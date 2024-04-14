@@ -16,6 +16,7 @@ typedef adjacency_list<listS, vecS, directedS,
     property<edge_weight_t, weightType>> Graph;
 
 typedef graph_traits<Graph>::vertex_descriptor Vertex;
+typedef std::shared_ptr<Vertex> VertexPtr;
 typedef graph_traits<Graph>::edge_descriptor Edge;
 typedef std::vector<Edge> edgeVec;
 typedef std::shared_ptr<edgeVec> edgeVecPtr;

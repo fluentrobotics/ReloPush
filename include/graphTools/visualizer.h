@@ -3,6 +3,9 @@
 #include <visualization_msgs/Marker.h>
 
 #include <graphTools/graph_info.h>
+#include <reloPush/movableObject.h>
+
+#include <unordered_set>
 
 class position2D
 {
@@ -18,11 +21,15 @@ class position2D
     float y;
 };
 
-double node_size = 0.2;
+double node_size = 0.075;
 double graph_height = 1.5;
 
+//todo: get it as a param
+double vehicle_lengh = 0.1;
+
 //void publish_marker(std::vector<position2D> blocks_list, ros::Publisher* pub_ptr, double block_size=node_size, std::string shape="Sphere",  bool use_color=true) {
-void publish_marker(std::map<std::string,position2D> posMap, ros::Publisher* pub_ptr, double block_size=node_size, std::string shape="Sphere",  bool use_color=true) {
+void publish_pose_nodes(std::unordered_map<std::string,VertexStatePair> nameMatcher, ros::Publisher* pub_ptr, 
+                        double block_size=node_size, std::string shape="Sphere",  bool use_color=true) {
 
 
     std::vector<std::vector<float>>colors = {
@@ -51,7 +58,7 @@ void publish_marker(std::map<std::string,position2D> posMap, ros::Publisher* pub
     visualization_msgs::MarkerArray marker_array;
     //for (size_t n = 0; n < blocks_list.size(); ++n) {
     size_t color_n = 0;
-    for (auto const& [key, val] : posMap)
+    for (auto const& [key, val] : nameMatcher)
     {
         visualization_msgs::Marker marker;
         marker.header.frame_id = "graph";  // Set the frame in which the marker will be displayed
@@ -62,8 +69,16 @@ void publish_marker(std::map<std::string,position2D> posMap, ros::Publisher* pub
             marker.type = visualization_msgs::Marker::SPHERE;
         }
         marker.action = visualization_msgs::Marker::ADD;
-        marker.pose.position.x = val.x;  // Set the position of the marker
-        marker.pose.position.y = val.y;
+
+        //todo: use a common value
+        //float direct_offset = 0.25f;
+        // node push direction
+        float node_th = val.state->yaw;
+
+        marker.pose.position.x = val.state->x;  // Set the position of the marker
+        marker.pose.position.x += vehicle_lengh * cos(node_th);
+        marker.pose.position.y = val.state->y;
+        marker.pose.position.y += vehicle_lengh * sin(node_th);
         marker.pose.position.z = graph_height;
         marker.pose.orientation.x = 0;  // Set the orientation of the marker
         marker.pose.orientation.y = 0;
@@ -72,11 +87,11 @@ void publish_marker(std::map<std::string,position2D> posMap, ros::Publisher* pub
         marker.scale.x = block_size;  // Set the scale of the marker (size)
         marker.scale.y = block_size;
         marker.scale.z = block_size;
-        marker.color.a = 1.0;  // Set the alpha (transparency) of the marker
+        marker.color.a = 0.5;  // Set the alpha (transparency) of the marker
         if (use_color) {
-            marker.color.r = colors[color_n][0];  // Set the color of the marker (red)
-            marker.color.g = colors[color_n][1];
-            marker.color.b = colors[color_n][2];
+            marker.color.r = colors[3][0];  // Set the color of the marker (red)
+            marker.color.g = colors[3][1];
+            marker.color.b = colors[3][2];
         } else {
             marker.color.r = 0.93;  // grey
             marker.color.g = 0.93;
@@ -84,6 +99,7 @@ void publish_marker(std::map<std::string,position2D> posMap, ros::Publisher* pub
         }
         marker.id = color_n;
         marker_array.markers.push_back(marker);
+
         color_n++;
     }
 
@@ -140,9 +156,9 @@ void draw_arrows(std::vector<geometry_msgs::Point>& slist, std::vector<geometry_
 
     // Example arrow parameters
     int arrow_count = slist.size();
-    double arrow_shaft = 0.03;
-    double arrow_scale = 0.07;
-    double arrow_height = 0.1;
+    double arrow_shaft = 0.01;
+    double arrow_scale = 0.04;
+    double arrow_height = 0.067;
 
     // Loop to create multiple arrows
     for (int i = 0; i < arrow_count; ++i) {
@@ -158,7 +174,11 @@ void draw_arrows(std::vector<geometry_msgs::Point>& slist, std::vector<geometry_
         //marker.color.r = 0.13725490196;  // Red
         //marker.color.g = 0.94117647;  // Green
         //marker.color.b = 0.78039216;  // Blue
-        marker.color.r = 0.161;  // Red
+        //change color by angle
+        auto ang = atan2((elist[i].y-slist[i].y),(elist[i].x-slist[i].x));
+        auto ang_ratio = ang/(2*M_PI);
+        //marker.color.r = 0.161;  // Red
+        marker.color.r = ang_ratio;  // Red
         marker.color.g = 0.455;  // Green
         marker.color.b = 0.451;  // Blue
         marker.pose.orientation.w = 1.0;
@@ -185,7 +205,7 @@ void draw_arrows(std::vector<geometry_msgs::Point>& slist, std::vector<geometry_
     pub_ptr->publish(marker_array);
 }
 
-void visualize_graph(Graph& g, ros::Publisher* node_pub_ptr, ros::Publisher* edge_pub_ptr)
+void visualize_graph(Graph& g, NameMatcher& nameMatcher, ros::Publisher* node_pub_ptr, ros::Publisher* edge_pub_ptr, double block_size=node_size)
 {
     // Vector to store vertex information
     std::vector<std::pair<Vertex, std::string>> vertex_info;
@@ -203,26 +223,7 @@ void visualize_graph(Graph& g, ros::Publisher* node_pub_ptr, ros::Publisher* edg
     for (boost::tie(ei, eend) = edges(g); ei != eend; ++ei) {
         edge_info.push_back(std::make_tuple(source(*ei, g), target(*ei, g), get(edge_weight, g, *ei)));
     }
-
-
-    std::vector<std::pair<float,float>> positions = {std::make_pair(0,0),std::make_pair(1.5,1),std::make_pair(1,1),std::make_pair(2.5,2),std::make_pair(3,0.8)};
-    //arbitrary positions
-    std::map<std::string,position2D> posMap;
-    
-    auto pa = position2D(0,0);
-    auto pb = position2D(1.5,1);
-    auto pc = position2D(1,1);
-    auto pd = position2D(2.5,2);
-    auto pe = position2D(3,0.8);
-
-    posMap.insert(std::pair<std::string,position2D>("a",pa));
-    posMap.insert(std::pair<std::string,position2D>("b",pb));
-    posMap.insert(std::pair<std::string,position2D>("c",pc));
-    posMap.insert(std::pair<std::string,position2D>("d",pd));
-    posMap.insert(std::pair<std::string,position2D>("e",pe));
-    //publish_marker({pa,pb,pc,pd,pe},node_pub_ptr);
-    publish_marker(posMap, node_pub_ptr);
-
+    publish_pose_nodes(nameMatcher.vsMap, node_pub_ptr);
 
     auto edge_list = graphTools::getEdges(g);
     //iterate all edges and connected vertices
@@ -231,17 +232,33 @@ void visualize_graph(Graph& g, ros::Publisher* node_pub_ptr, ros::Publisher* edg
     {
         auto vertPair = graphTools::getVertexPair(edge_list, n, g);
         auto vSource = graphTools::getVertexName(vertPair.getSource(), g);
-        auto source_xy = posMap[vSource];
+
+        //source vertex orientation
+        float source_th = nameMatcher.vsMap[vSource].state->yaw;
+
+        auto source_x = nameMatcher.vsMap[vSource].state->x;
+        source_x -= vehicle_lengh * cos(source_th);
+
+        auto source_y = nameMatcher.vsMap[vSource].state->y;
+        source_y -= vehicle_lengh * sin(source_th);
+
         auto vSink = graphTools::getVertexName(vertPair.getSink(), g);
-        auto sink_xy = posMap[vSink];
+        //sink vertex orientation
+        float sink_th = nameMatcher.vsMap[vSink].state->yaw;
+
+        auto sink_x = nameMatcher.vsMap[vSink].state->x;
+        sink_x -= vehicle_lengh * cos(sink_th);
+        auto sink_y = nameMatcher.vsMap[vSink].state->y;
+        sink_y -= vehicle_lengh * sin(sink_th);
         //auto eWeight = vertPair.getEdgeWeight();
         //std::cout << "Edge Weight: " << eWeight << "\n" << std::endl;
+
         geometry_msgs::Point p1,p2;
-        p1.x = source_xy.x;
-        p1.y = source_xy.y;
+        p1.x = source_x;
+        p1.y = source_y;
         p1.z = 1.0;
-        p2.x = sink_xy.x;
-        p2.y = sink_xy.y;
+        p2.x = sink_x;
+        p2.y = sink_y;
         p2.z = 1.0;
 
         startPointsList.push_back(p1);

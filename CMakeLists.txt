@@ -50,7 +50,16 @@ include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} ${OMPL_
 add_executable(test_dubins "test/test_dubins.cpp")
 target_link_libraries(test_dubins ${Boost_LIBRARIES} ${OMPL_LIBRARIES})
 
-add_executable(${PROJECT_NAME} "src/reloPush.cpp" "src/graph_info.cpp")
+add_executable(
+    ${PROJECT_NAME} 
+    "src/reloPush.cpp" 
+    "src/graph_info.cpp"  
+    "src/edge_construction.cpp" 
+    "src/reloPush/movableObject.cpp"
+    "src/omplTools/fromOMPL.cpp"
+    "src/omplTools/dubins_tools.cpp"
+    )
+
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES})
 
 

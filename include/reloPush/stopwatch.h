@@ -4,7 +4,7 @@
 class stopWatch
 {
 	public:
-		stopWatch(std::string name_in)
+		stopWatch(std::string name_in = "")
 		{
 			name = name_in;
 			start = std::chrono::high_resolution_clock::now();
