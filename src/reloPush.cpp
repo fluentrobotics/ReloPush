@@ -61,6 +61,8 @@ int main(int argc, char **argv)
 
     // genearte name matcher
     NameMatcher nameMatcher(mo_list);
+    // edge to path matcher
+    
 
     // initialize grid map
     std::unordered_set<State> obs;

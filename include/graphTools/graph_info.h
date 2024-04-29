@@ -5,6 +5,7 @@
 #include <memory>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <omplTools/dubins_tools.h>
 
 using namespace boost;
 
@@ -27,6 +28,7 @@ namespace graphTools
     class vertexPair
     {
     public:
+        vertexPair();
         vertexPair(Vertex source_in, Vertex sink_in, Edge edge_in, GraphPtr graph_ptr_in);
         Vertex getSource();
         Vertex getSink();
@@ -57,6 +59,31 @@ namespace graphTools
     // get name of a vertex
     vertexNameType getVertexName(Vertex v, GraphPtr graph);
     vertexNameType getVertexName(Vertex v, Graph& graph);
+
+    class pathInfo
+    {
+        public:
+            //from/to vertex
+            vertexPair vertices;
+            //dubins set
+            dubinsPath path;
+            //cost
+            float cost;
+            //path classification
+            std::string class_str;
+
+            pathInfo();
+            pathInfo(vertexPair pair_in, dubinsPath path_in, std::string class_str_in);
+    };
+
+    class EdgeMatcher
+    {
+        public:
+            std::unordered_map<Edge,pathInfo> edgeMap;
+
+            EdgeMatcher();
+            void insert(Edge e_in, pathInfo p_in);
+    };
 }
 
 #endif // !GRAPH_INFO_H

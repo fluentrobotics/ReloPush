@@ -24,6 +24,8 @@ edgeVecPtr graphTools::getEdges(Graph& graph)
 
 namespace graphTools
 {
+    vertexPair::vertexPair() {};
+
     vertexPair::vertexPair(Vertex source_in, Vertex sink_in, Edge edge_in, GraphPtr graph_ptr_in)
         : source_vertex(source_in), sink_vertex(sink_in), edge(edge_in), graph_ptr(graph_ptr_in)
     {
@@ -94,5 +96,22 @@ namespace graphTools
     vertexNameType getVertexName(Vertex v, Graph& graph)
     {
         return get(boost::vertex_name, graph, v);
+    }
+
+    pathInfo::pathInfo() {};
+
+    pathInfo::pathInfo(vertexPair pair_in, dubinsPath path_in, std::string class_str_in) : vertices(pair_in), path(path_in), class_str(class_str_in)
+    {
+        cost = path_in.length();
+    }
+
+    EdgeMatcher::EdgeMatcher()
+    {
+        edgeMap.clear();
+    }
+
+    void EdgeMatcher::insert(Edge e_in, pathInfo p_in)
+    {
+        edgeMap.insert({e_in,p_in});
     }
 }
