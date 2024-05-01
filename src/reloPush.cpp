@@ -12,9 +12,12 @@
 #include <reloPush/edge_construction.h>
 #include <pathPlanTools/path_planning_tools.h>
 #include <reloPush/stopwatch.h>
+#include <graphTools/edge_path_info.h>
 
 ros::Publisher* vertex_marker_pub_ptr;
 ros::Publisher* edge_marker_pub_ptr;
+ros::Publisher* object_marker_pub_ptr;
+ros::Publisher* dubins_path_pub_ptr;
 
 void initialize_publishers(ros::NodeHandle& nh)
 {
@@ -23,12 +26,17 @@ void initialize_publishers(ros::NodeHandle& nh)
     vertex_marker_pub_ptr = new ros::Publisher(vertex_marker_pub);
     ros::Publisher edge_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("graph_edges", 2);
     edge_marker_pub_ptr = new ros::Publisher(edge_marker_pub);
+    ros::Publisher object_marker_pub = nh.advertise<visualization_msgs::Marker>("movable_objects", 10);
+    object_marker_pub_ptr = new ros::Publisher(object_marker_pub);
+    ros::Publisher dubins_path_pub = nh.advertise<visualization_msgs::MarkerArray>("dubins_paths", 10);
+    dubins_path_pub_ptr = new ros::Publisher(dubins_path_pub);
 }
 
 void free_publisher_pointers()
 {
     delete(vertex_marker_pub_ptr);
     delete(edge_marker_pub_ptr);
+    delete(object_marker_pub_ptr);
 }
 
 int main(int argc, char **argv) 
@@ -61,8 +69,9 @@ int main(int argc, char **argv)
 
     // genearte name matcher
     NameMatcher nameMatcher(mo_list);
-    // edge to path matcher
     
+    // edge to path matcher
+    graphTools::EdgeMatcher edgeMatcher;
 
     // initialize grid map
     std::unordered_set<State> obs;
@@ -75,11 +84,15 @@ int main(int argc, char **argv)
 
     stopWatch time_edge("edge_con");
     // construct edges
-    reloPush::construct_edges(mo_list, gPtr, env, Constants::r,true);
+    reloPush::construct_edges(mo_list, gPtr, env, Constants::r, edgeMatcher ,true);
     time_edge.stop();
     time_edge.print_us();
     // visualize vertices
-    visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
+    auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
+    // visualize movable obstacles
+    draw_obstacles(mo_list, object_marker_pub_ptr);
+    // visualize edge paths
+    auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
 
     //test
     /*
@@ -89,7 +102,18 @@ int main(int argc, char **argv)
     std::cout << "test " << res << std::endl;
     */
 
-    ros::spin();
+    //ros::spin();
+
+    ros::Rate r(10);
+
+    while(ros::ok())
+    {
+        dubins_path_pub_ptr->publish(vis_path_msg);
+        vertex_marker_pub_ptr->publish(graph_vis_pair.first);
+        edge_marker_pub_ptr->publish(graph_vis_pair.second);
+        ros::spinOnce();
+        r.sleep();
+    }
 
     //remove publisher pointers
     free_publisher_pointers();

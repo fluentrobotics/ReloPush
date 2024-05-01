@@ -50,7 +50,7 @@ class movableObject
         std::string name;
         std::vector<StatePtr> pushing_poses;
         std::vector<std::string> vertex_names;
-        std::vector<VertexStatePair> vertex_state_list;
+        std::vector<VertexStatePair> vertex_state_list; // push-pose/vertex pair
 
         movableObject();
 

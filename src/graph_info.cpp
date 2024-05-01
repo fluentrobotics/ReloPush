@@ -1,4 +1,5 @@
-#include <graphTools/graph_info.h>
+//#include <graphTools/graph_info.h>
+#include <graphTools/edge_path_info.h>
 
 edgeVecPtr graphTools::getEdges(GraphPtr graph)
 {
@@ -98,20 +99,45 @@ namespace graphTools
         return get(boost::vertex_name, graph, v);
     }
 
-    pathInfo::pathInfo() {};
+    EdgePathInfo::EdgePathInfo() {};
 
-    pathInfo::pathInfo(vertexPair pair_in, dubinsPath path_in, std::string class_str_in) : vertices(pair_in), path(path_in), class_str(class_str_in)
+    EdgePathInfo::EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, dubinsPath path_in, pathType path_class_in, Edge edge_in, GraphPtr gPtr) : path(path_in), path_class(path_class_in)
     {
+        vertices = vertexPair(source_v,target_v,edge_in,gPtr);
         cost = path_in.length();
+        sourceState = source_s;
+        targetState = target_s;
     }
 
-    EdgeMatcher::EdgeMatcher()
+    EdgePathInfo::EdgePathInfo(vertexPair pair_in, State source_s, State target_s, dubinsPath path_in, pathType path_class_in) : vertices(pair_in), path(path_in), path_class(path_class_in)
     {
+        cost = path_in.length();
+        sourceState = source_s;
+        targetState = target_s;
+    }
+
+
+    EdgeMatcher::EdgeMatcher() {
         edgeMap.clear();
     }
 
-    void EdgeMatcher::insert(Edge e_in, pathInfo p_in)
+
+    void EdgeMatcher::insert(Edge e_in, EdgePathInfo p_in)
     {
         edgeMap.insert({e_in,p_in});
     }
+
+    std::shared_ptr<std::vector<std::pair<Edge,EdgePathInfo>>> EdgeMatcher::get_entries()
+    {
+        std::vector<std::pair<Edge,EdgePathInfo>> out_vec(0);
+
+        // iterate through unordered map
+        for (auto i = edgeMap.begin(); i != edgeMap.end(); i++)
+        {
+            out_vec.push_back({i->first,i->second});
+        }
+
+        return std::make_shared<std::vector<std::pair<Edge,EdgePathInfo>>>(out_vec);
+    }
+
 }

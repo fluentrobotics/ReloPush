@@ -1,11 +1,17 @@
 #include <ros/ros.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
+#include <nav_msgs/Path.h>
+#include <geometry_msgs/PoseStamped.h>
 
 #include <graphTools/graph_info.h>
+#include <graphTools/edge_path_info.h>
 #include <reloPush/movableObject.h>
 
 #include <unordered_set>
+
+#include <pathPlanTools/tf_tools.h>
+#include <pathPlanTools/path_planning_tools.h>
 
 class position2D
 {
@@ -27,12 +33,7 @@ double graph_height = 1.5;
 //todo: get it as a param
 double vehicle_lengh = 0.1;
 
-//void publish_marker(std::vector<position2D> blocks_list, ros::Publisher* pub_ptr, double block_size=node_size, std::string shape="Sphere",  bool use_color=true) {
-void publish_pose_nodes(std::unordered_map<std::string,VertexStatePair> nameMatcher, ros::Publisher* pub_ptr, 
-                        double block_size=node_size, std::string shape="Sphere",  bool use_color=true) {
-
-
-    std::vector<std::vector<float>>colors = {
+std::vector<std::vector<float>>colors = {
                         {0.615, 0.851, 0.823},
                         {0.075, 0.435, 0.388},
                         {0.878, 0.792, 0.235},
@@ -53,6 +54,11 @@ void publish_pose_nodes(std::unordered_map<std::string,VertexStatePair> nameMatc
                         {0.8274509803921568,0.7254901960784313,0.6235294117647059},
                         {0.7568627450980392,0.4666666666666667,0.403921568627451},
                         {0.7568627450980392,0.4666666666666667,0.403921568627451}};
+
+//void publish_marker(std::vector<position2D> blocks_list, ros::Publisher* pub_ptr, double block_size=node_size, std::string shape="Sphere",  bool use_color=true) {
+visualization_msgs::MarkerArray publish_pose_nodes(std::unordered_map<std::string,VertexStatePair> nameMatcher, ros::Publisher* pub_ptr, 
+                        double block_size=node_size, std::string shape="Sphere",  bool use_color=true) {
+
 
 
     visualization_msgs::MarkerArray marker_array;
@@ -105,6 +111,7 @@ void publish_pose_nodes(std::unordered_map<std::string,VertexStatePair> nameMatc
 
     // Publish the marker
     pub_ptr->publish(marker_array);
+    return marker_array;
 }
 
 /*
@@ -150,7 +157,113 @@ geometry_msgs::Point scale(const geometry_msgs::Point& p, double factor) {
     return scaled;
 }
 
-void draw_arrows(std::vector<geometry_msgs::Point>& slist, std::vector<geometry_msgs::Point>& elist, ros::Publisher* pub_ptr) {
+void draw_obstacles(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr, float size = 0.15f)
+{
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = "graph"; // Set the frame id to your desired frame
+    marker.header.stamp = ros::Time::now();
+    marker.ns = "movable_objects";
+    marker.type = visualization_msgs::Marker::CUBE;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.scale.x = size; // Set the scale of the cube as desired
+    marker.scale.y = size;
+    marker.scale.z = size;
+    marker.color.r = 0.8274509803921568;
+    marker.color.g = 0.7254901960784313;
+    marker.color.b = 0.6235294117647059;
+    marker.color.a = 1.0;
+
+    for (size_t i = 0; i < mo_list.size(); ++i) {
+        marker.id = i;
+        marker.pose.position.x = mo_list[i].x;
+        marker.pose.position.y = mo_list[i].y;
+        marker.pose.position.z = size/2; // Assuming the cube is placed at z = 0.5
+        marker.pose.orientation.x = 0.0;
+        marker.pose.orientation.y = 0.0;
+        marker.pose.orientation.z = 0.0;
+        marker.pose.orientation.w = 1.0;
+        pub_ptr->publish(marker);
+    }
+}
+
+visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher, Environment& env, ros::Publisher* pub_ptr, float turning_radius)
+{
+    auto edgePaths = edgeMatcher.get_entries();
+    
+    std::vector<nav_msgs::Path> path_vec;
+
+    for(auto& it : *edgePaths) // for each path
+    {
+        size_t num_pts = static_cast<int>(it.second.path.length()/0.1); //todo: get resolution as a param
+
+        auto pivot_state = it.second.sourceState;
+
+        // check collision
+        ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
+        OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
+        dubinsStart->setXY(pivot_state.x, pivot_state.y);
+        dubinsStart->setYaw(pivot_state.yaw);
+        OmplState *interState = (OmplState *)dubinsSpace.allocState();
+
+        // interpolate dubins path
+        // Interpolate dubins path to check for collision on grid map
+        nav_msgs::Path single_path;
+        single_path.header.frame_id = it.second.vertices.getSourceName(); // temporarily use this field to name the path
+        single_path.poses.resize(num_pts);
+        for (size_t np=0; np<num_pts; np++)
+        {            
+            //auto start = std::chrono::steady_clock::now();
+            jeeho_interpolate(dubinsStart, it.second.path, (double)np / (double)num_pts, interState, &dubinsSpace,
+                            turning_radius);
+            //auto end = std::chrono::steady_clock::now();
+            //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+            //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
+            //std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
+
+            geometry_msgs::PoseStamped one_pose;
+            one_pose.pose.position.x = interState->getX();
+            one_pose.pose.position.y = interState->getY();
+            one_pose.pose.position.z = 0;
+            one_pose.pose.orientation = jeeho::eigenQtoMsgQ(jeeho::euler_to_quaternion_xyz(0,0,interState->getYaw()));
+
+            single_path.poses[np] = one_pose;
+        }
+
+        path_vec.push_back(single_path);
+    }
+
+    visualization_msgs::MarkerArray marker_array;
+    int id = 0;
+    for (const auto& path : path_vec) {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "graph"; // Set the frame id to your desired frame
+        marker.header.stamp = ros::Time::now();
+        marker.ns = path.header.frame_id;
+        marker.id = id++;
+        marker.type = visualization_msgs::Marker::LINE_STRIP;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.orientation.w = 1.0;
+        marker.scale.x = 0.015; // Set the line width
+        auto color_set = colors[int(marker.ns.back() - '0')];
+        marker.color.r = color_set[0];
+        marker.color.g = color_set[1];
+        marker.color.b = color_set[2];
+        marker.color.a = 0.8;
+
+        // Fill marker points
+        for (const auto& pose : path.poses) {
+            marker.points.push_back(pose.pose.position);
+        }
+
+        marker_array.markers.push_back(marker);
+    }
+
+    pub_ptr->publish(marker_array);
+
+    return marker_array;
+}
+
+visualization_msgs::MarkerArray draw_arrows(std::vector<geometry_msgs::Point>& slist, std::vector<geometry_msgs::Point>& elist, ros::Publisher* pub_ptr) {
     // Create a MarkerArray message
     visualization_msgs::MarkerArray marker_array;
 
@@ -203,9 +316,10 @@ void draw_arrows(std::vector<geometry_msgs::Point>& slist, std::vector<geometry_
     }
 
     pub_ptr->publish(marker_array);
+    return marker_array;
 }
 
-void visualize_graph(Graph& g, NameMatcher& nameMatcher, ros::Publisher* node_pub_ptr, ros::Publisher* edge_pub_ptr, double block_size=node_size)
+std::pair<visualization_msgs::MarkerArray,visualization_msgs::MarkerArray> visualize_graph(Graph& g, NameMatcher& nameMatcher, ros::Publisher* node_pub_ptr, ros::Publisher* edge_pub_ptr, double block_size=node_size)
 {
     // Vector to store vertex information
     std::vector<std::pair<Vertex, std::string>> vertex_info;
@@ -223,7 +337,7 @@ void visualize_graph(Graph& g, NameMatcher& nameMatcher, ros::Publisher* node_pu
     for (boost::tie(ei, eend) = edges(g); ei != eend; ++ei) {
         edge_info.push_back(std::make_tuple(source(*ei, g), target(*ei, g), get(edge_weight, g, *ei)));
     }
-    publish_pose_nodes(nameMatcher.vsMap, node_pub_ptr);
+    auto node_vis = publish_pose_nodes(nameMatcher.vsMap, node_pub_ptr);
 
     auto edge_list = graphTools::getEdges(g);
     //iterate all edges and connected vertices
@@ -264,5 +378,7 @@ void visualize_graph(Graph& g, NameMatcher& nameMatcher, ros::Publisher* node_pu
         startPointsList.push_back(p1);
         endPointsList.push_back(p2);
     }
-    draw_arrows(startPointsList,endPointsList,edge_pub_ptr);
+    auto edge_vis = draw_arrows(startPointsList,endPointsList,edge_pub_ptr);
+
+    return std::make_pair(node_vis,edge_vis);
 }

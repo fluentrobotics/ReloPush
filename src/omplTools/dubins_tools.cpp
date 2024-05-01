@@ -141,7 +141,7 @@ Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, d
     return rotationMatrix * point;
 }
 
-std::pair<bool,dubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
+std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
 {
     double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
     double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
@@ -149,14 +149,17 @@ std::pair<bool,dubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
     double alpha = fromOMPL::mod2pi(th1 - th), beta = fromOMPL::mod2pi(th2 - th);
 
     if (d < fromOMPL::DUBINS_EPS && fabs(alpha - beta) < fromOMPL::DUBINS_EPS)
-        return std::make_pair<bool,dubinsPath>(false,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0}); //zero dubins path
+        return std::make_pair<pathType,dubinsPath>(pathType::none,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0}); //zero dubins path
 
     alpha = fromOMPL::mod2pi(alpha);
     beta = fromOMPL::mod2pi(beta);
     bool is_long = fromOMPL::is_longpath_case(d, alpha, beta); 
     
-    if(!is_long)
-        return std::make_pair<bool,dubinsPath>(false,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0});
+    if(!is_long) // short-path
+    {
+        dubinsPath dubinsSet = fromOMPL::dubins_classification(d, alpha, beta); //path
+        return std::make_pair<pathType,dubinsPath>(pathType::SP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
+    }
 
     //if longpath case
     //find dubins set
@@ -170,8 +173,8 @@ std::pair<bool,dubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
     // tie-break
     dx_dy_sum *= 1.01;
 
-    if(dubins_distance > dx_dy_sum) // small-turn long-path
-        return std::make_pair<bool,dubinsPath>(false,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
-    else // large-turn long-path
-        return std::make_pair<bool,dubinsPath>(true,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
+    if(dubins_distance > dx_dy_sum) // large-turn long-path
+        return std::make_pair<pathType,dubinsPath>(pathType::largeLP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
+    else // small-turn long-path
+        return std::make_pair<pathType,dubinsPath>(pathType::smallLP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
 }
