@@ -110,11 +110,11 @@ int main(int argc, char **argv)
     reloPush::add_deliveries(delivery_list,mo_list,gPtr,env,Constants::r,edgeMatcher,false);
 
     // traverse on graph
-    pathFinder pf;
-    auto g = *gPtr;
-    std::string s = "b2";
-    std::string t = "d2";
-    auto trav_res = pf.djikstra(g,s,t);
+    //pathFinder pf;
+    //auto g = *gPtr;
+    //std::string s = "b2";
+    //std::string t = "d2";
+    //auto trav_res = pf.djikstra(g,s,t);
 
 
     // visualize vertices
