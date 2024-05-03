@@ -232,3 +232,72 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
         }
     }
 }
+
+void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float turning_radius, graphTools::EdgeMatcher& edgeMatcher, bool print_log)
+{
+    //todo: parameterize
+    bool use_better_path = false;
+
+    // for each delivery location
+    for(size_t n=0; n<delivery_list.size(); n++)
+    {
+        auto target_vslist = delivery_list[n].vertex_state_list; // all goal-poses and their vertices
+        
+        for(size_t t_state_ind=0; t_state_ind<target_vslist.size(); t_state_ind++) // for each goal pose
+        {
+            auto target_state = target_vslist[t_state_ind].state;
+            auto target_vertex = target_vslist[t_state_ind].vertex;
+
+            // for each movable object
+            for(size_t m=0; m<mo_list.size(); m++)
+            {
+                // for each pushing side
+                for(size_t state_ind = 0; state_ind<mo_list[m].n_side; state_ind++)
+                {
+                    // checking if there needs an edge between pivot and target states
+                    auto pivot_state = mo_list[m].vertex_state_list[state_ind].state; // list of Vertex-State Pairs
+                    auto pivot_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
+
+                    if(print_log)
+                        std::cout << "MO" << n << " dir" << state_ind << " -> MO" << m << " dir" << t_state_ind << std::endl;
+
+                    // check for good path
+                    auto dubins_res = is_good_path(*pivot_state,*target_state,turning_radius);
+
+#pragma region proposed_path_classification
+                    if(use_better_path)
+                    {
+                        // todo
+                    }
+#pragma endregion proposed_path_classification
+
+#pragma region normal_dubins_path
+                    else // use ordinary dubins path
+                    {
+                        // check collision
+                        auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, turning_radius, print_log);
+
+                        if(!collision_found)
+                        {
+                            auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
+
+                            Edge e;
+                            bool succ;
+
+                            std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
+                            // add to edge-path matcher
+                            edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,pathType::smallLP,e,gPtr));
+                        }
+                        else
+                        {
+                            if(print_log)
+                                std::cout << " dubins collision" << std::endl;
+                        }
+                    }
+#pragma endregion normal_dubins_path
+                }
+                
+            }
+        }
+    }
+}

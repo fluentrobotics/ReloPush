@@ -81,9 +81,17 @@ NameMatcher::NameMatcher(std::vector<movableObject> mo_list, bool clear_map)
     }
 
     for(auto& it : mo_list)
+    {
+        moMap.insert({it.name,std::make_shared<movableObject>(it)});
         for(size_t n=0; n<it.vertex_names.size(); n++)
         {
             vsMap.insert({it.vertex_names[n], it.vertex_state_list[n]});
             moMap.insert({it.vertex_names[n], std::make_shared<movableObject>(it)});
         }
+    }
+}
+
+movableObjectPtr NameMatcher::getObject(std::string obj_name)
+{
+    return moMap[obj_name];
 }

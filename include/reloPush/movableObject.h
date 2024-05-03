@@ -64,11 +64,13 @@ typedef std::shared_ptr<movableObject> movableObjectPtr;
 class NameMatcher
 {
     public:
-        std::unordered_map<std::string,VertexStatePair> vsMap;
+        std::unordered_map<std::string,VertexStatePair> vsMap; // name_{push_num}
         std::unordered_map<std::string,movableObjectPtr> moMap;
 
         NameMatcher();
         NameMatcher(std::vector<movableObject> mo_list, bool clear_map = true);
+
+        movableObjectPtr getObject(std::string obj_name);
 };
 
 #endif

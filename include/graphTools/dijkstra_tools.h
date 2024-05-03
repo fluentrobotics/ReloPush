@@ -6,9 +6,7 @@
 #include "graph_info.h"
 
 class pathFinder {
-
     public:
-
         Vertex getVertexFromString(
             const Graph& graph,
             const std::string& name

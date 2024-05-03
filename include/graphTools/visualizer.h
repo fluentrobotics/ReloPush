@@ -319,6 +319,38 @@ visualization_msgs::MarkerArray draw_arrows(std::vector<geometry_msgs::Point>& s
     return marker_array;
 }
 
+visualization_msgs::MarkerArray draw_deliveries(std::vector<movableObject>& d_list, ros::Publisher* pub_ptr, float size = 0.15f)
+{
+    visualization_msgs::MarkerArray marker_array;
+    int id = 0;
+
+    for (const auto& obj : d_list)
+    {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "graph"; // Change "map" to your desired frame
+        marker.header.stamp = ros::Time::now();
+        marker.ns = obj.name;
+        marker.id = id++;
+        marker.type = visualization_msgs::Marker::CYLINDER; // Change marker type as needed
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = obj.x;
+        marker.pose.position.y = obj.y;
+        marker.pose.position.z = size/2; // Adjust as needed
+        marker.pose.orientation = tf::createQuaternionMsgFromYaw(obj.th); // Assuming th is in radians
+        marker.scale.x = size; // Adjust size as needed
+        marker.scale.y = size;
+        marker.scale.z = size;
+        marker.color.r = 0.439; //0.439, 0.545, 0.459
+        marker.color.g = 0.545;
+        marker.color.b = 0.459;
+        marker.color.a = 0.67; // Fully opaque
+        marker_array.markers.push_back(marker);
+    }
+    pub_ptr->publish(marker_array);
+
+    return marker_array;
+}
+
 std::pair<visualization_msgs::MarkerArray,visualization_msgs::MarkerArray> visualize_graph(Graph& g, NameMatcher& nameMatcher, ros::Publisher* node_pub_ptr, ros::Publisher* edge_pub_ptr, double block_size=node_size)
 {
     // Vector to store vertex information
