@@ -87,18 +87,26 @@ Visualization Manager:
         b1_1: false
         b1_2: false
         b1_3: false
-        b2_0: false
+        b2_0: true
         b2_1: false
-        b2_2: false
+        b2_2: true
         b2_3: false
-        b3_0: false
+        b3_0: true
         b3_1: false
         b3_2: false
-        b3_3: true
+        b3_3: false
         b4_0: true
-        b4_1: true
-        b4_2: true
-        b4_3: true
+        b4_1: false
+        b4_2: false
+        b4_3: false
+      Queue Size: 100
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /delivery_locations
+      Name: MarkerArray
+      Namespaces:
+        d2: true
       Queue Size: 100
       Value: true
   Enabled: true
