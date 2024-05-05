@@ -279,7 +279,7 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
 
                         if(!collision_found)
                         {
-                            auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
+                            //auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
 
                             Edge e;
                             bool succ;

@@ -20,13 +20,13 @@ class pathFinder {
         );
 
         std::pair<std::vector<Vertex>, float> djikstra(
-            const Graph& graph,
+            const GraphPtr graph,
             const std::string& sourceName,
             const std::string& destinationName
         );
 
         void printPath(
-            const Graph& graph,
+            const GraphPtr graphPtr,
             const std::vector<Vertex>& path
         );
     //private:

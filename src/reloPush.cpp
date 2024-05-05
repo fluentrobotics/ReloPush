@@ -47,6 +47,26 @@ void free_publisher_pointers()
     delete(delivery_marker_pub_ptr);
 }
 
+void print_edges(GraphPtr g)
+{
+    auto edge_list = graphTools::getEdges(*g);
+    std::cout << "got edges" << std::endl;
+
+    //print all edges and connected vertices
+    for (size_t n=0; n<edge_list->size(); n++)
+    {
+        auto vertPair = graphTools::getVertexPair(edge_list, n, g);
+        //name of vert
+        std::cout << "Edge " << n << std::endl;
+        auto vSource = graphTools::getVertexName(vertPair.getSource(), g);
+        std::cout << "Souce name: " << vSource << std::endl;
+        auto vSink = graphTools::getVertexName(vertPair.getSink(), g);
+        std::cout << "Sink name: " << vSink << std::endl;
+        auto eWeight = vertPair.getEdgeWeight();
+        std::cout << "Edge Weight: " << eWeight << "\n" << std::endl;
+    }
+}
+
 int main(int argc, char **argv) 
 {
     ros::init(argc, argv, "reloPush");
@@ -109,14 +129,6 @@ int main(int argc, char **argv)
     // add to graph
     reloPush::add_deliveries(delivery_list,mo_list,gPtr,env,Constants::r,edgeMatcher,false);
 
-    // traverse on graph
-    pathFinder pf;
-    auto g = *gPtr;
-    std::string s = "b2";
-    std::string t = "d2";
-    auto trav_res = pf.djikstra(g,s,t);
-
-
     // visualize vertices
     auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
     // visualize movable obstacles
@@ -125,6 +137,18 @@ int main(int argc, char **argv)
     auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
     // visualize delivery locations
     auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+
+    // print edges
+    print_edges(gPtr);
+
+    // traverse on graph
+    pathFinder pf;
+    //auto g = *gPtr;
+    std::string s = "b2_0";
+    std::string t = "d2_2";
+    auto trav_res = pf.djikstra(gPtr,s,t);
+    pf.printPath(gPtr, trav_res.first);
+    std::cout << "Cost: " << trav_res.second << std::endl;
 
     //test
     /*

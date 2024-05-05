@@ -1,6 +1,6 @@
 // Base code from https://github.com/siavashk/lignum-vitae
 
-#include <dijkstra_tools.h>
+#include <graphTools/dijkstra_tools.h>
 #include <reloPush/stopwatch.h>
 
 Vertex pathFinder::getVertexFromString(
@@ -36,35 +36,35 @@ std::vector<Vertex> pathFinder::getPath(
 }
 
 std::pair<std::vector<Vertex>, float> pathFinder::djikstra(
-    const Graph& graph,
+    const GraphPtr graphPtr,
     const std::string& sourceName,
     const std::string& destinationName
 ) {
-    Vertex source = getVertexFromString(graph, sourceName);
-    Vertex destination = getVertexFromString(graph, destinationName);
+    Vertex source = getVertexFromString(*graphPtr, sourceName);
+    Vertex destination = getVertexFromString(*graphPtr, destinationName);
 
-    const int numVertices = boost::num_vertices(graph);
+    const int numVertices = boost::num_vertices(*graphPtr);
     std::vector<float> distances(numVertices);
     std::vector<Vertex> pMap(numVertices);
 
     auto distanceMap = boost::predecessor_map(
-        boost::make_iterator_property_map(pMap.begin(), boost::get(boost::vertex_index, graph))).distance_map(
-            boost::make_iterator_property_map(distances.begin(), boost::get(boost::vertex_index, graph)));
+        boost::make_iterator_property_map(pMap.begin(), boost::get(boost::vertex_index, *graphPtr))).distance_map(
+            boost::make_iterator_property_map(distances.begin(), boost::get(boost::vertex_index, *graphPtr)));
     
     //runtime measurement
     stopWatch st(std::string("map"));
-    boost::dijkstra_shortest_paths(graph, source, distanceMap); //todo: avoid unnecessary distance map making 
+    boost::dijkstra_shortest_paths(*graphPtr, source, distanceMap); //todo: avoid unnecessary distance map making 
     st.stop_and_get_us();
 
     // return path and cost
-    return std::make_pair(getPath(graph, pMap, source, destination), distances[destination]);
+    return std::make_pair(getPath(*graphPtr, pMap, source, destination), distances[destination]);
 }
 
 void pathFinder::printPath(
-    const Graph& graph,
+    const GraphPtr graphPtr,
     const std::vector<Vertex>& path
 ) {
-    auto nameMap = boost::get(boost::vertex_name, graph);
+    auto nameMap = boost::get(boost::vertex_name, *graphPtr);
     std::cout << "The shortest path between " << nameMap[path.back()] << " and "
         << nameMap[path.front()] << " is: " << std::endl;
     for (auto it = path.rbegin(); it < path.rend(); ++it)
