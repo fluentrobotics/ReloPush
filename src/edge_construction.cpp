@@ -112,6 +112,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 {
                                     auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
 
+
                                     Edge e;
                                     bool succ;
 
@@ -214,6 +215,10 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 
                                 Edge e;
                                 bool succ;
+
+                                // for debug only
+                                auto name1 = graphTools::getVertexName(*pivot_vertex,gPtr);
+                                auto name2 = graphTools::getVertexName(*target_vertex,gPtr);
 
                                 std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
                                 // add to edge-path matcher

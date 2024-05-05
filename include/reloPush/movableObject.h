@@ -71,6 +71,7 @@ class NameMatcher
         NameMatcher(std::vector<movableObject> mo_list, bool clear_map = true);
 
         movableObjectPtr getObject(std::string obj_name);
+        void addVertices(std::vector<movableObject>& mo_list);
 };
 
 #endif

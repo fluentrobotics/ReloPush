@@ -128,6 +128,8 @@ int main(int argc, char **argv)
 
     // add to graph
     reloPush::add_deliveries(delivery_list,mo_list,gPtr,env,Constants::r,edgeMatcher,false);
+    //add to namematcher
+    nameMatcher.addVertices(delivery_list);
 
     // visualize vertices
     auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
@@ -145,10 +147,10 @@ int main(int argc, char **argv)
     pathFinder pf;
     //auto g = *gPtr;
     std::string s = "b2_0";
-    std::string t = "d2_2";
+    std::string t = "d2_0";
     auto trav_res = pf.djikstra(gPtr,s,t);
     pf.printPath(gPtr, trav_res.first);
-    std::cout << "Cost: " << trav_res.second << std::endl;
+    std::cout << "Cost: " << trav_res.second * Constants::r << std::endl;
 
     //test
     /*
