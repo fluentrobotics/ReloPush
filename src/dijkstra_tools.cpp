@@ -56,6 +56,12 @@ std::pair<std::vector<Vertex>, float> pathFinder::djikstra(
     boost::dijkstra_shortest_paths(*graphPtr, source, distanceMap); //todo: avoid unnecessary distance map making 
     st.stop_and_get_us();
 
+     // Check if destination is reachable
+    if (distances[destination] > 10000) {
+        // Destination is not reachable from the source
+        return std::make_pair(std::vector<Vertex>(), std::numeric_limits<float>::infinity());
+    }
+
     // return path and cost
     return std::make_pair(getPath(*graphPtr, pMap, source, destination), distances[destination]);
 }

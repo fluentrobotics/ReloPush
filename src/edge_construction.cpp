@@ -63,6 +63,7 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
     //put back took-out obstacles
     for(auto it : took_out)
         env.add_obs(it);
+    
 
     return collision_found;
 }

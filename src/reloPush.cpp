@@ -220,7 +220,7 @@ int main(int argc, char **argv)
     // visualize vertices
     auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
     // visualize movable obstacles
-    draw_obstacles(mo_list, object_marker_pub_ptr);
+    auto mo_vis = draw_obstacles(mo_list, object_marker_pub_ptr);
     // visualize edge paths
     auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
     // visualize delivery locations
@@ -253,6 +253,31 @@ int main(int argc, char **argv)
     pf.printPath(gPtr, min_list[0]->path);
     pf.printPath(gPtr, min_list[1]->path);
 
+
+    // hybrid astar from a robot
+    State start(1, 1, -1*M_PI/2);
+    State goal2(0.4, 3.5, 0);
+
+    env.changeGoal(goal2);
+    
+    HybridAStar<State, Action, double, Environment> hybridAStar(env);
+    PlanResult<State, Action, double> solution;
+    bool searchSuccess = hybridAStar.search(start, solution);
+
+    if (searchSuccess) {
+    std::cout << "\033[1m\033[32m Succesfully find a path! \033[0m\n";
+    
+    for (auto iter = solution.states.begin(); iter != solution.states.end(); iter++)
+       std::cout << iter->first << "," << iter->second << std::endl;
+
+    std::cout << "Solution: gscore/cost:" << solution.cost
+              << "\t fmin:" << solution.fmin << "\n\rDiscover " << env.Dcount
+              << " Nodes and Expand " << env.Ecount << " Nodes." << std::endl;
+    } else {
+        std::cout << "\033[1m\033[31m Fail to find a path \033[0m\n";
+    }
+
+
     ros::Rate r(10);
 
     while(ros::ok())
@@ -261,6 +286,7 @@ int main(int argc, char **argv)
         vertex_marker_pub_ptr->publish(graph_vis_pair.first);
         edge_marker_pub_ptr->publish(graph_vis_pair.second);
         delivery_marker_pub_ptr->publish(vis_deli_msg);
+        object_marker_pub_ptr->publish(mo_vis);
         ros::spinOnce();
         r.sleep();
     }

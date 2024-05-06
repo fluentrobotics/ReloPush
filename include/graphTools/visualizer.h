@@ -157,7 +157,7 @@ geometry_msgs::Point scale(const geometry_msgs::Point& p, double factor) {
     return scaled;
 }
 
-void draw_obstacles(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr, float size = 0.15f)
+visualization_msgs::Marker draw_obstacles(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr, float size = 0.15f)
 {
     visualization_msgs::Marker marker;
     marker.header.frame_id = "graph"; // Set the frame id to your desired frame
@@ -184,6 +184,8 @@ void draw_obstacles(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr
         marker.pose.orientation.w = 1.0;
         pub_ptr->publish(marker);
     }
+
+    return marker;
 }
 
 visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher, Environment& env, ros::Publisher* pub_ptr, float turning_radius)

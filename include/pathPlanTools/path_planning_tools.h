@@ -52,12 +52,12 @@ static float deltat = speed_limit / r;
 static const float penaltyTurning = 50;
 // [#] --- A movement cost penalty for reversing (choosing motion primitives >
 // 2)
-static const float penaltyReversing = 100.0;
+static const float penaltyReversing = 10.0;
 // [#] --- A movement cost penalty for change of direction (changing from
 // primitives < 3 to primitives > 2)
 static const float penaltyCOD = 2.0;
 
-static bool allow_reverse = false;
+static bool allow_reverse = true; // only when not pushing
 
 static float heuristicWeight = 1.0f;
 
@@ -73,7 +73,7 @@ static const float LF = 0.3;
 // distance from rear to vehicle back end
 static const float LB = 0.12;
 // obstacle default radius
-static const float obsRadius = 0.05;
+static const float obsRadius = 0.2;
 
 // R = 3, 6.75 DEG
 const double dx[] = {r * deltat, r* sin(deltat),  r* sin(deltat),
@@ -136,6 +136,12 @@ class Environment {
     dynamic_obs.insert(std::pair<int,State>(7,State(0.56318, 2.44999, 0,7)));
     std::cout << "test dobs addeed" << std::endl;
     */
+  }
+
+  void changeGoal(State goal_in)
+  {
+    m_goal = State(goal_in.x, goal_in.y, Constants::normalizeHeadingRad(goal_in.yaw));
+    updateCostmap();
   }
 
   struct compare_node {
@@ -504,6 +510,7 @@ class Environment {
   void add_obs(State obs_in)
   {
     m_obstacles.insert(obs_in);
+    updateCostmap();
   }
 
   std::vector<State> takeout_start_collision(const State& s)
@@ -574,8 +581,8 @@ class Environment {
           rotated_obs(1) > -car_width / 2.0 - obs_rad &&
           rotated_obs(1) < car_width / 2.0 + obs_rad)
         {
-          std::cout << "x: " << obs(0) << " y: " << obs(1) << std::endl;
-          std::cout << "x: " << rotated_obs(0) << " y: " << rotated_obs(1) << std::endl;
+          //std::cout << "x: " << obs(0) << " y: " << obs(1) << std::endl;
+          //std::cout << "x: " << rotated_obs(0) << " y: " << rotated_obs(1) << std::endl;
           return false;
         }
     }
