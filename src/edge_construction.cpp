@@ -20,12 +20,12 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
     auto took_out = env.takeout_start_collision(*pivot_state);
 
     // takeout pivot object from obstacles
-    took_out.push_back(State(mo_list[n].x,mo_list[n].y,0));
-    env.remove_obs(State(mo_list[n].x,mo_list[n].y,0));
+    took_out.push_back(State(mo_list[n].get_x(),mo_list[n].get_y(),0));
+    env.remove_obs(State(mo_list[n].get_x(),mo_list[n].get_y(),0));
 
     // takeout target object from obstacles
-    took_out.push_back(State(mo_list[m].x,mo_list[m].y,0));
-    env.remove_obs(State(mo_list[m].x,mo_list[m].y,0));
+    took_out.push_back(State(mo_list[m].get_x(),mo_list[m].get_y(),0));
+    env.remove_obs(State(mo_list[m].get_x(),mo_list[m].get_y(),0));
 
     // Interpolate dubins path to check for collision on grid map
     for (size_t np=0; np<num_pts; np++)
@@ -76,7 +76,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
     // construct edges
     for(size_t n=0; n<mo_list.size(); n++)
     {
-        auto pivot_vslist = mo_list[n].vertex_state_list;
+        auto pivot_vslist = mo_list[n].get_vertex_state_list();
         
         for(size_t piv_state_ind=0; piv_state_ind<pivot_vslist.size(); piv_state_ind++)
         {
@@ -89,10 +89,10 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                 if(n!=m) // not the same object
                 {
                     // for each pushing side
-                    for(size_t state_ind = 0; state_ind<mo_list[m].n_side; state_ind++)
+                    for(size_t state_ind = 0; state_ind<mo_list[m].get_n_side(); state_ind++)
                     {
                         // checking if there needs an edge between pivot and target states
-                        auto target_state = mo_list[m].vertex_state_list[state_ind].state; // list of Vertex-State Pairs
+                        auto target_state = mo_list[m].get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
 
                         if(print_log)
                             std::cout << "MO" << n << " dir" << piv_state_ind << " -> MO" << m << " dir" << state_ind << std::endl;
@@ -110,7 +110,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 
                                 if(!collision_found)
                                 {
-                                    auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
+                                    auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
 
 
                                     Edge e;
@@ -211,7 +211,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 
                             if(!collision_found)
                             {
-                                auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
+                                auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
 
                                 Edge e;
                                 bool succ;
@@ -246,7 +246,7 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
     // for each delivery location
     for(size_t n=0; n<delivery_list.size(); n++)
     {
-        auto target_vslist = delivery_list[n].vertex_state_list; // all goal-poses and their vertices
+        auto target_vslist = delivery_list[n].get_vertex_state_list(); // all goal-poses and their vertices
         
         for(size_t t_state_ind=0; t_state_ind<target_vslist.size(); t_state_ind++) // for each goal pose
         {
@@ -257,11 +257,11 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
             for(size_t m=0; m<mo_list.size(); m++)
             {
                 // for each pushing side
-                for(size_t state_ind = 0; state_ind<mo_list[m].n_side; state_ind++)
+                for(size_t state_ind = 0; state_ind<mo_list[m].get_n_side(); state_ind++)
                 {
                     // checking if there needs an edge between pivot and target states
-                    auto pivot_state = mo_list[m].vertex_state_list[state_ind].state; // list of Vertex-State Pairs
-                    auto pivot_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
+                    auto pivot_state = mo_list[m].get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
+                    auto pivot_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
 
                     if(print_log)
                         std::cout << "MO" << n << " dir" << state_ind << " -> MO" << m << " dir" << t_state_ind << std::endl;

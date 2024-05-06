@@ -14,6 +14,12 @@
 #include <reloPush/stopwatch.h>
 #include <graphTools/edge_path_info.h>
 
+#include <Eigen/Core>
+#include <Eigen/Dense>
+
+//#include <eigen3/Eigen/Core>
+//#include <eigen3/Eigen/Dense>
+
 ros::Publisher* vertex_marker_pub_ptr;
 ros::Publisher* edge_marker_pub_ptr;
 ros::Publisher* object_marker_pub_ptr;
@@ -67,6 +73,84 @@ void print_edges(GraphPtr g)
     }
 }
 
+class graphPlanResult
+{
+    public:
+        std::string sourceVertexName;
+        std::string targetVertexName;
+        float cost;
+        std::vector<Vertex> path;
+        std::string object_name;
+
+        graphPlanResult()
+        {}
+        graphPlanResult(std::string s_in, std::string t_in, float c_in, std::vector<Vertex> p_in, std::string name_in) : sourceVertexName(s_in), targetVertexName(t_in), cost(c_in), path(p_in), object_name(name_in)
+        {}
+};
+
+typedef std::shared_ptr<graphPlanResult> graphPlanResultPtr;
+std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string,std::string>& delivery_table, NameMatcher& nameMatcher,GraphPtr gPtr)
+{
+    pathFinder pf;
+    std::vector<graphPlanResultPtr> out_vec(0);
+    
+    //for each entry in delivery table
+    for (auto i = delivery_table.begin(); i != delivery_table.end(); i++)
+    {
+        //cout << i->first << "       " << i->second << endl;
+        auto pivot_obj = nameMatcher.getObject(i->first);
+        auto target_obj = nameMatcher.getObject(i->second);
+
+        auto pivot_names = pivot_obj->get_vertex_names();
+        auto target_names = target_obj->get_vertex_names();
+
+        const int rows = pivot_obj->get_n_side();
+        const int cols = target_obj->get_n_side();
+
+        // init cost table
+        Eigen::MatrixXf cost_mat(rows,cols);
+        // paths
+        std::vector<std::vector<std::vector<Vertex>>> paths(rows);
+        
+
+        for(int row=0; row<rows; row++)
+        {
+            paths[row].resize(cols);
+            for(int col=0; col<cols; col++)
+            {
+                
+                std::string start_name = pivot_names[row]; // by row
+                std::string target_name = target_names[col]; // by col
+
+                auto res = pf.djikstra(gPtr,start_name,target_name);
+
+                paths[row][col] = res.first;
+                cost_mat(row,col) = res.second;
+            }
+        }
+
+        std::cout << cost_mat << std::endl;
+
+        //find lowest
+        float minVal;
+        int minRow;
+        minVal = cost_mat.rowwise().minCoeff().minCoeff(&minRow);
+
+        // Find column with minimum value
+        float minColVal;
+        int minCol;
+        minColVal = cost_mat.colwise().minCoeff().minCoeff(&minCol);
+
+        std::cout << "row: " << minRow << " col: " << minCol << std::endl;
+
+        graphPlanResult gp(pivot_names[minRow],target_names[minCol],cost_mat(minRow,minCol),paths[minRow][minCol],i->first);
+        out_vec.push_back(std::make_shared<graphPlanResult>(gp));
+    }
+
+    return out_vec;
+}
+
+
 int main(int argc, char **argv) 
 {
     ros::init(argc, argv, "reloPush");
@@ -105,7 +189,7 @@ int main(int argc, char **argv)
     std::unordered_set<State> obs;
     for(auto& it : mo_list)
     {
-        obs.insert(State(it.x,it.y,0));
+        obs.insert(State(it.get_x(),it.get_y(),0));
     }
     State goal(0,0,0); // arbitrary goal
     Environment env(40, 40, obs, goal);
@@ -121,10 +205,12 @@ int main(int argc, char **argv)
     
     // deliver b2 to 3,3.5
     delivery_list.push_back(movableObject(3,3.5,0,"d2",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
     
     // assignment table. object -> delivery
     std::unordered_map<std::string,std::string> delivery_table;
     delivery_table.insert({"b2","d2"});
+    delivery_table.insert({"b1","d1"});
 
     // add to graph
     reloPush::add_deliveries(delivery_list,mo_list,gPtr,env,Constants::r,edgeMatcher,false);
@@ -146,11 +232,11 @@ int main(int argc, char **argv)
     // traverse on graph
     pathFinder pf;
     //auto g = *gPtr;
-    std::string s = "b2_0";
-    std::string t = "d2_0";
-    auto trav_res = pf.djikstra(gPtr,s,t);
-    pf.printPath(gPtr, trav_res.first);
-    std::cout << "Cost: " << trav_res.second * Constants::r << std::endl;
+    //std::string s = "b2_0";
+    //std::string t = "d2_0";
+    //auto trav_res = pf.djikstra(gPtr,s,t);
+    //pf.printPath(gPtr, trav_res.first);
+    //std::cout << "Cost: " << trav_res.second * Constants::r << std::endl;
 
     //test
     /*
@@ -161,6 +247,11 @@ int main(int argc, char **argv)
     */
 
     //ros::spin();
+
+    auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
+
+    pf.printPath(gPtr, min_list[0]->path);
+    pf.printPath(gPtr, min_list[1]->path);
 
     ros::Rate r(10);
 

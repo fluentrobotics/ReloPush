@@ -61,6 +61,39 @@ movableObject::movableObject(float x_in, float y_in, float th_in, std::string na
         add_to_graph(graph_ptr);
 }
 
+float movableObject::get_x()
+{
+    return x;
+}
+float movableObject::get_y()
+{
+    return y;
+}
+size_t movableObject::get_n_side()
+{
+    return n_side;
+}
+float movableObject::get_th()
+{
+    return th;
+}
+std::string movableObject::get_name()
+{
+    return name;
+}
+std::vector<StatePtr> movableObject::get_pushing_poses()
+{
+    return pushing_poses;
+}
+std::vector<std::string> movableObject::get_vertex_names()
+{
+    return vertex_names;
+}
+std::vector<VertexStatePair> movableObject::get_vertex_state_list()
+{
+    return vertex_state_list;
+}
+
 void movableObject::add_to_graph(GraphPtr graph)
 {
     vertex_state_list.resize(n_side);
@@ -92,11 +125,11 @@ void NameMatcher::addVertices(std::vector<movableObject>& mo_list)
 {
     for(auto& it : mo_list)
     {
-        moMap.insert({it.name,std::make_shared<movableObject>(it)});
-        for(size_t n=0; n<it.vertex_names.size(); n++)
+        moMap.insert({it.get_name(),std::make_shared<movableObject>(it)});
+        for(size_t n=0; n<it.get_vertex_names().size(); n++)
         {
-            vsMap.insert({it.vertex_names[n], it.vertex_state_list[n]});
-            moMap.insert({it.vertex_names[n], std::make_shared<movableObject>(it)});
+            vsMap.insert({it.get_vertex_names()[n], it.get_vertex_state_list()[n]});
+            moMap.insert({it.get_vertex_names()[n], std::make_shared<movableObject>(it)});
         }
     }
 }

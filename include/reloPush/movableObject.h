@@ -43,24 +43,38 @@ class VertexStatePair
 class movableObject
 {
     public:
-        float x;
-        float y;
-        float n_side;
-        float th;
-        std::string name;
-        std::vector<StatePtr> pushing_poses;
-        std::vector<std::string> vertex_names;
-        std::vector<VertexStatePair> vertex_state_list; // push-pose/vertex pair
+        
 
         movableObject();
 
         movableObject(float x_in, float y_in, float th_in = 0, std::string name_in = "", 
                                     float n_side_in = 4, GraphPtr graph_ptr = nullptr);
 
+        float get_x();
+        float get_y();
+        size_t get_n_side();
+        float get_th();
+        std::string get_name();
+        std::vector<StatePtr> get_pushing_poses();
+        std::vector<std::string> get_vertex_names();
+        std::vector<VertexStatePair> get_vertex_state_list();
         void add_to_graph(GraphPtr graph);
+
+
+    private:
+        float x;
+        float y;
+        size_t n_side;
+        float th;
+        std::string name;
+        std::vector<StatePtr> pushing_poses;
+        std::vector<std::string> vertex_names;
+        std::vector<VertexStatePair> vertex_state_list; // push-pose/vertex pair
+
 };
 
 typedef std::shared_ptr<movableObject> movableObjectPtr;
+typedef std::shared_ptr<VertexStatePair> vertexStatePairPtr;
 class NameMatcher
 {
     public:
@@ -71,6 +85,7 @@ class NameMatcher
         NameMatcher(std::vector<movableObject> mo_list, bool clear_map = true);
 
         movableObjectPtr getObject(std::string obj_name);
+        //vertexStatePairPtr getVertexStatePair(std::string vertex_name);
         void addVertices(std::vector<movableObject>& mo_list);
 };
 

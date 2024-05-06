@@ -175,8 +175,8 @@ void draw_obstacles(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr
 
     for (size_t i = 0; i < mo_list.size(); ++i) {
         marker.id = i;
-        marker.pose.position.x = mo_list[i].x;
-        marker.pose.position.y = mo_list[i].y;
+        marker.pose.position.x = mo_list[i].get_x();
+        marker.pose.position.y = mo_list[i].get_y();
         marker.pose.position.z = size/2; // Assuming the cube is placed at z = 0.5
         marker.pose.orientation.x = 0.0;
         marker.pose.orientation.y = 0.0;
@@ -324,19 +324,19 @@ visualization_msgs::MarkerArray draw_deliveries(std::vector<movableObject>& d_li
     visualization_msgs::MarkerArray marker_array;
     int id = 0;
 
-    for (const auto& obj : d_list)
+    for (auto& obj : d_list)
     {
         visualization_msgs::Marker marker;
         marker.header.frame_id = "graph"; // Change "map" to your desired frame
         marker.header.stamp = ros::Time::now();
-        marker.ns = obj.name;
+        marker.ns = obj.get_name();
         marker.id = id++;
         marker.type = visualization_msgs::Marker::CYLINDER; // Change marker type as needed
         marker.action = visualization_msgs::Marker::ADD;
-        marker.pose.position.x = obj.x;
-        marker.pose.position.y = obj.y;
+        marker.pose.position.x = obj.get_x();
+        marker.pose.position.y = obj.get_y();
         marker.pose.position.z = size/2; // Adjust as needed
-        marker.pose.orientation = tf::createQuaternionMsgFromYaw(obj.th); // Assuming th is in radians
+        marker.pose.orientation = tf::createQuaternionMsgFromYaw(obj.get_th()); // Assuming th is in radians
         marker.scale.x = size; // Adjust size as needed
         marker.scale.y = size;
         marker.scale.z = size;
