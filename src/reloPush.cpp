@@ -1,4 +1,9 @@
 
+#if __INTELLISENSE__
+#undef __ARM_NEON
+#undef __ARM_NEON__
+#endif
+
 #include <ros/ros.h>
 
 #include <string>
@@ -111,14 +116,12 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
         Eigen::MatrixXf cost_mat(rows,cols);
         // paths
         std::vector<std::vector<std::vector<Vertex>>> paths(rows);
-        
 
         for(int row=0; row<rows; row++)
         {
             paths[row].resize(cols);
             for(int col=0; col<cols; col++)
-            {
-                
+            {                
                 std::string start_name = pivot_names[row]; // by row
                 std::string target_name = target_names[col]; // by col
 
@@ -150,6 +153,56 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
     return out_vec;
 }
 
+std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State& start, State& goal_in, Environment& env, bool print_res = false)
+{
+    env.changeGoal(goal_in);
+    
+    HybridAStar<State, Action, double, Environment> hybridAStar(env);
+    PlanResult<State, Action, double> solution;
+    bool searchSuccess = hybridAStar.search(start, solution);
+
+    if (searchSuccess) {
+        if(print_res)
+        {
+            std::cout << "\033[1m\033[32m Succesfully find a path! \033[0m\n";
+    
+            for (auto iter = solution.states.begin(); iter != solution.states.end(); iter++)
+            std::cout << iter->first << "," << iter->second << std::endl;
+
+            std::cout << "Solution: gscore/cost:" << solution.cost
+                    << "\t fmin:" << solution.fmin << "\n\rDiscover " << env.Dcount
+                    << " Nodes and Expand " << env.Ecount << " Nodes." << std::endl;
+        } 
+    }
+    else {
+        if(print_res)
+            std::cout << "\033[1m\033[31m Fail to find a path \033[0m\n";
+    }
+
+    return std::make_shared<PlanResult<State, Action, double>>(solution);    
+}
+
+template<typename T>
+std::shared_ptr<std::vector<std::vector<T>>> initDoubleVec(int rows, int cols)
+{
+    std::vector<std::vector<T>> outVec(rows, std::vector<T>(cols, 0));
+    return std::make_shared<std::vector<std::vector<T>>>(outVec);
+}
+
+std::pair<size_t,size_t> find_min_row_col(Eigen::MatrixXf& mat)
+{
+    //find lowest
+    float minVal;
+    int minRow;
+    minVal = mat.rowwise().minCoeff().minCoeff(&minRow);
+
+    // Find column with minimum value
+    float minColVal;
+    int minCol;
+    minColVal = mat.colwise().minCoeff().minCoeff(&minCol);
+
+    return std::make_pair(minRow, minCol);
+}
 
 int main(int argc, char **argv) 
 {
@@ -248,34 +301,48 @@ int main(int argc, char **argv)
 
     //ros::spin();
 
+    // find best push traverse for all assignments
     auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
 
     pf.printPath(gPtr, min_list[0]->path);
     pf.printPath(gPtr, min_list[1]->path);
 
-
     // hybrid astar from a robot
-    State start(1, 1, -1*M_PI/2);
-    State goal2(0.4, 3.5, 0);
-
-    env.changeGoal(goal2);
+    std::vector<State> robots(0);
+    robots.push_back(State(0, 1, -1*M_PI/2));
     
-    HybridAStar<State, Action, double, Environment> hybridAStar(env);
-    PlanResult<State, Action, double> solution;
-    bool searchSuccess = hybridAStar.search(start, solution);
+    // assign robot to a block
+    // find assignment by shortest distacnce
+    // for each min_list, calculate travel distance to approach
+    // pick one with lowest cost
+    // todo: use hungarian to find best assignment
 
-    if (searchSuccess) {
-    std::cout << "\033[1m\033[32m Succesfully find a path! \033[0m\n";
-    
-    for (auto iter = solution.states.begin(); iter != solution.states.end(); iter++)
-       std::cout << iter->first << "," << iter->second << std::endl;
+    Eigen::MatrixXf robot_approach_mat = Eigen::MatrixXf(robots.size(),min_list.size());
+    auto pathArr = initDoubleVec<std::shared_ptr<PlanResult<State, Action, double>>>(robots.size(),min_list.size());
 
-    std::cout << "Solution: gscore/cost:" << solution.cost
-              << "\t fmin:" << solution.fmin << "\n\rDiscover " << env.Dcount
-              << " Nodes and Expand " << env.Ecount << " Nodes." << std::endl;
-    } else {
-        std::cout << "\033[1m\033[31m Fail to find a path \033[0m\n";
+    for(size_t r = 0; r<robots.size(); r++)
+    {
+        for(size_t min_it = 0; min_it < min_list.size(); min_it++)
+        {
+            auto approach_state = nameMatcher.getVertexStatePair(min_list[min_it]->sourceVertexName)->state;
+            auto plan_res = planHybridAstar(robots[r], *approach_state, env);
+
+            // cost
+            robot_approach_mat(r,min_it) = plan_res->cost;
+            // save to path array
+            pathArr->at(r)[min_it] = plan_res;
+        }
     }
+
+    size_t mrow,mcol;
+    std::tie(mrow,mcol) = find_min_row_col(robot_approach_mat);
+    //min cost path
+    auto minRobot = robots[mrow];
+    auto minApproach = min_list[mcol];
+    auto minPath = pathArr->at(mrow)[mcol];
+
+    //combine approach + push path
+    
 
 
     ros::Rate r(10);
