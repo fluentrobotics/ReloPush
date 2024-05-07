@@ -18,6 +18,7 @@
 #include <pathPlanTools/path_planning_tools.h>
 #include <reloPush/stopwatch.h>
 #include <graphTools/edge_path_info.h>
+#include <pathPlanTools/dubins_interpolation.h>
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -320,22 +321,6 @@ int main(int argc, char **argv)
 
     // traverse on graph
     pathFinder pf;
-    //auto g = *gPtr;
-    //std::string s = "b2_0";
-    //std::string t = "d2_0";
-    //auto trav_res = pf.djikstra(gPtr,s,t);
-    //pf.printPath(gPtr, trav_res.first);
-    //std::cout << "Cost: " << trav_res.second * Constants::r << std::endl;
-
-    //test
-    /*
-    State a2(1,3.5,3.141592566167013);
-    State a3(1.5,3.5,3.141592566167013);
-    auto res = is_good_path(a3,a2,0.6);
-    std::cout << "test " << res << std::endl;
-    */
-
-    //ros::spin();
 
     // find best push traverse for all assignments
     auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
@@ -345,7 +330,7 @@ int main(int argc, char **argv)
 
     // hybrid astar from a robot
     std::vector<State> robots(0);
-    robots.push_back(State(0, 1, -1*M_PI/2));
+    robots.push_back(State(0.3, 1, -1*M_PI/2));
     
     // assign robot to a block
     // find assignment by shortest distacnce
@@ -364,7 +349,7 @@ int main(int argc, char **argv)
             auto pre_push = find_pre_push(*approach_state,0.6f);
             //hybrid astar state yaw is negated
             pre_push.yaw*=-1;
-            auto plan_res = planHybridAstar(robots[r], pre_push, env, true);
+            auto plan_res = planHybridAstar(robots[r], pre_push, env, false);
 
             // cost
             robot_approach_mat(r,min_it) = plan_res->cost; // todo: handle path plan failure
@@ -396,43 +381,13 @@ int main(int argc, char **argv)
 
         // corresponding path
         auto partial_path_info = edgeMatcher.getPath(edge);
-        // interpolate
-        auto l = partial_path_info.path.length();
-        auto num_pts = static_cast<size_t>(l/0.1);
-        //size_t num_pts = static_cast<size_t>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
-        
+        //auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
 
-        auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
-
-        // check collision
-        ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
-        OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
-        dubinsStart->setXY(pivot_state->x, pivot_state->y);
-        dubinsStart->setYaw(pivot_state->yaw);
-        OmplState *interState = (OmplState *)dubinsSpace.allocState();
-
-        // interpolate dubins path
-        // Interpolate dubins path to check for collision on grid map
-        //nav_msgs::Path single_path;
-        //single_path.poses.resize(num_pts);
-        for (size_t np=0; np<num_pts; np++)
-        {            
-            //auto start = std::chrono::steady_clock::now();
-            jeeho_interpolate(dubinsStart, partial_path_info.path, (double)np / (double)num_pts, interState, &dubinsSpace,
-                            Constants::r);
-
-            //geometry_msgs::PoseStamped one_pose;
-            //one_pose.pose.position.x = interState->getX();
-            //one_pose.pose.position.y = interState->getY();
-            //one_pose.pose.position.z = 0;
-            //one_pose.pose.orientation = jeeho::eigenQtoMsgQ(jeeho::euler_to_quaternion_xyz(0,0,interState->getYaw()));
-
-            State tempState(interState->getX(), interState->getY(),interState->getYaw());
-
-            //single_path.poses[np] = one_pose;
-            final_path.push_back(tempState);
-        }
+        // get interpolated list
+        auto interp_list = interpolate_dubins(partial_path_info,Constants::r,0.2f);
+        final_path.insert(final_path.end(), interp_list->begin(), interp_list->end());
     }
+
 
 
     // test
