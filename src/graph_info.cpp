@@ -140,4 +140,9 @@ namespace graphTools
         return std::make_shared<std::vector<std::pair<Edge,EdgePathInfo>>>(out_vec);
     }
 
+    EdgePathInfo EdgeMatcher::getPath(Edge e_in)
+    {
+        return edgeMap[e_in];
+    }
+
 }

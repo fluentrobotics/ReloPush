@@ -34,6 +34,16 @@ struct PlanResult {
   Cost cost;
   //! lower bound of the cost (for suboptimal solvers)
   Cost fmin;
+  // return path as a vector of States
+  std::vector<State> getPath()
+  {
+    std::vector<State> out_vec(states.size());
+
+    for(size_t n=0; n<states.size(); n++)
+      out_vec[n] = states[n].first;
+
+    return out_vec;
+  }
 };
 
 }  // namespace libMultiRobotPlanning

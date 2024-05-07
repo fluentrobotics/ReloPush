@@ -30,6 +30,8 @@ ros::Publisher* edge_marker_pub_ptr;
 ros::Publisher* object_marker_pub_ptr;
 ros::Publisher* dubins_path_pub_ptr;
 ros::Publisher* delivery_marker_pub_ptr;
+//test
+ros::Publisher* test_path_pub_ptr;
 
 void initialize_publishers(ros::NodeHandle& nh)
 {
@@ -48,6 +50,10 @@ void initialize_publishers(ros::NodeHandle& nh)
 
     ros::Publisher delivery_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("delivery_locations", 10);
     delivery_marker_pub_ptr = new ros::Publisher(delivery_marker_pub);
+
+    //test
+    ros::Publisher test_path_pub = nh.advertise<nav_msgs::Path>("test_path", 10);
+    test_path_pub_ptr = new ros::Publisher(test_path_pub);
 }
 
 void free_publisher_pointers()
@@ -56,6 +62,8 @@ void free_publisher_pointers()
     delete(edge_marker_pub_ptr);
     delete(object_marker_pub_ptr);
     delete(delivery_marker_pub_ptr);
+    //test
+    delete(test_path_pub_ptr);
 }
 
 void print_edges(GraphPtr g)
@@ -204,6 +212,34 @@ std::pair<size_t,size_t> find_min_row_col(Eigen::MatrixXf& mat)
     return std::make_pair(minRow, minCol);
 }
 
+std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in)
+{
+    nav_msgs::Path out_path;
+    out_path.header.frame_id = "graph";
+    out_path.poses.resize(path_in.size());
+
+    for(size_t n=0; n<path_in.size(); n++)
+    {
+        out_path.poses[n].pose.position.x = path_in[n].x;
+        out_path.poses[n].pose.position.y = path_in[n].y;
+        out_path.poses[n].pose.position.z = 0;
+        out_path.poses[n].pose.orientation = jeeho::eigenQtoMsgQ(jeeho::euler_to_quaternion_xyz(0,0,path_in[n].yaw));
+    }
+
+    return std::make_shared<nav_msgs::Path>(out_path);
+}
+
+State find_pre_push(State& goalState, float distance)
+{
+    State outState(goalState);
+
+    // Calculate the new x and y coordinates
+    outState.x -= distance * cos(goalState.yaw);
+    outState.y -= distance * sin(goalState.yaw);
+
+    return outState;
+}
+
 int main(int argc, char **argv) 
 {
     ros::init(argc, argv, "reloPush");
@@ -325,10 +361,11 @@ int main(int argc, char **argv)
         for(size_t min_it = 0; min_it < min_list.size(); min_it++)
         {
             auto approach_state = nameMatcher.getVertexStatePair(min_list[min_it]->sourceVertexName)->state;
-            auto plan_res = planHybridAstar(robots[r], *approach_state, env);
+            auto pre_push = find_pre_push(*approach_state,0.6f);
+            auto plan_res = planHybridAstar(robots[r], pre_push, env, true);
 
             // cost
-            robot_approach_mat(r,min_it) = plan_res->cost;
+            robot_approach_mat(r,min_it) = plan_res->cost; // todo: handle path plan failure
             // save to path array
             pathArr->at(r)[min_it] = plan_res;
         }
@@ -341,8 +378,62 @@ int main(int argc, char **argv)
     auto minApproach = min_list[mcol];
     auto minPath = pathArr->at(mrow)[mcol];
 
-    //combine approach + push path
-    
+    // combine approach + push path
+    // minPath + dubins
+    // final path as a list of states
+    std::vector<State> final_path(minPath->getPath());
+
+    // augment dubins path
+    // don't do multi-processing
+    for(size_t i=0; i<min_list[mcol]->path.size()-1; i++)
+    {
+        //find edge //todo: handle multiple edges
+        Vertex source = min_list[mcol]->path[i];
+        Vertex target = min_list[mcol]->path[i+1];
+        Edge edge = boost::edge(source, target, *gPtr).first;
+
+        // corresponding path
+        auto partial_path_info = edgeMatcher.getPath(edge);
+        // interpolate
+        size_t num_pts = static_cast<int>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
+
+        auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
+
+        // check collision
+        ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
+        OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
+        dubinsStart->setXY(pivot_state->x, pivot_state->y);
+        dubinsStart->setYaw(pivot_state->yaw);
+        OmplState *interState = (OmplState *)dubinsSpace.allocState();
+
+        // interpolate dubins path
+        // Interpolate dubins path to check for collision on grid map
+        //nav_msgs::Path single_path;
+        //single_path.poses.resize(num_pts);
+        for (size_t np=0; np<num_pts; np++)
+        {            
+            //auto start = std::chrono::steady_clock::now();
+            jeeho_interpolate(dubinsStart, partial_path_info.path, (double)np / (double)num_pts, interState, &dubinsSpace,
+                            Constants::r);
+
+            //geometry_msgs::PoseStamped one_pose;
+            //one_pose.pose.position.x = interState->getX();
+            //one_pose.pose.position.y = interState->getY();
+            //one_pose.pose.position.z = 0;
+            //one_pose.pose.orientation = jeeho::eigenQtoMsgQ(jeeho::euler_to_quaternion_xyz(0,0,interState->getYaw()));
+
+            State tempState(interState->getX(), interState->getY(),interState->getYaw());
+
+            //single_path.poses[np] = one_pose;
+            final_path.push_back(tempState);
+        }
+    }
+
+
+    // test
+    auto navPath_ptr = statePath_to_navPath(final_path);
+
+
 
 
     ros::Rate r(10);
@@ -354,6 +445,9 @@ int main(int argc, char **argv)
         edge_marker_pub_ptr->publish(graph_vis_pair.second);
         delivery_marker_pub_ptr->publish(vis_deli_msg);
         object_marker_pub_ptr->publish(mo_vis);
+
+        //test
+        test_path_pub_ptr->publish(*navPath_ptr);
         ros::spinOnce();
         r.sleep();
     }
