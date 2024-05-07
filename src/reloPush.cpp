@@ -362,6 +362,8 @@ int main(int argc, char **argv)
         {
             auto approach_state = nameMatcher.getVertexStatePair(min_list[min_it]->sourceVertexName)->state;
             auto pre_push = find_pre_push(*approach_state,0.6f);
+            //hybrid astar state yaw is negated
+            pre_push.yaw*=-1;
             auto plan_res = planHybridAstar(robots[r], pre_push, env, true);
 
             // cost
@@ -381,21 +383,24 @@ int main(int argc, char **argv)
     // combine approach + push path
     // minPath + dubins
     // final path as a list of states
-    std::vector<State> final_path(minPath->getPath());
+    std::vector<State> final_path(minPath->getPath(true));
 
     // augment dubins path
     // don't do multi-processing
-    for(size_t i=0; i<min_list[mcol]->path.size()-1; i++)
+    for(size_t i=min_list[mcol]->path.size()-1; i>0; i--)
     {
         //find edge //todo: handle multiple edges
         Vertex source = min_list[mcol]->path[i];
-        Vertex target = min_list[mcol]->path[i+1];
+        Vertex target = min_list[mcol]->path[i-1];
         Edge edge = boost::edge(source, target, *gPtr).first;
 
         // corresponding path
         auto partial_path_info = edgeMatcher.getPath(edge);
         // interpolate
-        size_t num_pts = static_cast<int>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
+        auto l = partial_path_info.path.length();
+        auto num_pts = static_cast<size_t>(l/0.1);
+        //size_t num_pts = static_cast<size_t>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
+        
 
         auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
 
