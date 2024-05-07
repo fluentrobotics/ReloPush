@@ -336,7 +336,8 @@ int main(int argc, char **argv)
 
     // hybrid astar from a robot
     std::vector<State> robots(0);
-    robots.push_back(State(0.3, 1, -1*M_PI/2));
+    //robots.push_back(State(0.3, 1, -1*M_PI/2));
+    robots.push_back(State(2, 2.25, 0));
     
     // assign robot to a block
     // find assignment by shortest distacnce
@@ -393,9 +394,7 @@ int main(int argc, char **argv)
         auto interp_list = interpolate_dubins(partial_path_info,Constants::r,0.2f);
         final_path.insert(final_path.end(), interp_list->begin(), interp_list->end());
     }
-
-
-
+    
     // test
     auto navPath_ptr = statePath_to_navPath(final_path);
 
