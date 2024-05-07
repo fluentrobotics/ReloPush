@@ -8,7 +8,6 @@ Panels:
         - /Status1
         - /MarkerArray1
         - /MarkerArray2
-        - /Marker1
         - /MarkerArray3
         - /MarkerArray3/Namespaces1
         - /Path1
@@ -73,14 +72,6 @@ Visualization Manager:
         "": true
       Queue Size: 100
       Value: true
-    - Class: rviz/Marker
-      Enabled: true
-      Marker Topic: /movable_objects
-      Name: Marker
-      Namespaces:
-        movable_objects: true
-      Queue Size: 100
-      Value: true
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /dubins_paths
@@ -88,7 +79,7 @@ Visualization Manager:
       Namespaces:
         b1_0: false
         b1_1: false
-        b1_2: true
+        b1_2: false
         b1_3: false
         b2_0: false
         b2_1: false
@@ -98,9 +89,9 @@ Visualization Manager:
         b3_1: false
         b3_2: false
         b3_3: false
-        b4_0: true
+        b4_0: false
         b4_1: false
-        b4_2: true
+        b4_2: false
         b4_3: false
       Queue Size: 100
       Value: true
@@ -136,6 +127,25 @@ Visualization Manager:
       Shaft Length: 0.05000000074505806
       Topic: /test_path
       Unreliable: false
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /object_names
+      Name: MarkerArray
+      Namespaces:
+        text_markers: true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /movable_objects
+      Name: MarkerArray
+      Namespaces:
+        obj0: true
+        obj1: true
+        obj2: true
+        obj3: true
+      Queue Size: 100
       Value: true
   Enabled: true
   Global Options:
@@ -176,8 +186,8 @@ Visualization Manager:
       Near Clip Distance: 0.009999999776482582
       Scale: 275.3108215332031
       Target Frame: <Fixed Frame>
-      X: 2.4657273292541504
-      Y: 2.7338831424713135
+      X: 3.1304304599761963
+      Y: 2.9118635654449463
     Saved: ~
 Window Geometry:
   Displays:
@@ -195,5 +205,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1765
-  X: 155
-  Y: 94
+  X: 78
+  Y: 48

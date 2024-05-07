@@ -157,23 +157,16 @@ geometry_msgs::Point scale(const geometry_msgs::Point& p, double factor) {
     return scaled;
 }
 
-visualization_msgs::Marker draw_obstacles(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr, float size = 0.15f)
+visualization_msgs::MarkerArray draw_obstacles(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr, float size = 0.15f)
 {
-    visualization_msgs::Marker marker;
-    marker.header.frame_id = "graph"; // Set the frame id to your desired frame
-    marker.header.stamp = ros::Time::now();
-    marker.ns = "movable_objects";
-    marker.type = visualization_msgs::Marker::CUBE;
-    marker.action = visualization_msgs::Marker::ADD;
-    marker.scale.x = size; // Set the scale of the cube as desired
-    marker.scale.y = size;
-    marker.scale.z = size;
-    marker.color.r = 0.8274509803921568;
-    marker.color.g = 0.7254901960784313;
-    marker.color.b = 0.6235294117647059;
-    marker.color.a = 1.0;
-
+    visualization_msgs::MarkerArray marker_array;
     for (size_t i = 0; i < mo_list.size(); ++i) {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "graph";
+        marker.header.stamp = ros::Time::now();
+        marker.ns = "obj" + std::to_string(i);
+        marker.type = visualization_msgs::Marker::CUBE;
+        marker.action = visualization_msgs::Marker::ADD;
         marker.id = i;
         marker.pose.position.x = mo_list[i].get_x();
         marker.pose.position.y = mo_list[i].get_y();
@@ -182,10 +175,51 @@ visualization_msgs::Marker draw_obstacles(std::vector<movableObject>& mo_list, r
         marker.pose.orientation.y = 0.0;
         marker.pose.orientation.z = 0.0;
         marker.pose.orientation.w = 1.0;
-        pub_ptr->publish(marker);
+        marker.scale.x = size; // Set the scale of the cube as desired
+        marker.scale.y = size;
+        marker.scale.z = size;
+        marker.color.r = 0.8274509803921568;
+        marker.color.g = 0.7254901960784313;
+        marker.color.b = 0.6235294117647059;
+        marker.color.a = 1.0;
+        
+        marker_array.markers.push_back(marker);
     }
+    pub_ptr->publish(marker_array);
 
-    return marker;
+    return marker_array;
+}
+
+visualization_msgs::MarkerArray draw_texts(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr, float size = 0.15f)
+{
+    visualization_msgs::MarkerArray marker_array;
+    for (size_t i = 0; i < mo_list.size(); ++i) {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "graph";
+        marker.header.stamp = ros::Time::now();
+        marker.ns = "text_markers";
+        marker.id = i;
+        marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = mo_list[i].get_x();
+        marker.pose.position.y = mo_list[i].get_y();
+        marker.pose.position.z = size/2 + 0.1;
+        marker.pose.orientation.w = 1.0;
+        marker.scale.z = 0.1; // Text size
+        marker.color.r = 0.0; // Text color: red
+        marker.color.g = 0.0;
+        marker.color.b = 0.0;
+        marker.color.a = 1.0; // Alpha (transparency)
+        marker.lifetime = ros::Duration(); // Persistent marker
+
+        marker.text = mo_list[i].get_name(); // Text to display
+
+        
+        marker_array.markers.push_back(marker);
+    }
+    pub_ptr->publish(marker_array);
+
+    return marker_array;
 }
 
 visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher, Environment& env, ros::Publisher* pub_ptr, float turning_radius)

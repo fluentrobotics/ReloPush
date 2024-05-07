@@ -33,6 +33,7 @@ ros::Publisher* dubins_path_pub_ptr;
 ros::Publisher* delivery_marker_pub_ptr;
 //test
 ros::Publisher* test_path_pub_ptr;
+ros::Publisher* text_pub_ptr;
 
 void initialize_publishers(ros::NodeHandle& nh)
 {
@@ -43,7 +44,7 @@ void initialize_publishers(ros::NodeHandle& nh)
     ros::Publisher edge_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("graph_edges", 2);
     edge_marker_pub_ptr = new ros::Publisher(edge_marker_pub);
 
-    ros::Publisher object_marker_pub = nh.advertise<visualization_msgs::Marker>("movable_objects", 10);
+    ros::Publisher object_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("movable_objects", 10);
     object_marker_pub_ptr = new ros::Publisher(object_marker_pub);
 
     ros::Publisher dubins_path_pub = nh.advertise<visualization_msgs::MarkerArray>("dubins_paths", 10);
@@ -55,6 +56,9 @@ void initialize_publishers(ros::NodeHandle& nh)
     //test
     ros::Publisher test_path_pub = nh.advertise<nav_msgs::Path>("test_path", 10);
     test_path_pub_ptr = new ros::Publisher(test_path_pub);
+
+    ros::Publisher text_pub = nh.advertise<visualization_msgs::MarkerArray>("object_names", 5);
+    text_pub_ptr = new ros::Publisher(text_pub);
 }
 
 void free_publisher_pointers()
@@ -315,6 +319,8 @@ int main(int argc, char **argv)
     auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
     // visualize delivery locations
     auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+    // visualize object names
+    auto vis_names_msg = draw_texts(mo_list,text_pub_ptr);
 
     // print edges
     print_edges(gPtr);
@@ -408,6 +414,10 @@ int main(int argc, char **argv)
 
         //test
         test_path_pub_ptr->publish(*navPath_ptr);
+
+        //object names
+        text_pub_ptr->publish(vis_names_msg);
+
         ros::spinOnce();
         r.sleep();
     }
