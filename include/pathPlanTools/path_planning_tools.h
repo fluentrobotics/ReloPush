@@ -38,7 +38,7 @@ using libMultiRobotPlanning::PlanResult;
 using namespace libMultiRobotPlanning;
 
 namespace Constants {
-static float steer_limit = 0.35; // 0.3
+static float steer_limit = 0.28; // 0.3
 static float speed_limit = 0.4f;
 static float L = 0.29f;
 // [m] --- The minimum turning radius of the vehicle
@@ -46,13 +46,13 @@ static float r = L / tanf(fabs(steer_limit));
 //static float r = 0.5;
 //static const float r = 3;
 //static const float deltat = 6.75 / 180.0 * M_PI;
-static float deltat = speed_limit / r;
+static float deltat = speed_limit / r /1.5;
 // [#] --- A movement cost penalty for turning (choosing non straight motion
 // primitives)
 static const float penaltyTurning = 50;
 // [#] --- A movement cost penalty for reversing (choosing motion primitives >
 // 2)
-static const float penaltyReversing = 10.0;
+static const float penaltyReversing = 8.0;
 // [#] --- A movement cost penalty for change of direction (changing from
 // primitives < 3 to primitives > 2)
 static const float penaltyCOD = 2.0;

@@ -13,6 +13,8 @@
 #include <pathPlanTools/tf_tools.h>
 #include <pathPlanTools/path_planning_tools.h>
 
+extern const std::string world_frame;
+
 class position2D
 {
     public:
@@ -67,7 +69,7 @@ visualization_msgs::MarkerArray publish_pose_nodes(std::unordered_map<std::strin
     for (auto const& [key, val] : nameMatcher)
     {
         visualization_msgs::Marker marker;
-        marker.header.frame_id = "graph";  // Set the frame in which the marker will be displayed
+        marker.header.frame_id = world_frame;  // Set the frame in which the marker will be displayed
         marker.header.stamp = ros::Time::now();
         if (shape == "cube") {
             marker.type = visualization_msgs::Marker::CUBE;
@@ -117,7 +119,7 @@ visualization_msgs::MarkerArray publish_pose_nodes(std::unordered_map<std::strin
 /*
 void draw_lines(std::vector<geometry_msgs::Point>& plist) {
     visualization_msgs::Marker marker;
-    marker.header.frame_id = "graph";  // Set the frame in which the points are defined
+    marker.header.frame_id = world_frame;  // Set the frame in which the points are defined
     marker.type = visualization_msgs::Marker::ARROW;
     marker.action = visualization_msgs::Marker::ADD;
     marker.pose.orientation.w = 1.0;
@@ -162,7 +164,7 @@ visualization_msgs::MarkerArray draw_obstacles(std::vector<movableObject>& mo_li
     visualization_msgs::MarkerArray marker_array;
     for (size_t i = 0; i < mo_list.size(); ++i) {
         visualization_msgs::Marker marker;
-        marker.header.frame_id = "graph";
+        marker.header.frame_id = world_frame;
         marker.header.stamp = ros::Time::now();
         marker.ns = "obj" + std::to_string(i);
         marker.type = visualization_msgs::Marker::CUBE;
@@ -195,7 +197,7 @@ visualization_msgs::MarkerArray draw_texts(std::vector<movableObject>& mo_list, 
     visualization_msgs::MarkerArray marker_array;
     for (size_t i = 0; i < mo_list.size(); ++i) {
         visualization_msgs::Marker marker;
-        marker.header.frame_id = "graph";
+        marker.header.frame_id = world_frame;
         marker.header.stamp = ros::Time::now();
         marker.ns = "text_markers";
         marker.id = i;
@@ -272,7 +274,7 @@ visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher,
     int id = 0;
     for (const auto& path : path_vec) {
         visualization_msgs::Marker marker;
-        marker.header.frame_id = "graph"; // Set the frame id to your desired frame
+        marker.header.frame_id = world_frame; // Set the frame id to your desired frame
         marker.header.stamp = ros::Time::now();
         marker.ns = path.header.frame_id;
         marker.id = id++;
@@ -312,7 +314,7 @@ visualization_msgs::MarkerArray draw_arrows(std::vector<geometry_msgs::Point>& s
     // Loop to create multiple arrows
     for (int i = 0; i < arrow_count; ++i) {
         visualization_msgs::Marker marker;
-        marker.header.frame_id = "graph";
+        marker.header.frame_id = world_frame;
         marker.type = visualization_msgs::Marker::ARROW;
         marker.action = visualization_msgs::Marker::ADD;
         marker.id = i;
@@ -363,7 +365,7 @@ visualization_msgs::MarkerArray draw_deliveries(std::vector<movableObject>& d_li
     for (auto& obj : d_list)
     {
         visualization_msgs::Marker marker;
-        marker.header.frame_id = "graph"; // Change "map" to your desired frame
+        marker.header.frame_id = world_frame; // Change "map" to your desired frame
         marker.header.stamp = ros::Time::now();
         marker.ns = obj.get_name();
         marker.id = id++;

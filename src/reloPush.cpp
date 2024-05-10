@@ -35,6 +35,8 @@ ros::Publisher* delivery_marker_pub_ptr;
 ros::Publisher* test_path_pub_ptr;
 ros::Publisher* text_pub_ptr;
 
+const std::string world_frame = "map";
+
 void initialize_publishers(ros::NodeHandle& nh)
 {
     // init publishers and make pointers
@@ -54,7 +56,7 @@ void initialize_publishers(ros::NodeHandle& nh)
     delivery_marker_pub_ptr = new ros::Publisher(delivery_marker_pub);
 
     //test
-    ros::Publisher test_path_pub = nh.advertise<nav_msgs::Path>("test_path", 10);
+    ros::Publisher test_path_pub = nh.advertise<nav_msgs::Path>("/car/planned_trajectory", 10);
     test_path_pub_ptr = new ros::Publisher(test_path_pub);
 
     ros::Publisher text_pub = nh.advertise<visualization_msgs::MarkerArray>("object_names", 5);
@@ -220,8 +222,10 @@ std::pair<size_t,size_t> find_min_row_col(Eigen::MatrixXf& mat)
 std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in)
 {
     nav_msgs::Path out_path;
-    out_path.header.frame_id = "graph";
+    out_path.header.frame_id = world_frame;
     out_path.poses.resize(path_in.size());
+
+    out_path.header.stamp = ros::Time::now();
 
     for(size_t n=0; n<path_in.size(); n++)
     {
@@ -229,6 +233,23 @@ std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in
         out_path.poses[n].pose.position.y = path_in[n].y;
         out_path.poses[n].pose.position.z = 0;
         out_path.poses[n].pose.orientation = jeeho::eigenQtoMsgQ(jeeho::euler_to_quaternion_xyz(0,0,path_in[n].yaw));
+
+        //timing
+        if(n>0)
+        {
+            //delta distance
+            double dx = out_path.poses[n].pose.position.x - out_path.poses[n-1].pose.position.x;
+            double dy = out_path.poses[n].pose.position.y - out_path.poses[n-1].pose.position.y;
+            //double dz = out_path.poses[n].pose.position.z - out_path.poses[n-1].pose.position.z;
+            auto dist = std::sqrt(dx*dx + dy*dy);
+
+            //delta time
+            auto dTime = (float)dist/Constants::speed_limit;
+
+            out_path.poses[n].header.stamp = out_path.poses[n-1].header.stamp + ros::Duration(dTime);
+        }
+        else
+            out_path.poses[n].header.stamp = ros::Time::now();
     }
 
     return std::make_shared<nav_msgs::Path>(out_path);
@@ -338,6 +359,7 @@ int main(int argc, char **argv)
     std::vector<State> robots(0);
     //robots.push_back(State(0.3, 1, -1*M_PI/2));
     robots.push_back(State(2, 2.25, 0));
+    //robots.push_back(State(5, 3, M_PI/2));
     
     // assign robot to a block
     // find assignment by shortest distacnce
@@ -397,7 +419,7 @@ int main(int argc, char **argv)
     
     // test
     auto navPath_ptr = statePath_to_navPath(final_path);
-
+    test_path_pub_ptr->publish(*navPath_ptr);
 
 
 
@@ -412,7 +434,7 @@ int main(int argc, char **argv)
         object_marker_pub_ptr->publish(mo_vis);
 
         //test
-        test_path_pub_ptr->publish(*navPath_ptr);
+        //test_path_pub_ptr->publish(*navPath_ptr);
 
         //object names
         text_pub_ptr->publish(vis_names_msg);
