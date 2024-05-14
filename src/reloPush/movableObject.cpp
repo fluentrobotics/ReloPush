@@ -121,6 +121,11 @@ movableObjectPtr NameMatcher::getObject(std::string obj_name)
     return moMap[obj_name];
 }
 
+movableObjectPtr NameMatcher::getObject(Vertex vertex_in)
+{
+    return vertexMap[vertex_in];
+}
+
 vertexStatePairPtr NameMatcher::getVertexStatePair(std::string vertex_name)
 {
     return std::make_shared<VertexStatePair>(vsMap[vertex_name]);
@@ -131,10 +136,16 @@ void NameMatcher::addVertices(std::vector<movableObject>& mo_list)
     for(auto& it : mo_list)
     {
         moMap.insert({it.get_name(),std::make_shared<movableObject>(it)});
+        auto moPtr = std::make_shared<movableObject>(it);
         for(size_t n=0; n<it.get_vertex_names().size(); n++)
         {
             vsMap.insert({it.get_vertex_names()[n], it.get_vertex_state_list()[n]});
-            moMap.insert({it.get_vertex_names()[n], std::make_shared<movableObject>(it)});
+            moMap.insert({it.get_vertex_names()[n], moPtr});
         }
+
+        auto vs_list = it.get_vertex_state_list();
+        for(size_t n=0; n<vs_list.size(); n++)
+            vertexMap.insert({*vs_list[n].vertex, moPtr});
+        
     }
 }

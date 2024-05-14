@@ -75,6 +75,25 @@ void free_publisher_pointers()
     delete(test_path_pub_ptr);
 }
 
+std::pair<size_t,size_t> find_min_row_col(Eigen::MatrixXf& mat)
+{
+    /*
+    //find lowest
+    float minVal;
+    int minRow;
+    minVal = mat.rowwise().minCoeff().minCoeff(&minRow);
+
+    // Find column with minimum value
+    float minColVal;
+    int minCol;
+    minColVal = mat.colwise().minCoeff().minCoeff(&minCol);
+    */
+    size_t minRow, minCol;
+    float minValue = mat.minCoeff(&minRow, &minCol);
+
+    return std::make_pair(minRow, minCol);
+}
+
 void print_edges(GraphPtr g)
 {
     auto edge_list = graphTools::getEdges(*g);
@@ -152,12 +171,13 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
         std::cout << cost_mat << std::endl;
 
         // Find the indices of the smallest element
-        int minRow, minCol;
-        float minValue = cost_mat.minCoeff(&minRow, &minCol);
+        size_t minRow, minCol;
+        //float minValue = cost_mat.minCoeff(&minRow, &minCol);
+        std::tie(minRow,minCol) = find_min_row_col(cost_mat);
 
-        std::cout << "Smallest value: " << minValue << std::endl;
+        std::cout << "Smallest value: " << cost_mat(minRow,minCol) << std::endl;
 
-        std::cout << "row: " << minRow << " col: " << minCol << std::endl;
+        //std::cout << "row: " << minRow << " col: " << minCol << std::endl;
 
         Color::println("This may not be the only smallest value",Color::YELLOW);
 
@@ -168,8 +188,16 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
     return out_vec;
 }
 
-std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State& start, State& goal_in, Environment& env, bool print_res = false)
+std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, State goal_in, Environment& env, bool print_res = false, bool negate_start_yaw = false, bool negate_goal_yaw = false)
 {
+    
+
+    if(negate_start_yaw)
+        start.yaw *= -1;
+
+    if(negate_goal_yaw)
+        goal_in.yaw *= -1;
+
     env.changeGoal(goal_in);
     
     HybridAStar<State, Action, double, Environment> hybridAStar(env);
@@ -202,21 +230,6 @@ std::shared_ptr<std::vector<std::vector<T>>> initDoubleVec(int rows, int cols)
 {
     std::vector<std::vector<T>> outVec(rows, std::vector<T>(cols, 0));
     return std::make_shared<std::vector<std::vector<T>>>(outVec);
-}
-
-std::pair<size_t,size_t> find_min_row_col(Eigen::MatrixXf& mat)
-{
-    //find lowest
-    float minVal;
-    int minRow;
-    minVal = mat.rowwise().minCoeff().minCoeff(&minRow);
-
-    // Find column with minimum value
-    float minColVal;
-    int minCol;
-    minColVal = mat.colwise().minCoeff().minCoeff(&minCol);
-
-    return std::make_pair(minRow, minCol);
 }
 
 std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in)
@@ -255,13 +268,24 @@ std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in
     return std::make_shared<nav_msgs::Path>(out_path);
 }
 
-State find_pre_push(State& goalState, float distance)
+State find_pre_push(State& goalState, float distance = 0.6f)
 {
     State outState(goalState);
 
     // Calculate the new x and y coordinates
     outState.x -= distance * cos(goalState.yaw);
     outState.y -= distance * sin(goalState.yaw);
+
+    return outState;
+}
+
+State find_post_push(State& goalState, float distance = 0.6f)
+{
+    State outState(goalState);
+
+    // Calculate the new x and y coordinates
+    outState.x += distance * cos(goalState.yaw);
+    outState.y += distance * sin(goalState.yaw);
 
     return outState;
 }
@@ -280,21 +304,22 @@ void init_static_obstacles(std::unordered_set<State>& obs, std::vector<movableOb
     for(auto& it : mo_list)
     {
         obs.insert(State(it.get_x(),it.get_y(),0));
-    }
-    
+    }    
 }
 
 std::unordered_map<std::string,std::string> init_delivery(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, 
                     graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, GraphPtr gPtr, int num_push_sides = 4)
 {
     // deliver b2 to 3,3.5
-    delivery_list.push_back(movableObject(3,3.5,0,"d2",num_push_sides,gPtr));
-    delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
+    //delivery_list.push_back(movableObject(3,3.5,0,"d2",num_push_sides,gPtr));
+    //delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(4,3.5,0,"d3",num_push_sides,gPtr));
     
     // assignment table. object -> delivery
     std::unordered_map<std::string,std::string> delivery_table;
-    delivery_table.insert({"b2","d2"});
-    delivery_table.insert({"b1","d1"});
+    //delivery_table.insert({"b2","d2"});
+    //delivery_table.insert({"b1","d1"});
+    delivery_table.insert({"b3","d3"});
 
     // add to graph
     reloPush::add_deliveries(delivery_list,mo_list,gPtr,env,Constants::r,edgeMatcher,false);
@@ -307,9 +332,232 @@ std::unordered_map<std::string,std::string> init_delivery(std::vector<movableObj
 void init_robots(std::vector<State>& robots)
 {
     //robots.push_back(State(0.3, 1, -1*M_PI/2));
-    robots.push_back(State(2, 2.25, 0));
+    //robots.push_back(State(2, 2.25, 0));
+    robots.push_back(State(1, 2.25, 0));
     //robots.push_back(State(5, 3, M_PI/2));
 }
+
+int findFirstTrueIndex(const std::vector<bool>& vec) {
+    for (size_t i = 0; i < vec.size(); ++i) {
+        if (vec[i]) {
+            return static_cast<int>(i); // Return the index of the first true element
+        }
+    }
+    return -1; // Return -1 if no true element is found
+}
+
+std::vector<movableObjectPtr> get_intermediate_objects(std::vector<Vertex>& list_in, NameMatcher& nameMatcher)
+{
+    std::vector<movableObjectPtr> out_vec(0);
+
+    std::vector<Vertex> temp_vec(list_in);
+    if (temp_vec.size() >= 2) {
+        // Remove the first element
+        temp_vec.erase(temp_vec.begin());
+
+        // Remove the last element
+        temp_vec.erase(temp_vec.end() - 1);
+    }
+    else
+    {
+        // this should not happen
+        Color::println("Unexpected graph plan result", Color::RED);
+        temp_vec.clear();
+    }
+
+    for(auto& it : temp_vec)
+        out_vec.push_back(nameMatcher.getObject(it));
+
+    return out_vec;
+}
+
+void generate_temp_env(Environment& env_in, Environment& temp_env, std::vector<State>& push_path)
+{
+    // copy // todo: do better copy
+    Environment out_env = env_in;
+
+    //std::unordered_set<State> path_obs;
+
+    // add path as obstacle
+    for(size_t i=0; i<push_path.size(); i++)
+    {
+        // center point in cell coord
+        out_env.add_obs(State(push_path[i].x,push_path[i].y,0));
+    }
+
+    temp_env = out_env;
+}
+
+// relocation path of a cube
+// input: pushing path
+//        object to relocate
+//        map with obstacles
+std::shared_ptr<std::vector<std::vector<State>>> find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list, Environment& env)
+{
+    // find where to relocate
+    // propagate along pushing directions until find one
+    // increment by cell resolution (Constants::mapResolution)
+    // n candidates
+
+    // generate copied env with path points as obstacles
+    Environment temp_env;
+    generate_temp_env(env, temp_env, push_path);
+
+    std::vector<std::vector<State>> out_paths(relo_list.size());
+
+    // for each mo
+    for(int m = 0; m<relo_list.size(); m++)
+    {
+        movableObjectPtr moPtr = relo_list[m];
+
+        // take out this object from obstacles
+        temp_env.remove_obs(State(moPtr->get_x(), moPtr->get_y(), moPtr->get_th()));
+
+        auto init_pusing_poses = moPtr->get_pushing_poses();
+        std::vector<State> candidates(init_pusing_poses.size());
+        // copy
+        for(size_t n=0; n<init_pusing_poses.size(); n++)
+            candidates[n] = *(init_pusing_poses[n]);
+        
+        std::vector<bool> valid_vec(candidates.size());
+        for(size_t i=0; i<valid_vec.size(); i++)
+            valid_vec[i] = false;
+
+        bool valid_position_found = false;
+        while(true) //todo: add condition to quit
+        {
+            // increment by cell resolution along pushing direction
+            for(size_t n=0; n<candidates.size(); n++){
+                // unit vector of pushing direction
+                // Calculate change in x and y coordinates
+                float delta_x = Constants::mapResolution * cosf(candidates[n].yaw);
+                float delta_y = Constants::mapResolution * sinf(candidates[n].yaw);
+
+                candidates[n].x += delta_x;
+                candidates[n].y += delta_y;
+
+                // check if this is a valid position
+                if(temp_env.stateValid(candidates[n],Constants::carWidth,0.2,Constants::LB,Constants::LF) == true) //todo: set better values
+                {
+                    valid_vec[n] = true;
+
+                    // add break flag
+                    valid_position_found = true;
+                }
+            }
+
+            // break if a point is found
+            if(valid_position_found)
+                break;
+        }
+
+        // pick a valid pose if multiple // todo: find a better way to handle multiple candidates
+        int valid_ind = findFirstTrueIndex(valid_vec);
+
+        // path from init pre-push to target pre-push
+        State start_pre_push = find_pre_push(*init_pusing_poses[valid_ind], 0.6f);
+        State goal_pre_push = find_pre_push(candidates[valid_ind], 0.6f);
+        //todo: interpolate the line
+
+        // add new location as obstacle
+        temp_env.add_obs(candidates[valid_ind]);
+
+        // add this path
+        out_paths[m] = std::vector<State>({start_pre_push,goal_pre_push});
+    }
+
+    return std::make_shared<std::vector<std::vector<State>>>(out_paths);
+}
+
+std::vector<State> get_push_path(std::vector<Vertex>& vertex_path, 
+                                  graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr)
+{
+    std::vector<State> push_path(0);
+
+    // augment dubins path
+    // don't do multi-processing
+    for(size_t i=vertex_path.size()-1; i>0; i--)
+    {
+        //find edge //todo: handle multiple edges
+        Vertex source = vertex_path[i];
+        Vertex target = vertex_path[i-1];
+        Edge edge = boost::edge(source, target, *gPtr).first;
+
+        // corresponding path
+        auto partial_path_info = edgeMatcher.getPath(edge);
+        //auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
+
+        // get interpolated list
+        auto interp_list = interpolate_dubins(partial_path_info,Constants::r,0.2f);
+        push_path.insert(push_path.end(), interp_list->begin(), interp_list->end());
+    }    
+
+    //return final_path;
+    return push_path;
+}
+
+std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<std::vector<State>>& relo_path, State& robot, Environment& env, std::vector<movableObjectPtr>& relo_list)
+{
+    std::vector<std::vector<State>> path_segments;
+    if(relo_path.size()>0)
+    {
+        
+        // start to first relo
+        path_segments.push_back(planHybridAstar(robot, relo_path[0][0], env, false, true, true)->getPath(true));
+        path_segments.push_back(relo_path[0]);
+        // remove pushed object
+        auto moPtr = relo_list[0];
+        env.remove_obs(State(moPtr->get_x(), moPtr->get_y(), moPtr->get_th()));
+        // relocated
+        auto relocated_obs = find_post_push(relo_path[0].back());
+        env.add_obs(relocated_obs);
+
+        // relo
+        // do not use multiprocessing
+        for(size_t p=0; p<relo_path.size()-1; p++)
+        {
+            // last of this relo
+            auto lastThisRelo = relo_path[p].back();
+            // start of next relo
+            auto firstNextRelo = relo_path[p+1].front();
+
+            auto moPtr_loop = relo_list[p+1];
+            env.remove_obs(State(moPtr_loop->get_x(), moPtr_loop->get_y(), moPtr_loop->get_th()));
+
+            // plan hybrid astar path
+            auto temp_path = planHybridAstar(lastThisRelo, firstNextRelo, env, false, true, true);
+            path_segments.push_back(temp_path->getPath(true));
+            path_segments.push_back(relo_path[p+1]);
+
+            // put it back
+            env.add_obs(find_post_push(relo_path[p+1].back()));
+        }
+
+        // relo to push
+        auto lastLastRelo = relo_path.back().back();
+        // first pre-push
+        auto pre_push = find_pre_push(push_path.front(),0.6f);
+        path_segments.push_back(planHybridAstar(lastLastRelo, pre_push, env, false, true, true)->getPath(true));
+
+        path_segments.push_back(push_path);
+
+    }
+
+    else{
+        // start to prepush
+        auto pre_push = find_pre_push(push_path.front(),0.6f);
+        path_segments.push_back(planHybridAstar(robot, pre_push, env, false)->getPath(true));
+        path_segments.push_back(push_path);        
+    }
+
+    std::vector<State> combinedVector;
+    for (const auto& subVector : path_segments) {
+        combinedVector.insert(combinedVector.end(), subVector.begin(), subVector.end());
+    }
+    
+    return combinedVector;
+}
+
 
 std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, std::vector<graphPlanResultPtr>& min_list, 
                                         NameMatcher& nameMatcher, graphTools::EdgeMatcher& edgeMatcher ,Environment& env, GraphPtr gPtr)
@@ -340,7 +588,7 @@ std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, 
         }
     }
 
-    size_t mrow,mcol;
+    size_t mrow, mcol;
     std::tie(mrow,mcol) = find_min_row_col(robot_approach_mat);
     //min cost path
     auto minRobot = robots[mrow];
@@ -378,15 +626,12 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "reloPush");
     ros::NodeHandle nh;
-
     // initialize publishers
     initialize_publishers(nh);
-
     // wait for debug attach
     ros::Duration(1.0).sleep();
 
     int num_push_sides = 4;
-
     std::vector<movableObject> mo_list(0);
 
     //generate graph
@@ -407,7 +652,7 @@ int main(int argc, char **argv)
     init_static_obstacles(obs, mo_list);
 
     State goal(0,0,0); // arbitrary goal
-    Environment env(40, 40, obs, goal);
+    Environment env(20, 20, obs, goal);
 
     //stopWatch time_edge("edge_con");
     // construct edges
@@ -417,31 +662,34 @@ int main(int argc, char **argv)
 
     // add delivery poses
     std::vector<movableObject> delivery_list(0);
-    
     std::unordered_map<std::string,std::string> delivery_table = init_delivery(delivery_list,mo_list,env,edgeMatcher,nameMatcher,gPtr,num_push_sides);
 
     // print edges
     print_edges(gPtr);
-
     // traverse on graph
     pathFinder pf;
-
     // find best push traverse for all assignments
     auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
-
     pf.printPath(gPtr, min_list[0]->path);
-    pf.printPath(gPtr, min_list[1]->path);
+    //pf.printPath(gPtr, min_list[1]->path);
+    auto reloc_objects = get_intermediate_objects(min_list[0]->path, nameMatcher);
 
     // hybrid astar from a robot
     std::vector<State> robots(0);
     init_robots(robots);
+
+    // path segments for relocation
+    auto push_path = get_push_path(min_list[0]->path, edgeMatcher, gPtr);
+    auto relo_paths = find_relo_path(push_path, reloc_objects, env);
+    auto reloPush_path = combine_relo_push(push_path, *relo_paths, robots[0], env, reloc_objects);
+
+    auto navPath_ptr = statePath_to_navPath(reloPush_path);
     
     // combine all paths
     //auto navPath_ptr = statePath_to_navPath(final_path);
-    auto navPath_ptr = generate_final_path(robots, min_list, nameMatcher, edgeMatcher, env, gPtr);
+    //auto navPath_ptr = generate_final_path(robots, min_list, nameMatcher, edgeMatcher, env, gPtr);
 
     ros::Rate r(10);
-
     // visualize vertices
     auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
     // visualize movable obstacles

@@ -38,8 +38,8 @@ using libMultiRobotPlanning::PlanResult;
 using namespace libMultiRobotPlanning;
 
 namespace Constants {
-static float steer_limit = 0.28; // 0.3
-static float speed_limit = 0.4f;
+static float steer_limit = 0.27; // 0.3
+static float speed_limit = 0.33f; //0.4
 static float L = 0.29f;
 // [m] --- The minimum turning radius of the vehicle
 static float r = L / tanf(fabs(steer_limit));
@@ -111,6 +111,9 @@ using Action = int;  // Action < 6
 
 class Environment {
  public:
+
+  Environment(){};
+
   Environment(size_t maxx, size_t maxy, std::unordered_set<State> obstacles,
               State goal)
       : m_obstacles(std::move(obstacles)),

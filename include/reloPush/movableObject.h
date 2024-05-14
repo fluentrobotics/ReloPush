@@ -80,11 +80,13 @@ class NameMatcher
     public:
         std::unordered_map<std::string,VertexStatePair> vsMap; // name_{push_num}
         std::unordered_map<std::string,movableObjectPtr> moMap;
+        std::unordered_map<Vertex,movableObjectPtr> vertexMap; // to map vertex to movableObject
 
         NameMatcher();
         NameMatcher(std::vector<movableObject> mo_list, bool clear_map = true);
 
         movableObjectPtr getObject(std::string obj_name);
+        movableObjectPtr getObject(Vertex vertex_in);
         vertexStatePairPtr getVertexStatePair(std::string vertex_name);
         void addVertices(std::vector<movableObject>& mo_list);
 };
