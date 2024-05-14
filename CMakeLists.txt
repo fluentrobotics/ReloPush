@@ -59,6 +59,7 @@ add_executable(
     "src/omplTools/fromOMPL.cpp"
     "src/omplTools/dubins_tools.cpp"
     "src/dijkstra_tools.cpp"
+    "src/reloPush/color_print.cpp"
     )
 
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES})

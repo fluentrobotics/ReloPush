@@ -54,7 +54,7 @@ std::pair<std::vector<Vertex>, float> pathFinder::djikstra(
     //runtime measurement
     stopWatch st(std::string("map"));
     boost::dijkstra_shortest_paths(*graphPtr, source, distanceMap); //todo: avoid unnecessary distance map making 
-    st.stop_and_get_us();
+    //st.stop_and_get_us();
 
      // Check if destination is reachable
     if (distances[destination] > 10000) {

@@ -20,6 +20,8 @@
 #include <graphTools/edge_path_info.h>
 #include <pathPlanTools/dubins_interpolation.h>
 
+#include <reloPush/color_print.h>
+
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
@@ -149,17 +151,15 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
 
         std::cout << cost_mat << std::endl;
 
-        //find lowest
-        float minVal;
-        int minRow;
-        minVal = cost_mat.rowwise().minCoeff().minCoeff(&minRow);
+        // Find the indices of the smallest element
+        int minRow, minCol;
+        float minValue = cost_mat.minCoeff(&minRow, &minCol);
 
-        // Find column with minimum value
-        float minColVal;
-        int minCol;
-        minColVal = cost_mat.colwise().minCoeff().minCoeff(&minCol);
+        std::cout << "Smallest value: " << minValue << std::endl;
 
         std::cout << "row: " << minRow << " col: " << minCol << std::endl;
+
+        Color::println("This may not be the only smallest value",Color::YELLOW);
 
         graphPlanResult gp(pivot_names[minRow],target_names[minCol],cost_mat(minRow,minCol),paths[minRow][minCol],i->first);
         out_vec.push_back(std::make_shared<graphPlanResult>(gp));
@@ -266,58 +266,27 @@ State find_pre_push(State& goalState, float distance)
     return outState;
 }
 
-int main(int argc, char **argv) 
+void init_movable_objects(std::vector<movableObject>& mo_list, GraphPtr gPtr, int num_push_sides = 4)
 {
-    ros::init(argc, argv, "reloPush");
-    ros::NodeHandle nh;
-
-    // initialize publishers
-    initialize_publishers(nh);
-
-    // wait for debug attach
-    ros::Duration(1.0).sleep();
-
-    //test data
-    //x = [2.5, 1  ,   1.5, 2]
-    //y = [3, 3.5,   3.5,   3.5]
-
-    std::vector<movableObject> mo_list(0);
-
-    //generate graph
-    GraphPtr gPtr(new Graph);
-
-    // init objects and add to graph
-    // todo: parse from input file
-    int num_push_sides = 4;
     mo_list.push_back(movableObject(2.5,2,0,"b1",num_push_sides,gPtr));
-    mo_list.push_back(movableObject(1,3.5,0,"b2",num_push_sides,gPtr));
+    //mo_list.push_back(movableObject(1,3.5,0,"b2",num_push_sides,gPtr));
+    mo_list.push_back(movableObject(1,1.5,0,"b2",num_push_sides,gPtr));
     mo_list.push_back(movableObject(1.5,3.5,0,"b3",num_push_sides,gPtr));
     mo_list.push_back(movableObject(2,3.5,0,"b4",num_push_sides,gPtr));
+}
 
-    // genearte name matcher
-    NameMatcher nameMatcher(mo_list);
-    
-    // edge to path matcher
-    graphTools::EdgeMatcher edgeMatcher;
-
-    // initialize grid map
-    std::unordered_set<State> obs;
+void init_static_obstacles(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list)
+{
     for(auto& it : mo_list)
     {
         obs.insert(State(it.get_x(),it.get_y(),0));
     }
-    State goal(0,0,0); // arbitrary goal
-    Environment env(40, 40, obs, goal);
-
-    stopWatch time_edge("edge_con");
-    // construct edges
-    reloPush::construct_edges(mo_list, gPtr, env, Constants::r, edgeMatcher ,false);
-    time_edge.stop();
-    time_edge.print_us();
-
-    // add delivery poses
-    std::vector<movableObject> delivery_list(0);
     
+}
+
+std::unordered_map<std::string,std::string> init_delivery(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, 
+                    graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, GraphPtr gPtr, int num_push_sides = 4)
+{
     // deliver b2 to 3,3.5
     delivery_list.push_back(movableObject(3,3.5,0,"d2",num_push_sides,gPtr));
     delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
@@ -332,35 +301,19 @@ int main(int argc, char **argv)
     //add to namematcher
     nameMatcher.addVertices(delivery_list);
 
-    // visualize vertices
-    auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
-    // visualize movable obstacles
-    auto mo_vis = draw_obstacles(mo_list, object_marker_pub_ptr);
-    // visualize edge paths
-    auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
-    // visualize delivery locations
-    auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
-    // visualize object names
-    auto vis_names_msg = draw_texts(mo_list,text_pub_ptr);
+    return delivery_table;
+}
 
-    // print edges
-    print_edges(gPtr);
-
-    // traverse on graph
-    pathFinder pf;
-
-    // find best push traverse for all assignments
-    auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
-
-    pf.printPath(gPtr, min_list[0]->path);
-    pf.printPath(gPtr, min_list[1]->path);
-
-    // hybrid astar from a robot
-    std::vector<State> robots(0);
+void init_robots(std::vector<State>& robots)
+{
     //robots.push_back(State(0.3, 1, -1*M_PI/2));
     robots.push_back(State(2, 2.25, 0));
     //robots.push_back(State(5, 3, M_PI/2));
-    
+}
+
+std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, std::vector<graphPlanResultPtr>& min_list, 
+                                        NameMatcher& nameMatcher, graphTools::EdgeMatcher& edgeMatcher ,Environment& env, GraphPtr gPtr)
+{
     // assign robot to a block
     // find assignment by shortest distacnce
     // for each min_list, calculate travel distance to approach
@@ -415,15 +368,92 @@ int main(int argc, char **argv)
         // get interpolated list
         auto interp_list = interpolate_dubins(partial_path_info,Constants::r,0.2f);
         final_path.insert(final_path.end(), interp_list->begin(), interp_list->end());
-    }
+    }    
+
+    //return final_path;
+    return statePath_to_navPath(final_path);
+}
+
+int main(int argc, char **argv) 
+{
+    ros::init(argc, argv, "reloPush");
+    ros::NodeHandle nh;
+
+    // initialize publishers
+    initialize_publishers(nh);
+
+    // wait for debug attach
+    ros::Duration(1.0).sleep();
+
+    int num_push_sides = 4;
+
+    std::vector<movableObject> mo_list(0);
+
+    //generate graph
+    GraphPtr gPtr(new Graph);
+
+    // init objects and add to graph
+    // todo: parse from input file
+    init_movable_objects(mo_list, gPtr, num_push_sides);
+
+    // genearte name matcher
+    NameMatcher nameMatcher(mo_list);
     
-    // test
-    auto navPath_ptr = statePath_to_navPath(final_path);
-    test_path_pub_ptr->publish(*navPath_ptr);
+    // edge to path matcher
+    graphTools::EdgeMatcher edgeMatcher;
 
+    // initialize grid map
+    std::unordered_set<State> obs;
+    init_static_obstacles(obs, mo_list);
 
+    State goal(0,0,0); // arbitrary goal
+    Environment env(40, 40, obs, goal);
+
+    //stopWatch time_edge("edge_con");
+    // construct edges
+    reloPush::construct_edges(mo_list, gPtr, env, Constants::r, edgeMatcher ,false);
+    //time_edge.stop();
+    //time_edge.print_us();
+
+    // add delivery poses
+    std::vector<movableObject> delivery_list(0);
+    
+    std::unordered_map<std::string,std::string> delivery_table = init_delivery(delivery_list,mo_list,env,edgeMatcher,nameMatcher,gPtr,num_push_sides);
+
+    // print edges
+    print_edges(gPtr);
+
+    // traverse on graph
+    pathFinder pf;
+
+    // find best push traverse for all assignments
+    auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
+
+    pf.printPath(gPtr, min_list[0]->path);
+    pf.printPath(gPtr, min_list[1]->path);
+
+    // hybrid astar from a robot
+    std::vector<State> robots(0);
+    init_robots(robots);
+    
+    // combine all paths
+    //auto navPath_ptr = statePath_to_navPath(final_path);
+    auto navPath_ptr = generate_final_path(robots, min_list, nameMatcher, edgeMatcher, env, gPtr);
 
     ros::Rate r(10);
+
+    // visualize vertices
+    auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
+    // visualize movable obstacles
+    auto mo_vis = draw_obstacles(mo_list, object_marker_pub_ptr);
+    // visualize edge paths
+    auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
+    // visualize delivery locations
+    auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+    // visualize object names
+    auto vis_names_msg = draw_texts(mo_list,text_pub_ptr);
+    // publish final path once
+    test_path_pub_ptr->publish(*navPath_ptr);
 
     while(ros::ok())
     {
