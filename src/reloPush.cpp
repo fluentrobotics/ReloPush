@@ -39,6 +39,8 @@ ros::Publisher* text_pub_ptr;
 
 const std::string world_frame = "map";
 
+typedef visualization_msgs::MarkerArray vMArray;
+
 void initialize_publishers(ros::NodeHandle& nh)
 {
     // init publishers and make pointers
@@ -218,7 +220,7 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
         } 
     }
     else {
-        if(print_res)
+        //if(print_res)
             std::cout << "\033[1m\033[31m Fail to find a path \033[0m\n";
     }
 
@@ -292,11 +294,11 @@ State find_post_push(State& goalState, float distance = 0.6f)
 
 void init_movable_objects(std::vector<movableObject>& mo_list, GraphPtr gPtr, int num_push_sides = 4)
 {
-    mo_list.push_back(movableObject(2.5,2,0,"b1",num_push_sides,gPtr));
+    mo_list.push_back(movableObject(3,3.5,0,"b1",num_push_sides,gPtr));
     //mo_list.push_back(movableObject(1,3.5,0,"b2",num_push_sides,gPtr));
     mo_list.push_back(movableObject(1,1.5,0,"b2",num_push_sides,gPtr));
-    mo_list.push_back(movableObject(1.5,3.5,0,"b3",num_push_sides,gPtr));
-    mo_list.push_back(movableObject(2,3.5,0,"b4",num_push_sides,gPtr));
+    mo_list.push_back(movableObject(1,2,0,"b3",num_push_sides,gPtr));
+    mo_list.push_back(movableObject(0.5,3.5,0,"b4",num_push_sides,gPtr));
 }
 
 void init_static_obstacles(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list)
@@ -313,7 +315,7 @@ std::unordered_map<std::string,std::string> init_delivery(std::vector<movableObj
     // deliver b2 to 3,3.5
     //delivery_list.push_back(movableObject(3,3.5,0,"d2",num_push_sides,gPtr));
     //delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
-    delivery_list.push_back(movableObject(4,3.5,0,"d3",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(2,4,0,"d3",num_push_sides,gPtr));
     
     // assignment table. object -> delivery
     std::unordered_map<std::string,std::string> delivery_table;
@@ -333,7 +335,7 @@ void init_robots(std::vector<State>& robots)
 {
     //robots.push_back(State(0.3, 1, -1*M_PI/2));
     //robots.push_back(State(2, 2.25, 0));
-    robots.push_back(State(1, 2.25, 0));
+    robots.push_back(State(1.5, 2.5, 0));
     //robots.push_back(State(5, 3, M_PI/2));
 }
 
@@ -622,6 +624,42 @@ std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, 
     return statePath_to_navPath(final_path);
 }
 
+void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivery_list
+                        , NameMatcher& nameMatcher, graphTools::EdgeMatcher edgeMatcher, Environment& env, std::shared_ptr<nav_msgs::Path> navPath_ptr, double loop_rate=10)
+{
+    ros::Rate r(loop_rate);
+    // visualize vertices
+    auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
+    // visualize movable obstacles
+    auto mo_vis = draw_obstacles(mo_list, object_marker_pub_ptr);
+    // visualize edge paths
+    auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
+    // visualize delivery locations
+    auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+    // visualize object names
+    auto vis_names_msg = draw_texts(mo_list,text_pub_ptr);
+    // publish final path once
+    test_path_pub_ptr->publish(*navPath_ptr); 
+
+    while(ros::ok())
+    {
+        dubins_path_pub_ptr->publish(vis_path_msg);
+        vertex_marker_pub_ptr->publish(graph_vis_pair.first);
+        edge_marker_pub_ptr->publish(graph_vis_pair.second);
+        delivery_marker_pub_ptr->publish(vis_deli_msg);
+        object_marker_pub_ptr->publish(mo_vis);
+
+        //test
+        //test_path_pub_ptr->publish(*navPath_ptr);
+
+        //object names
+        text_pub_ptr->publish(vis_names_msg);
+
+        ros::spinOnce();
+        r.sleep();
+    }
+}
+
 int main(int argc, char **argv) 
 {
     ros::init(argc, argv, "reloPush");
@@ -689,37 +727,7 @@ int main(int argc, char **argv)
     //auto navPath_ptr = statePath_to_navPath(final_path);
     //auto navPath_ptr = generate_final_path(robots, min_list, nameMatcher, edgeMatcher, env, gPtr);
 
-    ros::Rate r(10);
-    // visualize vertices
-    auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
-    // visualize movable obstacles
-    auto mo_vis = draw_obstacles(mo_list, object_marker_pub_ptr);
-    // visualize edge paths
-    auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
-    // visualize delivery locations
-    auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
-    // visualize object names
-    auto vis_names_msg = draw_texts(mo_list,text_pub_ptr);
-    // publish final path once
-    test_path_pub_ptr->publish(*navPath_ptr);
-
-    while(ros::ok())
-    {
-        dubins_path_pub_ptr->publish(vis_path_msg);
-        vertex_marker_pub_ptr->publish(graph_vis_pair.first);
-        edge_marker_pub_ptr->publish(graph_vis_pair.second);
-        delivery_marker_pub_ptr->publish(vis_deli_msg);
-        object_marker_pub_ptr->publish(mo_vis);
-
-        //test
-        //test_path_pub_ptr->publish(*navPath_ptr);
-
-        //object names
-        text_pub_ptr->publish(vis_names_msg);
-
-        ros::spinOnce();
-        r.sleep();
-    }
+    visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, 10);
 
     //remove publisher pointers
     free_publisher_pointers();

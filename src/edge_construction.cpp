@@ -2,7 +2,7 @@
 
 
 bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
-                    size_t n, size_t m, std::pair<pathType,dubinsPath> dubins_res, Environment& env, float turning_radius, bool print_log)
+                    size_t n, size_t m, std::pair<pathType,dubinsPath> dubins_res, Environment& env, float turning_radius, bool print_log, bool is_delivery = false)
 {
     // check collision
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
@@ -12,20 +12,27 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
-    size_t num_pts = static_cast<int>(dubins_res.second.length()/0.1); //todo: get resolution as a param
+    size_t num_pts = static_cast<int>(dubins_res.second.length()/(0.1*0.5)); //todo: get resolution as a param
 
     bool collision_found = false;
 
-    // remove collision at starting pose
-    auto took_out = env.takeout_start_collision(*pivot_state);
-
+    
+    std::vector<State> took_out(0);
     // takeout pivot object from obstacles
     took_out.push_back(State(mo_list[n].get_x(),mo_list[n].get_y(),0));
     env.remove_obs(State(mo_list[n].get_x(),mo_list[n].get_y(),0));
 
     // takeout target object from obstacles
-    took_out.push_back(State(mo_list[m].get_x(),mo_list[m].get_y(),0));
-    env.remove_obs(State(mo_list[m].get_x(),mo_list[m].get_y(),0));
+    // only if this is not a delivery location
+    if(!is_delivery){
+        took_out.push_back(State(mo_list[m].get_x(),mo_list[m].get_y(),0));
+        env.remove_obs(State(mo_list[m].get_x(),mo_list[m].get_y(),0));
+    }
+
+    // remove other collision at starting pose
+    //auto init_collisions = env.takeout_start_collision(*pivot_state);
+    //for(auto& it : init_collisions)
+    //    took_out.push_back(it);
 
     // Interpolate dubins path to check for collision on grid map
     for (size_t np=0; np<num_pts; np++)
@@ -281,7 +288,7 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                     else // use ordinary dubins path
                     {
                         // check collision
-                        auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, turning_radius, print_log);
+                        auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, turning_radius, print_log, true);
 
                         if(!collision_found)
                         {
