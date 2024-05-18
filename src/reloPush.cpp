@@ -60,7 +60,7 @@ void initialize_publishers(ros::NodeHandle& nh)
     delivery_marker_pub_ptr = new ros::Publisher(delivery_marker_pub);
 
     //test
-    ros::Publisher test_path_pub = nh.advertise<nav_msgs::Path>("/car/planned_trajectory", 10);
+    ros::Publisher test_path_pub = nh.advertise<nav_msgs::Path>("/mushr2/planned_trajectory", 10);
     test_path_pub_ptr = new ros::Publisher(test_path_pub);
 
     ros::Publisher text_pub = nh.advertise<visualization_msgs::MarkerArray>("object_names", 5);
@@ -114,6 +114,50 @@ void print_edges(GraphPtr g)
         auto eWeight = vertPair.getEdgeWeight();
         std::cout << "Edge Weight: " << eWeight << "\n" << std::endl;
     }
+}
+
+tf::StampedTransform listen_tf(std::string from_tf, std::string to_tf)
+{
+  tf::StampedTransform transform;
+  tf::TransformListener listener;
+  try{
+      listener.waitForTransform(from_tf, to_tf,
+                                    ros::Time::now(), ros::Duration(0.5));
+    listener.lookupTransform(from_tf, to_tf,
+                             ros::Time(0), transform);
+  }
+  catch (tf::TransformException &ex) {
+    ROS_ERROR("%s",ex.what());
+    //ros::Duration(0.1).sleep();
+    //continue;Quaternion XYZW: -0.0396948 0.953661 -0.258644 -0.148522
+    transform.setData(tf::Transform::getIdentity());
+  }
+  return transform;
+}
+
+nav_msgs::Path transformPath(const nav_msgs::Path& input_path, const tf::Transform& transform) {
+    nav_msgs::Path output_path = input_path; // Copy header and other metadata
+    output_path.poses.clear();
+
+    output_path.header.frame_id = "map_mocap";
+
+    for (const auto& pose : input_path.poses) {
+        // Convert geometry_msgs::Pose to tf::Pose
+        tf::Pose tf_pose;
+        tf::poseMsgToTF(pose.pose, tf_pose);
+
+        // Apply the transformation
+        tf::Pose transformed_pose = transform * tf_pose;
+
+        // Convert tf::Pose back to geometry_msgs::Pose
+        geometry_msgs::PoseStamped transformed_pose_stamped = pose;
+        tf::poseTFToMsg(transformed_pose, transformed_pose_stamped.pose);
+
+        // Add the transformed pose to the new path
+        output_path.poses.push_back(transformed_pose_stamped);
+    }
+
+    return output_path;
 }
 
 class graphPlanResult
@@ -234,7 +278,7 @@ std::shared_ptr<std::vector<std::vector<T>>> initDoubleVec(int rows, int cols)
     return std::make_shared<std::vector<std::vector<T>>>(outVec);
 }
 
-std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in)
+std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in, bool use_mocap = false)
 {
     nav_msgs::Path out_path;
     out_path.header.frame_id = world_frame;
@@ -267,7 +311,21 @@ std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in
             out_path.poses[n].header.stamp = ros::Time::now();
     }
 
-    return std::make_shared<nav_msgs::Path>(out_path);
+    std::shared_ptr<nav_msgs::Path> out_ptr;
+
+    if(!use_mocap)
+        out_ptr = std::make_shared<nav_msgs::Path>(out_path);
+
+    else
+    {
+        tf::Transform transform = listen_tf("map","map_mocap");
+
+        // Apply the transformation to the path
+        nav_msgs::Path transformed_path = transformPath(out_path, transform);
+        out_ptr = std::make_shared<nav_msgs::Path>(transformed_path);
+    }
+
+    return out_ptr;
 }
 
 State find_pre_push(State& goalState, float distance = 0.6f)
@@ -294,11 +352,18 @@ State find_post_push(State& goalState, float distance = 0.6f)
 
 void init_movable_objects(std::vector<movableObject>& mo_list, GraphPtr gPtr, int num_push_sides = 4)
 {
+    /*sim
     mo_list.push_back(movableObject(3,3.5,0,"b1",num_push_sides,gPtr));
     //mo_list.push_back(movableObject(1,3.5,0,"b2",num_push_sides,gPtr));
     mo_list.push_back(movableObject(1,1.5,0,"b2",num_push_sides,gPtr));
     mo_list.push_back(movableObject(1,2,0,"b3",num_push_sides,gPtr));
     mo_list.push_back(movableObject(0.5,3.5,0,"b4",num_push_sides,gPtr));
+    */
+    //mo_list.push_back(movableObject(3.5,3.5,0,"b1",num_push_sides,gPtr));
+    //mo_list.push_back(movableObject(1,3.5,0,"b2",num_push_sides,gPtr));
+    //mo_list.push_back(movableObject(1,1.5,0,"b2",num_push_sides,gPtr));
+    mo_list.push_back(movableObject(1.5,2,0,"b3",num_push_sides,gPtr));
+    mo_list.push_back(movableObject(1,3.5,0,"b4",num_push_sides,gPtr));
 }
 
 void init_static_obstacles(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list)
@@ -315,7 +380,10 @@ std::unordered_map<std::string,std::string> init_delivery(std::vector<movableObj
     // deliver b2 to 3,3.5
     //delivery_list.push_back(movableObject(3,3.5,0,"d2",num_push_sides,gPtr));
     //delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
-    delivery_list.push_back(movableObject(2,4,0,"d3",num_push_sides,gPtr));
+    
+    //sim
+    //delivery_list.push_back(movableObject(2,4,0,"d3",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(3,3.5,0,"d3",num_push_sides,gPtr));
     
     // assignment table. object -> delivery
     std::unordered_map<std::string,std::string> delivery_table;
@@ -331,12 +399,78 @@ std::unordered_map<std::string,std::string> init_delivery(std::vector<movableObj
     return delivery_table;
 }
 
-void init_robots(std::vector<State>& robots)
+void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap = false)
 {
-    //robots.push_back(State(0.3, 1, -1*M_PI/2));
-    //robots.push_back(State(2, 2.25, 0));
-    robots.push_back(State(1.5, 2.5, 0));
-    //robots.push_back(State(5, 3, M_PI/2));
+    if(!use_mocap)
+    {
+        //robots.push_back(State(0.3, 1, -1*M_PI/2));
+        //robots.push_back(State(2, 2.25, 0));
+        robots.push_back(State(1.5, 2.5, 0));
+        //robots.push_back(State(5, 3, M_PI/2));
+    }
+    else
+    {
+        // get map tf
+        tf::TransformListener listener;
+
+        std::string from_tf = "map_mocap";
+        std::string to_tf = "map";
+
+        tf::Transform transform = listen_tf(from_tf, to_tf);
+
+        // subscribe robot poses
+        boost::shared_ptr<geometry_msgs::PoseStamped const> robotPose_mocap;
+        robotPose_mocap = ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/natnet_ros/mushr2/pose", nh);
+
+        if (robotPose_mocap != nullptr) {
+            // Extract the position
+            double x = robotPose_mocap->pose.position.x;
+            double y = robotPose_mocap->pose.position.y;
+            double z = robotPose_mocap->pose.position.z;
+
+            // Extract the orientation (quaternion)
+            double qx = robotPose_mocap->pose.orientation.x;
+            double qy = robotPose_mocap->pose.orientation.y;
+            double qz = robotPose_mocap->pose.orientation.z;
+            double qw = robotPose_mocap->pose.orientation.w;
+
+
+            ROS_INFO("Received PoseStamped message:");
+            ROS_INFO("Position - x: [%f], y: [%f], z: [%f]", x, y, z);
+            ROS_INFO("Orientation - x: [%f], y: [%f], z: [%f], w: [%f]", qx, qy, qz, qw);
+
+
+            // Convert geometry_msgs::PoseStamped to tf::Pose
+            tf::Pose tf_pose;
+            tf::poseMsgToTF(robotPose_mocap->pose, tf_pose);
+
+            // Apply the transformation
+            tf::Pose transformed_pose = transform * tf_pose;
+
+            // Convert tf::Pose back to geometry_msgs::Pose
+            geometry_msgs::PoseStamped transformed_pose_stamped = *robotPose_mocap;
+            tf::poseTFToMsg(transformed_pose, transformed_pose_stamped.pose);
+
+
+
+            Eigen::Quaterniond quat(transformed_pose_stamped.pose.orientation.w,
+                            transformed_pose_stamped.pose.orientation.x,
+                            transformed_pose_stamped.pose.orientation.y,
+                            transformed_pose_stamped.pose.orientation.z);
+
+            Eigen::Vector3d euler = quat.toRotationMatrix().eulerAngles(0, 1, 2);
+
+            double yaw = euler.z(); // or euler[2]
+
+            //push
+            robots.push_back(State(transformed_pose_stamped.pose.position.x,transformed_pose_stamped.pose.position.y,yaw));
+
+        } else {
+            ROS_WARN("No message received within the timeout period.");
+        }
+        
+    }
+   
 }
 
 int findFirstTrueIndex(const std::vector<bool>& vec) {
@@ -548,7 +682,7 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
     else{
         // start to prepush
         auto pre_push = find_pre_push(push_path.front(),0.6f);
-        path_segments.push_back(planHybridAstar(robot, pre_push, env, false)->getPath(true));
+        path_segments.push_back(planHybridAstar(robot, pre_push, env, false, true,true)->getPath(true));
         path_segments.push_back(push_path);        
     }
 
@@ -669,6 +803,8 @@ int main(int argc, char **argv)
     // wait for debug attach
     ros::Duration(1.0).sleep();
 
+    const bool use_mocap = true;
+
     int num_push_sides = 4;
     std::vector<movableObject> mo_list(0);
 
@@ -714,14 +850,14 @@ int main(int argc, char **argv)
 
     // hybrid astar from a robot
     std::vector<State> robots(0);
-    init_robots(robots);
+    init_robots(robots,nh,use_mocap);
 
     // path segments for relocation
     auto push_path = get_push_path(min_list[0]->path, edgeMatcher, gPtr);
     auto relo_paths = find_relo_path(push_path, reloc_objects, env);
     auto reloPush_path = combine_relo_push(push_path, *relo_paths, robots[0], env, reloc_objects);
 
-    auto navPath_ptr = statePath_to_navPath(reloPush_path);
+    auto navPath_ptr = statePath_to_navPath(reloPush_path, use_mocap);
     
     // combine all paths
     //auto navPath_ptr = statePath_to_navPath(final_path);
