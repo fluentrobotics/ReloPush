@@ -38,7 +38,7 @@ using libMultiRobotPlanning::PlanResult;
 using namespace libMultiRobotPlanning;
 
 namespace Constants {
-static float steer_limit = 0.265; // 0.3
+static float steer_limit = 0.2; // 0.3
 static float speed_limit = 0.36f; //0.4
 static float L = 0.29f;
 // [m] --- The minimum turning radius of the vehicle

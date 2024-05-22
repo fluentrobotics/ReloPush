@@ -37,6 +37,8 @@ ros::Publisher* delivery_marker_pub_ptr;
 ros::Publisher* test_path_pub_ptr;
 ros::Publisher* text_pub_ptr;
 
+ros::NodeHandle* nh_ptr;
+
 const std::string world_frame = "map";
 
 typedef visualization_msgs::MarkerArray vMArray;
@@ -399,6 +401,59 @@ std::unordered_map<std::string,std::string> init_delivery(std::vector<movableObj
     return delivery_table;
 }
 
+// euler_zyx, translation
+std::pair<Eigen::Vector3f,Eigen::Vector3f> get_real_robotPose(ros::NodeHandle& nh)
+{
+        // get map tf
+        tf::TransformListener listener;
+
+        // todo: parse frames as params
+        std::string from_tf = "map_mocap";
+        std::string to_tf = "map";
+
+        auto transform = listen_tf(from_tf, to_tf);
+        auto robotPose_mocap = ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/natnet_ros/mushr2/pose", nh);
+
+        if (robotPose_mocap != nullptr) {
+            // Robot pose on mocap frame
+            Eigen::Vector3f robotPos_mocap(robotPose_mocap->pose.position.x, 
+                                            robotPose_mocap->pose.position.y, 
+                                            robotPose_mocap->pose.position.z);
+            
+            Eigen::Quaternionf robotQ_mocap(robotPose_mocap->pose.orientation.w,robotPose_mocap->pose.orientation.x,
+                                            robotPose_mocap->pose.orientation.y,robotPose_mocap->pose.orientation.z);
+
+            // to Rotation Matrix
+            auto robotR_mocap = jeeho::quaternion_to_rotation_matrix<float>(robotQ_mocap);
+            // robot transformation matrix
+            auto robotH_mocap = jeeho::homo_matrix_from_R_t<float>(robotR_mocap, robotPos_mocap);
+
+            // TF world to mocap
+            Eigen::Vector3f t_w2mocap;
+            Eigen::Matrix3f R_w2mocap;
+            std::tie(R_w2mocap, t_w2mocap) = jeeho::tf_to_Rt<float>(transform);
+            // frame transformation matrix
+            auto mocapH = jeeho::homo_matrix_from_R_t(R_w2mocap, t_w2mocap);
+
+            // transform
+            auto robotH_w = mocapH * robotH_mocap;
+            Eigen::Vector3f t_w;
+            Eigen::Matrix3f R_w;
+            std::tie(R_w,t_w) = jeeho::R_t_from_homo_matrix<float>(robotH_w);
+
+            // get yaw
+            auto euler_zyx = jeeho::rot_matrix_to_euler_ZYX<float>(R_w);
+
+            return std::make_pair(euler_zyx, t_w);
+        }
+
+        else {
+            ROS_WARN("No message received within the timeout period.");
+        }
+
+
+}
+
 void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap = false)
 {
     if(!use_mocap)
@@ -410,6 +465,7 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
     }
     else
     {
+        /*
         // get map tf
         tf::TransformListener listener;
 
@@ -453,6 +509,11 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
 
             // get yaw
             auto euler_zyx = jeeho::rot_matrix_to_euler_ZYX<float>(R_w);
+            */
+
+            Eigen::Vector3f t_w, euler_zyx;
+            std::tie(euler_zyx, t_w) = get_real_robotPose(nh);
+
 
             // change yaw to 0~2pi range
             auto yaw_2pi = jeeho::convertEulerRange_to_2pi(euler_zyx.z());
@@ -502,12 +563,7 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
             //push
             robots.push_back(State(t_w.x(),t_w.y(),-1*yaw_2pi));
 
-        } else {
-            ROS_WARN("No message received within the timeout period.");
-        }
-        
-    }
-   
+    } 
 }
 
 int findFirstTrueIndex(const std::vector<bool>& vec) {
@@ -826,6 +882,10 @@ void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std:
         //object names
         text_pub_ptr->publish(vis_names_msg);
 
+        //testing
+        //auto robotRt = get_real_robotPose(*nh_ptr);
+        //std::cout << robotRt.first.z() << std::endl;
+
         ros::spinOnce();
         r.sleep();
     }
@@ -835,6 +895,7 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "reloPush");
     ros::NodeHandle nh;
+    nh_ptr = &nh;
     // initialize publishers
     initialize_publishers(nh);
     // wait for debug attach
