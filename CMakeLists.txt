@@ -44,7 +44,7 @@ catkin_package(
 #  DEPENDS system_lib
 )
 
-include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS} src/pathPlanTools)
 
 #test programs
 add_executable(test_dubins "test/test_dubins.cpp")
@@ -60,6 +60,7 @@ add_executable(
     "src/omplTools/dubins_tools.cpp"
     "src/dijkstra_tools.cpp"
     "src/reloPush/color_print.cpp"
+    "src/pathPlanTools/tf_tools.inl"
     )
 
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES})

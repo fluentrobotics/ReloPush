@@ -122,7 +122,7 @@ tf::StampedTransform listen_tf(std::string from_tf, std::string to_tf)
   tf::TransformListener listener;
   try{
       listener.waitForTransform(from_tf, to_tf,
-                                    ros::Time::now(), ros::Duration(0.5));
+                                    ros::Time::now(), ros::Duration(1.0));
     listener.lookupTransform(from_tf, to_tf,
                              ros::Time(0), transform);
   }
@@ -413,16 +413,51 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
         // get map tf
         tf::TransformListener listener;
 
+        // todo: parse frames as params
         std::string from_tf = "map_mocap";
         std::string to_tf = "map";
 
-        tf::Transform transform = listen_tf(from_tf, to_tf);
+        auto transform = listen_tf(from_tf, to_tf);
 
         // subscribe robot poses
         boost::shared_ptr<geometry_msgs::PoseStamped const> robotPose_mocap;
         robotPose_mocap = ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/natnet_ros/mushr2/pose", nh);
 
         if (robotPose_mocap != nullptr) {
+
+            // Robot pose on mocap frame
+            Eigen::Vector3f robotPos_mocap(robotPose_mocap->pose.position.x, 
+                                            robotPose_mocap->pose.position.y, 
+                                            robotPose_mocap->pose.position.z);
+            
+            Eigen::Quaternionf robotQ_mocap(robotPose_mocap->pose.orientation.w,robotPose_mocap->pose.orientation.x,
+                                            robotPose_mocap->pose.orientation.y,robotPose_mocap->pose.orientation.z);
+
+            // to Rotation Matrix
+            auto robotR_mocap = jeeho::quaternion_to_rotation_matrix<float>(robotQ_mocap);
+            // robot transformation matrix
+            auto robotH_mocap = jeeho::homo_matrix_from_R_t<float>(robotR_mocap, robotPos_mocap);
+
+            // TF world to mocap
+            Eigen::Vector3f t_w2mocap;
+            Eigen::Matrix3f R_w2mocap;
+            std::tie(R_w2mocap, t_w2mocap) = jeeho::tf_to_Rt<float>(transform);
+            // frame transformation matrix
+            auto mocapH = jeeho::homo_matrix_from_R_t(R_w2mocap, t_w2mocap);
+
+            // transform
+            auto robotH_w = mocapH * robotH_mocap;
+            Eigen::Vector3f t_w;
+            Eigen::Matrix3f R_w;
+            std::tie(R_w,t_w) = jeeho::R_t_from_homo_matrix<float>(robotH_w);
+
+            // get yaw
+            auto euler_zyx = jeeho::rot_matrix_to_euler_ZYX<float>(R_w);
+
+            // change yaw to 0~2pi range
+            auto yaw_2pi = jeeho::convertEulerRange_to_2pi(euler_zyx.z());
+
+            /*
             // Extract the position
             double x = robotPose_mocap->pose.position.x;
             double y = robotPose_mocap->pose.position.y;
@@ -461,9 +496,11 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
             Eigen::Vector3d euler = quat.toRotationMatrix().eulerAngles(0, 1, 2);
 
             double yaw = euler.z(); // or euler[2]
+            */
+
 
             //push
-            robots.push_back(State(transformed_pose_stamped.pose.position.x,transformed_pose_stamped.pose.position.y,yaw));
+            robots.push_back(State(t_w.x(),t_w.y(),-1*yaw_2pi));
 
         } else {
             ROS_WARN("No message received within the timeout period.");
@@ -639,7 +676,7 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
     {
         
         // start to first relo
-        path_segments.push_back(planHybridAstar(robot, relo_path[0][0], env, false, true, true)->getPath(true));
+        path_segments.push_back(planHybridAstar(robot, relo_path[0][0], env, false, false, true)->getPath(true));
         path_segments.push_back(relo_path[0]);
         // remove pushed object
         auto moPtr = relo_list[0];
@@ -661,7 +698,7 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
             env.remove_obs(State(moPtr_loop->get_x(), moPtr_loop->get_y(), moPtr_loop->get_th()));
 
             // plan hybrid astar path
-            auto temp_path = planHybridAstar(lastThisRelo, firstNextRelo, env, false, true, true);
+            auto temp_path = planHybridAstar(lastThisRelo, firstNextRelo, env, false, false, true);
             path_segments.push_back(temp_path->getPath(true));
             path_segments.push_back(relo_path[p+1]);
 
@@ -673,7 +710,7 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
         auto lastLastRelo = relo_path.back().back();
         // first pre-push
         auto pre_push = find_pre_push(push_path.front(),0.6f);
-        path_segments.push_back(planHybridAstar(lastLastRelo, pre_push, env, false, true, true)->getPath(true));
+        path_segments.push_back(planHybridAstar(lastLastRelo, pre_push, env, false, false, true)->getPath(true));
 
         path_segments.push_back(push_path);
 
@@ -682,7 +719,7 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
     else{
         // start to prepush
         auto pre_push = find_pre_push(push_path.front(),0.6f);
-        path_segments.push_back(planHybridAstar(robot, pre_push, env, false, true,true)->getPath(true));
+        path_segments.push_back(planHybridAstar(robot, pre_push, env, false, false, true)->getPath(true));
         path_segments.push_back(push_path);        
     }
 
@@ -803,7 +840,7 @@ int main(int argc, char **argv)
     // wait for debug attach
     ros::Duration(1.0).sleep();
 
-    const bool use_mocap = true;
+    const bool use_mocap = true; //todo: parse as a parameter
 
     int num_push_sides = 4;
     std::vector<movableObject> mo_list(0);
