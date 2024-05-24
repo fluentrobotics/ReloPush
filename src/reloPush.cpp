@@ -1,4 +1,5 @@
 
+// for ARM-based systems such as Macbook (on VM)
 #if __INTELLISENSE__
 #undef __ARM_NEON
 #undef __ARM_NEON__
@@ -37,13 +38,15 @@ ros::Publisher* delivery_marker_pub_ptr;
 ros::Publisher* test_path_pub_ptr;
 ros::Publisher* text_pub_ptr;
 
+ros::Publisher* boundary_pub_ptr;
+
 ros::NodeHandle* nh_ptr;
 
 const std::string world_frame = "map";
 
 typedef visualization_msgs::MarkerArray vMArray;
 
-void initialize_publishers(ros::NodeHandle& nh)
+void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
 {
     // init publishers and make pointers
     ros::Publisher vertex_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("graph_nodes", 10);
@@ -62,11 +65,20 @@ void initialize_publishers(ros::NodeHandle& nh)
     delivery_marker_pub_ptr = new ros::Publisher(delivery_marker_pub);
 
     //test
-    ros::Publisher test_path_pub = nh.advertise<nav_msgs::Path>("/mushr2/planned_trajectory", 10);
+    ros::Publisher test_path_pub;
+    if(!use_mocap) // todo: parse as param
+        test_path_pub = nh.advertise<nav_msgs::Path>("/car/planned_trajectory", 10);
+    else
+        test_path_pub = nh.advertise<nav_msgs::Path>("/mushr2/planned_trajectory", 10);
+
     test_path_pub_ptr = new ros::Publisher(test_path_pub);
 
     ros::Publisher text_pub = nh.advertise<visualization_msgs::MarkerArray>("object_names", 5);
     text_pub_ptr = new ros::Publisher(text_pub);
+
+    // workspace boundary
+    ros::Publisher boundary_pub = nh.advertise<visualization_msgs::Marker>("/workspace_boundary", 10);
+    boundary_pub_ptr = new ros::Publisher(boundary_pub);
 }
 
 void free_publisher_pointers()
@@ -74,9 +86,12 @@ void free_publisher_pointers()
     delete(vertex_marker_pub_ptr);
     delete(edge_marker_pub_ptr);
     delete(object_marker_pub_ptr);
+    delete(dubins_path_pub_ptr);
     delete(delivery_marker_pub_ptr);
     //test
     delete(test_path_pub_ptr);
+    delete(text_pub_ptr);
+    delete(boundary_pub_ptr);
 }
 
 std::pair<size_t,size_t> find_min_row_col(Eigen::MatrixXf& mat)
@@ -404,13 +419,12 @@ std::unordered_map<std::string,std::string> init_delivery(std::vector<movableObj
 // euler_zyx, translation
 std::pair<Eigen::Vector3f,Eigen::Vector3f> get_real_robotPose(ros::NodeHandle& nh)
 {
-        // get map tf
-        tf::TransformListener listener;
-
         // todo: parse frames as params
         std::string from_tf = "map_mocap";
         std::string to_tf = "map";
 
+        // get map tf
+        // todo: move it to the beginning of the program to do it only once
         auto transform = listen_tf(from_tf, to_tf);
         auto robotPose_mocap = ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/natnet_ros/mushr2/pose", nh);
 
@@ -460,7 +474,7 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
     {
         //robots.push_back(State(0.3, 1, -1*M_PI/2));
         //robots.push_back(State(2, 2.25, 0));
-        robots.push_back(State(1.5, 2.5, 0));
+        robots.push_back(State(2, 2.5, -1*M_PI/2));
         //robots.push_back(State(5, 3, M_PI/2));
     }
     else
@@ -901,7 +915,7 @@ int main(int argc, char **argv)
     // wait for debug attach
     ros::Duration(1.0).sleep();
 
-    const bool use_mocap = true; //todo: parse as a parameter
+    const bool use_mocap = false; //todo: parse as a parameter
 
     int num_push_sides = 4;
     std::vector<movableObject> mo_list(0);
@@ -923,8 +937,12 @@ int main(int argc, char **argv)
     std::unordered_set<State> obs;
     init_static_obstacles(obs, mo_list);
 
+    // todo: parse map size as params
+    float map_max_x = 4; // m
+    float map_max_y = 5.2; // m
+
     State goal(0,0,0); // arbitrary goal
-    Environment env(20, 20, obs, goal);
+    Environment env(map_max_x, map_max_y, obs, goal);
 
     //stopWatch time_edge("edge_con");
     // construct edges
@@ -960,7 +978,7 @@ int main(int argc, char **argv)
     // combine all paths
     //auto navPath_ptr = statePath_to_navPath(final_path);
     //auto navPath_ptr = generate_final_path(robots, min_list, nameMatcher, edgeMatcher, env, gPtr);
-
+    visualize_workspace_boundary(map_max_x, map_max_y, boundary_pub_ptr);
     visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, 10);
 
     //remove publisher pointers

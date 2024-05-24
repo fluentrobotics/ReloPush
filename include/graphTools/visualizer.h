@@ -452,3 +452,40 @@ std::pair<visualization_msgs::MarkerArray,visualization_msgs::MarkerArray> visua
 
     return std::make_pair(node_vis,edge_vis);
 }
+
+visualization_msgs::Marker visualize_workspace_boundary(float& max_x, float& max_y, ros::Publisher* pubPtr)
+{
+    visualization_msgs::Marker marker;
+        marker.header.frame_id = "map";
+        marker.header.stamp = ros::Time::now();
+        marker.ns = "rectangle";
+        marker.id = 0;
+        marker.type = visualization_msgs::Marker::LINE_STRIP;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.orientation.w = 1.0;
+
+        // Define the rectangle points (assuming it's axis-aligned for simplicity)
+        geometry_msgs::Point p1, p2, p3, p4;
+        p1.x = 0.0; p1.y = 0.0; p1.z = 0.0;
+        p2.x = max_x; p2.y = 0.0; p2.z = 0.0;
+        p3.x = max_x; p3.y = max_y; p3.z = 0.0;
+        p4.x = 0.0; p4.y = max_y; p4.z = 0.0;
+
+        // Add the points to the marker
+        marker.points.push_back(p1);
+        marker.points.push_back(p2);
+        marker.points.push_back(p3);
+        marker.points.push_back(p4);
+        marker.points.push_back(p1);  // Close the rectangle by returning to the first point
+
+        // Define marker properties
+        marker.scale.x = 0.02;  // Line width
+        marker.color.r = 1.0;
+        marker.color.g = 1.0;
+        marker.color.b = 1.0;
+        marker.color.a = 0.33;
+
+        // Publish the marker
+        pubPtr->publish(marker);
+        return marker;
+}

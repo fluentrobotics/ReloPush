@@ -141,6 +141,21 @@ class Environment {
     */
   }
 
+  Environment(float maxx, float maxy, std::unordered_set<State> obstacles,
+            State goal)
+    : m_obstacles(std::move(obstacles)),
+      m_goal(goal)  // NOLINT
+  {
+    m_dimx = static_cast<int>(maxx / static_cast<float>(Constants::mapResolution));
+    m_dimy = static_cast<int>(maxy / static_cast<float>(Constants::mapResolution));
+    // std::cout << "env build " << m_dimx << " " << m_dimy << " "
+    //           << m_obstacles.size() << std::endl;
+    holonomic_cost_map = std::vector<std::vector<double>>(
+        m_dimx, std::vector<double>(m_dimy, 0));
+    m_goal = State(goal.x, goal.y, Constants::normalizeHeadingRad(goal.yaw));
+    updateCostmap();
+  }
+
   void changeGoal(State goal_in)
   {
     m_goal = State(goal_in.x, goal_in.y, Constants::normalizeHeadingRad(goal_in.yaw));
