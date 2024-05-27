@@ -19,7 +19,7 @@ class stopWatch
 		{
 			auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
-			std::cout << duration << " us" << std::endl;
+			std::cout << name << ": " <<  duration << " us" << std::endl;
 
 			if (duration > 0)
 				return duration;

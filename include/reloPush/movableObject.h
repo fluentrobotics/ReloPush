@@ -49,11 +49,17 @@ class movableObject
 
         movableObject(float x_in, float y_in, float th_in = 0, std::string name_in = "", 
                                     float n_side_in = 4, GraphPtr graph_ptr = nullptr);
-
+                                    
+        void update_pushing_poses();
         float get_x();
         float get_y();
         size_t get_n_side();
         float get_th();
+
+        void set_x(float x_in);
+        void set_y(float y_in);
+        void set_th(float th_in);
+
         std::string get_name();
         std::vector<StatePtr> get_pushing_poses();
         std::vector<std::string> get_vertex_names();
@@ -88,7 +94,9 @@ class NameMatcher
         movableObjectPtr getObject(std::string obj_name);
         movableObjectPtr getObject(Vertex vertex_in);
         vertexStatePairPtr getVertexStatePair(std::string vertex_name);
+        
         void addVertices(std::vector<movableObject>& mo_list);
+        void reset(std::vector<movableObject>& mo_list);
 };
 
 #endif

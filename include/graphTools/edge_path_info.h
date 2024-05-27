@@ -51,6 +51,7 @@ namespace graphTools
             void insert(Edge e_in, EdgePathInfo p_in);
             std::shared_ptr<std::vector<std::pair<Edge,EdgePathInfo>>> get_entries();
             EdgePathInfo getPath(Edge e_in);
+            void reset();
     };
 }
 

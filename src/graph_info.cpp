@@ -145,4 +145,9 @@ namespace graphTools
         return edgeMap[e_in];
     }
 
+    void EdgeMatcher::reset()
+    {
+        edgeMap.clear();
+    }
+
 }

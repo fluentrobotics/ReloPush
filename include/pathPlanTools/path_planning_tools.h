@@ -115,7 +115,7 @@ class Environment {
   Environment(){};
 
   Environment(size_t maxx, size_t maxy, std::unordered_set<State> obstacles,
-              State goal)
+              State goal = State(0,0,0))
       : m_obstacles(std::move(obstacles)),
         m_goal(goal)  // NOLINT
   {

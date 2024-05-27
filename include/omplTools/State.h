@@ -9,6 +9,7 @@
 
 typedef boost::geometry::model::d2::point_xy<double> Point;
 
+
 struct State
 {
     State(double x, double y, double yaw, int time = 0) : x(x), y(y), yaw(yaw), time(time)
@@ -56,6 +57,7 @@ struct State
 
 
 typedef std::shared_ptr<State> StatePtr;
+typedef std::vector<State> statePath;
 
 
 #endif

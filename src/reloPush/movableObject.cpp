@@ -41,6 +41,14 @@ movableObject::movableObject(float x_in, float y_in, float th_in, std::string na
     pushing_poses.resize(n_side);
     vertex_names.resize(n_side);
 
+    update_pushing_poses();
+
+    if(graph_ptr!=nullptr)
+        add_to_graph(graph_ptr);
+}
+
+void movableObject::update_pushing_poses()
+{
     float ori_incre = M_PI * 2 / (float)n_side; // orientation increment
     
     for(size_t i = 0; i<n_side; i++)
@@ -56,9 +64,6 @@ movableObject::movableObject(float x_in, float y_in, float th_in, std::string na
         pushing_poses[i] = std::make_shared<State>(State(x_push, y_push, push_ori));
         vertex_names[i] = name + "_" + std::to_string(i); // {block_name}_{node_index}
     }
-
-    if(graph_ptr)
-        add_to_graph(graph_ptr);
 }
 
 float movableObject::get_x()
@@ -81,6 +86,21 @@ std::string movableObject::get_name()
 {
     return name;
 }
+
+void movableObject::set_x(float x_in)
+{
+    x = x_in;
+}
+void movableObject::set_y(float y_in)
+{
+    y = y_in;
+}
+void movableObject::set_th(float th_in)
+{
+    th = th_in;
+}
+
+
 std::vector<StatePtr> movableObject::get_pushing_poses()
 {
     return pushing_poses;
@@ -103,6 +123,8 @@ void movableObject::add_to_graph(GraphPtr graph)
         vertex_state_list[i] = VertexStatePair(temp_vertex,pushing_poses[i]);
     }
 }
+
+
 
 
 NameMatcher::NameMatcher(){}
@@ -148,4 +170,13 @@ void NameMatcher::addVertices(std::vector<movableObject>& mo_list)
             vertexMap.insert({*vs_list[n].vertex, moPtr});
         
     }
+}
+
+void NameMatcher::reset(std::vector<movableObject>& mo_list)
+{
+    vsMap.clear();
+    moMap.clear();
+    
+
+    NameMatcher::addVertices(mo_list);
 }
