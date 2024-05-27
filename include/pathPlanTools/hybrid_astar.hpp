@@ -134,6 +134,8 @@ class HybridAStar {
         std::reverse(solution.actions.begin(), solution.actions.end());
 
         openSet.clear();
+        // set success
+        solution.success true;
         return true;
       }
 
@@ -191,6 +193,8 @@ class HybridAStar {
       }
     }
     openSet.clear();
+    // set failed
+    solution.success = false;
     return false;
   }
 

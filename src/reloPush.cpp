@@ -285,6 +285,7 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
     else {
         //if(print_res)
             std::cout << "\033[1m\033[31m Fail to find a path \033[0m\n";
+            solution.cost = -1;
     }
 
     return std::make_shared<PlanResult<State, Action, double>>(solution);    
@@ -792,14 +793,17 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
     return push_path;
 }
 
-std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<std::vector<State>>& relo_path, State& robot, Environment& env, std::vector<movableObjectPtr>& relo_list)
+std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_path, std::vector<std::vector<State>>& relo_path, State& robot, Environment& env, std::vector<movableObjectPtr>& relo_list)
 {
     std::vector<std::vector<State>> path_segments;
     if(relo_path.size()>0)
     {
-        
+        auto plan_res =planHybridAstar(robot, relo_path[0][0], env, false, false, true);
+        if(!plan_res->success)
+            return std::make_pair(std::vector<State>(0),false); // return false
+
         // start to first relo
-        path_segments.push_back(planHybridAstar(robot, relo_path[0][0], env, false, false, true)->getPath(true));
+        path_segments.push_back(plan_res->getPath(true));
         path_segments.push_back(relo_path[0]);
         // remove pushed object
         auto moPtr = relo_list[0];
@@ -821,8 +825,11 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
             env.remove_obs(State(moPtr_loop->get_x(), moPtr_loop->get_y(), moPtr_loop->get_th()));
 
             // plan hybrid astar path
-            auto temp_path = planHybridAstar(lastThisRelo, firstNextRelo, env, false, true, true);
-            path_segments.push_back(temp_path->getPath(true));
+            plan_res = planHybridAstar(lastThisRelo, firstNextRelo, env, false, true, true);
+            if(!plan_res->success)
+                return std::make_pair(std::vector<State>(0),false); // return false
+
+            path_segments.push_back(plan_res->getPath(true));
             path_segments.push_back(relo_path[p+1]);
 
             // put it back
@@ -833,7 +840,13 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
         auto lastLastRelo = relo_path.back().back();
         // first pre-push
         auto pre_push = find_pre_push(push_path.front(),0.6f);
-        path_segments.push_back(planHybridAstar(lastLastRelo, pre_push, env, false, true, true)->getPath(true));
+
+        // plan hybrid astar
+        plan_res = planHybridAstar(lastLastRelo, pre_push, env, false, true, true);
+        if(!plan_res->success)
+                return std::make_pair(std::vector<State>(0),false); // return false
+
+        path_segments.push_back(plan_res->getPath(true));
 
         path_segments.push_back(push_path);
 
@@ -842,7 +855,13 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
     else{
         // start to prepush
         auto pre_push = find_pre_push(push_path.front(),0.6f);
-        path_segments.push_back(planHybridAstar(robot, pre_push, env, false, false, true)->getPath(true));
+        //stopWatch hb("hyb");
+        auto plan_res = planHybridAstar(robot, pre_push, env, false, false, true);
+        if(!plan_res->success)
+                return std::make_pair(std::vector<State>(0),false); // return false
+
+        path_segments.push_back(plan_res->getPath(true));
+        //hb.stop_and_get_us();
         path_segments.push_back(push_path);        
     }
 
@@ -851,7 +870,7 @@ std::vector<State> combine_relo_push(std::vector<State>& push_path, std::vector<
         combinedVector.insert(combinedVector.end(), subVector.begin(), subVector.end());
     }
     
-    return combinedVector;
+    return std::make_pair(combinedVector,true);
 }
 
 
@@ -1038,6 +1057,9 @@ int main(int argc, char **argv)
 
     std::vector<movableObject> delivered_obs;
 
+    // time measurements
+    std::vector<stopWatch> time_watches;
+
 
     /////////////////////////////////////////////
 
@@ -1058,21 +1080,28 @@ int main(int argc, char **argv)
         NameMatcher nameMatcher(mo_list);
 
         
-        stopWatch time_edge("time-edge");
+        stopWatch time_edge("edge");
         // construct edges
         reloPush::construct_edges(mo_list, gPtr, env, Constants::r, edgeMatcher ,false);
         time_edge.stop();
         time_edge.print_us();
+        time_watches.push_back(time_edge);
 
         // add deliverries to graph
         add_delivery_to_graph(delivery_list, mo_list, env, edgeMatcher, nameMatcher, gPtr);
+        time_edge.stop();
+        time_edge.print_us();
+        time_watches.push_back(time_edge);
         
         // print edges
         print_edges(gPtr);
         // traverse on graph
         pathFinder pf; // todo: make it static
         // find best push traverse for all assignments
+        stopWatch time_assign("assignment");
         auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
+        time_assign.stop();
+        time_watches.push_back(time_assign);
 
         // arbitrarily assign first in the list
         // todo: assign one with the lowest cost        
@@ -1082,26 +1111,42 @@ int main(int argc, char **argv)
 
         
 
+        stopWatch time_path_gen_push_path("path-gen: push-path");
         // path segments for relocation
         // final pushing
         auto push_path = get_push_path(min_list[0]->path, edgeMatcher, gPtr);
+        time_path_gen_push_path.stop();
+        time_watches.push_back(time_path_gen_push_path);
+
         // relocation paths
         pathsPtr relo_paths;
         relocationPair_list relocPair; // for updating movable objects
 
+        stopWatch time_path_gen_relo_path("path-gen: relo-path");
         std::tie(relo_paths, relocPair) = find_relo_path(push_path, reloc_objects, env);
+        time_path_gen_push_path.stop();
+        time_watches.push_back(time_path_gen_push_path);
+
+        stopWatch time_path_gen_comb_path("path-gen: combine");
         // combined path for the delivery
         auto reloPush_path = combine_relo_push(push_path, *relo_paths, robots[0], env, reloc_objects);
+        time_path_gen_comb_path.stop();
+        time_watches.push_back(time_path_gen_comb_path);
+        
+        if(!reloPush_path.second) // hybrid astar failed
+        {
+
+        }
 
         //auto navPath_ptr = statePath_to_navPath(reloPush_path, use_mocap);
 
         
         // store delivery set
-
         deliverySet dSet(mo_list, relocPair, min_list[0]->object_name, std::make_shared<statePath>(reloPush_path));
         delivery_sets.push_back(std::make_shared<deliverySet>(dSet));
         
-        
+
+        stopWatch time_update("update");        
         // update movable objects list
         /// move and remove
         update_mo_list(mo_list,relocPair);
@@ -1131,6 +1176,8 @@ int main(int argc, char **argv)
         // update robot
         robots[0] = push_path.back();
         robots[0].yaw *= -1;
+        time_update.stop();
+        time_watches.push_back(time_update);
 
     }
     //////////// loop ends ////////////
@@ -1141,6 +1188,12 @@ int main(int argc, char **argv)
 
     time_plan.stop();
     time_plan.print_us();
+    time_watches.push_back(time_plan);
+
+    for(auto& it : time_watches)
+    {
+        std::cout << it.get_name() << ": " << it.get_measurement() << " us" << std::endl;
+    }
 
 
     statePath final_path;

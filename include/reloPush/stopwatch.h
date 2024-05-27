@@ -27,10 +27,25 @@ class stopWatch
 				return 0;
 		}
 
+		size_t get_measurement()
+		{
+			auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+			if (duration > 0)
+				return duration;
+			else
+				return 0;		
+		}
+
 		size_t stop_and_get_us()
 		{
 			stop();
 			return print_us();
+		}
+
+		std::string get_name()
+		{
+			return name;
 		}
 
 	private:
