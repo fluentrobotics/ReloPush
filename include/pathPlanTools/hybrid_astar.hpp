@@ -135,7 +135,7 @@ class HybridAStar {
 
         openSet.clear();
         // set success
-        solution.success true;
+        solution.success = true;
         return true;
       }
 

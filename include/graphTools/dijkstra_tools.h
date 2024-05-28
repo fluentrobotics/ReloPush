@@ -34,4 +34,21 @@ class pathFinder {
 
 };
 
+class graphPlanResult
+{
+    public:
+        std::string sourceVertexName;
+        std::string targetVertexName;
+        float cost;
+        std::vector<Vertex> path;
+        std::string object_name;
+        size_t delivery_ind;
+
+        graphPlanResult()
+        {}
+        graphPlanResult(std::string s_in, std::string t_in, float c_in, std::vector<Vertex> p_in, std::string name_in, size_t delivery_obj_ind) 
+        : sourceVertexName(s_in), targetVertexName(t_in), cost(c_in), path(p_in), object_name(name_in), delivery_ind(delivery_obj_ind)
+        {}
+};
+
 #endif // !DIJKSTRA_TOOLS_H

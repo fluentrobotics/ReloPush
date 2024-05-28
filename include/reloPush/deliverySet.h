@@ -11,7 +11,8 @@ typedef std::vector<std::pair<std::string, State>> relocationPair_list; //index 
 typedef std::shared_ptr<statePath> pathPtr;
 typedef std::shared_ptr<std::vector<statePath>> pathsPtr;
 
-class deliverySet
+// context of each delivery
+class deliveryContext
 {
     public:
         // movable objects before relocation
@@ -27,9 +28,9 @@ class deliverySet
         // relocating path
         pathPtr reloPath;
 
-        deliverySet(){}
+        deliveryContext(){}
 
-        deliverySet(std::vector<movableObject>& mo_list_in, relocationPair_list relocPairs_in, std::string delivery_name, pathPtr pathPtr_in)
+        deliveryContext(std::vector<movableObject>& mo_list_in, relocationPair_list relocPairs_in, std::string delivery_name, pathPtr pathPtr_in)
         {
             mo_list = std::vector<movableObject>(mo_list_in);
             relocPairs = relocPairs_in;
@@ -37,6 +38,26 @@ class deliverySet
             reloPath = pathPtr_in;
         }
 
+};
+
+class deliveryContextSet
+{
+    public:
+        std::vector<std::shared_ptr<deliveryContext>> delivery_contexts;
+
+        statePath serializePath()
+        {
+            statePath out_path;
+            for(auto& it : delivery_contexts)
+            {
+                for(auto& it2 : *(it->reloPath))
+                {
+                    out_path.push_back(it2);
+                }
+            }
+
+            return out_path;
+        }
 };
 
 #endif
