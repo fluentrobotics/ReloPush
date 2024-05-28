@@ -7,7 +7,7 @@ enum measurement_type {graphPlan, pathPlan, relocatePlan, assign, allPlan};
 class stopWatch
 {
 	public:
-		stopWatch(std::string name_in = "", measurement_type type_in)
+		stopWatch(std::string name_in = "", measurement_type type_in = measurement_type::allPlan)
 		{
 			name = name_in;
 			type = type_in;

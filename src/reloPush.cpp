@@ -242,13 +242,17 @@ int main(int argc, char **argv)
 
     std::vector<movableObject> delivered_obs;
 
+    draw_obstacles(initMOList, object_marker_pub_ptr);
+    draw_texts(initMOList,text_pub_ptr);
+    draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+    visualize_workspace_boundary(params::map_max_x, params::map_max_y, boundary_pub_ptr);
+
     // time measurements
     stopWatchSet timeWatches;
     /////////////////////////////////////////////
-
     stopWatch time_plan("All-planning", measurement_type::allPlan);
     /////////////// loop starts ///////////////
-    reloPlanResult res = reloLoop(obs, mo_list, delivered_obs, env, params::map_max_x, params::map_max_y, gPtr, edgeMatcher, timeWatches.watches, 
+    reloPlanResult reloResult = reloLoop(obs, mo_list, delivered_obs, env, params::map_max_x, params::map_max_y, gPtr, edgeMatcher, timeWatches.watches, 
             delivery_list, delivery_table, deliverySets.delivery_contexts, robots);
     //////////// loop ends ////////////
     time_plan.stop();
@@ -256,16 +260,18 @@ int main(int argc, char **argv)
     timeWatches.watches.push_back(time_plan);
 
     // print measurements
-    timeWatches.print();
+    //timeWatches.print();
 
     // log
-    jeeho::logger records(is_succ, num_relo, d_seq, timeWatches);
+    jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches);
+    // write to file
+    records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/test_log.txt");
 
     // generate final navigation path
     statePath final_path = deliverySets.serializePath();
     auto navPath_ptr = statePath_to_navPath(final_path);
 
-    visualize_workspace_boundary(params::map_max_x, params::map_max_y, boundary_pub_ptr);
+    
 
     //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, 10);
 

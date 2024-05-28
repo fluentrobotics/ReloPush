@@ -380,8 +380,25 @@ void init_movable_objects(std::vector<movableObject>& mo_list, int num_push_side
     //mo_list.push_back(movableObject(1,3.5,0,"b4",num_push_sides));
     */
 
-    mo_list.push_back(movableObject(2.2,3.5,0,"b1",num_push_sides));
-    mo_list.push_back(movableObject(1,3.5,0,"b3",num_push_sides));
+    /* 2 obs 1 relo case */
+    //mo_list.push_back(movableObject(2.2,3.5,0,"b1",num_push_sides));
+    //mo_list.push_back(movableObject(1,3.5,0,"b3",num_push_sides));
+
+    /* 3 obs 0 relo case */
+    //mo_list.push_back(movableObject(1,1.5,0,"b1",num_push_sides));
+    //mo_list.push_back(movableObject(1.4,2.3,0,"b2",num_push_sides));
+    //mo_list.push_back(movableObject(1.2,3.1,0,"b3",num_push_sides));
+
+    /* M */
+    mo_list.push_back(movableObject(0.8,4,0,"b1",num_push_sides));
+    mo_list.push_back(movableObject(1.8,4,0,"b2",num_push_sides));
+    mo_list.push_back(movableObject(2.8,4,0,"b3",num_push_sides));
+    mo_list.push_back(movableObject(3.8,4,0,"b4",num_push_sides));
+    mo_list.push_back(movableObject(0.8,0.8,0,"b5",num_push_sides));
+    mo_list.push_back(movableObject(1.8,0.8,0,"b6",num_push_sides));
+    mo_list.push_back(movableObject(2.8,0.8,0,"b7",num_push_sides));
+    mo_list.push_back(movableObject(3.8,0.8,0,"b8",num_push_sides));
+    //mo_list.push_back(movableObject(4.5,3.2,0,"b9",num_push_sides));
 
 }
 
@@ -420,19 +437,41 @@ void init_static_obstacles(std::unordered_set<State>& obs, std::vector<movableOb
 std::unordered_map<std::string,std::string> init_delivery_table(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, 
                     graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr, int num_push_sides = 4)
 {
-    // deliver b2 to 3,3.5
-    //delivery_list.push_back(movableObject(3,3.5,0,"d2",num_push_sides,gPtr));
-    delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
-    
-    //sim
-    //delivery_list.push_back(movableObject(2,4,0,"d3",num_push_sides,gPtr));
-    delivery_list.push_back(movableObject(3,3.5,0,"d3",num_push_sides,gPtr));
+    /* 2 obs 1 relo case */
+    //delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
+    //delivery_list.push_back(movableObject(3,3.5,0,"d3",num_push_sides,gPtr));
+
+    /* 3 obs 0 relo case */
+    //delivery_list.push_back(movableObject(3.6,1.5,0,"d1",num_push_sides,gPtr));
+    //delivery_list.push_back(movableObject(3.8,2.3,0,"d2",num_push_sides,gPtr));
+    //delivery_list.push_back(movableObject(3.4,3.1,0,"d3",num_push_sides,gPtr));
+
+    /* M */
+    delivery_list.push_back(movableObject(0.8,1.6,0,"d1",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(0.8,2,2,"d2",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(0.8,2.8,0,"d3",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(1.6,2.5,0,"d4",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(2.4,2,2,"d5",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(3.2,2.5,0,"d6",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(4.0,2.8,0,"d7",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(4.0,2,2,"d8",num_push_sides,gPtr));
+    //delivery_list.push_back(movableObject(4.0,1.4,0,"d9",num_push_sides,gPtr));
     
     // assignment table. object -> delivery
     std::unordered_map<std::string,std::string> delivery_table;
     //delivery_table.insert({"b2","d2"});
     delivery_table.insert({"b1","d1"});
+    delivery_table.insert({"b2","d2"});
     delivery_table.insert({"b3","d3"});
+    delivery_table.insert({"b4","d4"});
+    delivery_table.insert({"b5","d5"});
+    delivery_table.insert({"b6","d6"});
+    delivery_table.insert({"b7","d7"});
+    delivery_table.insert({"b8","d8"});
+    //delivery_table.insert({"b9","d9"});
+
+
+
 
     return delivery_table;
 }
