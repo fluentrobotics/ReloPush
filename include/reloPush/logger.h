@@ -21,10 +21,12 @@ namespace jeeho
             float time_assign = 0;
             float time_total = 0;
             float time_reloc_plan = 0;
+            std::string testdata_name;
+            int testdata_ind;
 
         public:
-            logger(bool is_succ, size_t num_relocation, std::vector<std::string>& d_seq, stopWatchSet& time_measurements) 
-            : is_success(is_succ), num_relo(num_relocation), delivery_sequence(d_seq)
+            logger(bool is_succ, size_t num_relocation, std::vector<std::string>& d_seq, stopWatchSet& time_measurements, std::string data_name, int data_ind) 
+            : is_success(is_succ), num_relo(num_relocation), delivery_sequence(d_seq), testdata_name(data_name), testdata_ind(data_ind)
             {
                 // handle stopwatch measurements
                 for(auto& it : time_measurements.watches)
@@ -60,13 +62,14 @@ namespace jeeho
 
         void write_to_file(std::string file_name)
         {
-            std::ofstream outFile(file_name);
+            std::ofstream outFile(file_name,std::ios_base::app);
             std::string set_delim = "#";
             std::string header_delim = ":";
             std::string elem_delim = ",";
 
             if (outFile.is_open()) {
                 outFile << set_delim << std::endl;
+                outFile << testdata_name << header_delim << testdata_ind << std::endl;
                 outFile << "Is Success" << header_delim << (is_success ? "T" : "F") << "\n";
                 outFile << "Number of Relocations" << header_delim << num_relo << "\n";
 

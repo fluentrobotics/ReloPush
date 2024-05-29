@@ -12,6 +12,10 @@ namespace params
     float map_max_y = 5.2; // m
 
     const bool use_mocap = false; //todo: parse as a parameter
+    const bool use_testdata = true;
+    const bool reset_robot_pose = false;
+
+    const bool print_graph = false;
 }
 
 #endif

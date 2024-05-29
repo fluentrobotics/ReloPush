@@ -47,7 +47,8 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
         if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
         {
             //collision found
-            std::cout << "Collision found " << np << std::endl;
+            if(print_log)
+                std::cout << "Collision found " << np << std::endl;
             collision_found = true;
 
             break;
@@ -121,7 +122,8 @@ bool check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_
         if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
         {
             //collision found
-            std::cout << "Collision found " << np << std::endl;
+            if(print_log)
+                std::cout << "Collision found " << np << std::endl;
             collision_found = true;
 
             break;
@@ -206,7 +208,8 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 }
                                 else // collision found
                                 {
-                                    std::cout << " Collision found on a good path " << std::endl;
+                                    if(print_log)
+                                        std::cout << " Collision found on a good path " << std::endl;
                                 }
 
                                 /*

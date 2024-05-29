@@ -1,12 +1,8 @@
 
-// for ARM-based systems such as Macbook (on VM)
-#if __INTELLISENSE__
-#undef __ARM_NEON
-#undef __ARM_NEON__
-#endif
 
 #include <reloPush/reloPush_tools.h>
 #include <numeric>
+#include <reloPush/reloPush_tools.h>
 
 //#include <eigen3/Eigen/Core>
 //#include <eigen3/Eigen/Dense>
@@ -21,6 +17,9 @@ ros::Publisher* test_path_pub_ptr = nullptr;
 ros::Publisher* text_pub_ptr = nullptr;
 
 ros::Publisher* boundary_pub_ptr;
+
+ros::Publisher* robot_pose_reset_ptr;
+
 
 ros::NodeHandle* nh_ptr = nullptr;
 
@@ -103,7 +102,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         time_watches.push_back(time_edge_d);
         
         // print edges
-        print_edges(gPtr);
+        if(params::print_graph)
+            print_edges(gPtr);
+
         // traverse on graph
         pathFinder pf; // todo: make it static
         // find best push traverse for all assignments
@@ -196,6 +197,14 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
+    int data_ind = 0;
+    std::string data_file = "data_2o1r.txt";
+    if(argc==3)
+    {
+        data_file = std::string(argv[1]);
+        data_ind = std::atoi(argv[2]);        
+    }
+
     ros::init(argc, argv, "reloPush");
     ros::NodeHandle nh;
     nh_ptr = &nh;
@@ -207,6 +216,10 @@ int main(int argc, char **argv)
     ///////// Initial settings /////////
     int num_push_sides = 4; // todo: parse as a param
     std::vector<movableObject> mo_list(0);
+    std::vector<State> robots(0);
+    // init empty delivery locations
+    std::vector<movableObject> delivery_list(0);
+    std::unordered_map<std::string,std::string> delivery_table;
 
     //generate graph
     GraphPtr gPtr(new Graph);
@@ -219,26 +232,51 @@ int main(int argc, char **argv)
     //State goal(0,0,0); // arbitrary goal
     Environment env(params::map_max_x, params::map_max_y, obs);
 
-    // init objects and add to graph
-    // todo: parse from input file
-    init_movable_objects(mo_list, num_push_sides);
+    if(!params::use_testdata){
+        // init objects and add to graph
+        init_movable_objects(mo_list, num_push_sides);
+        // init robots
+        init_robots(robots, nh, params::use_mocap);
+        // make delivery table
+        delivery_table = init_delivery_table(delivery_list,mo_list,env,edgeMatcher,gPtr,num_push_sides);
+    }
+    else
+    {
+        // parse from input file
+        Color::println("=== Testdata " + data_file + " " + std::to_string(data_ind) + " ===",Color::CYAN, Color::BG_DEFAULT);
+        delivery_table = parse_movableObjects_robots_from_file(mo_list,robots,delivery_list,0,std::string(CMAKE_SOURCE_DIR) + "/testdata/" + data_file);
+        
+        if(params::reset_robot_pose)
+        {
+            // reset robot initpose on sim
+            geometry_msgs::PoseWithCovarianceStamped init_pose;
+            init_pose.pose.pose.position.x = robots[0].x;
+            init_pose.pose.pose.position.y = robots[0].y;
+
+            // angle in -pi ~ pi range
+            float yaw = robots[0].yaw * -1;
+            yaw = jeeho::convertEulerRange_to_pi(yaw);
+            //to quaternion
+            auto yaw_euler = Eigen::Vector3f(0,0,yaw);
+            auto yaw_quat = jeeho::euler_to_quaternion_zyx(yaw_euler);
+            init_pose.pose.pose.orientation.w = yaw_quat.w();
+            init_pose.pose.pose.orientation.x = yaw_quat.x();
+            init_pose.pose.pose.orientation.y = yaw_quat.y();
+            init_pose.pose.pose.orientation.z = yaw_quat.z();
+
+            robot_pose_reset_ptr->publish(init_pose);
+            ros::spinOnce();
+            ros::Duration(0.5).sleep();
+        }
+    }
 
     // save initital mo_list
     std::vector<movableObject> initMOList(mo_list);
     // init nameMatcher
     //NameMatcher initNameMatcher(mo_list);
 
-    // init empty delivery locations
-    std::vector<movableObject> delivery_list(0);
-    // make delivery table
-    std::unordered_map<std::string,std::string> delivery_table = init_delivery_table(delivery_list,mo_list,env,edgeMatcher,gPtr,num_push_sides);
-
     // list of each delivery set
     deliveryContextSet deliverySets;
-
-    // hybrid astar from a robot
-    std::vector<State> robots(0);
-    init_robots(robots, nh, params::use_mocap);
 
     std::vector<movableObject> delivered_obs;
 
@@ -263,15 +301,13 @@ int main(int argc, char **argv)
     //timeWatches.print();
 
     // log
-    jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches);
+    jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
     // write to file
-    records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/test_log.txt");
+    records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log_" + removeExtension(data_file) + ".txt");
 
     // generate final navigation path
     statePath final_path = deliverySets.serializePath();
     auto navPath_ptr = statePath_to_navPath(final_path);
-
-    
 
     //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, 10);
 
@@ -286,7 +322,8 @@ int main(int argc, char **argv)
     // publish final path once
     test_path_pub_ptr->publish(*navPath_ptr); 
 
-    ros::spin();
+    ros::spinOnce();
+    ros::Duration(1.0).sleep();
 
     //remove publisher pointers
     free_publisher_pointers();

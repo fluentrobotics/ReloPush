@@ -23,6 +23,8 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
+
 extern ros::Publisher* vertex_marker_pub_ptr;
 extern ros::Publisher* edge_marker_pub_ptr;
 extern ros::Publisher* object_marker_pub_ptr;
@@ -33,6 +35,7 @@ extern ros::Publisher* test_path_pub_ptr;
 extern ros::Publisher* text_pub_ptr;
 
 extern ros::Publisher* boundary_pub_ptr;
+extern ros::Publisher* robot_pose_reset_ptr;
 
 extern ros::NodeHandle* nh_ptr;
 
@@ -88,6 +91,10 @@ void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
     // workspace boundary
     ros::Publisher boundary_pub = nh.advertise<visualization_msgs::Marker>("/workspace_boundary", 10);
     boundary_pub_ptr = new ros::Publisher(boundary_pub);
+
+    // robot pose reset
+    ros::Publisher robot_pose_reset = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/initialpose", 10);
+    robot_pose_reset_ptr = new ros::Publisher(robot_pose_reset);
 }
 
 void free_publisher_pointers()

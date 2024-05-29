@@ -1,6 +1,11 @@
+// for ARM-based systems such as Macbook (on VM)
+#if __INTELLISENSE__
+#undef __ARM_NEON
+#undef __ARM_NEON__
+#endif
+
 #ifndef TF_TOOLS_H
 #define TF_TOOLS_H
-
 
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
@@ -16,54 +21,19 @@ std::ostream& operator<<(std::ostream& s, const Eigen::QuaternionBase<Derived>& 
     return s;
 }
 
-
 namespace jeeho
 {
-    Eigen::Quaternionf msgQtoEigenQ(geometry_msgs::Quaternion q)
-    {
-        // w x y z
-        Eigen::Quaternionf outQ(q.w, q.x, q.y, q.z);
+    Eigen::Quaternionf msgQtoEigenQ(geometry_msgs::Quaternion q);
 
-        return outQ;
-    }
+    geometry_msgs::Quaternion eigenQtoMsgQ(Eigen::Quaternionf q);
 
-    geometry_msgs::Quaternion eigenQtoMsgQ(Eigen::Quaternionf q)
-    {
-        geometry_msgs::Quaternion outQ;
-        outQ.w = q.w();
-        outQ.x = q.x();
-        outQ.y = q.y();
-        outQ.z = q.z();
+    Eigen::Matrix4f geometryPose_to_Eigen(geometry_msgs::Pose p);
 
-        return outQ;
-    }
+    Eigen::Quaternionf euler_to_quaternion_xyz(float roll, float pitch, float yaw);
 
-    Eigen::Matrix4f geometryPose_to_Eigen(geometry_msgs::Pose p)
-    {
-        Eigen::Affine3d out_aff;
-        tf::poseMsgToEigen(p,out_aff);
-        return out_aff.matrix().cast<float>();
-    }
+    float convertEulerRange_to_2pi(float angle);
 
-    Eigen::Quaternionf euler_to_quaternion_xyz(float roll, float pitch, float yaw)
-    {
-        // Convert roll, pitch, and yaw angles to quaternion
-        Eigen::Quaternionf q = Eigen::AngleAxisf(roll, Eigen::Vector3f::UnitX())
-            * Eigen::AngleAxisf(pitch, Eigen::Vector3f::UnitY())
-            * Eigen::AngleAxisf(yaw, Eigen::Vector3f::UnitZ());
-
-        // Print the resulting quaternion
-        //std::cout << "Quaternion: " << q.coeffs().transpose() << std::endl;
-        return q;
-    }
-
-    float convertEulerRange_to_2pi(float angle) {
-        if (angle < 0) {
-            return angle + 2 * M_PI;
-        } else {
-            return angle;
-        }
-    }
+    float convertEulerRange_to_pi(float yaw);
 
     // ROS TF matrix to Eigen matrix
     template<typename T>

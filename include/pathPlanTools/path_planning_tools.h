@@ -16,6 +16,7 @@
 #include <ompl/base/spaces/DubinsStateSpace.h>
 #include <ompl/base/spaces/ReedsSheppStateSpace.h>
 #include <ompl/base/spaces/SE2StateSpace.h>
+#include <reloPush/parse_testdata.h>
 
 #include <boost/functional/hash.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
