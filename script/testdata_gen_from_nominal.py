@@ -152,19 +152,44 @@ dataset_one = nominal_dataset("data_2o1r")
 dataset_one.mo_list = [movableObject(2.2,3.5,0,"b1",4), movableObject(1,3.5,0,"b3",4)] ## objects
 dataset_one.robot = [pose2D(2, 2.5, 1.5708)] ## robot
 dataset_one.d_list = [movableObject(0,0,0,"d1",4), movableObject(3,3.5,0,"d3",4)] ## delivery
-dataset_one.d_table = d_table = {"b1":"d1", "b3":"d3"} ## assign
+dataset_one.d_table = {"b1":"d1", "b3":"d3"} ## assign
 
 # 2obj 1relo test instance
 dataset_two = nominal_dataset("data_2o1r_2")
 dataset_two.mo_list = [movableObject(2.2,3.5,0,"b1",4), movableObject(1,3.5,0,"b3",4)] ## objects
 dataset_two.robot = [pose2D(2, 2.5, 1.5708)] ## robot
 dataset_two.d_list = [movableObject(0,0,0,"d1",4), movableObject(3,3.5,0,"d3",4)] ## delivery
-dataset_two.d_table = d_table = {"b1":"d3", "b3":"d1"} ## assign
+dataset_two.d_table = {"b1":"d3", "b3":"d1"} ## assign
+
+# 3obj 0relo test instance
+dataset_three = nominal_dataset("data_3o")
+dataset_three.mo_list = [movableObject(1,1.5,0,"b1",4),
+    movableObject(1.4,2.3,0,"b2",4),
+    movableObject(1.2,3.1,0,"b3",4)]
+dataset_three.robot = [pose2D(2, 2.5, 1.5708)]
+dataset_three.d_list = [movableObject(3.6,1.5,0,"d1",4),
+    movableObject(3.8,2.3,0,"d2",4),
+    movableObject(3.4,3.1,0,"d3",4)]
+dataset_three.d_table = {"b1":"d1", "b3":"d3", "b2":"d2"} 
+
+# 3obj 0relo test instance
+dataset_four = nominal_dataset("data_3o_2")
+dataset_four.mo_list = [movableObject(1,1.5,0,"b1",4),
+    movableObject(1.4,2.3,0,"b2",4),
+    movableObject(1.2,3.1,0,"b3",4)]
+dataset_four.robot = [pose2D(2, 2.5, 1.5708)]
+dataset_four.d_list = [movableObject(3.6,1.5,0,"d1",4),
+    movableObject(3.8,2.3,0,"d2",4),
+    movableObject(3.4,3.1,0,"d3",4)]
+dataset_four.d_table = {"b1":"d2", "b3":"d1", "b2":"d3"} 
 
 
-dataset_one.write_to_file()
-dataset_two.write_to_file()
 
+
+#dataset_one.write_to_file()
+#dataset_two.write_to_file()
+#dataset_three.write_to_file()
+dataset_four.write_to_file()
 
 #print(dataset_one.add_randomness().serialize())
 print('done')

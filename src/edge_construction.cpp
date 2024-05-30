@@ -48,7 +48,7 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
         {
             //collision found
             if(print_log)
-                std::cout << "Collision found " << np << std::endl;
+                std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
             collision_found = true;
 
             break;

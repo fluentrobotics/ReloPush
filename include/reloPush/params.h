@@ -13,9 +13,11 @@ namespace params
 
     const bool use_mocap = false; //todo: parse as a parameter
     const bool use_testdata = true;
-    const bool reset_robot_pose = false;
+    const bool reset_robot_pose = true;
 
-    const bool print_graph = false;
+    const bool print_graph = true;
+
+    int leave_log = 0;
 }
 
 #endif

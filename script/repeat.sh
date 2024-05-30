@@ -1,13 +1,17 @@
 #!/bin/bash
 
-while getopts t: flag
+T="default"
+
+while getopts "t": flag;
 do
     case "${flag}" in
-        t) T=${OPTARG};;
+        t) T=$OPTARG
+        echo "file: "$T
+        ;;
     esac
 done
 
-echo $T
+echo "bash sees: "$T
 
 
 # Relative path to the file in the testdata directory
@@ -26,6 +30,6 @@ lines=$(wc -l < "$file")
 
 for j in $( seq 0 $lines )
 	do
-		#echo $$
-		rosrun reloPush reloPush $T $j
+		echo $T
+		rosrun reloPush reloPush $T $j 1
 	done

@@ -69,7 +69,8 @@ namespace jeeho
 
             if (outFile.is_open()) {
                 outFile << set_delim << std::endl;
-                outFile << testdata_name << header_delim << testdata_ind << std::endl;
+                outFile << "data_name" << header_delim << testdata_name << std::endl;
+                outFile << "index" << header_delim << testdata_ind << std::endl;
                 outFile << "Is Success" << header_delim << (is_success ? "T" : "F") << "\n";
                 outFile << "Number of Relocations" << header_delim << num_relo << "\n";
 

@@ -197,13 +197,19 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    int data_ind = 0;
-    std::string data_file = "data_2o1r_2.txt";
-    if(argc==3)
+    int data_ind = 30;
+    std::string data_file = "data_3o_2.txt";
+    //int leave_log = 1;
+    if(argc==4)
     {
         data_file = std::string(argv[1]);
         data_ind = std::atoi(argv[2]);        
+        params::leave_log = std::atoi(argv[3]);
     }
+
+    Color::println("== data: " + data_file + " ===",Color::BG_YELLOW);
+    Color::println("== ind: " + std::to_string(data_ind) + " ===",Color::BG_YELLOW);
+    Color::println("== log: " + std::to_string(params::leave_log) + " ===",Color::BG_YELLOW);
 
     ros::init(argc, argv, "reloPush");
     ros::NodeHandle nh;
@@ -212,6 +218,8 @@ int main(int argc, char **argv)
     initialize_publishers(nh);
     // wait for debug attach
     ros::Duration(0.1).sleep();
+    if(!params::leave_log)
+        ros::Duration(1.0).sleep();
 
     ///////// Initial settings /////////
     int num_push_sides = 4; // todo: parse as a param
@@ -266,7 +274,8 @@ int main(int argc, char **argv)
 
             robot_pose_reset_ptr->publish(init_pose);
             ros::spinOnce();
-            ros::Duration(0.5).sleep();
+            if(!params::leave_log)
+                ros::Duration(0.5).sleep();
         }
     }
 
@@ -301,9 +310,12 @@ int main(int argc, char **argv)
     //timeWatches.print();
 
     // log
-    jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
-    // write to file
-    records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log_" + removeExtension(data_file) + ".txt");
+    if(params::leave_log == 1)
+    {
+        jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
+        // write to file
+        records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + removeExtension(data_file) + ".txt");
+    }
 
     // generate final navigation path
     statePath final_path = deliverySets.serializePath();
@@ -324,6 +336,8 @@ int main(int argc, char **argv)
 
     ros::spinOnce();
     ros::Duration(0.01).sleep();
+    if(!params::leave_log)
+        ros::Duration(0.5).sleep();
 
     //remove publisher pointers
     free_publisher_pointers();
