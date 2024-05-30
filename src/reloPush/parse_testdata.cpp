@@ -43,7 +43,7 @@ std::vector<std::string> read_file(std::string f_path)
 	{
 		while (getline(file_to_read, line))
 		{
-			cout << line << '\n';
+			//cout << line << '\n';
 			out_result.push_back(line);
 		}
 		file_to_read.close();

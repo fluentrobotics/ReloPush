@@ -1,4 +1,4 @@
-import numpy as np
+#import numpy as np
 import random as rn
 import os
 
@@ -126,6 +126,24 @@ class nominal_dataset:
         out_str += ';'.join([f"{key},{value}" for key, value in self.d_table.items()])
 
         return out_str
+    
+    def write_to_file(self):
+        # list of random data
+        dataset_rn_list = []
+        for i in range(100):
+            dataset_rn_list.append(self.add_randomness().serialize())
+
+        # Specify the file name
+        file_name = self.name + '.txt'
+        # Get the directory of the current script
+        current_directory = os.path.dirname(__file__)
+        # Construct the full file path
+        file_path = os.path.join(current_directory+"/../testdata/", file_name)
+
+        with open(file_path, 'w') as file:
+            file.write('\n'.join(dataset_rn_list))
+
+
         
 
 
@@ -136,23 +154,17 @@ dataset_one.robot = [pose2D(2, 2.5, 1.5708)] ## robot
 dataset_one.d_list = [movableObject(0,0,0,"d1",4), movableObject(3,3.5,0,"d3",4)] ## delivery
 dataset_one.d_table = d_table = {"b1":"d1", "b3":"d3"} ## assign
 
+# 2obj 1relo test instance
+dataset_two = nominal_dataset("data_2o1r_2")
+dataset_two.mo_list = [movableObject(2.2,3.5,0,"b1",4), movableObject(1,3.5,0,"b3",4)] ## objects
+dataset_two.robot = [pose2D(2, 2.5, 1.5708)] ## robot
+dataset_two.d_list = [movableObject(0,0,0,"d1",4), movableObject(3,3.5,0,"d3",4)] ## delivery
+dataset_two.d_table = d_table = {"b1":"d3", "b3":"d1"} ## assign
 
 
+dataset_one.write_to_file()
+dataset_two.write_to_file()
 
-# list of random data
-dataset_rn_list = []
-for i in range(20):
-    dataset_rn_list.append(dataset_one.add_randomness().serialize())
-
-# Specify the file name
-file_name = dataset_one.name + '.txt'
-# Get the directory of the current script
-current_directory = os.path.dirname(__file__)
-# Construct the full file path
-file_path = os.path.join(current_directory+"/../testdata/", file_name)
-
-with open(file_path, 'w') as file:
-    file.write('\n'.join(dataset_rn_list))
 
 #print(dataset_one.add_randomness().serialize())
 print('done')

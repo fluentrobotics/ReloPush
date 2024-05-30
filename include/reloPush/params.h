@@ -9,7 +9,7 @@ namespace params
 
     // todo: parse map size as params
     float map_max_x = 4; // m
-    float map_max_y = 5.2; // m
+    float map_max_y = 5.4; // m
 
     const bool use_mocap = false; //todo: parse as a parameter
     const bool use_testdata = true;

@@ -260,7 +260,17 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
         start.yaw *= -1;
 
     if(negate_goal_yaw)
+    {
+        //if(goal_in.yaw > M_PI)
+        //    goal_in.yaw -= M_PI;
+        //else
+        //    goal_in.yaw += M_PI;      
+        
         goal_in.yaw *= -1;
+    }
+
+    // testing
+    
 
     env.changeGoal(goal_in);
     
@@ -354,6 +364,9 @@ State find_pre_push(State& goalState, float distance = 0.6f)
     // Calculate the new x and y coordinates
     outState.x -= distance * cos(goalState.yaw);
     outState.y -= distance * sin(goalState.yaw);
+
+    // change angle range
+    //outState.yaw = jeeho::convertEulerRange_to_2pi(outState.yaw);
 
     return outState;
 }
@@ -880,7 +893,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         auto pre_push = find_pre_push(push_path.front(),0.6f);
 
         // plan hybrid astar
-        plan_res = planHybridAstar(lastLastRelo, pre_push, env, false, true, true);
+        plan_res = planHybridAstar(lastLastRelo, pre_push, env, false, true, false);
         if(!plan_res->success)
                 return std::make_pair(std::vector<State>(0),false); // return false
 

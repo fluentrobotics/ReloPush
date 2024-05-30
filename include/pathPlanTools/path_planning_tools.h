@@ -115,6 +115,7 @@ class Environment {
 
   Environment(){};
 
+/*
   Environment(size_t maxx, size_t maxy, std::unordered_set<State> obstacles,
               State goal = State(0,0,0))
       : m_obstacles(std::move(obstacles)),
@@ -130,7 +131,7 @@ class Environment {
     updateCostmap();
 
     //test dynamic_obs
-    /*
+    
     dynamic_obs.insert(std::pair<int,State>(1,State(2.46318, 2.44999, 0,1)));
     dynamic_obs.insert(std::pair<int,State>(2,State(2.06318, 2.44999, 0,2)));
     dynamic_obs.insert(std::pair<int,State>(3,State(1.76318, 2.44999, 0,3)));
@@ -139,11 +140,12 @@ class Environment {
     dynamic_obs.insert(std::pair<int,State>(6,State(0.86318, 2.44999, 0,6)));
     dynamic_obs.insert(std::pair<int,State>(7,State(0.56318, 2.44999, 0,7)));
     std::cout << "test dobs addeed" << std::endl;
-    */
+    
   }
-
+  */
+  
   Environment(float maxx, float maxy, std::unordered_set<State> obstacles,
-            State goal)
+            State goal = State(0,0,0))
     : m_obstacles(std::move(obstacles)),
       m_goal(goal)  // NOLINT
   {

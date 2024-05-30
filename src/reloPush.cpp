@@ -64,7 +64,7 @@ void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std:
 }
 
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
-                Environment& env, float& map_max_x, float& map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
+                Environment& env, float map_max_x, float map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
                 std::vector<stopWatch>& time_watches, std::vector<movableObject>& delivery_list, 
                 std::unordered_map<std::string,std::string>& delivery_table, 
                 std::vector<std::shared_ptr<deliveryContext>>& delivery_contexts, std::vector<State>& robots)
@@ -198,7 +198,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 int main(int argc, char **argv) 
 {
     int data_ind = 0;
-    std::string data_file = "data_2o1r.txt";
+    std::string data_file = "data_2o1r_2.txt";
     if(argc==3)
     {
         data_file = std::string(argv[1]);
@@ -211,7 +211,7 @@ int main(int argc, char **argv)
     // initialize publishers
     initialize_publishers(nh);
     // wait for debug attach
-    ros::Duration(1.0).sleep();
+    ros::Duration(0.1).sleep();
 
     ///////// Initial settings /////////
     int num_push_sides = 4; // todo: parse as a param
@@ -244,7 +244,7 @@ int main(int argc, char **argv)
     {
         // parse from input file
         Color::println("=== Testdata " + data_file + " " + std::to_string(data_ind) + " ===",Color::CYAN, Color::BG_DEFAULT);
-        delivery_table = parse_movableObjects_robots_from_file(mo_list,robots,delivery_list,0,std::string(CMAKE_SOURCE_DIR) + "/testdata/" + data_file);
+        delivery_table = parse_movableObjects_robots_from_file(mo_list,robots,delivery_list,data_ind,std::string(CMAKE_SOURCE_DIR) + "/testdata/" + data_file);
         
         if(params::reset_robot_pose)
         {
@@ -323,7 +323,7 @@ int main(int argc, char **argv)
     test_path_pub_ptr->publish(*navPath_ptr); 
 
     ros::spinOnce();
-    ros::Duration(1.0).sleep();
+    ros::Duration(0.01).sleep();
 
     //remove publisher pointers
     free_publisher_pointers();
