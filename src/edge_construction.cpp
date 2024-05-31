@@ -38,8 +38,12 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
     for (size_t np=0; np<num_pts; np++)
     {
         //auto start = std::chrono::steady_clock::now();
+        std::cout << "DubinsStart x: " << dubinsStart->getX() << " y: " << dubinsStart->getY() << std::endl;
+
         jeeho_interpolate(dubinsStart, dubins_res.second, (double)np / (double)num_pts, interState, &dubinsSpace,
                         turning_radius);
+
+        std::cout << "interStart x: " << interState->getX() << " y: " << interState->getY() << std::endl;
         //auto end = std::chrono::steady_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         //std::cout << "Elapsed time: " << duration << " usec" << std::endl;

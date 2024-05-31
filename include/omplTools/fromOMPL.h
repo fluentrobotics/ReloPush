@@ -16,6 +16,7 @@ namespace fromOMPL{
     double mod2pi(double x);
     bool is_longpath_case(double d, double alpha, double beta);
     ompl::base::DubinsStateSpace::DubinsPath dubins_classification(const double d, const double alpha, const double beta);
+    ompl::base::DubinsStateSpace::DubinsPath dubins_exhaustive(const double d, const double alpha, const double beta);
 }
 
 #endif

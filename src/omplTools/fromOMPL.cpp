@@ -612,3 +612,39 @@ DubinsStateSpace::DubinsPath fromOMPL::dubins_classification(const double d, con
     return path;
 }
 
+DubinsStateSpace::DubinsPath fromOMPL::dubins_exhaustive(const double d, const double alpha, const double beta)
+{
+    if (d < DUBINS_EPS && fabs(alpha - beta) < DUBINS_EPS)
+        return {DubinsStateSpace::dubinsPathType[0], 0, d, 0};
+
+    DubinsStateSpace::DubinsPath path(dubinsLSL(d, alpha, beta)), tmp(dubinsRSR(d, alpha, beta));
+    double len, minLength = path.length();
+
+    if ((len = tmp.length()) < minLength)
+    {
+        minLength = len;
+        path = tmp;
+    }
+    tmp = dubinsRSL(d, alpha, beta);
+    if ((len = tmp.length()) < minLength)
+    {
+        minLength = len;
+        path = tmp;
+    }
+    tmp = dubinsLSR(d, alpha, beta);
+    if ((len = tmp.length()) < minLength)
+    {
+        minLength = len;
+        path = tmp;
+    }
+    tmp = dubinsRLR(d, alpha, beta);
+    if ((len = tmp.length()) < minLength)
+    {
+        minLength = len;
+        path = tmp;
+    }
+    tmp = dubinsLRL(d, alpha, beta);
+    if ((len = tmp.length()) < minLength)
+        path = tmp;
+    return path;
+}

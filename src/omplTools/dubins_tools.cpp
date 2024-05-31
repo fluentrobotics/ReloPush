@@ -13,10 +13,11 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
                        OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius)
 {
     OmplState *s = space->allocState()->as<OmplState>();
-    double seg = t * path.length(), phi, v;
+    double seg = t * path.length(), phi=0, v=0;
 
     s->setXY(0,0);
     s->setYaw(from->getYaw());
+    std::cout << "S x: " << s->getX() << " " << s->getY() << " " << s->getYaw() << std::endl;
     if (!path.reverse_)
     {
         for (unsigned int i = 0; i < 3 && seg > 0; ++i)
@@ -63,6 +64,8 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
             }
         }
     }
+
+    std::cout << "---" << s->getX() << " " << s->getY() << std::endl;
 
     state->setX(s->getX() * turning_radius + from->getX());
     state->setY(s->getY() * turning_radius + from->getY());
@@ -157,7 +160,8 @@ std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_
     
     if(!is_long) // short-path
     {
-        dubinsPath dubinsSet = fromOMPL::dubins_classification(d, alpha, beta); //path
+        //dubinsPath dubinsSet = fromOMPL::dubins_classification(d, alpha, beta); //path
+        dubinsPath dubinsSet = fromOMPL::dubins_exhaustive(d, alpha, beta);
         return std::make_pair<pathType,dubinsPath>(pathType::SP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
     }
 

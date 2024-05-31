@@ -89,7 +89,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         stopWatch time_edge("edge", measurement_type::graphPlan);
         // construct edges
-        reloPush::construct_edges(mo_list, gPtr, env, Constants::r, edgeMatcher ,false);
+        reloPush::construct_edges(mo_list, gPtr, env, Constants::r, edgeMatcher ,true);
         time_edge.stop();
         time_edge.print_us();
         time_watches.push_back(time_edge);
