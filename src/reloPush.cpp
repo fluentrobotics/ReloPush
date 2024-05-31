@@ -11,6 +11,7 @@ ros::Publisher* vertex_marker_pub_ptr = nullptr;
 ros::Publisher* edge_marker_pub_ptr = nullptr;
 ros::Publisher* object_marker_pub_ptr = nullptr;
 ros::Publisher* dubins_path_pub_ptr = nullptr;
+ros::Publisher* failed_path_pub_ptr = nullptr;
 ros::Publisher* delivery_marker_pub_ptr = nullptr;
 //test
 ros::Publisher* test_path_pub_ptr = nullptr;
@@ -24,7 +25,8 @@ ros::Publisher* robot_pose_reset_ptr;
 ros::NodeHandle* nh_ptr = nullptr;
 
 void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivery_list
-                        , NameMatcher& nameMatcher, graphTools::EdgeMatcher edgeMatcher, Environment& env, std::shared_ptr<nav_msgs::Path> navPath_ptr, double loop_rate=10)
+                        , NameMatcher& nameMatcher, graphTools::EdgeMatcher edgeMatcher, Environment& env, std::shared_ptr<nav_msgs::Path> navPath_ptr,
+                         std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, double loop_rate=10)
 {
     ros::Rate r(loop_rate);
     // visualize vertices
@@ -32,7 +34,7 @@ void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std:
     // visualize movable obstacles
     auto mo_vis = draw_obstacles(mo_list, object_marker_pub_ptr);
     // visualize edge paths
-    auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
+    auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
     // visualize delivery locations
     auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
     // visualize object names
@@ -67,7 +69,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 Environment& env, float map_max_x, float map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
                 std::vector<stopWatch>& time_watches, std::vector<movableObject>& delivery_list, 
                 std::unordered_map<std::string,std::string>& delivery_table, 
-                std::vector<std::shared_ptr<deliveryContext>>& delivery_contexts, std::vector<State>& robots)
+                std::vector<std::shared_ptr<deliveryContext>>& delivery_contexts, std::vector<State>& robots, std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths)
 {
 
     std::vector<size_t> temp_relocs(0);
@@ -89,14 +91,14 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         stopWatch time_edge("edge", measurement_type::graphPlan);
         // construct edges
-        reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r, edgeMatcher, false);
+        reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r, edgeMatcher, failed_paths, false);
         time_edge.stop();
         time_edge.print_us();
         time_watches.push_back(time_edge);
 
         // add deliverries to graph
         stopWatch time_edge_d("delivery", measurement_type::graphPlan);
-        add_delivery_to_graph(delivery_list, mo_list, env, map_max_x, map_max_y, edgeMatcher, nameMatcher, gPtr);
+        add_delivery_to_graph(delivery_list, mo_list, env, map_max_x, map_max_y, edgeMatcher, nameMatcher, failed_paths, gPtr);
         time_edge_d.stop();
         time_edge_d.print_us();
         time_watches.push_back(time_edge_d);
@@ -314,6 +316,12 @@ int main(int argc, char **argv)
     draw_texts(initMOList,text_pub_ptr);
     draw_deliveries(delivery_list,delivery_marker_pub_ptr);
     visualize_workspace_boundary(params::map_max_x, params::map_max_y, boundary_pub_ptr);
+    // store failed paths
+    std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>> failed_paths;
+    // init failed paths map
+    for(auto& it : initMOList)
+        failed_paths.insert({it.get_name(),{}});
+    
 
     // time measurements
     stopWatchSet timeWatches;
@@ -321,7 +329,7 @@ int main(int argc, char **argv)
     stopWatch time_plan("All-planning", measurement_type::allPlan);
     /////////////// loop starts ///////////////
     reloPlanResult reloResult = reloLoop(obs, mo_list, delivered_obs, env, params::map_max_x, params::map_max_y, gPtr, edgeMatcher, timeWatches.watches, 
-            delivery_list, delivery_table, deliverySets.delivery_contexts, robots);
+            delivery_list, delivery_table, deliverySets.delivery_contexts, robots, failed_paths);
     //////////// loop ends ////////////
     time_plan.stop();
     time_plan.print_us();
@@ -342,23 +350,26 @@ int main(int argc, char **argv)
     statePath final_path = deliverySets.serializePath();
     auto navPath_ptr = statePath_to_navPath(final_path);
 
-    //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, 10);
+    //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, failed_paths, 10);
 
-    // visualize movable obstacles
-    auto mo_vis = draw_obstacles(initMOList, object_marker_pub_ptr);
-    // visualize edge paths
-    auto vis_path_msg = draw_paths(edgeMatcher,env,dubins_path_pub_ptr,Constants::r);
-    // visualize delivery locations
-    auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
-    // visualize object names
-    auto vis_names_msg = draw_texts(initMOList,text_pub_ptr);
-    // publish final path once
-    test_path_pub_ptr->publish(*navPath_ptr); 
+    while(ros::ok())
+    {
+        // visualize movable obstacles
+        auto mo_vis = draw_obstacles(initMOList, object_marker_pub_ptr);
+        // visualize edge paths
+        auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
+        // visualize delivery locations
+        auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+        // visualize object names
+        auto vis_names_msg = draw_texts(initMOList,text_pub_ptr);
+        // publish final path once
+        test_path_pub_ptr->publish(*navPath_ptr); 
 
-    ros::spinOnce();
-    ros::Duration(0.01).sleep();
-    if(!params::leave_log)
-        ros::Duration(0.5).sleep();
+        ros::spinOnce();
+        ros::Duration(0.01).sleep();
+        if(!params::leave_log)
+            ros::Duration(0.5).sleep();
+    }
 
     //remove publisher pointers
     free_publisher_pointers();

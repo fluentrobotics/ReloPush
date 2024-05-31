@@ -225,11 +225,13 @@ visualization_msgs::MarkerArray draw_texts(std::vector<movableObject>& mo_list, 
     return marker_array;
 }
 
-visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher, Environment& env, ros::Publisher* pub_ptr, float turning_radius)
+visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher, Environment& env, 
+                                        std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, 
+                                        ros::Publisher* pub_ptr, ros::Publisher* failed_pub_ptr, float turning_radius)
 {
     auto edgePaths = edgeMatcher.get_entries();
     
-    std::vector<nav_msgs::Path> path_vec;
+    std::vector<nav_msgs::Path> path_vec, failed_vec;
 
     for(auto& it : *edgePaths) // for each path
     {
@@ -271,6 +273,49 @@ visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher,
         path_vec.push_back(single_path);
     }
 
+    // for each failed path
+    for(auto& it : failed_paths)
+    {
+        for(auto& it2 : it.second){
+        
+            size_t num_pts = static_cast<int>(it2.second.length()/0.1); //todo: get resolution as a param
+
+            auto pivot_state = *it2.first;
+
+            // check collision
+            ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
+            OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
+            dubinsStart->setXY(pivot_state.x, pivot_state.y);
+            dubinsStart->setYaw(pivot_state.yaw);
+            OmplState *interState = (OmplState *)dubinsSpace.allocState();
+
+            // interpolate dubins path
+            // Interpolate dubins path to check for collision on grid map
+            nav_msgs::Path single_path;
+            single_path.header.frame_id = it.first; // temporarily use this field to name the path
+            single_path.poses.resize(num_pts);
+            for (size_t np=0; np<num_pts; np++)
+            {            
+                //auto start = std::chrono::steady_clock::now();
+                jeeho_interpolate(dubinsStart, it2.second, (double)np / (double)num_pts, interState, &dubinsSpace,
+                                turning_radius);
+                //auto end = std::chrono::steady_clock::now();
+                //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+                //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
+                //std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
+
+                geometry_msgs::PoseStamped one_pose;
+                one_pose.pose.position.x = interState->getX();
+                one_pose.pose.position.y = interState->getY();
+                one_pose.pose.position.z = 0;
+                one_pose.pose.orientation = jeeho::eigenQtoMsgQ(jeeho::euler_to_quaternion_xyz(0,0,interState->getYaw()));
+
+                single_path.poses[np] = one_pose;
+            }
+            failed_vec.push_back(single_path);
+        }        
+    }
+
     visualization_msgs::MarkerArray marker_array;
     int id = 0;
     for (const auto& path : path_vec) {
@@ -297,7 +342,35 @@ visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher,
         marker_array.markers.push_back(marker);
     }
 
+    visualization_msgs::MarkerArray marker_array_failed;
+    
+    for (const auto& path : failed_vec) {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = params::world_frame; // Set the frame id to your desired frame
+        marker.header.stamp = ros::Time::now();
+        marker.ns = path.header.frame_id;
+        marker.id = id++;
+        marker.type = visualization_msgs::Marker::LINE_STRIP;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.orientation.w = 1.0;
+        marker.scale.x = 0.015; // Set the line width
+        auto color_set = colors[int(marker.ns.back() - '0')];
+        marker.color.r = color_set[0];
+        marker.color.g = color_set[1];
+        marker.color.b = color_set[2];
+        marker.color.a = 0.5;
+
+        // Fill marker points
+        for (const auto& pose : path.poses) {
+            marker.points.push_back(pose.pose.position);
+        }
+
+        marker_array_failed.markers.push_back(marker);
+    }
+
+
     pub_ptr->publish(marker_array);
+    failed_pub_ptr->publish(marker_array_failed);
 
     return marker_array;
 }

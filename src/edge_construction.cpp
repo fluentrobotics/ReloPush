@@ -168,7 +168,8 @@ bool check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_
 }
 
 
-void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius, graphTools::EdgeMatcher& edgeMatcher, bool print_log)
+void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius,
+                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, bool print_log)
 {
     //todo: parameterize
     bool use_better_path = false;
@@ -331,6 +332,9 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                             {
                                 if(print_log)
                                     std::cout << " dubins collision" << std::endl;
+
+                                // store to failed paths
+                                failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
                             }
                         }
 #pragma endregion normal_dubins_path
@@ -341,7 +345,9 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
     }
 }
 
-void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius, graphTools::EdgeMatcher& edgeMatcher, bool print_log)
+void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env,
+                                 float max_x, float max_y, float turning_radius, graphTools::EdgeMatcher& edgeMatcher,
+                                 std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, bool print_log)
 {
     //todo: parameterize
     bool use_better_path = false;
@@ -400,6 +406,8 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                         {
                             if(print_log)
                                 std::cout << " dubins collision" << std::endl;
+                            
+                            failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
                         }
                     }
 #pragma endregion normal_dubins_path

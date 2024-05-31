@@ -32,6 +32,7 @@ extern ros::Publisher* dubins_path_pub_ptr;
 extern ros::Publisher* delivery_marker_pub_ptr;
 //test
 extern ros::Publisher* test_path_pub_ptr;
+extern ros::Publisher* failed_path_pub_ptr;
 extern ros::Publisher* text_pub_ptr;
 
 extern ros::Publisher* boundary_pub_ptr;
@@ -73,6 +74,9 @@ void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
     ros::Publisher dubins_path_pub = nh.advertise<visualization_msgs::MarkerArray>("dubins_paths", 10);
     dubins_path_pub_ptr = new ros::Publisher(dubins_path_pub);
 
+    ros::Publisher failed_path_pub = nh.advertise<visualization_msgs::MarkerArray>("failed_paths", 10);
+    failed_path_pub_ptr = new ros::Publisher(failed_path_pub);
+
     ros::Publisher delivery_marker_pub = nh.advertise<visualization_msgs::MarkerArray>("delivery_locations", 10);
     delivery_marker_pub_ptr = new ros::Publisher(delivery_marker_pub);
 
@@ -84,6 +88,8 @@ void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
         test_path_pub = nh.advertise<nav_msgs::Path>("/mushr2/planned_trajectory", 10);
 
     test_path_pub_ptr = new ros::Publisher(test_path_pub);
+
+
 
     ros::Publisher text_pub = nh.advertise<visualization_msgs::MarkerArray>("object_names", 5);
     text_pub_ptr = new ros::Publisher(text_pub);
@@ -103,6 +109,7 @@ void free_publisher_pointers()
     delete(edge_marker_pub_ptr);
     delete(object_marker_pub_ptr);
     delete(dubins_path_pub_ptr);
+    delete(failed_path_pub_ptr);
     delete(delivery_marker_pub_ptr);
     //test
     delete(test_path_pub_ptr);
@@ -499,13 +506,13 @@ std::unordered_map<std::string,std::string> init_delivery_table(std::vector<mova
 }
 
 void add_delivery_to_graph(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, float max_x, float max_y,
-                    graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, GraphPtr gPtr)
+                    graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, GraphPtr gPtr)
 {
     // add delivery verteices
     for(auto& it : delivery_list)
         it.add_to_graph(gPtr);
     // add to graph
-    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r,edgeMatcher,false);
+    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r,edgeMatcher, failed_paths,false);
     //add to namematcher
     nameMatcher.addVertices(delivery_list);
 }
