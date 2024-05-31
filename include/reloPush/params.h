@@ -18,6 +18,8 @@ namespace params
     const bool print_graph = true;
 
     int leave_log = 0;
+    bool print_log = false;
+    bool use_better_path = false;
 }
 
 #endif

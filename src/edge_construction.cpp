@@ -1,8 +1,8 @@
 #include <reloPush/edge_construction.h>
 
 
-bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
-                    size_t n, size_t m, std::pair<pathType,dubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool print_log, bool is_delivery = false)
+stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
+                    size_t n, size_t m, std::pair<pathType,dubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
 {
     // check collision
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
@@ -14,8 +14,7 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
 
     size_t num_pts = static_cast<int>(dubins_res.second.length()/(0.1*0.5)); //todo: get resolution as a param
 
-    bool collision_found = false;
-
+    stateValidity validity = stateValidity::valid;
     
     std::vector<State> took_out(0);
     // takeout pivot object from obstacles
@@ -54,7 +53,7 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
         {
             if(print_log)
                 std::cout << "Out of Boundary " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
-            collision_found = true;
+            validity = stateValidity::out_of_boundary;
 
             break;
         }
@@ -65,13 +64,13 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
             //collision found
             if(print_log)
                 std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
-            collision_found = true;
+            validity = stateValidity::collision;
 
             break;
         }                             
     }
 
-    if(!collision_found)
+    if(validity == stateValidity::valid)
     {
         if(print_log)
             std::cout << "edge found" << std::endl;
@@ -89,11 +88,11 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
         env.add_obs(it);
     
 
-    return collision_found;
+    return validity;
 }
 
-bool check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
-                    std::pair<pathType,dubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool print_log, bool is_delivery = false)
+stateValidity check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
+                    std::pair<pathType,dubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
 {
     // check collision
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
@@ -105,7 +104,7 @@ bool check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_
 
     size_t num_pts = static_cast<int>(dubins_res.second.length()/(0.1*0.5)); //todo: get resolution as a param
 
-    bool collision_found = false;
+    auto validity = stateValidity::valid;
 
     
     std::vector<State> took_out(0);
@@ -140,13 +139,13 @@ bool check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_
             //collision found
             if(print_log)
                 std::cout << "Collision found " << np << std::endl;
-            collision_found = true;
+            validity = stateValidity::collision;
 
             break;
         }                             
     }
 
-    if(!collision_found)
+    if(validity == stateValidity::valid)
     {
         if(print_log)
             std::cout << "edge found" << std::endl;
@@ -164,16 +163,13 @@ bool check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_
         env.add_obs(it);
     
 
-    return collision_found;
+    return validity;
 }
 
 
 void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius,
-                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, bool print_log)
+                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths)
 {
-    //todo: parameterize
-    bool use_better_path = false;
-
     edgeMatcher.reset();
 
     // construct edges
@@ -197,112 +193,54 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                         // checking if there needs an edge between pivot and target states
                         auto target_state = mo_list[m].get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
 
-                        if(print_log)
+                        if(params::print_log)
                             std::cout << "MO" << n << " dir" << piv_state_ind << " -> MO" << m << " dir" << state_ind << std::endl;
 
                         // check for good path
                         auto dubins_res = is_good_path(*pivot_state,*target_state,turning_radius);
 
 #pragma region proposed_path_classification
-                        if(use_better_path)
+                        if(params::use_better_path)
                         {
-                            if(dubins_res.first == pathType::smallLP) // a good path is found. Check if there is a collision with other objects
+                            // check collision
+                            auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius, params::print_log);
+
+                            if(validity == stateValidity::valid)
                             {
-                                // check collision
-                                auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius, print_log);
+                                auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
 
-                                if(!collision_found)
-                                {
-                                    auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
+                                Edge e;
+                                bool succ;
 
+                                // for debug only
+                                auto name1 = graphTools::getVertexName(*pivot_vertex,gPtr);
+                                auto name2 = graphTools::getVertexName(*target_vertex,gPtr);
 
-                                    Edge e;
-                                    bool succ;
-
-                                    std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
-                                    // add to edge-path matcher
-                                    edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,pathType::smallLP,e,gPtr));   
-                                }
-                                else // collision found
-                                {
-                                    if(print_log)
-                                        std::cout << " Collision found on a good path " << std::endl;
-                                }
-
-                                /*
-                                ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
-                                OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
-                                dubinsStart->setXY(pivot_state->x, pivot_state->y);
-                                dubinsStart->setYaw(pivot_state->yaw);
-                                OmplState *interState = (OmplState *)dubinsSpace.allocState();
-                                // auto path_g = generateSmoothPath(dubinsPath,0.1);
-
-                                size_t num_pts = static_cast<int>(dubins_res.second.length()/0.1); //todo: get resolution as a param
-
-                                bool collision_found = false;
-
-                                // remove collision at starting pose
-                                auto took_out = env.takeout_start_collision(*pivot_state);
-
-                                // takeout pivot object from obstacles
-                                took_out.push_back(State(mo_list[n].x,mo_list[n].y,0));
-                                env.remove_obs(State(mo_list[n].x,mo_list[n].y,0));
-
-                                // takeout target object from obstacles
-                                took_out.push_back(State(mo_list[m].x,mo_list[m].y,0));
-                                env.remove_obs(State(mo_list[m].x,mo_list[m].y,0));
-
-                                // Interpolate dubins path to check for collision on grid map
-                                for (size_t np=0; np<num_pts; np++)
-                                {
-                                    //auto start = std::chrono::steady_clock::now();
-                                    jeeho_interpolate(dubinsStart, dubins_res.second, (double)np / (double)num_pts, interState, &dubinsSpace,
-                                                    turning_radius);
-                                    //auto end = std::chrono::steady_clock::now();
-                                    //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-                                    //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
-                                    std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
-                                    if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
-                                    {
-                                        //collision found
-                                        std::cout << "Collision found" << std::endl;
-                                        collision_found = true;
-
-                                        break;
-                                        //todo: add splited path
-                                    }                             
-                                }
-
-                                if(!collision_found)
-                                {
-                                    if(print_log)
-                                        std::cout << "edge found" << std::endl;
-                                    auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
-                                    Edge e;
-                                    bool succ;
-                                    
-                                    std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
-                                    // add to edge-path matcher
-                                    edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,dubins_res.second,pathType::smLP,e,gPtr));                                
-                                }       
-
-                                //put back took-out obstacles
-                                for(auto it : took_out)
-                                    env.add_obs(it);
-                                */
-                                
+                                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
+                                // add to edge-path matcher
+                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,pathType::smallLP,e,gPtr));
                             }
-                            // need to split
-                            else if (dubins_res.first == pathType::largeLP || dubins_res.first == pathType::SP){ // either short-path or large-turn long-path
-                                if(print_log)
-                                    std::cout << "Short Path Case" << std::endl;
-                                
-                                //todo: add splited path
+                            else if(validity == stateValidity::collision)
+                            {
+                                if(params::print_log)
+                                    std::cout << " dubins collision" << std::endl;
+
+                                // store to failed paths
+                                failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
                             }
-                            // not a path
-                            else{
-                                if(print_log)
-                                    std::cout << "No Path Found" << std::endl;
+                            else if(validity == stateValidity::out_of_boundary)
+                            {
+                                // check if a long path is possible by relocating it
+                                /// find d_threshold to be a long path
+                                auto d_thres = get_longpath_d_thres(*pivot_state,*target_state);
+                                
+
+                                // if so, add it to an edge
+
+                                // else, no edge
+                                if(params::print_log)
+                                    std::cout << " no feasible path within boundary" << std::endl;
+
                             }
                         }
 #pragma endregion proposed_path_classification
@@ -311,9 +249,9 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                         else // use ordinary dubins path
                         {
                             // check collision
-                            auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius, print_log);
+                            auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius);
 
-                            if(!collision_found)
+                            if(validity == stateValidity::valid)
                             {
                                 auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
 
@@ -330,7 +268,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                             }
                             else
                             {
-                                if(print_log)
+                                if(params::print_log)
                                     std::cout << " dubins collision" << std::endl;
 
                                 // store to failed paths
@@ -389,7 +327,7 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                     else // use ordinary dubins path
                     {
                         // check collision
-                        auto collision_found = check_collision(mo_list[m], delivery_list[n], pivot_state, pivot_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, print_log, true);
+                        auto collision_found = check_collision(mo_list[m], delivery_list[n], pivot_state, pivot_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, true);
 
                         if(!collision_found)
                         {

@@ -144,12 +144,32 @@ Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, d
     return rotationMatrix * point;
 }
 
-std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
+void find_alpha_beta(State& s1, State& s2, double& alpha_out, double& beta_out)
 {
     double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
     double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
-    double dx = x2 - x1, dy = y2 - y1, d = sqrt(dx * dx + dy * dy) / turning_rad, th = atan2(dy, dx);
-    double alpha = fromOMPL::mod2pi(th1 - th), beta = fromOMPL::mod2pi(th2 - th);
+    double dx = x2 - x1, dy = y2 - y1, th = atan2(dy, dx);
+    alpha_out = fromOMPL::mod2pi(th1 - th), beta_out = fromOMPL::mod2pi(th2 - th);
+}
+
+float get_longpath_d_thres(State& s1, State& s2)
+{
+    double alpha, beta;
+    find_alpha_beta(s1,s2,alpha,beta);
+
+    return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta));
+}
+
+std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
+{
+    //double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
+    //double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
+    //double dx = x2 - x1, dy = y2 - y1, d = sqrt(dx * dx + dy * dy) / turning_rad, th = atan2(dy, dx);
+    //double alpha = fromOMPL::mod2pi(th1 - th), beta = fromOMPL::mod2pi(th2 - th);
+
+    double alpha, beta;
+    find_alpha_beta(s1,s2,alpha,beta);
+    double dx = s2.x - s1.x, dy = s2.y - s2.y, d = sqrt(dx * dx + dy * dy) / turning_rad;
 
     if (d < fromOMPL::DUBINS_EPS && fabs(alpha - beta) < fromOMPL::DUBINS_EPS)
         return std::make_pair<pathType,dubinsPath>(pathType::none,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0}); //zero dubins path

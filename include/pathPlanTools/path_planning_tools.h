@@ -110,6 +110,9 @@ struct hash<State> {
 
 using Action = int;  // Action < 6
 
+// for checking state validity of a path
+enum stateValidity {valid, collision, out_of_boundary};
+
 class Environment {
  public:
 

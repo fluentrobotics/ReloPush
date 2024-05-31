@@ -146,12 +146,19 @@ DubinsStateSpace::DubinsPath dubinsLRL(double d, double alpha, double beta)
     return {};
 }
 
+// long-path threshold from OMPL (Lim et al. Circling Back: Dubins set Classification Revisited)
+double fromOMPL::longpath_thres_dist(double& alpha, double& beta)
+{
+    return std::abs(std::sin(alpha)) + std::abs(std::sin(beta)) +
+            std::sqrt(4 - std::pow(std::cos(alpha) + std::cos(beta), 2));
+}
+
 // from OMPL
 bool fromOMPL::is_longpath_case(double d, double alpha, double beta)
 {
-    return (std::abs(std::sin(alpha)) + std::abs(std::sin(beta)) +
-            std::sqrt(4 - std::pow(std::cos(alpha) + std::cos(beta), 2)) - d) < 0;
+    return (longpath_thres_dist(alpha,beta) - d) < 0;
 }
+
 
 DubinsClass getDubinsClass(const double alpha, const double beta)
 {

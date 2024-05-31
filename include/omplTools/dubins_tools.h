@@ -36,6 +36,7 @@ ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, d
 // Function to transform a point from the global frame to the robot's frame
 Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, double robot_y);
 
+float get_longpath_d_thres(State& s1, State& s2);
 std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_rad);
 
 
