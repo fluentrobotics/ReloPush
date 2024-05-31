@@ -17,7 +17,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
 
     s->setXY(0,0);
     s->setYaw(from->getYaw());
-    std::cout << "S x: " << s->getX() << " " << s->getY() << " " << s->getYaw() << std::endl;
+    //std::cout << "S x: " << s->getX() << " " << s->getY() << " " << s->getYaw() << std::endl;
     if (!path.reverse_)
     {
         for (unsigned int i = 0; i < 3 && seg > 0; ++i)
@@ -65,7 +65,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
         }
     }
 
-    std::cout << "---" << s->getX() << " " << s->getY() << std::endl;
+    //std::cout << "---" << s->getX() << " " << s->getY() << std::endl;
 
     state->setX(s->getX() * turning_radius + from->getX());
     state->setY(s->getY() * turning_radius + from->getY());

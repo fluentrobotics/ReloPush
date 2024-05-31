@@ -240,10 +240,12 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
         std::tie(minRow,minCol) = find_min_row_col(cost_mat);
 
         std::cout << "Smallest value: " << cost_mat(minRow,minCol) << std::endl;
+        if(cost_mat(minRow,minCol)==std::numeric_limits<float>::infinity())
+            Color::println("No path on graph", Color::WARNING, Color::BG_MAGENTA);
 
         //std::cout << "row: " << minRow << " col: " << minCol << std::endl;
-
-        Color::println("This may not be the only smallest value",Color::YELLOW);
+        else
+            Color::println("This may not be the only smallest value",Color::YELLOW);
 
         graphPlanResult gp(pivot_names[minRow],target_names[minCol],cost_mat(minRow,minCol),paths[minRow][minCol],i->first, minRow);
         out_vec.push_back(std::make_shared<graphPlanResult>(gp));
@@ -496,14 +498,14 @@ std::unordered_map<std::string,std::string> init_delivery_table(std::vector<mova
     return delivery_table;
 }
 
-void add_delivery_to_graph(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, 
+void add_delivery_to_graph(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, float max_x, float max_y,
                     graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, GraphPtr gPtr)
 {
     // add delivery verteices
     for(auto& it : delivery_list)
         it.add_to_graph(gPtr);
     // add to graph
-    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env,Constants::r,edgeMatcher,false);
+    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r,edgeMatcher,false);
     //add to namematcher
     nameMatcher.addVertices(delivery_list);
 }

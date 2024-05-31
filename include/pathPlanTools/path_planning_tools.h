@@ -575,11 +575,6 @@ class Environment {
 
   bool stateValid(const State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
                                   float LB = Constants::LB, float LF = Constants::LF) {
-    double x_ind = s.x / Constants::mapResolution;
-    double y_ind = s.y / Constants::mapResolution;
-    if (x_ind < 0 || x_ind >= m_dimx || y_ind < 0 || y_ind >= m_dimy)
-      return false;
-
     //dynamic obstacles
     auto it = dynamic_obs.equal_range(s.time);
     for (auto itr = it.first; itr != it.second; ++itr) {
@@ -607,6 +602,13 @@ class Environment {
           return false;
         }
     }
+
+    // boundary
+    double x_ind = s.x / Constants::mapResolution;
+    double y_ind = s.y / Constants::mapResolution;
+    if (x_ind < 0 || x_ind >= m_dimx || y_ind < 0 || y_ind >= m_dimy)
+      return false;
+
     return true;
     // Eigen::Matrix2f rot;
     // double yaw = M_PI / 2;

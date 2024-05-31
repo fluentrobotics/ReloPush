@@ -2,7 +2,7 @@
 
 
 bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
-                    size_t n, size_t m, std::pair<pathType,dubinsPath> dubins_res, Environment& env, float turning_radius, bool print_log, bool is_delivery = false)
+                    size_t n, size_t m, std::pair<pathType,dubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool print_log, bool is_delivery = false)
 {
     // check collision
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
@@ -38,16 +38,28 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
     for (size_t np=0; np<num_pts; np++)
     {
         //auto start = std::chrono::steady_clock::now();
-        std::cout << "DubinsStart x: " << dubinsStart->getX() << " y: " << dubinsStart->getY() << std::endl;
+        //std::cout << "DubinsStart x: " << dubinsStart->getX() << " y: " << dubinsStart->getY() << std::endl;
 
         jeeho_interpolate(dubinsStart, dubins_res.second, (double)np / (double)num_pts, interState, &dubinsSpace,
                         turning_radius);
 
-        std::cout << "interStart x: " << interState->getX() << " y: " << interState->getY() << std::endl;
+        //std::cout << "interStart x: " << interState->getX() << " y: " << interState->getY() << std::endl;
         //auto end = std::chrono::steady_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
         //std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
+
+        // check if within boundary
+        if (interState->getX() < 0 || interState->getX() >= max_x || interState->getY() < 0 || interState->getY() >= max_y)
+        {
+            if(print_log)
+                std::cout << "Out of Boundary " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
+            collision_found = true;
+
+            break;
+        }
+
+
         if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
         {
             //collision found
@@ -81,7 +93,7 @@ bool check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, 
 }
 
 bool check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
-                    std::pair<pathType,dubinsPath> dubins_res, Environment& env, float turning_radius, bool print_log, bool is_delivery = false)
+                    std::pair<pathType,dubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool print_log, bool is_delivery = false)
 {
     // check collision
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
@@ -156,7 +168,7 @@ bool check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_
 }
 
 
-void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float turning_radius, graphTools::EdgeMatcher& edgeMatcher, bool print_log)
+void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius, graphTools::EdgeMatcher& edgeMatcher, bool print_log)
 {
     //todo: parameterize
     bool use_better_path = false;
@@ -196,7 +208,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                             if(dubins_res.first == pathType::smallLP) // a good path is found. Check if there is a collision with other objects
                             {
                                 // check collision
-                                auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, turning_radius, print_log);
+                                auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius, print_log);
 
                                 if(!collision_found)
                                 {
@@ -298,7 +310,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                         else // use ordinary dubins path
                         {
                             // check collision
-                            auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, turning_radius, print_log);
+                            auto collision_found = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius, print_log);
 
                             if(!collision_found)
                             {
@@ -329,7 +341,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
     }
 }
 
-void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float turning_radius, graphTools::EdgeMatcher& edgeMatcher, bool print_log)
+void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius, graphTools::EdgeMatcher& edgeMatcher, bool print_log)
 {
     //todo: parameterize
     bool use_better_path = false;
@@ -371,7 +383,7 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                     else // use ordinary dubins path
                     {
                         // check collision
-                        auto collision_found = check_collision(mo_list[m], delivery_list[n], pivot_state, pivot_vertex, state_ind, dubins_res, env, turning_radius, print_log, true);
+                        auto collision_found = check_collision(mo_list[m], delivery_list[n], pivot_state, pivot_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, print_log, true);
 
                         if(!collision_found)
                         {

@@ -89,14 +89,14 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         stopWatch time_edge("edge", measurement_type::graphPlan);
         // construct edges
-        reloPush::construct_edges(mo_list, gPtr, env, Constants::r, edgeMatcher ,true);
+        reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r, edgeMatcher, false);
         time_edge.stop();
         time_edge.print_us();
         time_watches.push_back(time_edge);
 
         // add deliverries to graph
         stopWatch time_edge_d("delivery", measurement_type::graphPlan);
-        add_delivery_to_graph(delivery_list, mo_list, env, edgeMatcher, nameMatcher, gPtr);
+        add_delivery_to_graph(delivery_list, mo_list, env, map_max_x, map_max_y, edgeMatcher, nameMatcher, gPtr);
         time_edge_d.stop();
         time_edge_d.print_us();
         time_watches.push_back(time_edge_d);
@@ -110,21 +110,42 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         // find best push traverse for all assignments
         stopWatch time_assign("assignment", measurement_type::assign);
         auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
+
+        // find non-inf ind
+        int min_list_ind = -1;
+        for(int i=0; i<min_list.size(); i++)
+        {
+            if(min_list[i]->cost != std::numeric_limits<float>::infinity())
+            {
+                min_list_ind = i;
+                break;
+            }
+        }
+
+        // at least one object cannot be delivered
+        if(min_list_ind == -1)
+        {
+            // failed
+            Color::println("At least one object cannot be delivered",Color::BG_RED,Color::BG_YELLOW);
+            return reloPlanResult(false);
+        }
+
+
         time_assign.stop();
         time_watches.push_back(time_assign);
 
         // arbitrarily assign first in the list
         // todo: assign one with the lowest cost        
-        pf.printPath(gPtr, min_list[0]->path);
+        pf.printPath(gPtr, min_list[min_list_ind]->path);
         //pf.printPath(gPtr, min_list[1]->path);
-        auto reloc_objects = get_intermediate_objects(min_list[0]->path, nameMatcher);
+        auto reloc_objects = get_intermediate_objects(min_list[min_list_ind]->path, nameMatcher);
         // add to num of reloc
         temp_relocs.push_back(reloc_objects.size());
 
         stopWatch time_path_gen_push_path("push-path", measurement_type::pathPlan);
         // path segments for relocation
         // final pushing
-        auto push_path = get_push_path(min_list[0]->path, edgeMatcher, gPtr);
+        auto push_path = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr);
         time_path_gen_push_path.stop();
         time_watches.push_back(time_path_gen_push_path);
 
@@ -152,11 +173,11 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         //auto navPath_ptr = statePath_to_navPath(reloPush_path, use_mocap);
 
         // store delivery set
-        deliveryContext dSet(mo_list, relocPair, min_list[0]->object_name, std::make_shared<statePath>(reloPush_path.first));
+        deliveryContext dSet(mo_list, relocPair, min_list[min_list_ind]->object_name, std::make_shared<statePath>(reloPush_path.first));
         delivery_contexts.push_back(std::make_shared<deliveryContext>(dSet));
 
         // add to delivery sequence
-        deliv_seq.push_back(min_list[0]->object_name);
+        deliv_seq.push_back(min_list[min_list_ind]->object_name);
         
         stopWatch time_update("update");        
         // update movable objects list
@@ -165,7 +186,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         //mo_list.erase(mo_list.begin() + min_list[0]->delivery_ind); // fix
         for(size_t o = 0; o<mo_list.size(); o++)
         {
-            if(mo_list[o].get_name() == min_list[0]->object_name)
+            if(mo_list[o].get_name() == min_list[min_list_ind]->object_name)
             {
                 //delivered_obs.push_back(mo_list[o]);
                 auto delivery_location_str = delivery_table[mo_list[o].get_name()];
@@ -182,7 +203,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
             // update delivery list
             /// remove previously assigned delivery
             /// delivery map has object name as the key
-            delivery_table.erase(min_list[0]->object_name);
+            delivery_table.erase(min_list[min_list_ind]->object_name);
         }
 
         // update robot
