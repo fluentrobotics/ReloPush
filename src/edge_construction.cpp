@@ -46,7 +46,9 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
         //auto end = std::chrono::steady_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
-        //std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
+
+        if(params::print_log)
+            std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
 
         // check if within boundary
         if (interState->getX() < 0 || interState->getX() >= max_x || interState->getY() < 0 || interState->getY() >= max_y)
@@ -130,19 +132,26 @@ stateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
         //auto start = std::chrono::steady_clock::now();
         jeeho_interpolate(dubinsStart, dubins_res.second, (double)np / (double)num_pts, interState, &dubinsSpace,
                         turning_radius);
-        //auto end = std::chrono::steady_clock::now();
-        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
-        //std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
+        // check if within boundary
+        if (interState->getX() < 0 || interState->getX() >= max_x || interState->getY() < 0 || interState->getY() >= max_y)
+        {
+            if(params::print_log)
+                std::cout << "Out of Boundary " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
+            validity = stateValidity::out_of_boundary;
+
+            break;
+        }
+
+
         if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
         {
             //collision found
             if(params::print_log)
-                std::cout << "Collision found " << np << std::endl;
+                std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
             validity = stateValidity::collision;
 
             break;
-        }                             
+        }                                
     }
 
     if(validity == stateValidity::valid)
@@ -428,9 +437,9 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                     else // use ordinary dubins path
                     {
                         // check collision
-                        auto collision_found = check_collision(mo_list[m], delivery_list[n], pivot_state, pivot_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, true);
+                        auto validity = check_collision(mo_list[m], delivery_list[n], pivot_state, pivot_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, true);
 
-                        if(!collision_found)
+                        if(validity == stateValidity::valid)
                         {
                             //auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
 
