@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <omplTools/State.h>
 #include <graphTools/graph_info.h>
+#include <pathPlanTools/tf_tools.h>
 
 /*
 double normalizeAngle(double angle) {
@@ -44,13 +45,13 @@ class movableObject
 {
     public:
         
-
         movableObject();
 
         movableObject(float x_in, float y_in, float th_in = 0, std::string name_in = "", 
                                     float n_side_in = 4, GraphPtr graph_ptr = nullptr);
                                     
         void update_pushing_poses();
+        std::vector<Eigen::Vector2f> get_push_unitvecs();
         float get_x();
         float get_y();
         size_t get_n_side();

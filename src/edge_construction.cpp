@@ -51,7 +51,7 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
         // check if within boundary
         if (interState->getX() < 0 || interState->getX() >= max_x || interState->getY() < 0 || interState->getY() >= max_y)
         {
-            if(print_log)
+            if(params::print_log)
                 std::cout << "Out of Boundary " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
             validity = stateValidity::out_of_boundary;
 
@@ -62,7 +62,7 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
         if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
         {
             //collision found
-            if(print_log)
+            if(params::print_log)
                 std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
             validity = stateValidity::collision;
 
@@ -72,7 +72,7 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
 
     if(validity == stateValidity::valid)
     {
-        if(print_log)
+        if(params::print_log)
             std::cout << "edge found" << std::endl;
         //auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
         //Edge e;
@@ -137,7 +137,7 @@ stateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
         if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
         {
             //collision found
-            if(print_log)
+            if(params::print_log)
                 std::cout << "Collision found " << np << std::endl;
             validity = stateValidity::collision;
 
@@ -147,7 +147,7 @@ stateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
 
     if(validity == stateValidity::valid)
     {
-        if(print_log)
+        if(params::print_log)
             std::cout << "edge found" << std::endl;
         //auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
         //Edge e;
@@ -166,6 +166,10 @@ stateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
     return validity;
 }
 
+// Comparison function to compare the float values in the tuples
+bool compareTuples(const std::tuple<bool, float, int>& a, const std::tuple<bool, float, int>& b) {
+    return std::get<1>(a) > std::get<1>(b); // Compare the second element (float)
+}
 
 void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius,
                              graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths)
@@ -175,7 +179,8 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
     // construct edges
     for(size_t n=0; n<mo_list.size(); n++)
     {
-        auto pivot_vslist = mo_list[n].get_vertex_state_list();
+        auto pivot_mo = mo_list[n];
+        auto pivot_vslist = pivot_mo.get_vertex_state_list();
         
         for(size_t piv_state_ind=0; piv_state_ind<pivot_vslist.size(); piv_state_ind++)
         {
@@ -191,7 +196,8 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                     for(size_t state_ind = 0; state_ind<mo_list[m].get_n_side(); state_ind++)
                     {
                         // checking if there needs an edge between pivot and target states
-                        auto target_state = mo_list[m].get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
+                        auto target_mo = mo_list[m];
+                        auto target_state = target_mo.get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
 
                         if(params::print_log)
                             std::cout << "MO" << n << " dir" << piv_state_ind << " -> MO" << m << " dir" << state_ind << std::endl;
@@ -199,16 +205,19 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                         // check for good path
                         auto dubins_res = is_good_path(*pivot_state,*target_state,turning_radius);
 
+                        // pre_reclocations
+                        preRelocList preRelocs(0);
+
 #pragma region proposed_path_classification
                         if(params::use_better_path)
                         {
                             // check collision
-                            auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius, params::print_log);
+                            auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius);
+                            // target vertex on graph
+                            auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
 
                             if(validity == stateValidity::valid)
                             {
-                                auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
-
                                 Edge e;
                                 bool succ;
 
@@ -218,7 +227,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 
                                 std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
                                 // add to edge-path matcher
-                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,pathType::smallLP,e,gPtr));
+                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
                             }
                             else if(validity == stateValidity::collision)
                             {
@@ -231,16 +240,105 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                             else if(validity == stateValidity::out_of_boundary)
                             {
                                 // check if a long path is possible by relocating it
-                                /// find d_threshold to be a long path
-                                auto d_thres = get_longpath_d_thres(*pivot_state,*target_state);
                                 
+                                auto unit_vecs = pivot_mo.get_push_unitvecs();
 
-                                // if so, add it to an edge
+                                float d_current_sq = powf(target_state->x - pivot_state->y,2) + powf(target_state->y - pivot_state->y,2);
+                                
+                                // find push indices that moves away from target
+                                std::vector<std::tuple<bool,float,size_t>> away_flags(pivot_mo.get_n_side());
+                                // MP
+                                for(size_t s=0; s<away_flags.size(); s++)
+                                {
+                                    float x_next = pivot_state->x + unit_vecs[s].x();
+                                    float y_next = pivot_state->y + unit_vecs[s].y();
 
-                                // else, no edge
-                                if(params::print_log)
-                                    std::cout << " no feasible path within boundary" << std::endl;
+                                    float d_next_sq = powf(target_state->x - x_next,2) + powf(target_state->y - y_next,2);
 
+                                    if(d_next_sq > d_current_sq)
+                                        away_flags[s] = std::make_tuple(true,d_next_sq - d_current_sq,s);
+                                    else
+                                        away_flags[s] = std::make_tuple(false,-1,s); 
+                                }
+
+                                float d_current = sqrtf(d_current_sq);
+                                // find d_threshold to be a long path
+                                auto d_thres = get_longpath_d_thres(*pivot_state,*target_state);
+
+                                // distance needed (d_thres should be larger than d_current)
+                                float d_delta = d_thres - d_current;
+
+                                // vector with ture only
+                                std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
+                                for(auto& it: away_flags)
+                                {
+                                    if(std::get<0>(it))
+                                        candidates_vec.push_back(it);
+                                }
+
+                                // sort in decending order of distance difference
+                                std::sort(candidates_vec.begin(), candidates_vec.end(), compareTuples);
+
+                                bool push_found = false;
+                                Eigen::Vector2f push_thres;
+                                // check if pushing can make if feasible
+                                for(auto& it : candidates_vec)
+                                {
+                                    // how much to push in this direction to meet d_delta
+                                    /// rotate i.r.t. mo
+                                    size_t push_ind = std::get<2>(it);
+                                    float yaw = jeeho::convertEulerRange_to_pi(pivot_mo.get_pushing_poses()[push_ind]->yaw);
+                                    Eigen::Matrix2f R;
+                                    R << std::cos(yaw), -std::sin(yaw), std::sin(yaw),  std::cos(yaw);
+                                    Eigen::Matrix2f R_inv = R.transpose();
+
+                                    Eigen::Vector2f target_centered_at_pivot = {target_state->x - pivot_state->x, target_state->y - pivot_state->y};
+                                    Eigen::Vector2f target_irt_pivot = R_inv * target_centered_at_pivot;
+
+                                    float x_thres = sqrtf(powf(target_irt_pivot.y(),2) - powf(d_thres,2));
+                                    float dist_to_push = x_thres - target_irt_pivot.x();
+
+                                    auto push_vec = dist_to_push * unit_vecs[std::get<2>(it)];
+
+                                    State state_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
+
+                                    // check if the state is valid
+                                    auto is_valid = env.stateValid(state_thres);
+
+                                    // if yes, go with it. if not, try next best
+                                    if(is_valid)
+                                    {
+                                        push_found = true;
+                                        push_thres = push_vec;
+
+                                        // note: not pre-push poses
+                                        preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
+
+                                        break;
+                                    }
+                                }   
+
+                                // if no candidates were possible, no edge
+                                if(!push_found)
+                                {
+                                    if(params::print_log)
+                                        std::cout << " no feasible path within boundary" << std::endl;
+                                }
+
+                                // if yes, add edge
+                                else
+                                {
+                                    // cost for pre-relocations
+                                    float pre_cost=0;
+                                    for(auto& it : preRelocs)
+                                        pre_cost += sqrtf(powf(it.second.x - it.first.x,2) + powf(it.second.y - it.first.y,2));
+
+                                    Edge e;
+                                    bool succ;
+                                    std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length() + pre_cost, *gPtr);
+                                    // add to edge-path matcher
+                                    edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
+                                }
                             }
                         }
 #pragma endregion proposed_path_classification
@@ -264,7 +362,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 
                                 std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
                                 // add to edge-path matcher
-                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,pathType::smallLP,e,gPtr));
+                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
                             }
                             else
                             {
@@ -316,6 +414,9 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                     // check for good path
                     auto dubins_res = is_good_path(*pivot_state,*target_state,turning_radius);
 
+                    // pre_reclocations
+                    preRelocList preRelocs(0);
+
 #pragma region proposed_path_classification
                     if(use_better_path)
                     {
@@ -338,7 +439,7 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
 
                             std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
                             // add to edge-path matcher
-                            edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,pathType::smallLP,e,gPtr));
+                            edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
                         }
                         else
                         {

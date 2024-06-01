@@ -66,6 +66,20 @@ void movableObject::update_pushing_poses()
     }
 }
 
+std::vector<Eigen::Vector2f> movableObject::get_push_unitvecs()
+{
+    std::vector<Eigen::Vector2f> out_vec(n_side);
+
+    for(size_t n=0; n<n_side; n++)
+    {
+        auto th_ = jeeho::convertEulerRange_to_pi(th);
+        out_vec[n](0) = cosf(th_);
+        out_vec[n](1) = sinf(th_);
+    }
+
+    return out_vec;
+}
+
 float movableObject::get_x()
 {
     return x;

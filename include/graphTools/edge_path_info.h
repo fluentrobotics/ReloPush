@@ -8,6 +8,8 @@
 
 #include <omplTools/State.h>
 
+typedef std::vector<std::pair<State,State>> preRelocList;
+
 namespace std {
     template <>
     struct hash<Edge> {
@@ -35,10 +37,12 @@ namespace graphTools
             float cost;
             //path classification
             pathType path_class;
+            //pre-relocation to make it a long-path
+            std::vector<std::pair<State,State>> pre_relocations;
 
             EdgePathInfo();
-            EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, dubinsPath path_in, pathType path_class_in, Edge edge_in, GraphPtr gPtr);
-            EdgePathInfo(vertexPair pair_in, State source_s, State target_s, dubinsPath path_in, pathType path_class_in);
+            EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, dubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in, Edge edge_in, GraphPtr gPtr);
+            EdgePathInfo(vertexPair pair_in, State source_s, State target_s, dubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in);
     };
 
     class EdgeMatcher
