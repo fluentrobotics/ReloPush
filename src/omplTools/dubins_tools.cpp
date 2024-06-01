@@ -169,7 +169,7 @@ std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_
 
     double alpha, beta;
     find_alpha_beta(s1,s2,alpha,beta);
-    double dx = s2.x - s1.x, dy = s2.y - s2.y, d = sqrt(dx * dx + dy * dy) / turning_rad;
+    double dx = s2.x - s1.x, dy = s2.y - s1.y, d = sqrt(dx * dx + dy * dy) / turning_rad;
 
     if (d < fromOMPL::DUBINS_EPS && fabs(alpha - beta) < fromOMPL::DUBINS_EPS)
         return std::make_pair<pathType,dubinsPath>(pathType::none,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0}); //zero dubins path
