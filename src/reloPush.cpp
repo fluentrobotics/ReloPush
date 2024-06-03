@@ -230,7 +230,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    int data_ind = 30;
+    int data_ind = 0;
     std::string data_file = "data_3o_2.txt";
     //int leave_log = 1;
     if(argc==4)
@@ -241,6 +241,7 @@ int main(int argc, char **argv)
     }
 
     Color::println("== data: " + data_file + " ===",Color::BG_YELLOW);
+    Color::println("== better path: " + std::to_string(params::use_better_path) + " ===",Color::BG_YELLOW);
     Color::println("== ind: " + std::to_string(data_ind) + " ===",Color::BG_YELLOW);
     Color::println("== log: " + std::to_string(params::leave_log) + " ===",Color::BG_YELLOW);
 
@@ -362,24 +363,28 @@ int main(int argc, char **argv)
 
     //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, failed_paths, 10);
 
-    while(ros::ok())
+    if(!params::leave_log)
     {
-        // visualize movable obstacles
-        auto mo_vis = draw_obstacles(initMOList, object_marker_pub_ptr);
-        // visualize edge paths
-        auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
-        // visualize delivery locations
-        auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
-        // visualize object names
-        auto vis_names_msg = draw_texts(initMOList,text_pub_ptr);
-        // publish final path once
-        test_path_pub_ptr->publish(*navPath_ptr); 
+        while(ros::ok())
+        {
+            // visualize movable obstacles
+            auto mo_vis = draw_obstacles(initMOList, object_marker_pub_ptr);
+            // visualize edge paths
+            auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
+            // visualize delivery locations
+            auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+            // visualize object names
+            auto vis_names_msg = draw_texts(initMOList,text_pub_ptr);
+            // publish final path once
+            test_path_pub_ptr->publish(*navPath_ptr); 
 
-        ros::spinOnce();
-        ros::Duration(0.01).sleep();
-        if(!params::leave_log)
+            ros::spinOnce();
             ros::Duration(0.5).sleep();
+                
+        }
     }
+    else
+        ros::Duration(0.01).sleep();
 
     //remove publisher pointers
     free_publisher_pointers();
