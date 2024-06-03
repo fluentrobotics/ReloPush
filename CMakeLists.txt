@@ -66,6 +66,8 @@ add_executable(
     "src/reloPush/parse_testdata.cpp"
     "src/pathPlanTools/tf_tools.inl"
     "src/pathPlanTools/tf_tools.cpp"
+    "src/reloPush/params.cpp"
+    "src/reloPush/push_pose_tools.cpp"
     )
 
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES})

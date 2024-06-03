@@ -116,7 +116,7 @@ std::unordered_map<std::string,std::string> parse_movableObjects_robots_from_fil
         // in 0 ~ 2pi range
         robots[i].yaw = jeeho::convertEulerRange_to_2pi(robots[i].yaw);
         // negate yaw for hybrid astar use
-        robots[i].yaw *= -1;
+        //robots[i].yaw *= -1;
     }
 
     // parse delivery poses

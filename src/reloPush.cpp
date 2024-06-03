@@ -2,7 +2,7 @@
 
 #include <reloPush/reloPush_tools.h>
 #include <numeric>
-#include <reloPush/reloPush_tools.h>
+//#include <reloPush/reloPush_tools.h>
 
 //#include <eigen3/Eigen/Core>
 //#include <eigen3/Eigen/Dense>
@@ -26,7 +26,7 @@ ros::NodeHandle* nh_ptr = nullptr;
 
 void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivery_list
                         , NameMatcher& nameMatcher, graphTools::EdgeMatcher edgeMatcher, Environment& env, std::shared_ptr<nav_msgs::Path> navPath_ptr,
-                         std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, double loop_rate=10)
+                         std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, double loop_rate=10)
 {
     ros::Rate r(loop_rate);
     // visualize vertices
@@ -69,7 +69,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 Environment& env, float map_max_x, float map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
                 std::vector<stopWatch>& time_watches, std::vector<movableObject>& delivery_list, 
                 std::unordered_map<std::string,std::string>& delivery_table, 
-                std::vector<std::shared_ptr<deliveryContext>>& delivery_contexts, std::vector<State>& robots, std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths)
+                std::vector<std::shared_ptr<deliveryContext>>& delivery_contexts, std::vector<State>& robots, std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths)
 {
 
     std::vector<size_t> temp_relocs(0);
@@ -95,6 +95,16 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         time_edge.stop();
         time_edge.print_us();
         time_watches.push_back(time_edge);
+
+
+        // test: verify objects graph first
+        // print edges
+        if(params::print_graph)
+            print_edges(gPtr);
+
+        draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
+
+
 
         // add deliverries to graph
         stopWatch time_edge_d("delivery", measurement_type::graphPlan);
@@ -210,7 +220,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         // update robot
         robots[0] = push_path.back();
-        robots[0].yaw *= -1;
+        //robots[0].yaw *= -1;
         time_update.stop();
         time_watches.push_back(time_update);    
     }
@@ -285,7 +295,7 @@ int main(int argc, char **argv)
             init_pose.pose.pose.position.y = robots[0].y;
 
             // angle in -pi ~ pi range
-            float yaw = robots[0].yaw * -1;
+            float yaw = robots[0].yaw;
             yaw = jeeho::convertEulerRange_to_pi(yaw);
             //to quaternion
             auto yaw_euler = Eigen::Vector3f(0,0,yaw);
@@ -317,7 +327,7 @@ int main(int argc, char **argv)
     draw_deliveries(delivery_list,delivery_marker_pub_ptr);
     visualize_workspace_boundary(params::map_max_x, params::map_max_y, boundary_pub_ptr);
     // store failed paths
-    std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>> failed_paths;
+    std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>> failed_paths;
     // init failed paths map
     for(auto& it : initMOList)
         failed_paths.insert({it.get_name(),{}});

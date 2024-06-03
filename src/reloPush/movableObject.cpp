@@ -72,7 +72,7 @@ std::vector<Eigen::Vector2f> movableObject::get_push_unitvecs()
 
     for(size_t n=0; n<n_side; n++)
     {
-        auto th_ = jeeho::convertEulerRange_to_pi(th);
+        auto th_ = jeeho::convertEulerRange_to_pi(pushing_poses[n]->yaw);
         out_vec[n](0) = cosf(th_);
         out_vec[n](1) = sinf(th_);
     }

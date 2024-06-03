@@ -7,7 +7,7 @@
 std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo& pathInfo, float turning_rad, float path_resolution=0.1)
 {
     // interpolate
-    auto l = pathInfo.path.length();
+    auto l = pathInfo.path.lengthCost();
     auto num_pts = static_cast<size_t>(l/path_resolution);
     //size_t num_pts = static_cast<size_t>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
 
@@ -28,7 +28,7 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
     for (size_t np=0; np<num_pts; np++)
     {            
         //auto start = std::chrono::steady_clock::now();
-        jeeho_interpolate(dubinsStart, pathInfo.path, (double)np / (double)num_pts, interState, &dubinsSpace,
+        jeeho_interpolate(dubinsStart, pathInfo.path.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
                         turning_rad);
 
         State tempState(interState->getX(), interState->getY(),interState->getYaw());

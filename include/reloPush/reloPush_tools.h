@@ -19,6 +19,7 @@
 
 #include <reloPush/color_print.h>
 #include <reloPush/params.h>
+#include <reloPush/push_pose_tools.h>
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -261,31 +262,28 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
     return out_vec;
 }
 
-std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, State goal_in, Environment& env, bool print_res = false, bool negate_start_yaw = false, bool negate_goal_yaw = false)
+std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, State goal_in, Environment& env, bool print_res = false)
 {
+
     
 
-    if(negate_start_yaw)
-        start.yaw *= -1;
+    // make sure the angle range is in 0~2pi
+    start.yaw = jeeho::convertEulerRange_to_2pi(start.yaw);
+    goal_in.yaw = jeeho::convertEulerRange_to_2pi(goal_in.yaw);
 
-    if(negate_goal_yaw)
-    {
-        //if(goal_in.yaw > M_PI)
-        //    goal_in.yaw -= M_PI;
-        //else
-        //    goal_in.yaw += M_PI;      
-        
-        goal_in.yaw *= -1;
-    }
+    // check if states are valid
+    auto start_valid = env.stateValid(start);
+    auto goal_valid = env.stateValid(goal_in);
 
-    // testing
+    // negate yaw for hybrid astar
+    State start_neg = State(start.x,start.y,-1*start.yaw);
+    State goal_neg = State(goal_in.x, goal_in.y, -1*goal_in.yaw);
     
-
-    env.changeGoal(goal_in);
+    env.changeGoal(goal_neg);
     
     HybridAStar<State, Action, double, Environment> hybridAStar(env);
     PlanResult<State, Action, double> solution;
-    bool searchSuccess = hybridAStar.search(start, solution);
+    bool searchSuccess = hybridAStar.search(start_neg, solution);
 
     if (searchSuccess) {
         if(print_res)
@@ -303,6 +301,7 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
     else {
         //if(print_res)
             std::cout << "\033[1m\033[31m Fail to find a path \033[0m\n";
+            std::cout << "start: (" << start.x << ", " << start.y << ", " << start.yaw << ") target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
             solution.cost = -1;
     }
 
@@ -366,30 +365,7 @@ std::shared_ptr<nav_msgs::Path> statePath_to_navPath(std::vector<State>& path_in
     return out_ptr;
 }
 
-State find_pre_push(State& goalState, float distance = 0.6f)
-{
-    State outState(goalState);
 
-    // Calculate the new x and y coordinates
-    outState.x -= distance * cos(goalState.yaw);
-    outState.y -= distance * sin(goalState.yaw);
-
-    // change angle range
-    //outState.yaw = jeeho::convertEulerRange_to_2pi(outState.yaw);
-
-    return outState;
-}
-
-State find_post_push(State& goalState, float distance = 0.6f)
-{
-    State outState(goalState);
-
-    // Calculate the new x and y coordinates
-    outState.x += distance * cos(goalState.yaw);
-    outState.y += distance * sin(goalState.yaw);
-
-    return outState;
-}
 
 void init_movable_objects(std::vector<movableObject>& mo_list, int num_push_sides = 4)
 {
@@ -506,13 +482,13 @@ std::unordered_map<std::string,std::string> init_delivery_table(std::vector<mova
 }
 
 void add_delivery_to_graph(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, float max_x, float max_y,
-                    graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, GraphPtr gPtr)
+                    graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, GraphPtr gPtr)
 {
     // add delivery verteices
     for(auto& it : delivery_list)
         it.add_to_graph(gPtr);
     // add to graph
-    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r,edgeMatcher, failed_paths,false);
+    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r,edgeMatcher, failed_paths);
     //add to namematcher
     nameMatcher.addVertices(delivery_list);
 }
@@ -577,7 +553,7 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
     {
         //robots.push_back(State(0.3, 1, -1*M_PI/2));
         //robots.push_back(State(2, 2.25, 0));
-        robots.push_back(State(2, 2.5, -1*M_PI/2));
+        robots.push_back(State(2, 2.5, M_PI/2));
         //robots.push_back(State(5, 3, M_PI/2));
     }
     else
@@ -678,7 +654,7 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
 
 
             //push
-            robots.push_back(State(t_w.x(),t_w.y(),-1*yaw_2pi));
+            robots.push_back(State(t_w.x(),t_w.y(),yaw_2pi));
 
     } 
 }
@@ -846,8 +822,12 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
 
         // get interpolated list
         auto interp_list = interpolate_dubins(partial_path_info,Constants::r,0.2f);
+        
         push_path.insert(push_path.end(), interp_list->begin(), interp_list->end());
     }    
+
+    //test pre_path
+    push_path.pop_back();
 
     //return final_path;
     return push_path;
@@ -858,7 +838,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
     std::vector<std::vector<State>> path_segments;
     if(relo_path.size()>0)
     {
-        auto plan_res =planHybridAstar(robot, relo_path[0][0], env, false, false, true);
+        auto plan_res =planHybridAstar(robot, relo_path[0][0], env, false);
         if(!plan_res->success)
             return std::make_pair(std::vector<State>(0),false); // return false
 
@@ -885,7 +865,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
             env.remove_obs(State(moPtr_loop->get_x(), moPtr_loop->get_y(), moPtr_loop->get_th()));
 
             // plan hybrid astar path
-            plan_res = planHybridAstar(lastThisRelo, firstNextRelo, env, false, true, true);
+            plan_res = planHybridAstar(lastThisRelo, firstNextRelo, env, false);
             if(!plan_res->success)
                 return std::make_pair(std::vector<State>(0),false); // return false
 
@@ -902,7 +882,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         auto pre_push = find_pre_push(push_path.front(),0.6f);
 
         // plan hybrid astar
-        plan_res = planHybridAstar(lastLastRelo, pre_push, env, false, true, false);
+        plan_res = planHybridAstar(lastLastRelo, pre_push, env, false);
         if(!plan_res->success)
                 return std::make_pair(std::vector<State>(0),false); // return false
 
@@ -916,7 +896,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         // start to prepush
         auto pre_push = find_pre_push(push_path.front(),0.6f);
         //stopWatch hb("hyb");
-        auto plan_res = planHybridAstar(robot, pre_push, env, false, false, true);
+        auto plan_res = planHybridAstar(robot, pre_push, env, false);
         if(!plan_res->success)
                 return std::make_pair(std::vector<State>(0),false); // return false
 
@@ -953,7 +933,7 @@ std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, 
             auto approach_state = nameMatcher.getVertexStatePair(min_list[min_it]->sourceVertexName)->state;
             auto pre_push = find_pre_push(*approach_state,0.6f);
             //hybrid astar state yaw is negated
-            pre_push.yaw*=-1;
+            //pre_push.yaw*=-1;
             auto plan_res = planHybridAstar(robots[r], pre_push, env, false);
 
             // cost

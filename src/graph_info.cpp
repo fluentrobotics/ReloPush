@@ -101,19 +101,19 @@ namespace graphTools
 
     EdgePathInfo::EdgePathInfo() {};
 
-    EdgePathInfo::EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, dubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in, Edge edge_in, GraphPtr gPtr) 
+    EdgePathInfo::EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in, Edge edge_in, GraphPtr gPtr) 
     : path(path_in), path_class(path_class_in), pre_relocations(pre_relocs)
     {
         vertices = vertexPair(source_v,target_v,edge_in,gPtr);
-        cost = path_in.length();
+        cost = path_in.lengthCost();
         sourceState = source_s;
         targetState = target_s;
     }
 
-    EdgePathInfo::EdgePathInfo(vertexPair pair_in, State source_s, State target_s, dubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in) 
+    EdgePathInfo::EdgePathInfo(vertexPair pair_in, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in) 
     : vertices(pair_in), path(path_in), path_class(path_class_in), pre_relocations(pre_relocs)
     {
-        cost = path_in.length();
+        cost = path_in.lengthCost();
         sourceState = source_s;
         targetState = target_s;
     }

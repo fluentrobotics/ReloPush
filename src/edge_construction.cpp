@@ -2,7 +2,7 @@
 
 
 stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
-                    size_t n, size_t m, std::pair<pathType,dubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
+                    size_t n, size_t m, std::pair<pathType,reloDubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
 {
     // check collision
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
@@ -12,7 +12,7 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
-    size_t num_pts = static_cast<int>(dubins_res.second.length()/(0.1*0.5)); //todo: get resolution as a param
+    size_t num_pts = static_cast<int>(dubins_res.second.lengthCost()/(0.1*0.5)); //todo: get resolution as a param
 
     stateValidity validity = stateValidity::valid;
     
@@ -39,7 +39,7 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
         //auto start = std::chrono::steady_clock::now();
         //std::cout << "DubinsStart x: " << dubinsStart->getX() << " y: " << dubinsStart->getY() << std::endl;
 
-        jeeho_interpolate(dubinsStart, dubins_res.second, (double)np / (double)num_pts, interState, &dubinsSpace,
+        jeeho_interpolate(dubinsStart, dubins_res.second.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
                         turning_radius);
 
         //std::cout << "interStart x: " << interState->getX() << " y: " << interState->getY() << std::endl;
@@ -94,7 +94,7 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
 }
 
 stateValidity check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
-                    std::pair<pathType,dubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
+                    std::pair<pathType,reloDubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
 {
     // check collision
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
@@ -104,10 +104,9 @@ stateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
-    size_t num_pts = static_cast<int>(dubins_res.second.length()/(0.1*0.5)); //todo: get resolution as a param
+    size_t num_pts = static_cast<int>(dubins_res.second.lengthCost()/(0.1*0.5)); //todo: get resolution as a param
 
-    auto validity = stateValidity::valid;
-
+    stateValidity validity = stateValidity::valid;
     
     std::vector<State> took_out(0);
     // takeout pivot object from obstacles
@@ -130,8 +129,19 @@ stateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
     for (size_t np=0; np<num_pts; np++)
     {
         //auto start = std::chrono::steady_clock::now();
-        jeeho_interpolate(dubinsStart, dubins_res.second, (double)np / (double)num_pts, interState, &dubinsSpace,
+        //std::cout << "DubinsStart x: " << dubinsStart->getX() << " y: " << dubinsStart->getY() << std::endl;
+
+        jeeho_interpolate(dubinsStart, dubins_res.second.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
                         turning_radius);
+
+        //std::cout << "interStart x: " << interState->getX() << " y: " << interState->getY() << std::endl;
+        //auto end = std::chrono::steady_clock::now();
+        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
+
+        if(params::print_log)
+            std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
+
         // check if within boundary
         if (interState->getX() < 0 || interState->getX() >= max_x || interState->getY() < 0 || interState->getY() >= max_y)
         {
@@ -151,7 +161,7 @@ stateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
             validity = stateValidity::collision;
 
             break;
-        }                                
+        }                             
     }
 
     if(validity == stateValidity::valid)
@@ -180,8 +190,332 @@ bool compareTuples(const std::tuple<bool, float, int>& a, const std::tuple<bool,
     return std::get<1>(a) > std::get<1>(b); // Compare the second element (float)
 }
 
+void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pivot_state, StatePtr target_state, VertexPtr pivot_vertex, VertexPtr target_vertex,
+                                size_t& state_ind, size_t& n, size_t& m, std::pair<pathType, reloDubinsPath>& dubins_res, Environment& env,
+                                float& max_x, float& max_y, float& turning_radius, GraphPtr gPtr, preRelocList& preRelocs, graphTools::EdgeMatcher& edgeMatcher,
+                                std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,
+                                movableObject& pivot_mo, movableObject& target_mo)
+{
+    // check collision
+    auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius);
+
+    if(validity == stateValidity::valid)
+    {
+        Edge e;
+        bool succ;
+
+        // for debug only
+        auto name1 = graphTools::getVertexName(*pivot_vertex,gPtr);
+        auto name2 = graphTools::getVertexName(*target_vertex,gPtr);
+
+        std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
+        // add to edge-path matcher
+        edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
+    }
+    else if(validity == stateValidity::collision)
+    {
+        if(params::print_log)
+            std::cout << " dubins collision" << std::endl;
+
+        // store to failed paths
+        failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+    }
+    else if(validity == stateValidity::out_of_boundary)
+    {
+        // check if a long path is possible by relocating it
+        
+        auto unit_vecs = pivot_mo.get_push_unitvecs();
+
+        float d_current_sq = powf(target_state->x - pivot_state->x,2) + powf(target_state->y - pivot_state->y,2);
+        
+        // find push indices that moves away from target
+        std::vector<std::tuple<bool,float,size_t>> away_flags(pivot_mo.get_n_side());
+        // MP
+        for(size_t s=0; s<away_flags.size(); s++)
+        {
+            auto scaled_uvec = 0.1 * unit_vecs[s];
+            float x_next = pivot_state->x + scaled_uvec.x();
+            float y_next = pivot_state->y + scaled_uvec.y();
+
+            float d_next_sq = powf(target_state->x - x_next,2) + powf(target_state->y - y_next,2);
+
+            if(d_next_sq > d_current_sq)
+                away_flags[s] = std::make_tuple(true,d_next_sq - d_current_sq,s);
+            else
+                away_flags[s] = std::make_tuple(false,-1,s); // todo: what if it can be pushed far
+        }
+
+        float d_current = sqrtf(d_current_sq);
+        // find d_threshold to be a long path
+        auto d_thres = get_longpath_d_thres(*pivot_state,*target_state);
+
+        // if this is already a long path, no edge
+        if(d_current > d_thres)
+        {
+            // store to failed paths
+            failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+            return;
+        }
+
+        // distance needed (d_thres should be larger than d_current)
+        float d_delta = d_thres - d_current;
+
+        // vector with ture only
+        std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
+        /* it might be a good idea to try all directions */
+        
+        for(auto& it: away_flags)
+        {
+            if(std::get<0>(it))
+                candidates_vec.push_back(it);
+        }
+        
+        //candidates_vec = std::vector<std::tuple<bool,float,size_t>>(away_flags);
+
+        // sort in decending order of distance difference
+        std::sort(candidates_vec.begin(), candidates_vec.end(), compareTuples);
+
+        bool push_found = false;
+        Eigen::Vector2f push_thres;
+        // check if pushing can make if feasible
+        for(auto& it : candidates_vec)
+        {
+            // how much to push in this direction to meet d_delta
+            /// rotate i.r.t. mo
+            size_t push_ind = std::get<2>(it);
+            float yaw = jeeho::convertEulerRange_to_pi(pivot_mo.get_pushing_poses()[push_ind]->yaw);
+            Eigen::Matrix2f R;
+            R << std::cos(yaw), -std::sin(yaw), std::sin(yaw),  std::cos(yaw);
+            Eigen::Matrix2f R_inv = R.transpose();
+
+            Eigen::Vector2f target_centered_at_pivot = {target_state->x - pivot_state->x, target_state->y - pivot_state->y};
+            Eigen::Vector2f target_irt_pivot = R_inv * target_centered_at_pivot;
+
+            float x_thres = sqrtf(powf(d_thres,2) - powf(target_irt_pivot.y(),2));
+            float dist_to_push = x_thres - target_irt_pivot.x();
+
+            Eigen::Vector2f push_vec = dist_to_push * unit_vecs[push_ind];
+
+            State state_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
+
+            // check if the state is valid
+            auto is_valid = env.stateValid(state_thres);
+
+            // if yes, go with it. if not, try next best
+            if(is_valid)
+            {
+                push_found = true;
+                push_thres = push_vec;
+
+                // note: not pre-push poses
+                preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
+
+                // cost for pre-relocations
+                float pre_cost=0;
+                for(auto& it : preRelocs)
+                    pre_cost += sqrtf(powf(it.second.x - it.first.x,2) + powf(it.second.y - it.first.y,2));
+
+                // find new dubins path
+                auto new_dubins_res = is_good_path(state_thres,*target_state,turning_radius);
+
+                Edge e;
+                bool succ;
+                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, new_dubins_res.second.lengthCost() + pre_cost, *gPtr);
+                // add to edge-path matcher
+                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,state_thres,*target_state,new_dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
+
+                break;
+            }
+        }   
+
+        // if no candidates were possible, no edge
+        if(!push_found)
+        {
+            if(params::print_log)
+                std::cout << " no feasible path within boundary" << std::endl;
+        }
+    }
+}
+
+
+
+
+
+// newer version
+void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, StatePtr pivot_state, StatePtr target_state, VertexPtr pivot_vertex, VertexPtr target_vertex,
+                                size_t& state_ind, std::pair<pathType, reloDubinsPath>& dubins_res, Environment& env,
+                                float& max_x, float& max_y, float& turning_radius, GraphPtr gPtr, preRelocList& preRelocs, graphTools::EdgeMatcher& edgeMatcher,
+                                std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,
+                                movableObject& pivot_mo, movableObject& target_mo, bool is_delivery = false)
+{
+    // check collision
+    auto validity = check_collision(fromObj, toObj, pivot_state, pivot_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, is_delivery);
+
+    // for debug only
+    auto name_pivot = graphTools::getVertexName(*pivot_vertex,gPtr);
+    auto name_target = graphTools::getVertexName(*target_vertex,gPtr);
+
+    // for debug only
+    if(name_target == "d3_0")
+        std::string dummy = ""; //conditional break doesn't work somehow 
+
+    if(validity == stateValidity::valid)
+    {
+        Edge e;
+        bool succ;
+
+
+        std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
+        // add to edge-path matcher
+        edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
+    }
+    else if(validity == stateValidity::collision)
+    {
+        if(params::print_log)
+            std::cout << " dubins collision" << std::endl;
+
+        // store to failed paths
+        failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+    }
+    else if(validity == stateValidity::out_of_boundary)
+    {
+        // check if a long path is possible by relocating it
+        
+        auto unit_vecs = pivot_mo.get_push_unitvecs();
+
+        float d_current_sq = powf(target_state->x - pivot_state->x,2) + powf(target_state->y - pivot_state->y,2);
+        
+        // find push indices that moves away from target
+        std::vector<std::tuple<bool,float,size_t>> away_flags(pivot_mo.get_n_side());
+        // MP
+        for(size_t s=0; s<away_flags.size(); s++)
+        {
+            auto scaled_uvec = 0.1 * unit_vecs[s];
+            float x_next = pivot_state->x + scaled_uvec.x();
+            float y_next = pivot_state->y + scaled_uvec.y();
+
+            float d_next_sq = powf(target_state->x - x_next,2) + powf(target_state->y - y_next,2);
+
+            if(d_next_sq > d_current_sq)
+                away_flags[s] = std::make_tuple(true,d_next_sq - d_current_sq,s);
+            else
+                away_flags[s] = std::make_tuple(false,-1,s); // todo: what if it can be pushed far
+        }
+
+        float d_current = sqrtf(d_current_sq); // normalized by turning radius
+        // find d_threshold to be a long path
+        auto d_thres = get_longpath_d_thres(*pivot_state,*target_state, turning_radius) * 1.001; // tie-break
+
+        // if this is already a long path, no edge
+        if(d_current > d_thres)
+        {
+            // store to failed paths
+            failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+            return;
+        }
+
+        // distance needed (d_thres should be larger than d_current)
+        float d_delta = d_thres - d_current;
+
+        // vector with ture only
+        std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
+        /* it might be a good idea to try all directions */
+        
+        for(auto& it: away_flags)
+        {
+            if(std::get<0>(it))
+                candidates_vec.push_back(it);
+        }
+        
+        //candidates_vec = std::vector<std::tuple<bool,float,size_t>>(away_flags);
+
+        // sort in decending order of distance difference
+        std::sort(candidates_vec.begin(), candidates_vec.end(), compareTuples);
+
+        bool push_found = false;
+        Eigen::Vector2f push_thres;
+        // check if pushing can make if feasible
+        for(auto& it : candidates_vec)
+        {
+            // how much to push in this direction to meet d_delta
+            /// rotate i.r.t. mo
+            size_t push_ind = std::get<2>(it);
+            float yaw = jeeho::convertEulerRange_to_pi(pivot_mo.get_pushing_poses()[push_ind]->yaw);
+            Eigen::Matrix2f R;
+            R << std::cos(yaw), -std::sin(yaw), std::sin(yaw),  std::cos(yaw);
+            Eigen::Matrix2f R_inv = R.transpose();
+
+            Eigen::Vector2f target_centered_at_pivot = {target_state->x - pivot_state->x, target_state->y - pivot_state->y};
+            Eigen::Vector2f target_irt_pivot = R_inv * target_centered_at_pivot;
+
+            // centered at target i.r.t. start
+            Eigen::Vector2f start_c_target = -1*target_irt_pivot;
+
+            float x_thres = sqrtf(powf(d_thres,2) - powf(start_c_target.y(),2));
+            float dist_to_push = x_thres - start_c_target.x();
+
+            Eigen::Vector2f push_vec = dist_to_push * unit_vecs[push_ind];
+
+            State state_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
+
+            // find new dubins path
+            auto new_dubins_res = is_good_path(state_thres,*target_state,turning_radius);
+
+            // check if the path is valid
+            //auto is_valid = env.stateValid(state_thres);
+            auto chk = check_collision(fromObj, toObj, std::make_shared<State>(state_thres), pivot_vertex, state_ind, new_dubins_res, 
+                                        env, max_x, max_y, turning_radius, is_delivery);
+
+            // if yes, go with it. if not, try next best
+            if(chk == stateValidity::valid)
+            {
+                push_found = true;
+                push_thres = push_vec;
+
+                // note: not pre-push poses
+                preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
+
+                // cost for pre-relocations
+                float pre_cost=0;
+                for(auto& it : preRelocs)
+                    pre_cost += sqrtf(powf(it.second.x - it.first.x,2) + powf(it.second.y - it.first.y,2));
+
+                Edge e;
+                bool succ;
+                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, new_dubins_res.second.lengthCost() + pre_cost, *gPtr);
+                // add to edge-path matcher
+                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,new_dubins_res.second,
+                                    preRelocs,pathType::smallLP,e,gPtr));
+
+                break;
+            }
+        }   
+
+        // if no candidates were possible, no edge
+        if(!push_found)
+        {
+            if(params::print_log)
+                std::cout << " no feasible path within boundary" << std::endl;
+
+            // todo: add to failed path
+        }
+
+        // if yes, add edge
+        else
+        {
+            if(params::print_log)
+                std::cout << " make it feashible by pushing" << std::endl;
+        }
+    }
+}
+
+
+
+
+
+
 void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius,
-                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths)
+                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths)
 {
     edgeMatcher.reset();
 
@@ -206,7 +540,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                     {
                         // checking if there needs an edge between pivot and target states
                         auto target_mo = mo_list[m];
-                        auto target_state = target_mo.get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
+                        auto target_state =  target_mo.get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
 
                         if(params::print_log)
                             std::cout << "MO" << n << " dir" << piv_state_ind << " -> MO" << m << " dir" << state_ind << std::endl;
@@ -222,11 +556,11 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                         {
                             // check collision
                             auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius);
-                            // target vertex on graph
-                            auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
 
                             if(validity == stateValidity::valid)
                             {
+                                auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
+
                                 Edge e;
                                 bool succ;
 
@@ -234,11 +568,11 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 auto name1 = graphTools::getVertexName(*pivot_vertex,gPtr);
                                 auto name2 = graphTools::getVertexName(*target_vertex,gPtr);
 
-                                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
+                                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
                                 // add to edge-path matcher
                                 edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
                             }
-                            else if(validity == stateValidity::collision)
+                            else
                             {
                                 if(params::print_log)
                                     std::cout << " dubins collision" << std::endl;
@@ -246,110 +580,8 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 // store to failed paths
                                 failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
                             }
-                            else if(validity == stateValidity::out_of_boundary)
-                            {
-                                // check if a long path is possible by relocating it
-                                
-                                auto unit_vecs = pivot_mo.get_push_unitvecs();
-
-                                float d_current_sq = powf(target_state->x - pivot_state->y,2) + powf(target_state->y - pivot_state->y,2);
-                                
-                                // find push indices that moves away from target
-                                std::vector<std::tuple<bool,float,size_t>> away_flags(pivot_mo.get_n_side());
-                                // MP
-                                for(size_t s=0; s<away_flags.size(); s++)
-                                {
-                                    float x_next = pivot_state->x + unit_vecs[s].x();
-                                    float y_next = pivot_state->y + unit_vecs[s].y();
-
-                                    float d_next_sq = powf(target_state->x - x_next,2) + powf(target_state->y - y_next,2);
-
-                                    if(d_next_sq > d_current_sq)
-                                        away_flags[s] = std::make_tuple(true,d_next_sq - d_current_sq,s);
-                                    else
-                                        away_flags[s] = std::make_tuple(false,-1,s); 
-                                }
-
-                                float d_current = sqrtf(d_current_sq);
-                                // find d_threshold to be a long path
-                                auto d_thres = get_longpath_d_thres(*pivot_state,*target_state);
-
-                                // distance needed (d_thres should be larger than d_current)
-                                float d_delta = d_thres - d_current;
-
-                                // vector with ture only
-                                std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
-                                for(auto& it: away_flags)
-                                {
-                                    if(std::get<0>(it))
-                                        candidates_vec.push_back(it);
-                                }
-
-                                // sort in decending order of distance difference
-                                std::sort(candidates_vec.begin(), candidates_vec.end(), compareTuples);
-
-                                bool push_found = false;
-                                Eigen::Vector2f push_thres;
-                                // check if pushing can make if feasible
-                                for(auto& it : candidates_vec)
-                                {
-                                    // how much to push in this direction to meet d_delta
-                                    /// rotate i.r.t. mo
-                                    size_t push_ind = std::get<2>(it);
-                                    float yaw = jeeho::convertEulerRange_to_pi(pivot_mo.get_pushing_poses()[push_ind]->yaw);
-                                    Eigen::Matrix2f R;
-                                    R << std::cos(yaw), -std::sin(yaw), std::sin(yaw),  std::cos(yaw);
-                                    Eigen::Matrix2f R_inv = R.transpose();
-
-                                    Eigen::Vector2f target_centered_at_pivot = {target_state->x - pivot_state->x, target_state->y - pivot_state->y};
-                                    Eigen::Vector2f target_irt_pivot = R_inv * target_centered_at_pivot;
-
-                                    float x_thres = sqrtf(powf(target_irt_pivot.y(),2) - powf(d_thres,2));
-                                    float dist_to_push = x_thres - target_irt_pivot.x();
-
-                                    auto push_vec = dist_to_push * unit_vecs[std::get<2>(it)];
-
-                                    State state_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
-
-                                    // check if the state is valid
-                                    auto is_valid = env.stateValid(state_thres);
-
-                                    // if yes, go with it. if not, try next best
-                                    if(is_valid)
-                                    {
-                                        push_found = true;
-                                        push_thres = push_vec;
-
-                                        // note: not pre-push poses
-                                        preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
-
-                                        break;
-                                    }
-                                }   
-
-                                // if no candidates were possible, no edge
-                                if(!push_found)
-                                {
-                                    if(params::print_log)
-                                        std::cout << " no feasible path within boundary" << std::endl;
-                                }
-
-                                // if yes, add edge
-                                else
-                                {
-                                    // cost for pre-relocations
-                                    float pre_cost=0;
-                                    for(auto& it : preRelocs)
-                                        pre_cost += sqrtf(powf(it.second.x - it.first.x,2) + powf(it.second.y - it.first.y,2));
-
-                                    Edge e;
-                                    bool succ;
-                                    std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length() + pre_cost, *gPtr);
-                                    // add to edge-path matcher
-                                    edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
-                                }
-                            }
                         }
+                        
 #pragma endregion proposed_path_classification
 
 #pragma region normal_dubins_path
@@ -369,7 +601,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 auto name1 = graphTools::getVertexName(*pivot_vertex,gPtr);
                                 auto name2 = graphTools::getVertexName(*target_vertex,gPtr);
 
-                                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
+                                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
                                 // add to edge-path matcher
                                 edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
                             }
@@ -381,6 +613,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 // store to failed paths
                                 failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
                             }
+                            
                         }
 #pragma endregion normal_dubins_path
                     }
@@ -392,20 +625,21 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 
 void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env,
                                  float max_x, float max_y, float turning_radius, graphTools::EdgeMatcher& edgeMatcher,
-                                 std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, bool print_log)
+                                 std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, bool print_log)
 {
-    //todo: parameterize
-    bool use_better_path = false;
-
     // for each delivery location
     for(size_t n=0; n<delivery_list.size(); n++)
     {
-        auto target_vslist = delivery_list[n].get_vertex_state_list(); // all goal-poses and their vertices
+        movableObject target_mo = delivery_list[n];
+        auto target_vslist = target_mo.get_vertex_state_list(); // all goal-poses and their vertices
         
         for(size_t t_state_ind=0; t_state_ind<target_vslist.size(); t_state_ind++) // for each goal pose
         {
             auto target_state = target_vslist[t_state_ind].state;
             auto target_vertex = target_vslist[t_state_ind].vertex;
+
+            // for debug only
+            auto target_name = graphTools::getVertexName(*target_vertex,gPtr);
 
             // for each movable object
             for(size_t m=0; m<mo_list.size(); m++)
@@ -414,8 +648,12 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                 for(size_t state_ind = 0; state_ind<mo_list[m].get_n_side(); state_ind++)
                 {
                     // checking if there needs an edge between pivot and target states
-                    auto pivot_state = mo_list[m].get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
-                    auto pivot_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
+                    auto pivot_mo = mo_list[m];
+                    auto pivot_state = pivot_mo.get_vertex_state_list()[state_ind].state; // list of Vertex-State Pairs
+                    auto pivot_vertex = pivot_mo.get_vertex_state_list()[state_ind].vertex;
+
+                    // for debug only
+                    auto pivot_name = graphTools::getVertexName(*pivot_vertex,gPtr);
 
                     if(print_log)
                         std::cout << "MO" << n << " dir" << state_ind << " -> MO" << m << " dir" << t_state_ind << std::endl;
@@ -427,9 +665,10 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                     preRelocList preRelocs(0);
 
 #pragma region proposed_path_classification
-                    if(use_better_path)
+                    if(params::use_better_path)
                     {
-                        // todo
+                        proposed_edge_construction(pivot_mo, target_mo, pivot_state, target_state, pivot_vertex, target_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, gPtr,
+                                                    preRelocs, edgeMatcher, failed_paths, pivot_mo, target_mo, true);
                     }
 #pragma endregion proposed_path_classification
 
@@ -446,7 +685,10 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                             Edge e;
                             bool succ;
 
-                            std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
+                            // test
+                            auto tname = graphTools::getVertexName(*target_vertex, gPtr);
+
+                            std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
                             // add to edge-path matcher
                             edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
                         }

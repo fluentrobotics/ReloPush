@@ -75,7 +75,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
 }
 
 
-ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, double turning_radius)
+reloDubinsPath findDubins(State &start, State &goal, double turning_radius)
 {
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
@@ -84,13 +84,17 @@ ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, d
     dubinsStart->setYaw(-start.yaw);
     dubinsEnd->setXY(goal.x, goal.y);
     dubinsEnd->setYaw(-goal.yaw);
-    ompl::base::DubinsStateSpace::DubinsPath dubinsPath = dubinsSpace.dubins(dubinsStart, dubinsEnd);
+    ompl::base::DubinsStateSpace::DubinsPath dPath = dubinsSpace.dubins(dubinsStart, dubinsEnd);
+
+    // inherited class
+    reloDubinsPath dubinsPath(dPath);
+
     dubinsStart->setXY(start.x, start.y);
     dubinsStart->setYaw(-start.yaw);
 
     for (auto pathidx = 0; pathidx < 3; pathidx++)
     {
-        switch (dubinsPath.type_[pathidx])
+        switch (dubinsPath.omplDubins.type_[pathidx])
         {
             case 0:  // DUBINS_LEFT
                 std::cout << "Left" << std::endl;
@@ -107,7 +111,7 @@ ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, d
                           << "\033[0m\n";
                 break;
         }
-        std::cout << fabs(dubinsPath.length_[pathidx]) << std::endl;
+        std::cout << fabs(dubinsPath.omplDubins.length_[pathidx]) << std::endl;
     }
 
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
@@ -118,7 +122,7 @@ ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, d
     for (size_t n=0; n<num_pts; n++)
     {
         //auto start = std::chrono::steady_clock::now();
-        jeeho_interpolate(dubinsStart, dubinsPath, (double)n / (double)num_pts, interState, &dubinsSpace,
+        jeeho_interpolate(dubinsStart, dubinsPath.omplDubins, (double)n / (double)num_pts, interState, &dubinsSpace,
                           turning_radius);
         //auto end = std::chrono::steady_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
@@ -152,15 +156,15 @@ void find_alpha_beta(State& s1, State& s2, double& alpha_out, double& beta_out)
     alpha_out = fromOMPL::mod2pi(th1 - th), beta_out = fromOMPL::mod2pi(th2 - th);
 }
 
-float get_longpath_d_thres(State& s1, State& s2)
+float get_longpath_d_thres(State& s1, State& s2, float turning_rad)
 {
     double alpha, beta;
     find_alpha_beta(s1,s2,alpha,beta);
 
-    return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta));
+    return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta))*turning_rad;
 }
 
-std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
+std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
 {
     //double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
     //double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
@@ -172,7 +176,7 @@ std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_
     double dx = s2.x - s1.x, dy = s2.y - s1.y, d = sqrt(dx * dx + dy * dy) / turning_rad;
 
     if (d < fromOMPL::DUBINS_EPS && fabs(alpha - beta) < fromOMPL::DUBINS_EPS)
-        return std::make_pair<pathType,dubinsPath>(pathType::none,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0}); //zero dubins path
+        return std::make_pair<pathType,reloDubinsPath>(pathType::none,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0}); //zero dubins path
 
     alpha = fromOMPL::mod2pi(alpha);
     beta = fromOMPL::mod2pi(beta);
@@ -182,7 +186,7 @@ std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_
     {
         //dubinsPath dubinsSet = fromOMPL::dubins_classification(d, alpha, beta); //path
         dubinsPath dubinsSet = fromOMPL::dubins_exhaustive(d, alpha, beta);
-        return std::make_pair<pathType,dubinsPath>(pathType::SP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
+        return std::make_pair<pathType,reloDubinsPath>(pathType::SP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2], turning_rad});
     }
 
     //if longpath case
@@ -198,7 +202,7 @@ std::pair<pathType,dubinsPath> is_good_path(State& s1, State& s2, float turning_
     dx_dy_sum *= 1.01;
 
     if(dubins_distance > dx_dy_sum) // large-turn long-path
-        return std::make_pair<pathType,dubinsPath>(pathType::largeLP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
+        return std::make_pair<pathType,reloDubinsPath>(pathType::largeLP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2], turning_rad});
     else // small-turn long-path
-        return std::make_pair<pathType,dubinsPath>(pathType::smallLP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2]});
+        return std::make_pair<pathType,reloDubinsPath>(pathType::smallLP,{dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2], turning_rad});
 }

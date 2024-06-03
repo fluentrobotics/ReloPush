@@ -32,7 +32,7 @@ namespace graphTools
             State sourceState;
             State targetState;
             //dubins set
-            dubinsPath path;
+            reloDubinsPath path;
             //cost
             float cost;
             //path classification
@@ -41,8 +41,8 @@ namespace graphTools
             std::vector<std::pair<State,State>> pre_relocations;
 
             EdgePathInfo();
-            EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, dubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in, Edge edge_in, GraphPtr gPtr);
-            EdgePathInfo(vertexPair pair_in, State source_s, State target_s, dubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in);
+            EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in, Edge edge_in, GraphPtr gPtr);
+            EdgePathInfo(vertexPair pair_in, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in);
     };
 
     class EdgeMatcher

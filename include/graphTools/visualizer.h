@@ -226,7 +226,7 @@ visualization_msgs::MarkerArray draw_texts(std::vector<movableObject>& mo_list, 
 }
 
 visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher, Environment& env, 
-                                        std::unordered_map<std::string, std::vector<std::pair<StatePtr,dubinsPath>>>& failed_paths, 
+                                        std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, 
                                         ros::Publisher* pub_ptr, ros::Publisher* failed_pub_ptr, float turning_radius)
 {
     auto edgePaths = edgeMatcher.get_entries();
@@ -235,7 +235,7 @@ visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher,
 
     for(auto& it : *edgePaths) // for each path
     {
-        size_t num_pts = static_cast<int>(it.second.path.length()/0.1); //todo: get resolution as a param
+        size_t num_pts = static_cast<int>(it.second.path.lengthCost()/0.1); //todo: get resolution as a param
 
         auto pivot_state = it.second.sourceState;
 
@@ -254,7 +254,7 @@ visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher,
         for (size_t np=0; np<num_pts; np++)
         {            
             //auto start = std::chrono::steady_clock::now();
-            jeeho_interpolate(dubinsStart, it.second.path, (double)np / (double)num_pts, interState, &dubinsSpace,
+            jeeho_interpolate(dubinsStart, it.second.path.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
                             turning_radius);
             //auto end = std::chrono::steady_clock::now();
             //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
@@ -278,7 +278,7 @@ visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher,
     {
         for(auto& it2 : it.second){
         
-            size_t num_pts = static_cast<int>(it2.second.length()/0.1); //todo: get resolution as a param
+            size_t num_pts = static_cast<int>(it2.second.lengthCost()/0.1); //todo: get resolution as a param
 
             auto pivot_state = *it2.first;
 
@@ -297,7 +297,7 @@ visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher,
             for (size_t np=0; np<num_pts; np++)
             {            
                 //auto start = std::chrono::steady_clock::now();
-                jeeho_interpolate(dubinsStart, it2.second, (double)np / (double)num_pts, interState, &dubinsSpace,
+                jeeho_interpolate(dubinsStart, it2.second.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
                                 turning_radius);
                 //auto end = std::chrono::steady_clock::now();
                 //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();

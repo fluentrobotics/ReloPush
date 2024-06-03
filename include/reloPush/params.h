@@ -5,21 +5,21 @@
 
 namespace params
 {
-    static const std::string world_frame = "map";
+    extern const std::string world_frame;
 
     // todo: parse map size as params
-    static float map_max_x = 4; // m
-    static float map_max_y = 5.4; // m
+    extern float map_max_x; // m
+    extern float map_max_y; // m
 
-    static const bool use_mocap = false; //todo: parse as a parameter
-    static const bool use_testdata = true;
-    static const bool reset_robot_pose = true;
+    extern const bool use_mocap; //todo: parse as a parameter
+    extern const bool use_testdata;
+    extern const bool reset_robot_pose;
 
-    static const bool print_graph = true;
+    extern const bool print_graph;
 
-    static int leave_log = 0;
-    static bool print_log = true;
-    static bool use_better_path = false;
+    extern int leave_log;
+    extern bool print_log;
+    extern bool use_better_path;
 }
 
 #endif
