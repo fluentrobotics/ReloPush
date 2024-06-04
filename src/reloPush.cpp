@@ -244,6 +244,7 @@ int main(int argc, char **argv)
     Color::println("== better path: " + std::to_string(params::use_better_path) + " ===",Color::BG_YELLOW);
     Color::println("== ind: " + std::to_string(data_ind) + " ===",Color::BG_YELLOW);
     Color::println("== log: " + std::to_string(params::leave_log) + " ===",Color::BG_YELLOW);
+    Color::println("== post-push: " + std::to_string(params::post_push_ind) + " ===",Color::BG_YELLOW);
 
     ros::init(argc, argv, "reloPush");
     ros::NodeHandle nh;

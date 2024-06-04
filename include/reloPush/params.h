@@ -11,6 +11,9 @@ namespace params
     extern float map_max_x; // m
     extern float map_max_y; // m
 
+    // index of post-push pose from last state of the path
+    extern int post_push_ind;
+
     extern const bool use_mocap; //todo: parse as a parameter
     extern const bool use_testdata;
     extern const bool reset_robot_pose;

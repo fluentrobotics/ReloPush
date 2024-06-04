@@ -164,16 +164,20 @@ float get_longpath_d_thres(State& s1, State& s2, float turning_rad)
     return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta))*turning_rad;
 }
 
-std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad)
+std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad, bool use_pre_push_pose)
 {
     //double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
     //double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
     //double dx = x2 - x1, dy = y2 - y1, d = sqrt(dx * dx + dy * dy) / turning_rad, th = atan2(dy, dx);
     //double alpha = fromOMPL::mod2pi(th1 - th), beta = fromOMPL::mod2pi(th2 - th);
+    
 
     double alpha, beta;
     find_alpha_beta(s1,s2,alpha,beta);
     double dx = s2.x - s1.x, dy = s2.y - s1.y, d = sqrt(dx * dx + dy * dy) / turning_rad;
+
+    if(use_pre_push_pose)
+    {}
 
     if (d < fromOMPL::DUBINS_EPS && fabs(alpha - beta) < fromOMPL::DUBINS_EPS)
         return std::make_pair<pathType,reloDubinsPath>(pathType::none,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0}); //zero dubins path

@@ -7,6 +7,7 @@
 //#include <reloPush/movableObject.h>
 #include <omplTools/fromOMPL.h>
 #include <omplTools/State.h>
+#include <reloPush/push_pose_tools.h>
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -63,7 +64,7 @@ reloDubinsPath findDubins(State &start, State &goal, double turning_radius = 1.0
 Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, double robot_y);
 
 float get_longpath_d_thres(State& s1, State& s2, float turning_rad = 1.0f);
-std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad);
+std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad, bool use_pre_push_pose = true);
 
 
 

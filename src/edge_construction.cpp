@@ -342,6 +342,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
 
 
 // newer version
+// todo: merge with the older one
 void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, StatePtr pivot_state, StatePtr target_state, VertexPtr pivot_vertex, VertexPtr target_vertex,
                                 size_t& state_ind, std::pair<pathType, reloDubinsPath>& dubins_res, Environment& env,
                                 float& max_x, float& max_y, float& turning_radius, GraphPtr gPtr, preRelocList& preRelocs, graphTools::EdgeMatcher& edgeMatcher,

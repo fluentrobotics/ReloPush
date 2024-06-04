@@ -801,8 +801,8 @@ std::pair<pathsPtr, relocationPair_list> find_relo_path(std::vector<State>& push
         int valid_ind = findFirstTrueIndex(valid_vec);
 
         // path from init pre-push to target pre-push
-        State start_pre_push = find_pre_push(*init_pusing_poses[valid_ind], 0.75f);
-        State goal_pre_push = find_pre_push(candidates[valid_ind], 0.75f);
+        State start_pre_push = find_pre_push(*init_pusing_poses[valid_ind], 0.6f);
+        State goal_pre_push = find_pre_push(candidates[valid_ind], 0.6f);
 
         // angle range to 0 ~2 pi
         start_pre_push.yaw = jeeho::convertEulerRange_to_2pi(start_pre_push.yaw);
@@ -845,8 +845,10 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
         push_path.insert(push_path.end(), interp_list->begin(), interp_list->end());
     }    
 
-    //test pre_path
-    push_path.pop_back();
+    // add pose-push pose
+    // todo: do it better
+    State post_push = push_path.end()[params::post_push_ind];
+    push_path.push_back(post_push);
 
     //return final_path;
     return push_path;
@@ -898,7 +900,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         // relo to push
         auto lastLastRelo = relo_path.back().back();
         // first pre-push
-        auto pre_push = find_pre_push(push_path.front(),0.75f);
+        auto pre_push = find_pre_push(push_path.front(),0.6f);
 
         // plan hybrid astar
         plan_res = planHybridAstar(lastLastRelo, pre_push, env, false);
@@ -913,7 +915,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
 
     else{
         // start to prepush
-        auto pre_push = find_pre_push(push_path.front(),0.75f);
+        auto pre_push = find_pre_push(push_path.front(),0.6f);
         //stopWatch hb("hyb");
         auto plan_res = planHybridAstar(robot, pre_push, env, false);
         if(!plan_res->success)
@@ -950,9 +952,8 @@ std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, 
         for(size_t min_it = 0; min_it < min_list.size(); min_it++)
         {
             auto approach_state = nameMatcher.getVertexStatePair(min_list[min_it]->sourceVertexName)->state;
-            auto pre_push = find_pre_push(*approach_state,0.75f);
-            //hybrid astar state yaw is negated
-            //pre_push.yaw*=-1;
+            auto pre_push = find_pre_push(*approach_state,0.6f);
+
             auto plan_res = planHybridAstar(robots[r], pre_push, env, false);
 
             // cost
