@@ -744,4 +744,6 @@ class Environment {
   std::multimap<int, State> dynamic_obs;
 };
 
+std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, State goal_in, Environment& env, bool print_res = false);
+
 #endif

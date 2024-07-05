@@ -66,6 +66,7 @@ add_executable(
     "src/reloPush/parse_testdata.cpp"
     "src/pathPlanTools/tf_tools.inl"
     "src/pathPlanTools/tf_tools.cpp"
+    "src/pathPlanTools/path_planning_tools.cpp"
     "src/reloPush/params.cpp"
     "src/reloPush/push_pose_tools.cpp"
     )

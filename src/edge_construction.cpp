@@ -301,19 +301,44 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
             // check if the state is valid
             auto is_valid = env.stateValid(state_thres);
 
+            // check if prepush is valid
+            State new_prepush = State(state_thres.x,state_thres.y,pivot_state->yaw);
+            auto is_pre_push_valid = env.stateValid(find_pre_push(new_prepush));
+
+            // check there is a path connecting preRelo to new pre-push
+            // add/remove virtual obstacles
+            bool is_path_to_prepush_valid = false;
+            env.remove_obs(*pivot_state);
+            // relocated
+            env.add_obs(state_thres);
+
+            State arrivalState(state_thres.x,state_thres.y,yaw);
+            auto plan_res =planHybridAstar(find_pre_push(arrivalState), new_prepush, env, false);
+            if(plan_res->success)
+               is_path_to_prepush_valid = true;
+
+            // revert obstacle
+            env.add_obs(*pivot_state);
+            env.remove_obs(state_thres);
+
             // if yes, go with it. if not, try next best
-            if(is_valid)
+            if(is_valid && is_pre_push_valid && is_path_to_prepush_valid)
             {
                 push_found = true;
                 push_thres = push_vec;
 
                 // note: not pre-push poses
-                preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
+                //preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
+                // find dubins
+                auto dubins_pre = findDubins(*pivot_state,state_thres,turning_radius);
+
+                State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
+                preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,plan_res);
 
                 // cost for pre-relocations
                 float pre_cost=0;
                 for(auto& it : preRelocs)
-                    pre_cost += sqrtf(powf(it.second.x - it.first.x,2) + powf(it.second.y - it.first.y,2));
+                    pre_cost += sqrtf(powf(it.preReloDubins.targetState.x - it.preReloDubins.startState.x,2) + powf(it.preReloDubins.targetState.y - it.preReloDubins.startState.y,2));
 
                 // find new dubins path
                 auto new_dubins_res = is_good_path(state_thres,*target_state,turning_radius);
@@ -468,19 +493,49 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
             auto chk = check_collision(fromObj, toObj, std::make_shared<State>(state_thres), pivot_vertex, state_ind, new_dubins_res, 
                                         env, max_x, max_y, turning_radius, is_delivery);
 
+            // check if the state is valid
+            auto is_valid = env.stateValid(state_thres);
+
+            // check if prepush is valid
+            State new_prepush = State(state_thres.x,state_thres.y,pivot_state->yaw);
+            auto is_pre_push_valid = env.stateValid(find_pre_push(new_prepush));
+
+            // check there is a path connecting preRelo to new pre-push
+            // add/remove virtual obstacles
+            bool is_path_to_prepush_valid = false;
+            env.remove_obs(*pivot_state);
+            // relocated
+            env.add_obs(state_thres);
+
+            State arrivalState(state_thres.x,state_thres.y,yaw);
+            auto plan_res =planHybridAstar(find_pre_push(arrivalState), new_prepush, env, false);
+            if(plan_res->success)
+               is_path_to_prepush_valid = true;
+
+            // revert obstacle
+            env.add_obs(*pivot_state);
+            env.remove_obs(state_thres);
+
             // if yes, go with it. if not, try next best
-            if(chk == stateValidity::valid)
+            if(chk == stateValidity::valid && is_valid && is_pre_push_valid && is_path_to_prepush_valid)
             {
                 push_found = true;
                 push_thres = push_vec;
 
                 // note: not pre-push poses
-                preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
+                // todo: handle multiple pre-relocations
+                //preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
+
+                // find dubins
+                auto dubins_pre = findDubins(*pivot_state,state_thres,turning_radius);
+
+                State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
+                preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,plan_res);
 
                 // cost for pre-relocations
                 float pre_cost=0;
                 for(auto& it : preRelocs)
-                    pre_cost += sqrtf(powf(it.second.x - it.first.x,2) + powf(it.second.y - it.first.y,2));
+                    pre_cost += sqrtf(powf(it.preReloDubins.targetState.x - it.preReloDubins.startState.x,2) + powf(it.preReloDubins.targetState.y - it.preReloDubins.startState.y,2));
 
                 Edge e;
                 bool succ;

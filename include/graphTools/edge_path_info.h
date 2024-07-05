@@ -8,7 +8,8 @@
 
 #include <omplTools/State.h>
 
-typedef std::vector<std::pair<State,State>> preRelocList;
+//typedef std::vector<std::pair<State,State>> preRelocList;
+typedef std::vector<preReloPath> preRelocList;
 
 namespace std {
     template <>
@@ -38,7 +39,8 @@ namespace graphTools
             //path classification
             pathType path_class;
             //pre-relocation to make it a long-path
-            std::vector<std::pair<State,State>> pre_relocations;
+            //std::vector<std::pair<State,State>> pre_relocations;
+            preRelocList pre_relocations;
 
             EdgePathInfo();
             EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in, Edge edge_in, GraphPtr gPtr);

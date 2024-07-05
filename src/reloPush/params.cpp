@@ -14,9 +14,9 @@ namespace params
     const bool use_testdata = true;
     const bool reset_robot_pose = true;
 
-    const bool print_graph = true;
+    const bool print_graph = false;
 
     int leave_log = 0;
-    bool print_log = true;
+    bool print_log = false;
     bool use_better_path = true;
 }

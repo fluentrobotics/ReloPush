@@ -8,6 +8,7 @@
 #include <omplTools/fromOMPL.h>
 #include <omplTools/State.h>
 #include <reloPush/push_pose_tools.h>
+#include <pathPlanTools/path_planning_tools.h>
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -25,6 +26,11 @@ class reloDubinsPath{
 
 public:
     dubinsPath omplDubins;
+    State startState;
+    State targetState;
+
+    reloDubinsPath(int i)
+    {}
 
     reloDubinsPath(dubinsPath& omplDubinsPath) : omplDubins(omplDubinsPath)
     {}
@@ -36,6 +42,11 @@ public:
         turning_rad = r;
     }
 
+    reloDubinsPath(State& start, State& target, dubinsPath& dubins_in) : startState(start), targetState(target)
+    {
+        omplDubins = dubins_in;
+    }
+
     float lengthCost() {
         return static_cast<float>(omplDubins.length()) * turning_rad;
     }
@@ -44,6 +55,25 @@ private:
     float turning_rad =1.0;
     void set_r(float r){
         turning_rad = r;
+    }
+};
+
+class preReloPath{
+    public:
+    reloDubinsPath preReloDubins;
+    std::shared_ptr<PlanResult<State, Action, double>> pathToNextPush; // to next pre-push
+
+    preReloPath()
+    {
+        preReloDubins = reloDubinsPath(0);
+    }
+
+    preReloPath(State start, State target, reloDubinsPath& dubins_in, std::shared_ptr<PlanResult<State, Action, double>> path_to_next_prePush)
+    {
+        preReloDubins = dubins_in;
+        preReloDubins.startState = start;
+        preReloDubins.targetState = target;
+        pathToNextPush = path_to_next_prePush;
     }
 };
 
