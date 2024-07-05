@@ -210,7 +210,7 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
     //for each entry in delivery table
     for (auto i = delivery_table.begin(); i != delivery_table.end(); i++)
     {
-        //cout << i->first << "       " << i->second << endl;
+        std::cout << i->first << " -> " << i->second << std::endl;
         auto pivot_obj = nameMatcher.getObject(i->first);
         auto target_obj = nameMatcher.getObject(i->second);
 
@@ -834,6 +834,10 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
         Vertex source = vertex_path[i];
         Vertex target = vertex_path[i-1];
         Edge edge = boost::edge(source, target, *gPtr).first;
+        auto test_ = boost::edge(source, target, *gPtr).second;
+
+        //print vetex names
+        std::cout << graphTools::getVertexName(source, gPtr) << " -> " << graphTools::getVertexName(target,gPtr) << std::endl; 
 
         // corresponding path
         auto partial_path_info = edgeMatcher.getPath(edge);
@@ -847,7 +851,11 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
 
     // add pose-push pose
     // todo: do it better
-    State post_push = push_path.end()[params::post_push_ind];
+    State post_push;
+    if(push_path.size()>=std::abs(params::post_push_ind))
+        post_push = push_path.end()[params::post_push_ind];
+    else
+        post_push = push_path[0];
     push_path.push_back(post_push);
 
     //return final_path;

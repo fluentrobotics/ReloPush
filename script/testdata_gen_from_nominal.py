@@ -184,12 +184,29 @@ dataset_four.d_list = [movableObject(3.6,1.5,0,"d1",4),
 dataset_four.d_table = {"b1":"d2", "b3":"d1", "b2":"d3"} 
 
 
+# 4obj
+dataset_five = nominal_dataset("data_4o")
+dataset_five.mo_list = [
+    movableObject(2.9, 2.13,0,"b1",4),
+    movableObject(0.58, 4.04,0,"b2",4),
+    movableObject(2.9, 3.37,0,"b3",4),
+    movableObject(2.09, 0.8,0,"b4",4)]
+dataset_five.robot = [pose2D(2.35, 2.43, 1.5708)]
+dataset_five.d_list = [
+    movableObject(1.47, 4.39,0,"d1",4),
+    movableObject(0.78, 2.91,0,"d2",4),
+    movableObject(1.12, 1.88,0,"d3",4),
+    movableObject(0.63, 0.76,0,"d4",4)]
+dataset_five.d_table = {"b1":"d2", "b3":"d1", "b2":"d3", "b4":"d4"} 
+
+
 
 
 #dataset_one.write_to_file()
 #dataset_two.write_to_file()
 #dataset_three.write_to_file()
-dataset_four.write_to_file()
+#dataset_four.write_to_file()
+dataset_five.write_to_file()
 
 #print(dataset_one.add_randomness().serialize())
 print('done')

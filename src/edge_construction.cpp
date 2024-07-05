@@ -380,7 +380,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
     }
     else if(validity == stateValidity::out_of_boundary)
     {
-        // check if a long path is possible by relocating it
+        // check if a long path is possible by relocating the object it
         
         auto unit_vecs = pivot_mo.get_push_unitvecs();
 
@@ -420,7 +420,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
         // vector with ture only
         std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
-        /* it might be a good idea to try all directions */
+        /* todo: it might be a good idea to try all directions */
         
         for(auto& it: away_flags)
         {
@@ -457,6 +457,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
             Eigen::Vector2f push_vec = dist_to_push * unit_vecs[push_ind];
 
+            // reloacted object pose
             State state_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
 
             // find new dubins path
@@ -524,7 +525,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
     for(size_t n=0; n<mo_list.size(); n++)
     {
         auto pivot_mo = mo_list[n];
-        auto pivot_vslist = pivot_mo.get_vertex_state_list();
+        auto pivot_vslist = pivot_mo.get_vertex_state_list(); //the sides of an objects
         
         for(size_t piv_state_ind=0; piv_state_ind<pivot_vslist.size(); piv_state_ind++)
         {

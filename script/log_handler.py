@@ -33,7 +33,7 @@ folder = "../log/raw"
 # Construct the full file path
 folder_path = os.path.join(current_directory, folder)
 
-print(os.listdir(folder_path))
+#print(os.listdir(folder_path))
 
 
 

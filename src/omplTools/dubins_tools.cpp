@@ -8,12 +8,25 @@
 
 //typedef ompl::base::SE2StateSpace::StateType OmplState;
 
+double sumUpToIndex(const double* arr, size_t length, unsigned int i) {
+    // Check if the index is within bounds
+    if (i >= length) {
+        throw std::out_of_range("Index is out of range");
+    }
+
+    double sum = 0.0;
+    for (size_t j = 0; j <= i; ++j) {
+        sum += arr[j];
+    }
+    return sum;
+}
+
 
 void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace::DubinsPath &path, double t,
                        OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius)
 {
     OmplState *s = space->allocState()->as<OmplState>();
-    double seg = t * path.length(), phi=0, v=0;
+    double seg = t * path.length()/turning_radius, phi=0, v=0;
 
     s->setXY(0,0);
     s->setYaw(from->getYaw());
@@ -23,6 +36,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
         for (unsigned int i = 0; i < 3 && seg > 0; ++i)
         {
             v = std::min(seg, path.length_[i]);
+            //v = std::min(seg, sumUpToIndex(path.length_,3,i)*turning_radius);
             phi = s->getYaw();
             seg -= v;
             switch (path.type_[i])
@@ -69,6 +83,8 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
 
     state->setX(s->getX() * turning_radius + from->getX());
     state->setY(s->getY() * turning_radius + from->getY());
+    //state->setX(s->getX() + from->getX());
+    //state->setY(s->getY() + from->getY());
     space->getSubspace(1)->enforceBounds(s->as<OmplState>(1));
     state->setYaw(s->getYaw());
     space->freeState(s);

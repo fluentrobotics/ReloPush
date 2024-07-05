@@ -6,8 +6,16 @@
 
 std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo& pathInfo, float turning_rad, float path_resolution=0.1)
 {
+    // augment pre-relocation (relocation to make it LP) first
+    // do not multi-process
+    for(auto& it : pathInfo.pre_relocations) //first: source second: target
+    {
+        // for each pre-relocation (usually one)
+        
+    }
+
     // interpolate
-    auto l = pathInfo.path.lengthCost();
+    auto l = pathInfo.path.lengthCost(); // unit cost * turning rad
     auto num_pts = static_cast<size_t>(l/path_resolution);
     //size_t num_pts = static_cast<size_t>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
 

@@ -86,6 +86,18 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         // update graph
         update_graph(mo_list, gPtr);
 
+        // print vertex table (name - index)
+        // Print the table of vertex names and their numbers
+        typedef boost::graph_traits<Graph>::vertex_iterator VertexIterator;
+        std::cout << "\nVertex Number\tVertex Name\n";
+        std::cout << "-------------\t-----------\n";
+
+        VertexIterator vi, vi_end;
+        for (boost::tie(vi, vi_end) = vertices(*gPtr); vi != vi_end; ++vi) {
+            std::cout << *vi << "\t\t" << graphTools::getVertexName(*vi,gPtr) << "\n";
+        }
+        std::cout << std::endl;
+
         // genearte name matcher
         NameMatcher nameMatcher(mo_list);
 
@@ -103,8 +115,6 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
             print_edges(gPtr);
 
         draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
-
-
 
         // add deliverries to graph
         stopWatch time_edge_d("delivery", measurement_type::graphPlan);
@@ -129,6 +139,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         {
             if(min_list[i]->cost != std::numeric_limits<float>::infinity())
             {
+                // todo: find one with lowest cost
                 min_list_ind = i;
                 break;
             }
@@ -146,8 +157,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         time_assign.stop();
         time_watches.push_back(time_assign);
 
-        // arbitrarily assign first in the list
-        // todo: assign one with the lowest cost        
+        // choose delivery with lowest cost       
         pf.printPath(gPtr, min_list[min_list_ind]->path);
         //pf.printPath(gPtr, min_list[1]->path);
         auto reloc_objects = get_intermediate_objects(min_list[min_list_ind]->path, nameMatcher);
@@ -231,7 +241,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 int main(int argc, char **argv) 
 {
     int data_ind = 0;
-    std::string data_file = "data_3o_2.txt";
+    //std::string data_file = "data_3o_2.txt";
+    std::string data_file = "data_4o.txt";
+    
     //int leave_log = 1;
     if(argc==4)
     {
@@ -339,10 +351,12 @@ int main(int argc, char **argv)
     stopWatchSet timeWatches;
     /////////////////////////////////////////////
     stopWatch time_plan("All-planning", measurement_type::allPlan);
+
     /////////////// loop starts ///////////////
     reloPlanResult reloResult = reloLoop(obs, mo_list, delivered_obs, env, params::map_max_x, params::map_max_y, gPtr, edgeMatcher, timeWatches.watches, 
             delivery_list, delivery_table, deliverySets.delivery_contexts, robots, failed_paths);
     //////////// loop ends ////////////
+
     time_plan.stop();
     time_plan.print_us();
     timeWatches.watches.push_back(time_plan);
