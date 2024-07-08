@@ -1,15 +1,84 @@
 #include <reloPush/edge_construction.h>
 
+// Assumes a rectangular workspace
+bool is_within_boundary(OmplState* state, float min_x, float min_y, float max_x, float max_y)
+{
+    if (state->getX() < 0 || state->getX() >= max_x || state->getY() < 0 || state->getY() >= max_y)
+    {
+        if(params::print_log)
+            std::cout << "Out of Boundary " << "x: "<< state->getX() << " y: " << state->getY() << " yaw: " << state->getYaw() << std::endl;
+        return false;
+    }
+    else
+        return true;
+}
+
+stateValidity check_validity_by_interpolation(OmplState* dubinsStart, OmplState* interState, std::pair<pathType,reloDubinsPath>& dubins_res,
+                                                ompl::base::DubinsStateSpace& dubinsSpace,
+                                                float& turning_radius, size_t num_pts, 
+                                                Environment& env, float max_x, float max_y)
+{
+    stateValidity validity = stateValidity::valid;
+
+    for (size_t np=0; np<num_pts; np++)
+    {
+        //auto start = std::chrono::steady_clock::now();
+        //std::cout << "DubinsStart x: " << dubinsStart->getX() << " y: " << dubinsStart->getY() << std::endl;
+
+        jeeho_interpolate(dubinsStart, dubins_res.second.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
+                        turning_radius);
+
+        //std::cout << "interStart x: " << interState->getX() << " y: " << interState->getY() << std::endl;
+        //auto end = std::chrono::steady_clock::now();
+        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
+
+        if(params::print_log)
+            std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
+
+        // check if within boundary
+        if(!is_within_boundary(interState,0,0,max_x,max_y))
+        {
+            validity = stateValidity::out_of_boundary;
+            break;
+        }
+
+
+        if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
+        {
+            //collision found
+            if(params::print_log)
+                std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
+            validity = stateValidity::collision;
+
+            break;
+        }                             
+    }
+
+    return validity;
+}
+
+/*
+** input: turning_radius, pivot_state(from_state), dubinsSpace
+** output: dubinsStart, interState
+*/
+void init_dubins_state(float turning_radius, StatePtr pivot_state,
+                       ompl::base::DubinsStateSpace& dubinsSpace, OmplState* dubinsStart, OmplState* interState)
+{
+    // Allocate and initialize the starting state
+    dubinsStart = (OmplState *)dubinsSpace.allocState();
+    dubinsStart->setXY(pivot_state->x, pivot_state->y);
+    dubinsStart->setYaw(pivot_state->yaw);
+    
+    // Allocate and initialize the intermediate state
+    interState = (OmplState *)dubinsSpace.allocState();
+}
 
 stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
                     size_t n, size_t m, std::pair<pathType,reloDubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
 {
-    // check collision
-    ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
-    OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
-    dubinsStart->setXY(pivot_state->x, pivot_state->y);
-    dubinsStart->setYaw(pivot_state->yaw);
-    OmplState *interState = (OmplState *)dubinsSpace.allocState();
+    ompl::base::DubinsStateSpace dubinsSpace(turning_radius); OmplState* dubinsStart, *interState = nullptr;
+    init_dubins_state(turning_radius, pivot_state, dubinsSpace, dubinsStart, interState);
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
     size_t num_pts = static_cast<int>(dubins_res.second.lengthCost()/(0.1*0.5)); //todo: get resolution as a param
@@ -28,80 +97,24 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
         env.remove_obs(State(mo_list[m].get_x(),mo_list[m].get_y(),0));
     }
 
-    // remove other collision at starting pose
-    //auto init_collisions = env.takeout_start_collision(*pivot_state);
-    //for(auto& it : init_collisions)
-    //    took_out.push_back(it);
-
     // Interpolate dubins path to check for collision on grid map
-    for (size_t np=0; np<num_pts; np++)
-    {
-        //auto start = std::chrono::steady_clock::now();
-        //std::cout << "DubinsStart x: " << dubinsStart->getX() << " y: " << dubinsStart->getY() << std::endl;
+    validity = check_validity_by_interpolation(dubinsStart, interState, dubins_res, dubinsSpace, turning_radius, num_pts, env, max_x, max_y);
 
-        jeeho_interpolate(dubinsStart, dubins_res.second.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
-                        turning_radius);
-
-        //std::cout << "interStart x: " << interState->getX() << " y: " << interState->getY() << std::endl;
-        //auto end = std::chrono::steady_clock::now();
-        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
-
-        if(params::print_log)
-            std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
-
-        // check if within boundary
-        if (interState->getX() < 0 || interState->getX() >= max_x || interState->getY() < 0 || interState->getY() >= max_y)
-        {
-            if(params::print_log)
-                std::cout << "Out of Boundary " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
-            validity = stateValidity::out_of_boundary;
-
-            break;
-        }
-
-
-        if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
-        {
-            //collision found
-            if(params::print_log)
-                std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
-            validity = stateValidity::collision;
-
-            break;
-        }                             
-    }
-
-    if(validity == stateValidity::valid)
-    {
-        if(params::print_log)
-            std::cout << "edge found" << std::endl;
-        //auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
-        //Edge e;
-        //bool succ;
-        
-        //std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
-        // add to edge-path matcher
-        //edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,dubins_res.second,pathType::smLP,e,gPtr));                               
-    }       
+    if(validity == stateValidity::valid && params::print_log)
+        std::cout << "edge found" << std::endl;
 
     //put back took-out obstacles
     for(auto it : took_out)
         env.add_obs(it);
     
-
     return validity;
 }
 
 stateValidity check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
                     std::pair<pathType,reloDubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
 {
-    // check collision
-    ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
-    OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
-    dubinsStart->setXY(pivot_state->x, pivot_state->y);
-    dubinsStart->setYaw(pivot_state->yaw);
-    OmplState *interState = (OmplState *)dubinsSpace.allocState();
+    ompl::base::DubinsStateSpace dubinsSpace(turning_radius); OmplState* dubinsStart, *interState = nullptr;
+    init_dubins_state(turning_radius, pivot_state, dubinsSpace, dubinsStart, interState);
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
     size_t num_pts = static_cast<int>(dubins_res.second.lengthCost()/(0.1*0.5)); //todo: get resolution as a param
@@ -120,67 +133,15 @@ stateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
         env.remove_obs(State(toObj.get_x(),toObj.get_y(),0));
     }
 
-    // remove other collision at starting pose
-    //auto init_collisions = env.takeout_start_collision(*pivot_state);
-    //for(auto& it : init_collisions)
-    //    took_out.push_back(it);
-
     // Interpolate dubins path to check for collision on grid map
-    for (size_t np=0; np<num_pts; np++)
-    {
-        //auto start = std::chrono::steady_clock::now();
-        //std::cout << "DubinsStart x: " << dubinsStart->getX() << " y: " << dubinsStart->getY() << std::endl;
+    validity = check_validity_by_interpolation(dubinsStart, interState, dubins_res, dubinsSpace, turning_radius, num_pts, env, max_x, max_y);
 
-        jeeho_interpolate(dubinsStart, dubins_res.second.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
-                        turning_radius);
-
-        //std::cout << "interStart x: " << interState->getX() << " y: " << interState->getY() << std::endl;
-        //auto end = std::chrono::steady_clock::now();
-        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        //std::cout << "Elapsed time: " << duration << " usec" << std::endl;
-
-        if(params::print_log)
-            std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
-
-        // check if within boundary
-        if (interState->getX() < 0 || interState->getX() >= max_x || interState->getY() < 0 || interState->getY() >= max_y)
-        {
-            if(params::print_log)
-                std::cout << "Out of Boundary " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
-            validity = stateValidity::out_of_boundary;
-
-            break;
-        }
-
-
-        if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
-        {
-            //collision found
-            if(params::print_log)
-                std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
-            validity = stateValidity::collision;
-
-            break;
-        }                             
-    }
-
-    if(validity == stateValidity::valid)
-    {
-        if(params::print_log)
-            std::cout << "edge found" << std::endl;
-        //auto target_vertex = mo_list[m].vertex_state_list[state_ind].vertex;
-        //Edge e;
-        //bool succ;
-        
-        //std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.length(), *gPtr);
-        // add to edge-path matcher
-        //edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,dubins_res.second,pathType::smLP,e,gPtr));                               
-    }       
+    if(validity == stateValidity::valid && params::print_log)
+        std::cout << "edge found" << std::endl;         
 
     //put back took-out obstacles
     for(auto it : took_out)
         env.add_obs(it);
-    
 
     return validity;
 }
@@ -313,7 +274,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
             env.add_obs(state_thres);
 
             State arrivalState(state_thres.x,state_thres.y,yaw);
-            auto plan_res =planHybridAstar(find_pre_push(arrivalState), new_prepush, env, false);
+            auto plan_res = planHybridAstar(find_pre_push(arrivalState), new_prepush, env, false);
             if(plan_res->success)
                is_path_to_prepush_valid = true;
 
