@@ -537,6 +537,8 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 {
     edgeMatcher.reset();
 
+    // todo: remove duplicate with proposed edge construction
+    // only difference is from/to
     // construct edges
     for(size_t n=0; n<mo_list.size(); n++)
     {
@@ -572,6 +574,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 #pragma region proposed_path_classification
                         if(params::use_better_path)
                         {
+                            /*
                             // check collision
                             auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius);
 
@@ -589,6 +592,8 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
                                 // add to edge-path matcher
                                 edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
+                                
+                               
                             }
                             else
                             {
@@ -598,6 +603,12 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 // store to failed paths
                                 failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
                             }
+                            */
+                            auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
+
+                            proposed_edge_construction(pivot_mo,target_mo,pivot_state,target_state,pivot_vertex,target_vertex,
+                                                            state_ind,dubins_res,env,max_x,max_y,turning_radius,
+                                                            gPtr,preRelocs,edgeMatcher,failed_paths,pivot_mo,target_mo,false);
                         }
                         
 #pragma endregion proposed_path_classification
