@@ -238,8 +238,96 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
     return reloPlanResult(true, std::accumulate(temp_relocs.begin(), temp_relocs.end(), 0), deliv_seq);
 }
 
+void init_visualization(std::vector<movableObject>& initMOList, std::vector<movableObject>& delivery_list)
+{
+    draw_obstacles(initMOList, object_marker_pub_ptr);
+    draw_texts(initMOList,text_pub_ptr);
+    draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+    visualize_workspace_boundary(params::map_max_x, params::map_max_y, boundary_pub_ptr);
+}
+
+void parse_from_input_file(std::string& data_file, int& data_ind, std::vector<movableObject>& mo_list,
+                            std::vector<State>& robots, std::unordered_map<std::string,std::string>& delivery_table,
+                            std::vector<movableObject>& delivery_list)
+{
+    // parse from input file
+    Color::println("=== Testdata " + data_file + " " + std::to_string(data_ind) + " ===",Color::CYAN, Color::BG_DEFAULT);
+    delivery_table = parse_movableObjects_robots_from_file(mo_list,robots,delivery_list,data_ind,std::string(CMAKE_SOURCE_DIR) + "/testdata/" + data_file);
+    
+    if(params::reset_robot_pose)
+    {
+        // reset robot initpose on sim
+        geometry_msgs::PoseWithCovarianceStamped init_pose;
+        init_pose.pose.pose.position.x = robots[0].x;
+        init_pose.pose.pose.position.y = robots[0].y;
+
+        // angle in -pi ~ pi range
+        float yaw = robots[0].yaw;
+        yaw = jeeho::convertEulerRange_to_pi(yaw);
+        //to quaternion
+        auto yaw_euler = Eigen::Vector3f(0,0,yaw);
+        auto yaw_quat = jeeho::euler_to_quaternion_zyx(yaw_euler);
+        init_pose.pose.pose.orientation.w = yaw_quat.w();
+        init_pose.pose.pose.orientation.x = yaw_quat.x();
+        init_pose.pose.pose.orientation.y = yaw_quat.y();
+        init_pose.pose.pose.orientation.z = yaw_quat.z();
+
+        robot_pose_reset_ptr->publish(init_pose);
+        ros::spinOnce();
+        if(!params::leave_log)
+            ros::Duration(0.5).sleep();
+    }
+}
+
+void handle_args(int argc, char **argv, std::string& data_file, int& data_ind)
+{
+    data_ind = 0;
+    //std::string data_file = "data_3o_2.txt";
+    data_file = "data_4o.txt";
+    
+    //int leave_log = 1;
+    if(argc==4)
+    {
+        data_file = std::string(argv[1]);
+        data_ind = std::atoi(argv[2]);        
+        params::leave_log = std::atoi(argv[3]);
+    }
+}
+
+void init_prompt(std::string& data_file, int& data_ind)
+{
+    Color::println("== data: " + data_file + " ===",Color::BG_YELLOW);
+    Color::println("== better path: " + std::to_string(params::use_better_path) + " ===",Color::BG_YELLOW);
+    Color::println("== ind: " + std::to_string(data_ind) + " ===",Color::BG_YELLOW);
+    Color::println("== log: " + std::to_string(params::leave_log) + " ===",Color::BG_YELLOW);
+    Color::println("== post-push: " + std::to_string(params::post_push_ind) + " ===",Color::BG_YELLOW);
+}
+
+void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& edgeMatcher, Environment& env,
+              std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,
+              std::vector<movableObject>& delivery_list, std::shared_ptr<nav_msgs::Path> navPath_ptr)
+{
+    while(ros::ok())
+    {
+        // visualize movable obstacles
+        auto mo_vis = draw_obstacles(initMOList, object_marker_pub_ptr);
+        // visualize edge paths
+        auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
+        // visualize delivery locations
+        auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
+        // visualize object names
+        auto vis_names_msg = draw_texts(initMOList,text_pub_ptr);
+        // publish final path once
+        test_path_pub_ptr->publish(*navPath_ptr); 
+
+        ros::spinOnce();
+        ros::Duration(0.5).sleep();                
+    }
+}
+
 int main(int argc, char **argv) 
 {
+    /*
     int data_ind = 0;
     //std::string data_file = "data_3o_2.txt";
     std::string data_file = "data_4o.txt";
@@ -251,24 +339,25 @@ int main(int argc, char **argv)
         data_ind = std::atoi(argv[2]);        
         params::leave_log = std::atoi(argv[3]);
     }
-
-    Color::println("== data: " + data_file + " ===",Color::BG_YELLOW);
-    Color::println("== better path: " + std::to_string(params::use_better_path) + " ===",Color::BG_YELLOW);
-    Color::println("== ind: " + std::to_string(data_ind) + " ===",Color::BG_YELLOW);
-    Color::println("== log: " + std::to_string(params::leave_log) + " ===",Color::BG_YELLOW);
-    Color::println("== post-push: " + std::to_string(params::post_push_ind) + " ===",Color::BG_YELLOW);
+    */
+    std::string data_file=""; int data_ind=0;
+    handle_args(argc, argv, data_file, data_ind); 
+    // print initial messages
+    init_prompt(data_file, data_ind);
 
     ros::init(argc, argv, "reloPush");
     ros::NodeHandle nh;
     nh_ptr = &nh;
     // initialize publishers
     initialize_publishers(nh);
+
     // wait for debug attach
     ros::Duration(0.1).sleep();
     if(!params::leave_log)
         ros::Duration(1.0).sleep();
 
-    ///////// Initial settings /////////
+#pragma region initialize_essential_data
+    ///////// Init essential data holders /////////
     int num_push_sides = 4; // todo: parse as a param
     std::vector<movableObject> mo_list(0);
     std::vector<State> robots(0);
@@ -280,10 +369,8 @@ int main(int argc, char **argv)
     GraphPtr gPtr(new Graph);
     // edge to path matcher
     graphTools::EdgeMatcher edgeMatcher;
-
     // initialize grid map
     std::unordered_set<State> obs;
-
     //State goal(0,0,0); // arbitrary goal
     Environment env(params::map_max_x, params::map_max_y, obs);
 
@@ -298,60 +385,32 @@ int main(int argc, char **argv)
     else
     {
         // parse from input file
-        Color::println("=== Testdata " + data_file + " " + std::to_string(data_ind) + " ===",Color::CYAN, Color::BG_DEFAULT);
-        delivery_table = parse_movableObjects_robots_from_file(mo_list,robots,delivery_list,data_ind,std::string(CMAKE_SOURCE_DIR) + "/testdata/" + data_file);
-        
-        if(params::reset_robot_pose)
-        {
-            // reset robot initpose on sim
-            geometry_msgs::PoseWithCovarianceStamped init_pose;
-            init_pose.pose.pose.position.x = robots[0].x;
-            init_pose.pose.pose.position.y = robots[0].y;
-
-            // angle in -pi ~ pi range
-            float yaw = robots[0].yaw;
-            yaw = jeeho::convertEulerRange_to_pi(yaw);
-            //to quaternion
-            auto yaw_euler = Eigen::Vector3f(0,0,yaw);
-            auto yaw_quat = jeeho::euler_to_quaternion_zyx(yaw_euler);
-            init_pose.pose.pose.orientation.w = yaw_quat.w();
-            init_pose.pose.pose.orientation.x = yaw_quat.x();
-            init_pose.pose.pose.orientation.y = yaw_quat.y();
-            init_pose.pose.pose.orientation.z = yaw_quat.z();
-
-            robot_pose_reset_ptr->publish(init_pose);
-            ros::spinOnce();
-            if(!params::leave_log)
-                ros::Duration(0.5).sleep();
-        }
+        parse_from_input_file(data_file, data_ind, mo_list, robots, delivery_table, delivery_list);
     }
 
     // save initital mo_list
     std::vector<movableObject> initMOList(mo_list);
     // init nameMatcher
     //NameMatcher initNameMatcher(mo_list);
-
     // list of each delivery set
     deliveryContextSet deliverySets;
-
     std::vector<movableObject> delivered_obs;
-
-    draw_obstacles(initMOList, object_marker_pub_ptr);
-    draw_texts(initMOList,text_pub_ptr);
-    draw_deliveries(delivery_list,delivery_marker_pub_ptr);
-    visualize_workspace_boundary(params::map_max_x, params::map_max_y, boundary_pub_ptr);
     // store failed paths
     std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>> failed_paths;
     // init failed paths map
     for(auto& it : initMOList)
         failed_paths.insert({it.get_name(),{}});
-    
 
     // time measurements
     stopWatchSet timeWatches;
     /////////////////////////////////////////////
     stopWatch time_plan("All-planning", measurement_type::allPlan);
-
+    ///////////////////////////////////////////////
+#pragma endregion initialize_essential_data
+    
+    // initial visualization on RViz
+    init_visualization(initMOList, delivery_list);
+   
     /////////////// loop starts ///////////////
     reloPlanResult reloResult = reloLoop(obs, mo_list, delivered_obs, env, params::map_max_x, params::map_max_y, gPtr, edgeMatcher, timeWatches.watches, 
             delivery_list, delivery_table, deliverySets.delivery_contexts, robots, failed_paths);
@@ -379,25 +438,8 @@ int main(int argc, char **argv)
     //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, failed_paths, 10);
 
     if(!params::leave_log)
-    {
-        while(ros::ok())
-        {
-            // visualize movable obstacles
-            auto mo_vis = draw_obstacles(initMOList, object_marker_pub_ptr);
-            // visualize edge paths
-            auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
-            // visualize delivery locations
-            auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
-            // visualize object names
-            auto vis_names_msg = draw_texts(initMOList,text_pub_ptr);
-            // publish final path once
-            test_path_pub_ptr->publish(*navPath_ptr); 
-
-            ros::spinOnce();
-            ros::Duration(0.5).sleep();
-                
-        }
-    }
+        vis_loop(initMOList, edgeMatcher, env, failed_paths, delivery_list, navPath_ptr);
+    
     else
         ros::Duration(0.01).sleep();
 
