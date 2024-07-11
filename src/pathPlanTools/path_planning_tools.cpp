@@ -15,19 +15,31 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
     if(!start_valid)
     {
         PlanResult<State, Action, double> solution;
-        std::cout << "\033[1m\033[31m Start not valid \033[0m\n";
-        std::cout << "start: (" << start.x << ", " << start.y << ", " << start.yaw << ")\n";
+        //std::cout << "\033[1m\033[31m Start not valid \033[0m\n";
+        //std::cout << "start: (" << start.x << ", " << start.y << ", " << start.yaw << ")\n";
         solution.cost = -1;
         return std::make_shared<PlanResult<State, Action, double>>(solution); 
     }
     else if(!goal_valid)
     {
         PlanResult<State, Action, double> solution;
-        std::cout << "\033[1m\033[31m Target not valid \033[0m\n";
-        std::cout << "target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
+        //std::cout << "\033[1m\033[31m Target not valid \033[0m\n";
+        //std::cout << "target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
         solution.cost = -1;
         return std::make_shared<PlanResult<State, Action, double>>(solution); 
 
+    }
+
+    // if start and goal are the same, return empty path with success
+    if(start == goal_in)
+    {
+        PlanResult<State, Action, double> solution;
+        solution.states.clear();
+        solution.actions.clear();
+        //std::cout << "\033[1m\033[31m Target not valid \033[0m\n";
+        //std::cout << "target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
+        solution.cost = 0;
+        return std::make_shared<PlanResult<State, Action, double>>(solution); 
     }
 
     // negate yaw for hybrid astar

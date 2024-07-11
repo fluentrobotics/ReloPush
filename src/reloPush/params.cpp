@@ -11,7 +11,7 @@ namespace params
     int post_push_ind = -4; // ind
 
     const bool use_mocap = false; //todo: parse as a parameter
-    const bool use_testdata = true;
+    const bool use_testdata = false; //use file to initialize planning
     const bool reset_robot_pose = true;
 
     const bool print_graph = false;

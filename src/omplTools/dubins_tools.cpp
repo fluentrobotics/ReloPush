@@ -91,7 +91,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
 }
 
 
-reloDubinsPath findDubins(State &start, State &goal, double turning_radius)
+reloDubinsPath findDubins(State &start, State &goal, double turning_radius, bool print_type)
 {
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
@@ -108,28 +108,32 @@ reloDubinsPath findDubins(State &start, State &goal, double turning_radius)
     dubinsStart->setXY(start.x, start.y);
     dubinsStart->setYaw(-start.yaw);
 
-    for (auto pathidx = 0; pathidx < 3; pathidx++)
+    if(print_type)
     {
-        switch (dubinsPath.omplDubins.type_[pathidx])
+        for (auto pathidx = 0; pathidx < 3; pathidx++)
         {
-            case 0:  // DUBINS_LEFT
-                std::cout << "Left" << std::endl;
-                break;
-            case 1:  // DUBINS_STRAIGHT
-                std::cout << "Straight" << std::endl;
-                break;
-            case 2:  // DUBINS_RIGHT
-                std::cout << "Right" << std::endl;
-                break;
-            default:
-                std::cout << "\033[1m\033[31m"
-                          << "Warning: Receive unknown DubinsPath type"
-                          << "\033[0m\n";
-                break;
+            switch (dubinsPath.omplDubins.type_[pathidx])
+            {
+                case 0:  // DUBINS_LEFT
+                    std::cout << "Left" << std::endl;
+                    break;
+                case 1:  // DUBINS_STRAIGHT
+                    std::cout << "Straight" << std::endl;
+                    break;
+                case 2:  // DUBINS_RIGHT
+                    std::cout << "Right" << std::endl;
+                    break;
+                default:
+                    std::cout << "\033[1m\033[31m"
+                            << "Warning: Receive unknown DubinsPath type"
+                            << "\033[0m\n";
+                    break;
+            }
+            std::cout << fabs(dubinsPath.omplDubins.length_[pathidx]) << std::endl;
         }
-        std::cout << fabs(dubinsPath.omplDubins.length_[pathidx]) << std::endl;
     }
 
+/*
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
@@ -146,6 +150,7 @@ reloDubinsPath findDubins(State &start, State &goal, double turning_radius)
 
         std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
     }
+    */
 
     return dubinsPath;
 }

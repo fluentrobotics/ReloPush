@@ -88,7 +88,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
                        OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius);
 
 
-reloDubinsPath findDubins(State &start, State &goal, double turning_radius = 1.0);
+reloDubinsPath findDubins(State &start, State &goal, double turning_radius = 1.0, bool print_type = false);
 
 // Function to transform a point from the global frame to the robot's frame
 Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, double robot_y);

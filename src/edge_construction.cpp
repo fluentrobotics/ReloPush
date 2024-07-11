@@ -63,22 +63,22 @@ stateValidity check_validity_by_interpolation(OmplState* dubinsStart, OmplState*
 ** output: dubinsStart, interState
 */
 void init_dubins_state(float turning_radius, StatePtr pivot_state,
-                       ompl::base::DubinsStateSpace& dubinsSpace, OmplState* dubinsStart, OmplState* interState)
+                       ompl::base::DubinsStateSpace& dubinsSpace, OmplState* dubinsStart)
 {
     // Allocate and initialize the starting state
-    dubinsStart = (OmplState *)dubinsSpace.allocState();
+    
     dubinsStart->setXY(pivot_state->x, pivot_state->y);
     dubinsStart->setYaw(pivot_state->yaw);
     
     // Allocate and initialize the intermediate state
-    interState = (OmplState *)dubinsSpace.allocState();
+    //interState = (OmplState *)dubinsSpace.allocState();
 }
 
 stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
                     size_t n, size_t m, std::pair<pathType,reloDubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
 {
-    ompl::base::DubinsStateSpace dubinsSpace(turning_radius); OmplState* dubinsStart, *interState = nullptr;
-    init_dubins_state(turning_radius, pivot_state, dubinsSpace, dubinsStart, interState);
+    ompl::base::DubinsStateSpace dubinsSpace(turning_radius); OmplState* dubinsStart = (OmplState *)dubinsSpace.allocState(), *interState = (OmplState *)dubinsSpace.allocState();
+    init_dubins_state(turning_radius, pivot_state, dubinsSpace, dubinsStart);
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
     size_t num_pts = static_cast<int>(dubins_res.second.lengthCost()/(0.1*0.5)); //todo: get resolution as a param
@@ -113,8 +113,8 @@ stateValidity check_collision(std::vector<movableObject>& mo_list, StatePtr pivo
 stateValidity check_collision(movableObject fromObj, movableObject toObj, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
                     std::pair<pathType,reloDubinsPath> dubins_res, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
 {
-    ompl::base::DubinsStateSpace dubinsSpace(turning_radius); OmplState* dubinsStart, *interState = nullptr;
-    init_dubins_state(turning_radius, pivot_state, dubinsSpace, dubinsStart, interState);
+    ompl::base::DubinsStateSpace dubinsSpace(turning_radius); OmplState* dubinsStart = (OmplState *)dubinsSpace.allocState(), *interState = (OmplState *)dubinsSpace.allocState();
+    init_dubins_state(turning_radius, pivot_state, dubinsSpace, dubinsStart);
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
     size_t num_pts = static_cast<int>(dubins_res.second.lengthCost()/(0.1*0.5)); //todo: get resolution as a param
@@ -363,6 +363,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
         // store to failed paths
         failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
     }
+    //todo: add start/goal invalid
     else if(validity == stateValidity::out_of_boundary)
     {
         // check if a long path is possible by relocating the object it
@@ -444,38 +445,44 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 Eigen::Vector2f push_vec = dist_to_push * unit_vecs[push_ind];
 
                 // reloacted object pose
-                State state_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
+                State long_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
 
                 // find new dubins path
-                auto new_dubins_res = is_good_path(state_thres,*target_state,turning_radius);
+                auto new_dubins_res = is_good_path(long_thres,*target_state,turning_radius);
 
                 // check if the path is valid
-                //auto is_valid = env.stateValid(state_thres);
-                auto chk = check_collision(fromObj, toObj, std::make_shared<State>(state_thres), pivot_vertex, state_ind, new_dubins_res, 
+                //auto is_valid = env.stateValid(long_thres);
+                auto chk = check_collision(fromObj, toObj, std::make_shared<State>(long_thres), pivot_vertex, state_ind, new_dubins_res, 
                                             env, max_x, max_y, turning_radius, is_delivery);
 
                 // check if the state is valid
-                auto is_valid = env.stateValid(state_thres);
+                auto is_valid = env.stateValid(long_thres);
 
                 // check if prepush is valid
-                State new_prepush = State(state_thres.x,state_thres.y,pivot_state->yaw);
-                auto is_pre_push_valid = env.stateValid(find_pre_push(new_prepush));
+                State new_prepose = State(long_thres.x,long_thres.y,pivot_state->yaw);
+                State new_prepush = find_pre_push(new_prepose); 
 
-                // check there is a path connecting preRelo to new pre-push
+                //for test only. not part of the algorithm
+                //auto test = env.stateValid(new_prepush);
+
+                auto is_pre_push_valid = env.stateValid(new_prepush);
+
+                // check there is a path connecting relocation post-push to new pre-push
                 // add/remove virtual obstacles
                 bool is_path_to_prepush_valid = false;
                 env.remove_obs(*pivot_state);
                 // relocated
-                env.add_obs(state_thres);
+                env.add_obs(long_thres);
 
-                State arrivalState(state_thres.x,state_thres.y,yaw);
-                auto plan_res =planHybridAstar(find_pre_push(arrivalState), new_prepush, env, false);
+                State arrivalState(long_thres.x,long_thres.y,yaw);
+                State relocation_postpush = find_pre_push(arrivalState);
+                auto plan_res =planHybridAstar(relocation_postpush, new_prepush, env, false);
                 if(plan_res->success)
-                is_path_to_prepush_valid = true;
+                    is_path_to_prepush_valid = true;
 
                 // revert obstacle
                 env.add_obs(*pivot_state);
-                env.remove_obs(state_thres);
+                env.remove_obs(long_thres);
 
                 // if yes, go with it. if not, try next best
                 if(chk == stateValidity::valid && is_valid && is_pre_push_valid && is_path_to_prepush_valid)
@@ -488,10 +495,10 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     //preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
 
                     // find dubins
-                    auto dubins_pre = findDubins(*pivot_state,state_thres,turning_radius);
+                    auto dubins_pre = findDubins(*pivot_state,long_thres,turning_radius);
 
                     State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
-                    preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,plan_res);
+                    preReloPath prePath = preReloPath(prePath_start,long_thres,dubins_pre,plan_res);
 
                     // cost for pre-relocations
                     float pre_cost=0;
