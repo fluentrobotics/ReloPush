@@ -24,6 +24,7 @@ namespace params
     extern int leave_log;
     extern bool print_log;
     extern bool use_better_path;
+    extern bool print_final_path;
 }
 
 #endif

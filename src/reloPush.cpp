@@ -447,6 +447,14 @@ int main(int argc, char **argv)
     // generate final navigation path
     statePath final_path = deliverySets.serializePath();
     auto navPath_ptr = statePath_to_navPath(final_path);
+
+    if(params::print_final_path)
+    {
+        std::cout << "== Final Path ==" << std::endl;
+        for(auto& p : final_path)
+            std::cout << p.x << "," << p.y << "," << p.yaw << std::endl;
+    }
+
     //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, failed_paths, 10);
 
     if(!params::leave_log)

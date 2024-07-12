@@ -32,8 +32,10 @@ public:
     reloDubinsPath(int i)
     {}
 
-    reloDubinsPath(dubinsPath& omplDubinsPath) : omplDubins(omplDubinsPath)
-    {}
+    reloDubinsPath(dubinsPath& omplDubinsPath, float r) : omplDubins(omplDubinsPath)
+    {
+        turning_rad=r;
+    }
 
     reloDubinsPath(const ompl::base::DubinsStateSpace::DubinsPathSegmentType *type = ompl::base::DubinsStateSpace::dubinsPathType[0],
                          double t = 0., double p = std::numeric_limits<double>::max(), double q = 0., float r=1.0)

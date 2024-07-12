@@ -348,12 +348,12 @@ void init_movable_objects(std::vector<movableObject>& mo_list, int num_push_side
     //mo_list.push_back(movableObject(1,3.5,0,"b3",num_push_sides));
 
     /* 3 obs 0 relo case */
-    //mo_list.push_back(movableObject(1,1.5,0,"b1",num_push_sides));
-    //mo_list.push_back(movableObject(1.4,2.3,0,"b2",num_push_sides));
-    //mo_list.push_back(movableObject(1.2,3.1,0,"b3",num_push_sides));
+    mo_list.push_back(movableObject(1,1.5,0,"b1",num_push_sides));
+    mo_list.push_back(movableObject(1.4,2.3,0,"b2",num_push_sides));
+    mo_list.push_back(movableObject(1.2,3.1,0,"b3",num_push_sides));
 
     // pre-reloc
-    mo_list.push_back(movableObject(2,2.5,0,"b3",num_push_sides));
+    //mo_list.push_back(movableObject(2,2.5,0,"b3",num_push_sides));
 
     /* M */
     //mo_list.push_back(movableObject(0.8,4,0,"b1",num_push_sides));
@@ -408,8 +408,8 @@ std::unordered_map<std::string,std::string> init_delivery_table(std::vector<mova
     //delivery_list.push_back(movableObject(3,3.5,0,"d3",num_push_sides,gPtr));
 
     /* 3 obs 0 relo case */
-    //delivery_list.push_back(movableObject(3.6,1.5,0,"d1",num_push_sides,gPtr));
-    //delivery_list.push_back(movableObject(3.8,2.3,0,"d2",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(3.6,1.5,0,"d1",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(3.8,2.3,0,"d2",num_push_sides,gPtr));
     delivery_list.push_back(movableObject(3.4,3.1,0,"d3",num_push_sides,gPtr));
 
     /* M */
@@ -426,9 +426,9 @@ std::unordered_map<std::string,std::string> init_delivery_table(std::vector<mova
     // assignment table. object -> delivery
     std::unordered_map<std::string,std::string> delivery_table;
     //delivery_table.insert({"b2","d2"});
-    //delivery_table.insert({"b1","d1"});
-    //delivery_table.insert({"b2","d2"});
-    delivery_table.insert({"b3","d3"});
+    delivery_table.insert({"b1","d2"});
+    delivery_table.insert({"b2","d3"});
+    delivery_table.insert({"b3","d1"});
     //delivery_table.insert({"b4","d4"});
     //delivery_table.insert({"b5","d5"});
     //delivery_table.insert({"b6","d6"});
@@ -515,11 +515,11 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
         //robots.push_back(State(0.3, 1, -1*M_PI/2));
         //robots.push_back(State(2, 2.25, 0));
         
-        //robots.push_back(State(2, 2.5, M_PI/2));
+        robots.push_back(State(2, 2.5, M_PI/2));
         
         //robots.push_back(State(5, 3, M_PI/2));
 
-        robots.push_back(State(1,2.5,M_PI/2));
+        //robots.push_back(State(1,2.5,M_PI/2));
     }
     else
     {

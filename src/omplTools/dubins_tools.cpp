@@ -97,13 +97,20 @@ reloDubinsPath findDubins(State &start, State &goal, double turning_radius, bool
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
     OmplState *dubinsEnd = (OmplState *)dubinsSpace.allocState();
     dubinsStart->setXY(start.x, start.y);
-    dubinsStart->setYaw(-start.yaw);
+    //dubinsStart->setYaw(-start.yaw);
+    dubinsStart->setYaw(jeeho::convertEulerRange_to_2pi(start.yaw));
     dubinsEnd->setXY(goal.x, goal.y);
-    dubinsEnd->setYaw(-goal.yaw);
+    //dubinsEnd->setYaw(-goal.yaw);
+    dubinsEnd->setYaw(jeeho::convertEulerRange_to_2pi(goal.yaw));
+
+    //for debug
+    auto xx = dubinsEnd->getX();
+    auto yy = dubinsEnd->getY();
+
     ompl::base::DubinsStateSpace::DubinsPath dPath = dubinsSpace.dubins(dubinsStart, dubinsEnd);
 
     // inherited class
-    reloDubinsPath dubinsPath(dPath);
+    reloDubinsPath dubinsPath(dPath,turning_radius);
 
     dubinsStart->setXY(start.x, start.y);
     dubinsStart->setYaw(-start.yaw);
