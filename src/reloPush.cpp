@@ -77,6 +77,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
     std::vector<size_t> temp_relocs(0);
     std::vector<std::string> deliv_seq(0);
 
+    // count number of pre-relocations
+    size_t count_pre_relocs = 0;
+
     while(mo_list.size()>0)
     {
         // set static obstacles from movable objects
@@ -166,12 +169,18 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         // add to num of reloc
         temp_relocs.push_back(reloc_objects.size());
 
+        // count number of pre-relocations
+        size_t num_prereloc = 0;
+
         stopWatch time_path_gen_push_path("push-path", measurement_type::pathPlan);
         // path segments for relocation
         // final pushing
-        auto push_path = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr);
+        auto push_path = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc);
         time_path_gen_push_path.stop();
         time_watches.push_back(time_path_gen_push_path);
+
+        // count
+        count_pre_relocs += num_prereloc;
 
         // relocation paths
         pathsPtr relo_paths;
@@ -237,7 +246,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         time_watches.push_back(time_update);    
     }
 
-    return reloPlanResult(true, std::accumulate(temp_relocs.begin(), temp_relocs.end(), 0), deliv_seq);
+    return reloPlanResult(true, std::accumulate(temp_relocs.begin(), temp_relocs.end(), 0),count_pre_relocs, deliv_seq);
 }
 
 void init_visualization(std::vector<movableObject>& initMOList, std::vector<movableObject>& delivery_list)
@@ -384,9 +393,7 @@ int main(int argc, char **argv)
         // make delivery table
         delivery_table = init_delivery_table(delivery_list,mo_list,env,edgeMatcher,gPtr,num_push_sides);
     }
-    else
-    {
-        // parse from input file
+    else{ // parse from input file
         parse_from_input_file(data_file, data_ind, mo_list, robots, delivery_table, delivery_list);
     }
 
@@ -409,7 +416,8 @@ int main(int argc, char **argv)
     stopWatch time_plan("All-planning", measurement_type::allPlan);
     ///////////////////////////////////////////////
 #pragma endregion initialize_essential_data
-    
+
+
     // initial visualization on RViz
     init_visualization(initMOList, delivery_list);
    
@@ -424,6 +432,9 @@ int main(int argc, char **argv)
 
     // print measurements
     //timeWatches.print();
+
+        // print results
+    std::cout << "Pre-relocations: " << reloResult.num_of_prereloc << std::endl;
 
     // log
     if(params::leave_log == 1)

@@ -495,22 +495,25 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     //preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
 
                     // find dubins
-                    auto dubins_pre = findDubins(*pivot_state,long_thres,turning_radius);
+                    State preRelocStart(pivot_state->x, pivot_state->y, arrivalState.yaw);
+                    //State preRelocStart_prepush = find_pre_push(preRelocStart);
+                    auto dubins_pre = findDubins(preRelocStart,arrivalState,turning_radius);
 
-                    State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
-                    preReloPath prePath = preReloPath(prePath_start,long_thres,dubins_pre,plan_res);
+                    // State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
+                    preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,plan_res);
+                    preRelocs.push_back(prePath);
 
                     // cost for pre-relocations
                     float pre_cost=0;
                     for(auto& it : preRelocs)
-                        pre_cost += sqrtf(powf(it.preReloDubins.targetState.x - it.preReloDubins.startState.x,2) + powf(it.preReloDubins.targetState.y - it.preReloDubins.startState.y,2));
+                        pre_cost += sqrtf(powf(it.preReloDubins.targetState.x - it.preReloDubins.startState.x,2) + powf(it.preReloDubins.targetState.y - it.preReloDubins.startState.y,2)); // assuming straight push per action
 
                     Edge e;
                     bool succ;
                     std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, new_dubins_res.second.lengthCost() + pre_cost, *gPtr);
                     // add to edge-path matcher
                     edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,new_dubins_res.second,
-                                        preRelocs,pathType::smallLP,e,gPtr));
+                                        preRelocs,new_dubins_res.first,e,gPtr));
 
                     break;
                 }

@@ -46,17 +46,19 @@ typedef visualization_msgs::MarkerArray vMArray;
 
 struct reloPlanResult{
     bool is_succ;
-    size_t num_of_reloc; //number of temp reloc
+    size_t num_of_reloc; //number of temp relocation (of other objects blocking paths)
+    size_t num_of_prereloc; //number of pre-relocation (of delivering object)
     std::vector<std::string> delivery_sequence;
 
     reloPlanResult(bool is_success) : is_succ(is_success)
     {
         num_of_reloc = 0;
+        num_of_prereloc = 0;
         delivery_sequence.resize(0);
     }
 
-    reloPlanResult(bool is_success, size_t num_reloc, std::vector<std::string>& d_seq) 
-    : is_succ(is_success), num_of_reloc(num_reloc), delivery_sequence(d_seq)
+    reloPlanResult(bool is_success, size_t num_reloc, size_t num_prereloc, std::vector<std::string>& d_seq) 
+    : is_succ(is_success), num_of_reloc(num_reloc), num_of_prereloc(num_prereloc), delivery_sequence(d_seq)
     {}
 };
 
@@ -342,13 +344,16 @@ void init_movable_objects(std::vector<movableObject>& mo_list, int num_push_side
     */
 
     /* 2 obs 1 relo case */
-    mo_list.push_back(movableObject(2.2,3.5,0,"b1",num_push_sides));
+    //mo_list.push_back(movableObject(2.2,3.5,0,"b1",num_push_sides));
     //mo_list.push_back(movableObject(1,3.5,0,"b3",num_push_sides));
 
     /* 3 obs 0 relo case */
     //mo_list.push_back(movableObject(1,1.5,0,"b1",num_push_sides));
     //mo_list.push_back(movableObject(1.4,2.3,0,"b2",num_push_sides));
     //mo_list.push_back(movableObject(1.2,3.1,0,"b3",num_push_sides));
+
+    // pre-reloc
+    mo_list.push_back(movableObject(2,2.5,0,"b3",num_push_sides));
 
     /* M */
     //mo_list.push_back(movableObject(0.8,4,0,"b1",num_push_sides));
@@ -399,13 +404,13 @@ std::unordered_map<std::string,std::string> init_delivery_table(std::vector<mova
                     graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr, int num_push_sides = 4)
 {
     /* 2 obs 1 relo case */
-    delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
+    //delivery_list.push_back(movableObject(0,0,0,"d1",num_push_sides,gPtr));
     //delivery_list.push_back(movableObject(3,3.5,0,"d3",num_push_sides,gPtr));
 
     /* 3 obs 0 relo case */
     //delivery_list.push_back(movableObject(3.6,1.5,0,"d1",num_push_sides,gPtr));
     //delivery_list.push_back(movableObject(3.8,2.3,0,"d2",num_push_sides,gPtr));
-    //delivery_list.push_back(movableObject(3.4,3.1,0,"d3",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(3.4,3.1,0,"d3",num_push_sides,gPtr));
 
     /* M */
     //delivery_list.push_back(movableObject(0.8,1.6,0,"d1",num_push_sides,gPtr));
@@ -421,9 +426,9 @@ std::unordered_map<std::string,std::string> init_delivery_table(std::vector<mova
     // assignment table. object -> delivery
     std::unordered_map<std::string,std::string> delivery_table;
     //delivery_table.insert({"b2","d2"});
-    delivery_table.insert({"b1","d1"});
+    //delivery_table.insert({"b1","d1"});
     //delivery_table.insert({"b2","d2"});
-    //delivery_table.insert({"b3","d3"});
+    delivery_table.insert({"b3","d3"});
     //delivery_table.insert({"b4","d4"});
     //delivery_table.insert({"b5","d5"});
     //delivery_table.insert({"b6","d6"});
@@ -509,8 +514,12 @@ void init_robots(std::vector<State>& robots, ros::NodeHandle& nh,bool use_mocap 
     {
         //robots.push_back(State(0.3, 1, -1*M_PI/2));
         //robots.push_back(State(2, 2.25, 0));
-        robots.push_back(State(2, 2.5, M_PI/2));
+        
+        //robots.push_back(State(2, 2.5, M_PI/2));
+        
         //robots.push_back(State(5, 3, M_PI/2));
+
+        robots.push_back(State(1,2.5,M_PI/2));
     }
     else
     {
@@ -759,9 +768,11 @@ std::pair<pathsPtr, relocationPair_list> find_relo_path(std::vector<State>& push
 }
 
 std::vector<State> get_push_path(std::vector<Vertex>& vertex_path, 
-                                  graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr)
+                                  graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr, size_t& num_prereloc)
 {
     std::vector<State> push_path(0);
+
+    num_prereloc = 0;
 
     // augment dubins path
     // don't do multi-processing
@@ -778,6 +789,8 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
 
         // corresponding path
         auto partial_path_info = edgeMatcher.getPath(edge);
+        // count pre-relocation
+        num_prereloc += partial_path_info.pre_relocations.size();
         //auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
 
         /* hold this modification*/

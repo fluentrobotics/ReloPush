@@ -33,7 +33,7 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
         for (size_t np=0; np<num_pts_pre; np++)
         {            
             //auto start = std::chrono::steady_clock::now();
-            jeeho_interpolate(dubinsStart, pathInfo.path.omplDubins, (double)np / (double)num_pts_pre, interState, &dubinsSpace,
+            jeeho_interpolate(dubinsStart, dubins_pre.omplDubins, (double)np / (double)num_pts_pre, interState, &dubinsSpace,
                             turning_rad);
 
             State tempState(interState->getX(), interState->getY(),interState->getYaw());
@@ -42,6 +42,16 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
             //final_path.push_back(tempState);
             preReloStateVec[np] = tempState;
         }
+
+
+        // for each prerelocation (mostly one)
+        auto path_poses = it.pathToNextPush->getPath(true);
+
+        for(auto& p : path_poses) // todo: use better way to augment vector
+        {
+            preReloStateVec.push_back(p);
+        }
+        
 
         preReloPaths.push_back(preReloStateVec);
     }
@@ -52,6 +62,10 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
     //size_t num_pts = static_cast<size_t>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
 
     State startState = pathInfo.sourceState;
+    if(preReloPaths.size()>0)
+        startState = State(pathInfo.pre_relocations.back().preReloDubins.targetState.x,
+                            pathInfo.pre_relocations.back().preReloDubins.targetState.y,
+                            startState.yaw); // relocated object nominal pose
 
     ompl::base::DubinsStateSpace dubinsSpace(turning_rad);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
@@ -59,7 +73,7 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
     dubinsStart->setYaw(startState.yaw);
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
 
-    std::vector<State> out_vec(num_pts);
+    std::vector<State> main_push_path(num_pts);
 
     // interpolate dubins path
     // Interpolate dubins path to check for collision on grid map
@@ -75,12 +89,24 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
 
         //single_path.poses[np] = one_pose;
         //final_path.push_back(tempState);
-        out_vec[np] = tempState;
+        main_push_path[np] = tempState;
     }
 
     //combine with pre-relocations
+    std::vector<State> out_path(0);
+    for(auto& it : preReloPaths)
+    {
+        // relocation push
+        for(auto& prerelo_wpt : it)
+            out_path.push_back(prerelo_wpt);
+    }
+    for(auto& it : main_push_path)
+    {
+        out_path.push_back(it);
+    }
 
-    return std::make_shared<std::vector<State>>(out_vec);
+
+    return std::make_shared<std::vector<State>>(out_path);
 }
 
 
