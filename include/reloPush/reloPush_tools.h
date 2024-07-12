@@ -780,10 +780,26 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
         auto partial_path_info = edgeMatcher.getPath(edge);
         //auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
 
+        /* hold this modification*/
+        /*
+        // find dubins with pre-push (arrival) as goal
+        // todo: check validity of this arrival pre-push
+        auto arrival_prepush = find_pre_push(partial_path_info.targetState);
+        auto dubins_with_arrival_prepush = findDubins(partial_path_info.sourceState,arrival_prepush,partial_path_info.path.get_turning_radius());
+
+        // update with new dubins path
+        partial_path_info.update_dubins(dubins_with_arrival_prepush);
+        */
+
         // get interpolated list
-        auto interp_list = interpolate_dubins(partial_path_info,Constants::r,0.2f);
+        auto interp_list = interpolate_dubins(partial_path_info, params::interpolation_step);
         
-        push_path.insert(push_path.end(), interp_list->begin(), interp_list->end());
+        // omit last steps for arrival
+        auto last_pose = interp_list->end();
+        if(interp_list->size() > 1) // todo: find this better (i.e. slightly change last pose)
+            last_pose = interp_list->end()-1;
+
+        push_path.insert(push_path.end(), interp_list->begin(), last_pose);
     }    
 
     // add pose-push pose
@@ -791,8 +807,8 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
     State post_push;
     if(push_path.size()>=std::abs(params::post_push_ind))
         post_push = push_path.end()[params::post_push_ind];
-    else
-        post_push = push_path[0];
+    //else
+    //    post_push = push_path[0];
     push_path.push_back(post_push);
 
     //return final_path;
@@ -934,7 +950,7 @@ std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, 
         //auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
 
         // get interpolated list
-        auto interp_list = interpolate_dubins(partial_path_info,Constants::r,0.2f);
+        auto interp_list = interpolate_dubins(partial_path_info, params::interpolation_step);
         final_path.insert(final_path.end(), interp_list->begin(), interp_list->end());
     }    
 

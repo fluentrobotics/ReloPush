@@ -4,8 +4,9 @@
 #include<graphTools/edge_path_info.h>
 
 
-std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo& pathInfo, float turning_rad, float path_resolution=0.1)
+std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo& pathInfo, float path_resolution=0.1)
 {
+    float turning_rad = pathInfo.path.get_turning_radius();
     // augment pre-relocation (relocation to make it LP) first
     // do not multi-process
     

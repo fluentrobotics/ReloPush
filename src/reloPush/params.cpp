@@ -8,7 +8,8 @@ namespace params
     float map_max_x = 4; // m
     float map_max_y = 5.4; // m
 
-    int post_push_ind = -4; // ind
+    int post_push_ind = -2; // ind
+    float interpolation_step = 0.2f;
 
     const bool use_mocap = false; //todo: parse as a parameter
     const bool use_testdata = false; //use file to initialize planning

@@ -30,6 +30,7 @@ namespace graphTools
             //from/to vertex
             vertexPair vertices;
             //from/to states
+            // todo: with reloDubinsPath, these aren't necessary as they are also 'path'
             State sourceState;
             State targetState;
             //dubins set
@@ -45,6 +46,8 @@ namespace graphTools
             EdgePathInfo();
             EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in, Edge edge_in, GraphPtr gPtr);
             EdgePathInfo(vertexPair pair_in, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in);
+
+            void update_dubins(reloDubinsPath& reloDubins);
     };
 
     class EdgeMatcher

@@ -51,6 +51,11 @@ public:
         return static_cast<float>(omplDubins.length()) * turning_rad;
     }
 
+    float get_turning_radius()
+    {
+        return turning_rad;
+    }
+
 private:
     float turning_rad =1.0;
     void set_r(float r){

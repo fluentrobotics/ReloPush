@@ -118,6 +118,15 @@ namespace graphTools
         targetState = target_s;
     }
 
+    //update with new dubins path keeping vertices, path_class and pre_relocations
+    void EdgePathInfo::update_dubins(reloDubinsPath& reloDubins)
+    {
+        cost = reloDubins.lengthCost();
+        sourceState = reloDubins.startState;
+        targetState = reloDubins.targetState;
+        path = reloDubins;
+    }
+
 
     EdgeMatcher::EdgeMatcher() {
         edgeMap.clear();

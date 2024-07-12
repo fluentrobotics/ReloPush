@@ -13,6 +13,7 @@ namespace params
 
     // index of post-push pose from last state of the path
     extern int post_push_ind;
+    extern float interpolation_step;
 
     extern const bool use_mocap; //todo: parse as a parameter
     extern const bool use_testdata;
