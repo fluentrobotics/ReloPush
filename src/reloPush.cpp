@@ -292,9 +292,9 @@ void parse_from_input_file(std::string& data_file, int& data_ind, std::vector<mo
 
 void handle_args(int argc, char **argv, std::string& data_file, int& data_ind)
 {
-    data_ind = 0;
+    data_ind = 21;
     //std::string data_file = "data_3o_2.txt";
-    data_file = "data_4o.txt";
+    data_file = "data_3o_2.txt";
     
     //int leave_log = 1;
     if(argc==4)
