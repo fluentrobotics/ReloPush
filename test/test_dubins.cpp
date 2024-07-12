@@ -122,8 +122,8 @@ ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, d
     dubinsEnd->setXY(goal.x, goal.y);
     dubinsEnd->setYaw(-goal.yaw);
     ompl::base::DubinsStateSpace::DubinsPath dubinsPath = dubinsSpace.dubins(dubinsStart, dubinsEnd);
-    dubinsStart->setXY(start.x, start.y);
-    dubinsStart->setYaw(-start.yaw);
+    //dubinsStart->setXY(start.x, start.y);
+    //dubinsStart->setYaw(-start.yaw);
 
     for (auto pathidx = 0; pathidx < 3; pathidx++)
     {

@@ -26,7 +26,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
                        OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius)
 {
     OmplState *s = space->allocState()->as<OmplState>();
-    double seg = t * path.length()/turning_radius, phi=0, v=0;
+    double seg = t * path.length(), phi=0, v=0;
 
     s->setXY(0,0);
     s->setYaw(from->getYaw());

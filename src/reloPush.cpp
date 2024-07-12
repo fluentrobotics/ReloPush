@@ -24,6 +24,7 @@ ros::Publisher* robot_pose_reset_ptr;
 
 ros::NodeHandle* nh_ptr = nullptr;
 
+/*
 void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivery_list
                         , NameMatcher& nameMatcher, graphTools::EdgeMatcher edgeMatcher, Environment& env, std::shared_ptr<nav_msgs::Path> navPath_ptr,
                          std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, double loop_rate=10)
@@ -64,6 +65,7 @@ void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std:
         r.sleep();
     }
 }
+*/
 
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
                 Environment& env, float map_max_x, float map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
@@ -176,7 +178,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         relocationPair_list relocPair; // for updating movable objects
 
         stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
-        std::tie(relo_paths, relocPair) = find_relo_path(push_path, reloc_objects, env);
+        std::tie(relo_paths, relocPair) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
         time_path_gen_push_path.stop();
         time_watches.push_back(time_path_gen_push_path);
 
@@ -307,6 +309,8 @@ void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& e
               std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,
               std::vector<movableObject>& delivery_list, std::shared_ptr<nav_msgs::Path> navPath_ptr)
 {
+    // publish final path once
+    test_path_pub_ptr->publish(*navPath_ptr);
     while(ros::ok())
     {
         // visualize movable obstacles
@@ -317,8 +321,6 @@ void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& e
         auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
         // visualize object names
         auto vis_names_msg = draw_texts(initMOList,text_pub_ptr);
-        // publish final path once
-        test_path_pub_ptr->publish(*navPath_ptr); 
 
         ros::spinOnce();
         ros::Duration(0.5).sleep();                
@@ -434,7 +436,6 @@ int main(int argc, char **argv)
     // generate final navigation path
     statePath final_path = deliverySets.serializePath();
     auto navPath_ptr = statePath_to_navPath(final_path);
-
     //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, failed_paths, 10);
 
     if(!params::leave_log)
