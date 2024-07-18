@@ -390,7 +390,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     away_flags[s] = std::make_tuple(false,-1,s); // todo: what if it can be pushed far
             }
 
-            float d_current = sqrtf(d_current_sq); // normalized by turning radius
+            float d_current = sqrtf(d_current_sq); // not normalized by turning radius
             // find d_threshold to be a long path
             auto d_thres = get_longpath_d_thres(*pivot_state,*target_state, turning_radius) * 1.001; // tie-break
 
@@ -456,7 +456,11 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                                             env, max_x, max_y, turning_radius, is_delivery);
 
                 // check if the state is valid
+                // take out the object first
+                env.remove_obs(State(fromObj.get_x(),fromObj.get_y(),0));
                 auto is_valid = env.stateValid(long_thres);
+                // put it back to env
+                env.add_obs(State(fromObj.get_x(),fromObj.get_y(),0));
 
                 // check if prepush is valid
                 State new_prepose = State(long_thres.x,long_thres.y,pivot_state->yaw);

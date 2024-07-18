@@ -71,7 +71,8 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 Environment& env, float map_max_x, float map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
                 std::vector<stopWatch>& time_watches, std::vector<movableObject>& delivery_list, 
                 std::unordered_map<std::string,std::string>& delivery_table, 
-                std::vector<std::shared_ptr<deliveryContext>>& delivery_contexts, std::vector<State>& robots, std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths)
+                std::vector<std::shared_ptr<deliveryContext>>& delivery_contexts, std::vector<State>& robots, std::unordered_map<std::string,
+                std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths)
 {
 
     std::vector<size_t> temp_relocs(0);

@@ -176,7 +176,7 @@ Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, d
     return rotationMatrix * point;
 }
 
-void find_alpha_beta(State& s1, State& s2, double& alpha_out, double& beta_out)
+void find_alpha_beta_ompl(State& s1, State& s2, double& alpha_out, double& beta_out)
 {
     double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
     double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
@@ -184,12 +184,13 @@ void find_alpha_beta(State& s1, State& s2, double& alpha_out, double& beta_out)
     alpha_out = fromOMPL::mod2pi(th1 - th), beta_out = fromOMPL::mod2pi(th2 - th);
 }
 
+// returns euclidean distance threshold (not normalized by turning radius)
 float get_longpath_d_thres(State& s1, State& s2, float turning_rad)
 {
-    double alpha, beta;
-    find_alpha_beta(s1,s2,alpha,beta);
+    //double alpha, beta;
+    //find_alpha_beta_ompl(s1,s2,alpha,beta);
 
-    return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta))*turning_rad;
+    return static_cast<float>(fromOMPL::longpath_thres_dist(s1.yaw,s2.yaw))*turning_rad;
 }
 
 std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad, bool use_pre_push_pose)
@@ -199,21 +200,25 @@ std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turn
     //double dx = x2 - x1, dy = y2 - y1, d = sqrt(dx * dx + dy * dy) / turning_rad, th = atan2(dy, dx);
     //double alpha = fromOMPL::mod2pi(th1 - th), beta = fromOMPL::mod2pi(th2 - th);
     
-
-    double alpha, beta;
-    find_alpha_beta(s1,s2,alpha,beta);
+    //OMPL uses slightly different alpha and beta, which lead to different results
+    double a=fromOMPL::mod2pi(s1.yaw), b=fromOMPL::mod2pi(s2.yaw); 
+    //find_alpha_beta(s1,s2,alpha,beta);
     double dx = s2.x - s1.x, dy = s2.y - s1.y, d = sqrt(dx * dx + dy * dy) / turning_rad;
 
     if(use_pre_push_pose)
     {}
 
-    if (d < fromOMPL::DUBINS_EPS && fabs(alpha - beta) < fromOMPL::DUBINS_EPS)
+    // these are as good as same poses
+    if (d < fromOMPL::DUBINS_EPS && fabs(a - b) < fromOMPL::DUBINS_EPS)
         return std::make_pair<pathType,reloDubinsPath>(pathType::none,{ompl::base::DubinsStateSpace::dubinsPathType[0], 0, 0, 0}); //zero dubins path
 
-    alpha = fromOMPL::mod2pi(alpha);
-    beta = fromOMPL::mod2pi(beta);
-    bool is_long = fromOMPL::is_longpath_case(d, alpha, beta); 
+    // alpha = fromOMPL::mod2pi(alpha); // duplicate
+    // beta = fromOMPL::mod2pi(beta); // duplicate
+    bool is_long = fromOMPL::is_longpath_case(d, a, b); 
     
+    double alpha, beta;
+    find_alpha_beta_ompl(s1,s2,alpha,beta); //todo: investigate if OMPL's alpha and beta is needed
+
     if(!is_long) // short-path
     {
         //dubinsPath dubinsSet = fromOMPL::dubins_classification(d, alpha, beta); //path
