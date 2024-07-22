@@ -20,5 +20,5 @@ namespace params
     int leave_log = 0;
     bool print_log = false;
     bool use_better_path = true;
-    bool print_final_path = true;
+    bool print_final_path = false;
 }
