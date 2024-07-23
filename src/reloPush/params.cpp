@@ -12,7 +12,7 @@ namespace params
     float interpolation_step = 0.2f;
 
     const bool use_mocap = false; //todo: parse as a parameter
-    const bool use_testdata = true; //use file to initialize planning
+    const bool use_testdata = false; //use file to initialize planning
     const bool reset_robot_pose = true;
 
     const bool print_graph = false;

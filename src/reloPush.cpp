@@ -139,6 +139,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         stopWatch time_assign("assignment", measurement_type::assign);
         auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
 
+
+        /// remaining ones ////
+
         // find non-inf ind
         int min_list_ind = -1;
         for(int i=0; i<min_list.size(); i++)
@@ -201,8 +204,10 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         if(!reloPush_path.second) // hybrid astar failed
         {
             Color::println("Hybrid Astar Failed", Color::RED, Color::BG_YELLOW);
-            return reloPlanResult(false);
+            return reloPlanResult(false); // todo: don't return unless this is the only one left
         }
+
+        ///////////////////
 
         //auto navPath_ptr = statePath_to_navPath(reloPush_path, use_mocap);
 
