@@ -94,8 +94,7 @@ std::pair<std::vector<State>,bool> iterate_remaining_deliveries(Environment& env
     count_pre_relocs += num_prereloc;
 
     // relocation paths
-    pathsPtr relo_paths;
-    
+    pathsPtr relo_paths;    
 
     stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
     std::tie(relo_paths, relocPair) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
@@ -106,6 +105,8 @@ std::pair<std::vector<State>,bool> iterate_remaining_deliveries(Environment& env
     // combined path for the delivery
     auto reloPush_path = combine_relo_push(push_path, *relo_paths, robots[0], env, reloc_objects);
     time_path_gen_comb_path.stop();
+
+    //iterate until a valid one is found. Fail if all of them are not valid
     
     if(!reloPush_path.second) // hybrid astar failed
     {
@@ -170,6 +171,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         if(params::print_graph)
             print_edges(gPtr);
 
+
         draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
 
         // add deliverries to graph
@@ -216,10 +218,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         relocationPair_list relocPair; // for updating movable objects
         statePath push_path;
         auto reloPush_path = iterate_remaining_deliveries(env, min_list, min_list_ind, push_path, count_pre_relocs, temp_relocs, robots, relocPair, nameMatcher, edgeMatcher, time_watches, gPtr);
-
         
-        
-
         ///////////////////
 
         //auto navPath_ptr = statePath_to_navPath(reloPush_path, use_mocap);

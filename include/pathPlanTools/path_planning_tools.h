@@ -25,6 +25,7 @@
 #include <eigen3/Eigen/Dense>
 #include <fstream>
 #include <iostream>
+
 typedef ompl::base::SE2StateSpace::StateType OmplState;
 typedef boost::geometry::model::d2::point_xy<double> Point;
 typedef boost::geometry::model::segment<Point> Segment;

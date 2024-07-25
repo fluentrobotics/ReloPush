@@ -203,6 +203,7 @@ nav_msgs::Path transformPath(const nav_msgs::Path& input_path, const tf::Transfo
     return output_path;
 }
 
+/// @brief result of dijkstra on graph
 typedef std::shared_ptr<graphPlanResult> graphPlanResultPtr;
 // finds the row/col combination with the minimum cost for each delivery
 std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string,std::string>& delivery_table, NameMatcher& nameMatcher,GraphPtr gPtr)
