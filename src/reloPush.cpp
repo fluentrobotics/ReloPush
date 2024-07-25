@@ -67,6 +67,56 @@ void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std:
 }
 */
 
+std::pair<std::vector<State>,bool> iterate_remaining_deliveries(Environment& env, std::vector<graphPlanResultPtr>& min_list, int& min_list_ind, statePath& push_path,
+                                                                size_t& count_pre_relocs, std::vector<size_t>& temp_relocs, std::vector<State>& robots, relocationPair_list& relocPair,
+                                                                NameMatcher& nameMatcher, graphTools::EdgeMatcher& edgeMatcher,std::vector<stopWatch>& time_watches, GraphPtr gPtr)
+{
+    // traverse on graph
+    pathFinder pf; // todo: make it static
+    // choose delivery with lowest cost       
+    pf.printPath(gPtr, min_list[min_list_ind]->path);
+    //pf.printPath(gPtr, min_list[1]->path);
+    auto reloc_objects = get_intermediate_objects(min_list[min_list_ind]->path, nameMatcher);
+    // add to num of reloc
+    temp_relocs.push_back(reloc_objects.size());
+
+    // count number of pre-relocations
+    size_t num_prereloc = 0;
+
+    stopWatch time_path_gen_push_path("push-path", measurement_type::pathPlan);
+    // path segments for relocation
+    // final pushing
+    push_path = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc);
+    time_path_gen_push_path.stop();
+    time_watches.push_back(time_path_gen_push_path);
+
+    // count
+    count_pre_relocs += num_prereloc;
+
+    // relocation paths
+    pathsPtr relo_paths;
+    
+
+    stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
+    std::tie(relo_paths, relocPair) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
+    time_path_gen_push_path.stop();
+    time_watches.push_back(time_path_gen_push_path);
+
+    stopWatch time_path_gen_comb_path("combine", measurement_type::pathPlan);
+    // combined path for the delivery
+    auto reloPush_path = combine_relo_push(push_path, *relo_paths, robots[0], env, reloc_objects);
+    time_path_gen_comb_path.stop();
+    
+    if(!reloPush_path.second) // hybrid astar failed
+    {
+        Color::println("Hybrid Astar Failed", Color::RED, Color::BG_YELLOW);
+        //return reloPlanResult(false); // todo: don't return unless this is the only one left
+    }
+    time_watches.push_back(time_path_gen_comb_path);
+
+    return reloPush_path;
+}
+
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
                 Environment& env, float map_max_x, float map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
                 std::vector<stopWatch>& time_watches, std::vector<movableObject>& delivery_list, 
@@ -133,16 +183,13 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         if(params::print_graph)
             print_edges(gPtr);
 
-        // traverse on graph
-        pathFinder pf; // todo: make it static
+        
         // find best push traverse for all assignments
         stopWatch time_assign("assignment", measurement_type::assign);
+        // minimum row/col for each remaining delivery
         auto min_list = find_min_cost_seq(delivery_table,nameMatcher,gPtr);
-
-
-        /// remaining ones ////
-
-        // find non-inf ind
+    
+        // find first on-inf ind
         int min_list_ind = -1;
         for(int i=0; i<min_list.size(); i++)
         {
@@ -166,46 +213,12 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         time_assign.stop();
         time_watches.push_back(time_assign);
 
-        // choose delivery with lowest cost       
-        pf.printPath(gPtr, min_list[min_list_ind]->path);
-        //pf.printPath(gPtr, min_list[1]->path);
-        auto reloc_objects = get_intermediate_objects(min_list[min_list_ind]->path, nameMatcher);
-        // add to num of reloc
-        temp_relocs.push_back(reloc_objects.size());
-
-        // count number of pre-relocations
-        size_t num_prereloc = 0;
-
-        stopWatch time_path_gen_push_path("push-path", measurement_type::pathPlan);
-        // path segments for relocation
-        // final pushing
-        auto push_path = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc);
-        time_path_gen_push_path.stop();
-        time_watches.push_back(time_path_gen_push_path);
-
-        // count
-        count_pre_relocs += num_prereloc;
-
-        // relocation paths
-        pathsPtr relo_paths;
         relocationPair_list relocPair; // for updating movable objects
+        statePath push_path;
+        auto reloPush_path = iterate_remaining_deliveries(env, min_list, min_list_ind, push_path, count_pre_relocs, temp_relocs, robots, relocPair, nameMatcher, edgeMatcher, time_watches, gPtr);
 
-        stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
-        std::tie(relo_paths, relocPair) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
-        time_path_gen_push_path.stop();
-        time_watches.push_back(time_path_gen_push_path);
-
-        stopWatch time_path_gen_comb_path("combine", measurement_type::pathPlan);
-        // combined path for the delivery
-        auto reloPush_path = combine_relo_push(push_path, *relo_paths, robots[0], env, reloc_objects);
-        time_path_gen_comb_path.stop();
-        time_watches.push_back(time_path_gen_comb_path);
         
-        if(!reloPush_path.second) // hybrid astar failed
-        {
-            Color::println("Hybrid Astar Failed", Color::RED, Color::BG_YELLOW);
-            return reloPlanResult(false); // todo: don't return unless this is the only one left
-        }
+        
 
         ///////////////////
 
