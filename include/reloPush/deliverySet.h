@@ -8,8 +8,8 @@
 #include <reloPush/movableObject.h>
 
 typedef std::vector<std::pair<std::string, State>> relocationPair_list; //index of the mo_list, new state
-typedef std::shared_ptr<statePath> pathPtr;
-typedef std::shared_ptr<std::vector<statePath>> pathsPtr;
+typedef std::shared_ptr<StatePath> pathPtr;
+typedef std::shared_ptr<std::vector<StatePath>> pathsPtr;
 
 // context of each delivery
 class deliveryContext

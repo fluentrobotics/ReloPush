@@ -42,12 +42,13 @@ class graphPlanResult
         float cost;
         std::vector<Vertex> path;
         std::string object_name;
-        size_t delivery_ind;
+        size_t min_row; // row with min cost
+        size_t min_col;
 
         graphPlanResult()
         {}
-        graphPlanResult(std::string s_in, std::string t_in, float c_in, std::vector<Vertex> p_in, std::string name_in, size_t delivery_obj_ind) 
-        : sourceVertexName(s_in), targetVertexName(t_in), cost(c_in), path(p_in), object_name(name_in), delivery_ind(delivery_obj_ind)
+        graphPlanResult(std::string s_in, std::string t_in, float c_in, std::vector<Vertex> p_in, std::string name_in, size_t delivery_obj_ind, size_t min_col_in) 
+        : sourceVertexName(s_in), targetVertexName(t_in), cost(c_in), path(p_in), object_name(name_in), min_row(delivery_obj_ind), min_col(min_col_in)
         {}
 };
 

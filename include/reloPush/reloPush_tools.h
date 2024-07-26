@@ -43,6 +43,9 @@ extern ros::NodeHandle* nh_ptr;
 
 
 typedef visualization_msgs::MarkerArray vMArray;
+typedef std::unordered_map<std::string,std::string> strMap;
+typedef std::vector<std::vector<std::vector<Vertex>>> VertexPath;
+typedef std::shared_ptr<VertexPath> VertexPathPtr;
 
 struct reloPlanResult{
     bool is_succ;
@@ -60,6 +63,39 @@ struct reloPlanResult{
     reloPlanResult(bool is_success, size_t num_reloc, size_t num_prereloc, std::vector<std::string>& d_seq) 
     : is_succ(is_success), num_of_reloc(num_reloc), num_of_prereloc(num_prereloc), delivery_sequence(d_seq)
     {}
+};
+
+struct ReloPathResult{
+    bool is_succ;
+    movableObjectPtr from_obj;
+    movableObjectPtr to_obj;
+    size_t from_push_ind; // index of pushing orientation of the object
+    size_t to_arrival_ind; // index of arriving orientation of the object
+    StatePathPtr state_path;
+
+    ReloPathResult()
+    {
+        is_succ = false;
+        from_obj = nullptr;
+        to_obj = nullptr;
+        from_push_ind = 99;
+        to_arrival_ind = 99;
+        state_path = nullptr;
+    }
+
+    ReloPathResult(bool is_success, movableObjectPtr from_obj_ptr, movableObjectPtr to_obj_ptr, size_t push_ind, size_t arrival_ind, StatePathPtr path_in) 
+    : is_succ(is_success), from_obj(from_obj_ptr), to_obj(to_obj_ptr), from_push_ind(push_ind), to_arrival_ind(arrival_ind), state_path(path_in)
+    {}
+};
+
+struct ObjectPairPath{
+    movableObjectPtr from_obj = nullptr;
+    movableObjectPtr to_obj = nullptr;
+    VertexPathPtr path = nullptr;
+
+    ObjectPairPath(movableObjectPtr from_obj_ptr, movableObjectPtr to_obj_ptr, VertexPathPtr path_ptr) : from_obj(from_obj_ptr), to_obj(to_obj_ptr), path(path_ptr)
+    {
+    }
 };
 
 void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
@@ -204,7 +240,94 @@ nav_msgs::Path transformPath(const nav_msgs::Path& input_path, const tf::Transfo
 }
 
 /// @brief result of dijkstra on graph
+/// Vertices and paht with cost
 typedef std::shared_ptr<graphPlanResult> graphPlanResultPtr;
+
+typedef std::shared_ptr<Eigen::MatrixXf> MatPtr;
+
+typedef std::pair<MatPtr,ObjectPairPath> ObjectCostMat;
+
+// generate cost matrix of each delivery
+// return: vector of pairs of costmat and vertices pair
+std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, NameMatcher& nameMatcher,GraphPtr gPtr)
+{
+    std::vector<ObjectCostMat> out_mat_vec(0);
+    pathFinder pf;
+
+    //for each entry in delivery table
+    for (auto i = delivery_table.begin(); i != delivery_table.end(); i++)
+    {
+        std::cout << i->first << " -> " << i->second << std::endl;
+        auto pivot_obj = nameMatcher.getObject(i->first);
+        auto target_obj = nameMatcher.getObject(i->second);
+
+        auto pivot_names = pivot_obj->get_vertex_names();
+        auto target_names = target_obj->get_vertex_names();
+
+        const int rows = pivot_obj->get_n_side();
+        const int cols = target_obj->get_n_side();
+
+        // init cost table
+        Eigen::MatrixXf cost_mat(rows,cols);
+        // paths
+        VertexPath paths(rows);
+
+        for(int row=0; row<rows; row++)
+        {
+            paths[row].resize(cols);
+            for(int col=0; col<cols; col++)
+            {                
+                std::string start_name = pivot_names[row]; // by row
+                std::string target_name = target_names[col]; // by col
+
+                auto res = pf.djikstra(gPtr,start_name,target_name);
+
+                paths[row][col] = res.first;
+                cost_mat(row,col) = res.second;
+            }
+        }
+
+        std::cout << cost_mat << std::endl;
+
+        // store in matrix vector
+        ObjectCostMat mat_pair(std::make_shared<Eigen::MatrixXf>(cost_mat),ObjectPairPath(pivot_obj,target_obj,std::make_shared<VertexPath>(paths)));
+        out_mat_vec.push_back(mat_pair);
+    }
+    
+    return out_mat_vec;
+}
+
+// returns a list of min row/col pairs
+std::vector<graphPlanResultPtr> find_min_from_mat(std::vector<ObjectCostMat>& mat_vec)
+{
+    std::vector<graphPlanResultPtr> out_vec(0);
+
+    for(auto& it : mat_vec)
+    {
+        // Find the indices of the smallest element
+        size_t minRow, minCol;
+
+        // for naming purpose
+        auto cost_mat_ptr = it.first;
+        //float minValue = cost_mat.minCoeff(&minRow, &minCol);
+        std::tie(minRow,minCol) = find_min_row_col(*cost_mat_ptr);
+
+        std::cout << "Smallest value: " << (*cost_mat_ptr)(minRow,minCol) << std::endl;
+        if((*cost_mat_ptr)(minRow,minCol)==std::numeric_limits<float>::infinity())
+            Color::println("No path on graph", Color::WARNING, Color::BG_MAGENTA);
+
+        //std::cout << "row: " << minRow << " col: " << minCol << std::endl;
+        else
+            Color::println("This may not be the only smallest value",Color::YELLOW);
+
+        auto pivot_names = it.second.from_obj->get_vertex_names();
+        auto target_names = it.second.to_obj->get_vertex_names();
+
+        graphPlanResult gp(pivot_names[minRow],target_names[minCol],(*cost_mat_ptr)(minRow,minCol),(*it.second.path)[minRow][minCol],it.second.from_obj->get_name(), minRow, minCol);
+        out_vec.push_back(std::make_shared<graphPlanResult>(gp));
+    }
+}
+
 // finds the row/col combination with the minimum cost for each delivery
 std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string,std::string>& delivery_table, NameMatcher& nameMatcher,GraphPtr gPtr)
 {
@@ -259,7 +382,7 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
         else
             Color::println("This may not be the only smallest value",Color::YELLOW);
 
-        graphPlanResult gp(pivot_names[minRow],target_names[minCol],cost_mat(minRow,minCol),paths[minRow][minCol],i->first, minRow);
+        graphPlanResult gp(pivot_names[minRow],target_names[minCol],cost_mat(minRow,minCol),paths[minRow][minCol],i->first, minRow, minCol);
         out_vec.push_back(std::make_shared<graphPlanResult>(gp));
     }
 
@@ -707,7 +830,7 @@ std::pair<pathsPtr, relocationPair_list> find_relo_path(std::vector<State>& push
     Environment temp_env;
     generate_temp_env(env, temp_env, push_path);
 
-    std::vector<statePath> out_paths(relo_list.size());
+    std::vector<StatePath> out_paths(relo_list.size());
 
     // for movable object update
     relocationPair_list object_relocation;
@@ -779,7 +902,7 @@ std::pair<pathsPtr, relocationPair_list> find_relo_path(std::vector<State>& push
         out_paths[m] = std::vector<State>({start_pre_push,goal_pre_push});
     }
 
-    return std::make_pair(std::make_shared<std::vector<statePath>>(out_paths), object_relocation);
+    return std::make_pair(std::make_shared<std::vector<StatePath>>(out_paths), object_relocation);
 }
 
 std::vector<State> get_push_path(std::vector<Vertex>& vertex_path, 

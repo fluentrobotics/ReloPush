@@ -57,7 +57,8 @@ struct State
 
 
 typedef std::shared_ptr<State> StatePtr;
-typedef std::vector<State> statePath;
+typedef std::vector<State> StatePath;
+typedef std::shared_ptr<StatePath> StatePathPtr;
 
 
 #endif
