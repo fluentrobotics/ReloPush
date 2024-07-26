@@ -109,6 +109,8 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
 
     StatePathPtr out_path = nullptr;
 
+    int num_temp_relocs=0, num_pre_relocs=0;
+
     while(true)
     {
         // find best push traverse for all assignments
@@ -121,7 +123,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         std::vector<graphPlanResultPtr> min_list = find_min_from_mat(costMat_vertices_pairs);
         
         // count number of pre-relocations
-        size_t count_pre_relocs = 0;
+        //size_t count_pre_relocs = 0;
 
         // find first on-inf ind
         min_list_ind = find_min_path(min_list); // todo: handle -1
@@ -138,8 +140,9 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         auto reloc_objects = get_intermediate_objects(min_list[min_list_ind]->path, nameMatcher);
 
         // add to num of reloc
-        std::vector<size_t> temp_relocs(0);
-        temp_relocs.push_back(reloc_objects.size()); // todo: fix this
+        //std::vector<size_t> temp_relocs(0);
+        //temp_relocs.push_back(reloc_objects.size()); // todo: fix this
+        int num_tempreloc = static_cast<int>(reloc_objects.size());
 
         // count number of pre-relocations (of the target object)
         size_t num_prereloc = 0;
@@ -152,7 +155,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         //time_watches.push_back(time_path_gen_push_path);
 
         // count
-        count_pre_relocs += num_prereloc;
+        //count_pre_relocs += num_prereloc;
 
         // relocation paths
         pathsPtr relo_paths;    
@@ -188,6 +191,9 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
             min_cost_col = min_list[min_list_ind]->min_col;
             out_path = std::make_shared<StatePath>(reloPush_path.first);
 
+            num_pre_relocs = num_prereloc;
+            num_temp_relocs = num_tempreloc;            
+
             break;
         }
     }
@@ -198,7 +204,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
     auto to_obj = costMat_vertices_pairs[min_list_ind].second.to_obj;
 
     
-    return ReloPathResult(true, from_obj, to_obj, min_cost_row, min_cost_col, out_path);
+    return ReloPathResult(true, from_obj, to_obj, min_cost_row, min_cost_col, out_path, num_temp_relocs, num_pre_relocs);
 }
 
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
@@ -212,7 +218,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
     
     std::vector<std::string> deliv_seq(0);
 
-    
+    std::vector<int> vec_num_interm_relocs(0), vec_num_pre_relocs(0);
 
     while(mo_list.size()>0)
     {
@@ -266,11 +272,10 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         // print edges
         if(params::print_graph)
             print_edges(gPtr);
-
         
         relocationPair_list relocPair; // for updating movable objects
         StatePath push_path;
-        auto reloPush_path = iterate_remaining_deliveries(env, push_path, delivery_table, robots, relocPair, nameMatcher, edgeMatcher, time_watches, gPtr);
+        ReloPathResult reloPush_path = iterate_remaining_deliveries(env, push_path, delivery_table, robots, relocPair, nameMatcher, edgeMatcher, time_watches, gPtr);
         
         ///////////////////
 
@@ -317,9 +322,14 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         //robots[0].yaw *= -1;
         time_update.stop();
         time_watches.push_back(time_update);    
+
+        // count relocations
+        vec_num_interm_relocs.push_back(reloPush_path.num_interm_reloc);
+        vec_num_pre_relocs.push_back(reloPush_path.num_pre_reloc);
     }
 
-    return reloPlanResult(true, std::accumulate(temp_relocs.begin(), temp_relocs.end(), 0),count_pre_relocs, deliv_seq);
+    return reloPlanResult(true, std::accumulate(vec_num_interm_relocs.begin(), vec_num_interm_relocs.end(), 0),
+                            std::accumulate(vec_num_pre_relocs.begin(), vec_num_pre_relocs.end(), 0), deliv_seq);
 }
 
 void init_visualization(std::vector<movableObject>& initMOList, std::vector<movableObject>& delivery_list)

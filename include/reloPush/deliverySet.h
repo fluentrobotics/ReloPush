@@ -45,9 +45,9 @@ class deliveryContextSet
     public:
         std::vector<std::shared_ptr<deliveryContext>> delivery_contexts;
 
-        statePath serializePath()
+        StatePath serializePath()
         {
-            statePath out_path;
+            StatePath out_path;
             for(auto& it : delivery_contexts)
             {
                 for(auto& it2 : *(it->reloPath))

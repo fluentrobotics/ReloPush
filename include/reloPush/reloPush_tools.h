@@ -72,6 +72,8 @@ struct ReloPathResult{
     size_t from_push_ind; // index of pushing orientation of the object
     size_t to_arrival_ind; // index of arriving orientation of the object
     StatePathPtr state_path;
+    int num_interm_reloc; // intermediate relocation of blocking objects
+    int num_pre_reloc; // pre-relocation of the target object
 
     ReloPathResult()
     {
@@ -81,10 +83,12 @@ struct ReloPathResult{
         from_push_ind = 99;
         to_arrival_ind = 99;
         state_path = nullptr;
+        num_interm_reloc = 0;
+        num_pre_reloc = 0;
     }
 
-    ReloPathResult(bool is_success, movableObjectPtr from_obj_ptr, movableObjectPtr to_obj_ptr, size_t push_ind, size_t arrival_ind, StatePathPtr path_in) 
-    : is_succ(is_success), from_obj(from_obj_ptr), to_obj(to_obj_ptr), from_push_ind(push_ind), to_arrival_ind(arrival_ind), state_path(path_in)
+    ReloPathResult(bool is_success, movableObjectPtr from_obj_ptr, movableObjectPtr to_obj_ptr, size_t push_ind, size_t arrival_ind, StatePathPtr path_in, int temp_reloc, int pre_reloc) 
+    : is_succ(is_success), from_obj(from_obj_ptr), to_obj(to_obj_ptr), from_push_ind(push_ind), to_arrival_ind(arrival_ind), state_path(path_in), num_interm_reloc(temp_reloc), num_pre_reloc(pre_reloc)
     {}
 };
 
@@ -251,7 +255,7 @@ typedef std::pair<MatPtr,ObjectPairPath> ObjectCostMat;
 // return: vector of pairs of costmat and vertices pair
 std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, NameMatcher& nameMatcher,GraphPtr gPtr)
 {
-    std::vector<ObjectCostMat> out_mat_vec(0);
+    std::vector<ObjectCostMat> out_mat_vec;
     pathFinder pf;
 
     //for each entry in delivery table
