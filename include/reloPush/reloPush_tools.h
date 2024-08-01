@@ -330,6 +330,8 @@ std::vector<graphPlanResultPtr> find_min_from_mat(std::vector<ObjectCostMat>& ma
         graphPlanResult gp(pivot_names[minRow],target_names[minCol],(*cost_mat_ptr)(minRow,minCol),(*it.second.path)[minRow][minCol],it.second.from_obj->get_name(), minRow, minCol);
         out_vec.push_back(std::make_shared<graphPlanResult>(gp));
     }
+
+    return out_vec;
 }
 
 // finds the row/col combination with the minimum cost for each delivery

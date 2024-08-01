@@ -277,8 +277,12 @@ visualization_msgs::MarkerArray draw_paths(graphTools::EdgeMatcher& edgeMatcher,
     for(auto& it : failed_paths)
     {
         for(auto& it2 : it.second){
+            auto testing_p = it2.second.lengthCost(); //for debug only
+
+            if(it2.second.lengthCost() == std::numeric_limits<float>::infinity())
+                continue;
         
-            size_t num_pts = static_cast<int>(it2.second.lengthCost()/0.1); //todo: get resolution as a param
+            auto num_pts = static_cast<int>(it2.second.lengthCost()/0.1); //todo: get resolution as a param
 
             auto pivot_state = *it2.first;
 
