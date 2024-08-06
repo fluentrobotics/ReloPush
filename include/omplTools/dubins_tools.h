@@ -44,6 +44,13 @@ public:
         turning_rad = r;
     }
 
+    reloDubinsPath(State& start, State& target, const ompl::base::DubinsStateSpace::DubinsPathSegmentType *type = ompl::base::DubinsStateSpace::dubinsPathType[0],
+                         double t = 0., double p = std::numeric_limits<double>::max(), double q = 0., float r=1.0): startState(start), targetState(target)
+    {
+        omplDubins = dubinsPath(type,t,p,q);
+        turning_rad = r;
+    }
+
     reloDubinsPath(State& start, State& target, dubinsPath& dubins_in) : startState(start), targetState(target)
     {
         omplDubins = dubins_in;

@@ -17,6 +17,7 @@ namespace jeeho
             size_t num_relo;
             std::vector<std::string> delivery_sequence;
             float time_graph_plan = 0;
+            float time_graph_const = 0; //graph generation
             float time_path_plan = 0;
             float time_assign = 0;
             float time_total = 0;
@@ -40,6 +41,10 @@ namespace jeeho
                     
                     case measurement_type::assign :
                         time_assign += durationInSeconds;
+                        break;
+
+                    case measurement_type::graphConst :
+                        time_graph_const += durationInSeconds;
                         break;
                     
                     case measurement_type::graphPlan :
@@ -82,7 +87,7 @@ namespace jeeho
                     }
                 }
                 outFile << "\n";
-
+                outFile << "Time Graph Const" << header_delim << time_graph_const << "\n";
                 outFile << "Time Graph Plan" << header_delim << time_graph_plan << "\n";
                 outFile << "Time Path Plan" << header_delim << time_path_plan << "\n";
                 outFile << "Time Assign" << header_delim << time_assign << "\n";

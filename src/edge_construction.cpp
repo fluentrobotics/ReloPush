@@ -155,10 +155,14 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
                                 size_t& state_ind, size_t& n, size_t& m, std::pair<pathType, reloDubinsPath>& dubins_res, Environment& env,
                                 float& max_x, float& max_y, float& turning_radius, GraphPtr gPtr, preRelocList& preRelocs, graphTools::EdgeMatcher& edgeMatcher,
                                 std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,
-                                movableObject& pivot_mo, movableObject& target_mo)
+                                movableObject& pivot_mo, movableObject& target_mo, std::vector<stopWatch>& time_watches)
 {
+
     // check collision
+    stopWatch time_chk_col("chk_col", measurement_type::graphConst);
     auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius);
+    time_chk_col.stop();
+    time_watches.push_back(time_chk_col);
 
     if(validity == stateValidity::valid)
     {
@@ -184,7 +188,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
     else if(validity == stateValidity::out_of_boundary)
     {
         // check if a long path is possible by relocating it
-        
+        stopWatch time_ofb1("ofb1", measurement_type::graphConst);
         auto unit_vecs = pivot_mo.get_push_unitvecs();
 
         float d_current_sq = powf(target_state->x - pivot_state->x,2) + powf(target_state->y - pivot_state->y,2);
@@ -221,6 +225,9 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
         // distance needed (d_thres should be larger than d_current)
         float d_delta = d_thres - d_current;
 
+        time_ofb1.stop();
+        time_watches.push_back(time_ofb1);
+
         // vector with ture only
         std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
         /* it might be a good idea to try all directions */
@@ -241,6 +248,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
         // check if pushing can make if feasible
         for(auto& it : candidates_vec)
         {
+            stopWatch time_ofb2("ofb2", measurement_type::graphConst);
             // how much to push in this direction to meet d_delta
             /// rotate i.r.t. mo
             size_t push_ind = std::get<2>(it);
@@ -273,8 +281,14 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
             // relocated
             env.add_obs(state_thres);
 
+            time_ofb2.stop();
+            time_watches.push_back(time_ofb2);
+
             State arrivalState(state_thres.x,state_thres.y,yaw);
+            stopWatch time_mp("pre_mp", measurement_type::pathPlan);
             auto plan_res = planHybridAstar(find_pre_push(arrivalState), new_prepush, env, false);
+            time_mp.stop();
+            time_watches.push_back(time_mp);
             if(plan_res->success)
                is_path_to_prepush_valid = true;
 
@@ -285,6 +299,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
             // if yes, go with it. if not, try next best
             if(is_valid && is_pre_push_valid && is_path_to_prepush_valid)
             {
+                stopWatch time_pre_valid("pre_valid", measurement_type::graphConst);
                 push_found = true;
                 push_thres = push_vec;
 
@@ -310,6 +325,9 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
                 // add to edge-path matcher
                 edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,state_thres,*target_state,new_dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
 
+                time_pre_valid.stop();
+                time_watches.push_back(time_pre_valid);
+
                 break;
             }
         }   
@@ -333,10 +351,13 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                                 size_t& state_ind, std::pair<pathType, reloDubinsPath>& dubins_res, Environment& env,
                                 float& max_x, float& max_y, float& turning_radius, GraphPtr gPtr, preRelocList& preRelocs, graphTools::EdgeMatcher& edgeMatcher,
                                 std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,
-                                movableObject& pivot_mo, movableObject& target_mo, bool is_delivery = false)
+                                movableObject& pivot_mo, movableObject& target_mo,std::vector<stopWatch>& time_watches, bool is_delivery = false)
 {
     // check collision
+    stopWatch time_chk_col("chk_col", measurement_type::graphConst);
     auto validity = check_collision(fromObj, toObj, pivot_state, pivot_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, is_delivery);
+    time_chk_col.stop();
+    time_watches.push_back(time_chk_col);
 
     // for debug only
     auto name_pivot = graphTools::getVertexName(*pivot_vertex,gPtr);
@@ -366,9 +387,11 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
     //todo: add start/goal invalid
     else if(validity == stateValidity::out_of_boundary)
     {
+        
         // check if a long path is possible by relocating the object it
         if(dubins_res.first == pathType::SP)
         {
+            stopWatch time_ofb1("ofb1", measurement_type::graphConst);
             auto unit_vecs = pivot_mo.get_push_unitvecs();
 
             float d_current_sq = powf(target_state->x - pivot_state->x,2) + powf(target_state->y - pivot_state->y,2);
@@ -405,6 +428,9 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
             // distance needed (d_thres should be larger than d_current)
             float d_delta = d_thres - d_current;
 
+            time_ofb1.stop();
+            time_watches.push_back(time_ofb1);
+
             // vector with ture only
             std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
             /* todo: it might be a good idea to try all directions */
@@ -425,6 +451,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
             // check if pushing can make if feasible
             for(auto& it : candidates_vec)
             {
+                stopWatch time_ofb2("ofb2", measurement_type::graphConst);
                 // how much to push in this direction to meet d_delta
                 /// rotate i.r.t. mo
                 size_t push_ind = std::get<2>(it);
@@ -452,8 +479,12 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
                 // check if the path is valid
                 //auto is_valid = env.stateValid(long_thres);
+                //auto ofb_start = std::chrono::high_resolution_clock::now();
                 auto chk = check_collision(fromObj, toObj, std::make_shared<State>(long_thres), pivot_vertex, state_ind, new_dubins_res, 
                                             env, max_x, max_y, turning_radius, is_delivery);
+                //auto ofb_end = std::chrono::high_resolution_clock::now();
+                //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(ofb_end - ofb_start).count();
+                //std::cout << "OFB: " <<  duration << " us" << std::endl;
 
                 // check if the state is valid
                 // take out the object first
@@ -470,6 +501,9 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 //auto test = env.stateValid(new_prepush);
 
                 auto is_pre_push_valid = env.stateValid(new_prepush);
+                time_ofb2.stop();
+                time_watches.push_back(time_ofb2);
+                
 
                 // check there is a path connecting relocation post-push to new pre-push
                 // add/remove virtual obstacles
@@ -480,17 +514,26 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
                 State arrivalState(long_thres.x,long_thres.y,yaw);
                 State relocation_postpush = find_pre_push(arrivalState);
+                // motion plan
+                stopWatch time_mp("preReloc", measurement_type::pathPlan);
                 auto plan_res =planHybridAstar(relocation_postpush, new_prepush, env, false);
+                time_mp.stop();
+                time_watches.push_back(time_mp);
+                
                 if(plan_res->success)
                     is_path_to_prepush_valid = true;
+                
 
                 // revert obstacle
                 env.add_obs(*pivot_state);
                 env.remove_obs(long_thres);
 
                 // if yes, go with it. if not, try next best
+                
                 if(chk == stateValidity::valid && is_valid && is_pre_push_valid && is_path_to_prepush_valid)
                 {
+                    stopWatch time_pre_valid("pre_valid", measurement_type::graphConst);
+
                     push_found = true;
                     push_thres = push_vec;
 
@@ -519,6 +562,9 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,new_dubins_res.second,
                                         preRelocs,new_dubins_res.first,e,gPtr));
 
+                    time_pre_valid.stop();
+                    time_watches.push_back(time_pre_valid);
+
                     break;
                 }
             }   
@@ -545,6 +591,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 // it is already a long-path
                 
         }
+        
     }
 }
 
@@ -554,7 +601,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
 
 void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius,
-                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths)
+                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, std::vector<stopWatch>& time_watches)
 {
     edgeMatcher.reset();
 
@@ -629,7 +676,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 
                             proposed_edge_construction(pivot_mo,target_mo,pivot_state,target_state,pivot_vertex,target_vertex,
                                                             state_ind,dubins_res,env,max_x,max_y,turning_radius,
-                                                            gPtr,preRelocs,edgeMatcher,failed_paths,pivot_mo,target_mo,false);
+                                                            gPtr,preRelocs,edgeMatcher,failed_paths,pivot_mo,target_mo,time_watches,false);
                         }
                         
 #pragma endregion proposed_path_classification
@@ -675,7 +722,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 
 void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env,
                                  float max_x, float max_y, float turning_radius, graphTools::EdgeMatcher& edgeMatcher,
-                                 std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, bool print_log)
+                                 std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,std::vector<stopWatch>& time_watches, bool print_log)
 {
     // for each delivery location
     for(size_t n=0; n<delivery_list.size(); n++)
@@ -717,8 +764,12 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
 #pragma region proposed_path_classification
                     if(params::use_better_path)
                     {
+                        //auto tstart = std::chrono::high_resolution_clock::now();
                         proposed_edge_construction(pivot_mo, target_mo, pivot_state, target_state, pivot_vertex, target_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, gPtr,
-                                                    preRelocs, edgeMatcher, failed_paths, pivot_mo, target_mo, true);
+                                                    preRelocs, edgeMatcher, failed_paths, pivot_mo, target_mo,time_watches, true);
+                        //auto tend = std::chrono::high_resolution_clock::now();
+                        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(tend - tstart).count();
+                        //std::cout << "propEdge: " <<  duration << " us" << std::endl;
                     }
 #pragma endregion proposed_path_classification
 

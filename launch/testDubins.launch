@@ -1,0 +1,5 @@
+<!-- -*- mode: XML -*- -->
+<launch>
+    <node pkg="reloPush" type="test_dubins" name="test_dubins">
+    </node>
+</launch>

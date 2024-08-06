@@ -171,11 +171,11 @@ int main(int /*argc*/, char ** /*argv*/)
 {
     std::cout << "hi bmo" << std::endl;
     
-    State start(1,1.4, 0);
-    State goal(2,2.5, -1.5708);
+    State start(0.953053,1.5183274745941162, 0);
+    State goal(1.3815808296203613,2.2772977352142334, 0);
 
-    //findDubins(start, goal,1.43061495);
-    findDubins(start, goal,1);
+    findDubins(start, goal,1.43061495);
+  //  findDubins(start, goal,1);
 
 
     return 0;

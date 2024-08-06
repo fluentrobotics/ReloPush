@@ -16,7 +16,7 @@ namespace params
     extern float interpolation_step;
 
     extern const bool use_mocap; //todo: parse as a parameter
-    extern const bool use_testdata;
+    
     extern const bool reset_robot_pose;
 
     extern const bool print_graph;
@@ -25,6 +25,7 @@ namespace params
     extern bool print_log;
     extern bool use_better_path;
     extern bool print_final_path;
+    extern bool use_testdata;
 }
 
 #endif

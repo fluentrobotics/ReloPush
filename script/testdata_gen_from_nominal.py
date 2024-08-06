@@ -197,8 +197,25 @@ dataset_five.d_list = [
     movableObject(0.78, 2.91,0,"d2",4),
     movableObject(1.12, 1.88,0,"d3",4),
     movableObject(0.63, 0.76,0,"d4",4)]
-dataset_five.d_table = {"b1":"d2", "b3":"d1", "b2":"d3", "b4":"d4"} 
+dataset_five.d_table = {"b1":"d2", "b3":"d1", "b2":"d3", "b4":"d4"}
 
+# 5obj
+dataset_five_obj = nominal_dataset("data_5o")
+dataset_five_obj.mo_list = [
+    movableObject(1, 1.5,0,"b1",4),
+    movableObject(1.4, 2.3,0,"b2",4),
+    movableObject(2, 4,0,"b3",4),
+    movableObject(3.4, 2.3,0,"b4",4),
+    movableObject(1.58,4.7,0,"b5",4)
+]
+dataset_five_obj.d_list = [
+    movableObject(3.6,1.5,0,"d1",4),
+    movableObject(3.8,2.3,0,"d2",4),
+    movableObject(3.4,3.1,0,"d3",4),
+    movableObject(2.9,4,3,"d4",4),
+    movableObject(3.8,5,0,"d5",4)
+]
+dataset_five.d_table = {"b1":"d1", "b2":"d2", "b3":"d3", "b4":"d4", "b5":"d5"}
 
 
 
@@ -206,7 +223,8 @@ dataset_five.d_table = {"b1":"d2", "b3":"d1", "b2":"d3", "b4":"d4"}
 #dataset_two.write_to_file()
 #dataset_three.write_to_file()
 #dataset_four.write_to_file()
-dataset_five.write_to_file()
+#dataset_five.write_to_file()
+dataset_five_obj.write_to_file()
 
 #print(dataset_one.add_randomness().serialize())
 print('done')

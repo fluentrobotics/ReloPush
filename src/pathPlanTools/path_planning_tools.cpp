@@ -16,15 +16,15 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
     {
         PlanResult<State, Action, double> solution;
         //std::cout << "\033[1m\033[31m Start not valid \033[0m\n";
-        //std::cout << "start: (" << start.x << ", " << start.y << ", " << start.yaw << ")\n";
+        //std::cout << "start not valid: (" << start.x << ", " << start.y << ", " << start.yaw << ")\n";
         solution.cost = -1;
         return std::make_shared<PlanResult<State, Action, double>>(solution); 
     }
-    else if(!goal_valid)
+    if(!goal_valid)
     {
         PlanResult<State, Action, double> solution;
         //std::cout << "\033[1m\033[31m Target not valid \033[0m\n";
-        //std::cout << "target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
+        //std::cout << "target not valid: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
         solution.cost = -1;
         return std::make_shared<PlanResult<State, Action, double>>(solution); 
 
@@ -55,7 +55,7 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
     if (searchSuccess) {
         if(print_res)
         {
-            std::cout << "\033[1m\033[32m Succesfully find a path! \033[0m\n";
+            std::cout << "\033[1m\033[32m Succesfully found a path! \033[0m\n";
     
             for (auto iter = solution.states.begin(); iter != solution.states.end(); iter++)
             std::cout << iter->first << "," << iter->second << std::endl;
@@ -67,8 +67,8 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
     }
     else {
         //if(print_res)
-            std::cout << "\033[1m\033[31m Fail to find a path \033[0m\n";
-            std::cout << "start: (" << start.x << ", " << start.y << ", " << start.yaw << ") target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
+            //std::cout << "\033[1m\033[31m Failed to find a path \033[0m\n";
+            //std::cout << "start: (" << start.x << ", " << start.y << ", " << start.yaw << ") target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
             solution.cost = -1;
     }
 

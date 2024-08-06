@@ -1,8 +1,11 @@
+#ifndef STOPWATCH_H
+#define STOPWATCH_H
+
 #include <chrono>
 #include <string>
 #include <vector>
 
-enum measurement_type {graphPlan, pathPlan, relocatePlan, assign, allPlan};
+enum measurement_type {graphPlan, graphConst, pathPlan, relocatePlan, assign, allPlan};
 
 class stopWatch
 {
@@ -76,3 +79,5 @@ class stopWatchSet
 			}
 		}
 };
+
+#endif

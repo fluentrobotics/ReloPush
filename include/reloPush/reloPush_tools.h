@@ -479,9 +479,9 @@ void init_movable_objects(std::vector<movableObject>& mo_list, int num_push_side
     //mo_list.push_back(movableObject(1,3.5,0,"b3",num_push_sides));
 
     /* 3 obs 0 relo case */
-    mo_list.push_back(movableObject(1,1.5,0,"b1",num_push_sides));
-    mo_list.push_back(movableObject(1.4,2.3,0,"b2",num_push_sides));
-    mo_list.push_back(movableObject(1.2,3.1,0,"b3",num_push_sides));
+    //mo_list.push_back(movableObject(1,1.5,0,"b1",num_push_sides));
+    //mo_list.push_back(movableObject(1.4,2.3,0,"b2",num_push_sides));
+    //mo_list.push_back(movableObject(1.2,3.1,0,"b3",num_push_sides));
 
     // pre-reloc
     //mo_list.push_back(movableObject(2,2.5,0,"b3",num_push_sides));
@@ -489,9 +489,9 @@ void init_movable_objects(std::vector<movableObject>& mo_list, int num_push_side
     /* 5 obs */
     mo_list.push_back(movableObject(1,1.5,0,"b1",num_push_sides));
     mo_list.push_back(movableObject(1.4,2.3,0,"b2",num_push_sides));
-    mo_list.push_back(movableObject(1.2,3.1,0,"b3",num_push_sides));
+    mo_list.push_back(movableObject(2,4,0,"b3",num_push_sides));
     mo_list.push_back(movableObject(3.4,2.3,0,"b4",num_push_sides));
-    mo_list.push_back(movableObject(4.2,3.1,0,"b5",num_push_sides));
+    mo_list.push_back(movableObject(1.58,4.7,0,"b5",num_push_sides));
 
     /* M */
     //mo_list.push_back(movableObject(0.8,4,0,"b1",num_push_sides));
@@ -533,7 +533,7 @@ std::unordered_map<std::string,std::string> init_delivery_table(std::vector<mova
     delivery_list.push_back(movableObject(3.6,1.5,0,"d1",num_push_sides,gPtr));
     delivery_list.push_back(movableObject(3.8,2.3,0,"d2",num_push_sides,gPtr));
     delivery_list.push_back(movableObject(3.4,3.1,0,"d3",num_push_sides,gPtr));
-    delivery_list.push_back(movableObject(3.6,4,0,"d4",num_push_sides,gPtr));
+    delivery_list.push_back(movableObject(2.9,4,3,"d4",num_push_sides,gPtr));
     delivery_list.push_back(movableObject(3.8,5,0,"d5",num_push_sides,gPtr));
     
     // assignment table. object -> delivery
@@ -587,13 +587,13 @@ void init_static_obstacles(std::unordered_set<State>& obs, std::vector<movableOb
 
 
 void add_delivery_to_graph(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, float max_x, float max_y,
-                    graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, GraphPtr gPtr)
+                    graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, GraphPtr gPtr, std::vector<stopWatch>& time_watches)
 {
     // add delivery verteices
     for(auto& it : delivery_list)
         it.add_to_graph(gPtr);
     // add to graph
-    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r,edgeMatcher, failed_paths);
+    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r,edgeMatcher, failed_paths, time_watches);
     //add to namematcher
     nameMatcher.addVertices(delivery_list);
 }
