@@ -13,6 +13,7 @@
 #include <reloPush/edge_construction.h>
 #include <pathPlanTools/path_planning_tools.h>
 #include <reloPush/logger.h>
+#include <reloPush/data_collector.h> // logger will write file based on info on a data_collector
 #include <graphTools/edge_path_info.h>
 #include <pathPlanTools/dubins_interpolation.h>
 #include <reloPush/deliverySet.h>
@@ -40,6 +41,9 @@ extern ros::Publisher* boundary_pub_ptr;
 extern ros::Publisher* robot_pose_reset_ptr;
 
 extern ros::NodeHandle* nh_ptr;
+
+// global data_collector
+std::shared_ptr<DataCollector> dataCollectorPtr(new DataCollector);
 
 
 typedef visualization_msgs::MarkerArray vMArray;
