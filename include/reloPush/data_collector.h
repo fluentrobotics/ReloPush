@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-enum moveType {pre,temp,final,none}; // push, push, push, non-push
+enum moveType {pre,temp,final,app}; // push, push, push, non-push
 
 class PathInfo
 {
@@ -18,39 +18,15 @@ class PathInfo
     State toPose;
     std::vector<State> path;
 
-    PathInfo()
-    {
-        vertexName = "";
-        fromPose = State();
-        toPose = State();
-        path.clear();
-    }
+    PathInfo();
 
-    PathInfo(std::string vertex_name, moveType path_type, State& from_pose, State& to_pose, std::vector<State>& path_in) 
-    : vertexName(vertex_name), type(path_type), fromPose(from_pose), toPose(to_pose), path(path_in)
-    {}
-
-    bool is_pushing()
-    {
-        if(type == moveType::none)
-            return false;
-        else
-            return true;
-    }
+    PathInfo(std::string vertex_name, moveType path_type, 
+            State& from_pose, State& to_pose, std::vector<State>& path_in);
+    
+    bool is_pushing();
 
     // Sum of euclidean distances between consecutive waypoints
-    float pathLength() 
-    {
-        float totalLength = 0.0;
-
-        for (size_t i = 1; i < path.size(); ++i) {
-            float dx = path[i].x - path[i-1].x;
-            float dy = path[i].y - path[i-1].y;
-            totalLength += std::sqrt(dx * dx + dy * dy);
-        }
-
-        return totalLength;
-    }
+    float pathLength();
     
 };
 
@@ -59,10 +35,7 @@ class PathInfoList
     public:
     std::vector<PathInfo> paths;
 
-    PathInfoList()
-    {paths.clear();}
-
-    
+    PathInfoList();
 };
 
 class DataCollector
@@ -82,5 +55,7 @@ class DataCollector
     {}
 
 };
+
+typedef std::shared_ptr<DataCollector> collectorPtr;
 
 #endif

@@ -596,12 +596,9 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 }
 
 
-
-
-
-
 void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius,
-                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, std::vector<stopWatch>& time_watches)
+                             graphTools::EdgeMatcher& edgeMatcher,std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, 
+                             std::vector<stopWatch>& time_watches)
 {
     edgeMatcher.reset();
 

@@ -4,6 +4,7 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <iostream>
 
 enum measurement_type {graphPlan, graphConst, pathPlan, relocatePlan, assign, allPlan};
 

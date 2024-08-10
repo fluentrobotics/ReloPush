@@ -7,13 +7,16 @@
 #include <reloPush/params.h>
 #include <reloPush/push_pose_tools.h>
 #include <reloPush/stopwatch.h>
+//#include <reloPush/edge_construction.h>
+#include <reloPush/data_collector.h>
 
 #include <tuple>
 #include <algorithm>
 
 namespace reloPush{
     void construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPtr, Environment& env, float max_x, float max_y, float turning_radius, 
-                        graphTools::EdgeMatcher& edgeMatcher, std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,std::vector<stopWatch>& time_watches);
+                        graphTools::EdgeMatcher& edgeMatcher, std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,
+                        std::vector<stopWatch>& time_watches);
     void add_deliveries(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, GraphPtr gPtr, 
                         Environment& env, float max_x, float max_y, float turning_radius, graphTools::EdgeMatcher& edgeMatcher,
                         std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,std::vector<stopWatch>& time_watches, bool print_log = false);

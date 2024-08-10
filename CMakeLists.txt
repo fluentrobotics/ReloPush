@@ -69,6 +69,7 @@ add_executable(
     "src/pathPlanTools/path_planning_tools.cpp"
     "src/reloPush/params.cpp"
     "src/reloPush/push_pose_tools.cpp"
+    "src/reloPush/data_collector.cpp"
     )
 
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES})

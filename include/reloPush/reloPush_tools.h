@@ -42,8 +42,7 @@ extern ros::Publisher* robot_pose_reset_ptr;
 
 extern ros::NodeHandle* nh_ptr;
 
-// global data_collector
-std::shared_ptr<DataCollector> dataCollectorPtr(new DataCollector);
+
 
 
 typedef visualization_msgs::MarkerArray vMArray;
@@ -953,14 +952,14 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
         */
 
         // get interpolated list
-        auto interp_list = interpolate_dubins(partial_path_info, params::interpolation_step);
+        auto interp_path = interpolate_dubins(partial_path_info, params::interpolation_step);
         
         // omit last steps for arrival
-        auto last_pose = interp_list->end();
-        if(interp_list->size() > 1) // todo: find this better (i.e. slightly change last pose)
-            last_pose = interp_list->end()-1;
+        auto last_pose = interp_path->end();
+        if(interp_path->size() > 1) // todo: find this better (i.e. slightly change last pose)
+            last_pose = interp_path->end()-1;
 
-        push_path.insert(push_path.end(), interp_list->begin(), last_pose);
+        push_path.insert(push_path.end(), interp_path->begin(), last_pose);
     }    
 
     // add pose-push pose
