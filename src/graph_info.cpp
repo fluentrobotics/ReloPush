@@ -101,7 +101,8 @@ namespace graphTools
 
     EdgePathInfo::EdgePathInfo() {};
 
-    EdgePathInfo::EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in, Edge edge_in, GraphPtr gPtr) 
+    EdgePathInfo::EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s,
+                                reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in,Edge edge_in, GraphPtr gPtr) 
     : path(path_in), path_class(path_class_in), pre_relocations(pre_relocs)
     {
         vertices = vertexPair(source_v,target_v,edge_in,gPtr);

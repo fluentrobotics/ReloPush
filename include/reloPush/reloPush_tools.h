@@ -77,6 +77,7 @@ struct ReloPathResult{
     StatePathPtr state_path;
     int num_interm_reloc; // intermediate relocation of blocking objects
     int num_pre_reloc; // pre-relocation of the target object
+    PathInfoList pathInfoList; // partial path info to be appended to the final result
 
     ReloPathResult()
     {
@@ -88,10 +89,14 @@ struct ReloPathResult{
         state_path = nullptr;
         num_interm_reloc = 0;
         num_pre_reloc = 0;
+        pathInfoList = PathInfoList();
     }
 
-    ReloPathResult(bool is_success, movableObjectPtr from_obj_ptr, movableObjectPtr to_obj_ptr, size_t push_ind, size_t arrival_ind, StatePathPtr path_in, int temp_reloc, int pre_reloc) 
-    : is_succ(is_success), from_obj(from_obj_ptr), to_obj(to_obj_ptr), from_push_ind(push_ind), to_arrival_ind(arrival_ind), state_path(path_in), num_interm_reloc(temp_reloc), num_pre_reloc(pre_reloc)
+    ReloPathResult(bool is_success, movableObjectPtr from_obj_ptr, movableObjectPtr to_obj_ptr, size_t push_ind,
+                    size_t arrival_ind, StatePathPtr path_in, int temp_reloc, int pre_reloc, PathInfoList& list_in) 
+                    : is_succ(is_success), from_obj(from_obj_ptr), to_obj(to_obj_ptr), 
+                    from_push_ind(push_ind), to_arrival_ind(arrival_ind), 
+                    state_path(path_in), num_interm_reloc(temp_reloc), num_pre_reloc(pre_reloc), pathInfoList(list_in)
     {}
 };
 
@@ -824,11 +829,11 @@ void generate_temp_env(Environment& env_in, Environment& temp_env, std::vector<S
 
 
 
-// relocation path of a cube
+// relocation path of an intermediate object
 // input: pushing path
 //        object to relocate
 //        map with obstacles
-std::pair<pathsPtr, relocationPair_list> find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list, Environment& env)
+std::pair<ReloPathInfoList, StatePathsPtr> find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list, Environment& env)
 {
     // find where to relocate
     // propagate along pushing directions until find one
@@ -840,6 +845,8 @@ std::pair<pathsPtr, relocationPair_list> find_relo_path(std::vector<State>& push
     generate_temp_env(env, temp_env, push_path);
 
     std::vector<StatePath> out_paths(relo_list.size());
+    ReloPathInfoList outInfo;
+    outInfo.reloPathInfoList.resize(relo_list.size());
 
     // for movable object update
     relocationPair_list object_relocation;
@@ -879,7 +886,6 @@ std::pair<pathsPtr, relocationPair_list> find_relo_path(std::vector<State>& push
                 if(temp_env.stateValid(candidates[n],Constants::carWidth,0.3,Constants::LB,Constants::LF) == true) //todo: set better values
                 {
                     valid_vec[n] = true;
-
                     // add break flag
                     valid_position_found = true;
                 }
@@ -909,15 +915,21 @@ std::pair<pathsPtr, relocationPair_list> find_relo_path(std::vector<State>& push
 
         // add this path
         out_paths[m] = std::vector<State>({start_pre_push,goal_pre_push});
+        // add to path info
+        auto path_to_reloc = std::vector<State>({start_pre_push,goal_pre_push});
+        ReloPathInfo p(std::make_shared<std::vector<State>>(path_to_reloc),relo_list[m]->get_name());
+        outInfo.reloPathInfoList[m] = p;
     }
 
-    return std::make_pair(std::make_shared<std::vector<StatePath>>(out_paths), object_relocation);
+    //return std::make_pair(std::make_shared<std::vector<StatePath>>(out_paths), object_relocation);
+    return std::make_pair(outInfo,std::make_shared<std::vector<std::vector<State>>>(out_paths));
 }
 
-std::vector<State> get_push_path(std::vector<Vertex>& vertex_path, 
+std::pair<std::vector<State>,PathInfoList> get_push_path(std::vector<Vertex>& vertex_path, 
                                   graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr, size_t& num_prereloc)
 {
     std::vector<State> push_path(0);
+    PathInfoList plist;
 
     num_prereloc = 0;
 
@@ -951,8 +963,10 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
         partial_path_info.update_dubins(dubins_with_arrival_prepush);
         */
 
-        // get interpolated list
-        auto interp_path = interpolate_dubins(partial_path_info, params::interpolation_step);
+        // get interpolated list (prepath + final path)
+        auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step);
+        auto interp_path = interp_path_pair.first;
+        auto interp_pathinfo = interp_path_pair.second;
         
         // omit last steps for arrival
         auto last_pose = interp_path->end();
@@ -960,6 +974,7 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
             last_pose = interp_path->end()-1;
 
         push_path.insert(push_path.end(), interp_path->begin(), last_pose);
+        plist.append(interp_pathinfo);
     }    
 
     // add pose-push pose
@@ -970,9 +985,10 @@ std::vector<State> get_push_path(std::vector<Vertex>& vertex_path,
     //else
     //    post_push = push_path[0];
     push_path.push_back(post_push);
+    plist.paths.end()->path.push_back(post_push); // add to path info as well
 
-    //return final_path;
-    return push_path;
+    //return final_path, pathinfo list;
+    return std::make_pair(push_path,plist);
 }
 
 std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_path, std::vector<std::vector<State>>& relo_path, State& robot, Environment& env, std::vector<movableObjectPtr>& relo_list)

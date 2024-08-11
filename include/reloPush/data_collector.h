@@ -36,6 +36,8 @@ class PathInfoList
     std::vector<PathInfo> paths;
 
     PathInfoList();
+    void push_back(PathInfo& p_in);
+    void append(PathInfoList& list_in);
 };
 
 class DataCollector
@@ -49,10 +51,12 @@ class DataCollector
     stopWatchSet stopWatches;
     //int num_of_pre_reloc; // relocation of object of relocation
     //int num_of_temp_reloc; // relocation of other blocking objects
-    PathInfo pathInfo;
+    PathInfoList pathInfoList;
 
     DataCollector()
     {}
+
+    void append_pathinfo(PathInfoList& list_in);
 
 };
 

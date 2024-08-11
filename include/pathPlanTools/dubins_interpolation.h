@@ -3,25 +3,27 @@
 
 #include<graphTools/edge_path_info.h>
 
-
-std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo& pathInfo, float path_resolution=0.1)
+// interpolate push paths (approaching path already in edgepath)
+std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(graphTools::EdgePathInfo& edgePathInfo, float path_resolution=0.1)
 {
-    float turning_rad = pathInfo.path.get_turning_radius();
+    float turning_rad = edgePathInfo.path.get_turning_radius();
+    // path info list
+    PathInfoList plist = PathInfoList();
+
     // augment pre-relocation (relocation to make it LP) first
-    // do not multi-process
-    
+    // do not multi-process    
     std::vector<std::vector<State>> preReloPaths(0);
-    for(auto& it : pathInfo.pre_relocations) //first: source second: target
+    for(auto& it : edgePathInfo.pre_relocations) //first: source second: target
     {
         // for each pre-relocation (usually one)
         // find dubins path (intiutively straight)
         auto dubins_pre = findDubins(it.preReloDubins.startState, it.preReloDubins.targetState, turning_rad);
+        
+        //interpolate
+#pragma region interploation_prerelo
         auto l_pre = dubins_pre.lengthCost(); // unit cost * turning rad
         auto num_pts_pre = static_cast<size_t>(l_pre/path_resolution);
-
-        //interpolate
         std::vector<State> preReloStateVec(num_pts_pre);
-
         State startState = it.preReloDubins.startState;
 
         ompl::base::DubinsStateSpace dubinsSpace(turning_rad);
@@ -42,29 +44,35 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
             //final_path.push_back(tempState);
             preReloStateVec[np] = tempState;
         }
+#pragma endregion
 
-
+        // add to path info
+        PathInfo p(edgePathInfo.vertices.getSourceName(),moveType::pre,it.preReloDubins.startState, it.preReloDubins.targetState,preReloStateVec);
+        plist.push_back(p);
         // for each prerelocation (mostly one)
-        auto path_poses = it.pathToNextPush->getPath(true);
+        auto path_poses = it.pathToNextPush->getPath(true); // approach path
+        PathInfo p_app(edgePathInfo.vertices.getSourceName(),moveType::app,it.preReloDubins.startState, it.preReloDubins.targetState,path_poses);
 
         for(auto& p : path_poses) // todo: use better way to augment vector
         {
             preReloStateVec.push_back(p);
         }
-        
 
         preReloPaths.push_back(preReloStateVec);
+        // path info
+        plist.push_back(p);
+        plist.push_back(p_app);        
     }
 
+    State startState = edgePathInfo.sourceState;
+#pragma region interpolation
     // interpolate
-    auto l = pathInfo.path.lengthCost(); // unit cost * turning rad
+    auto l = edgePathInfo.path.lengthCost(); // unit cost * turning rad
     auto num_pts = static_cast<size_t>(l/path_resolution);
     //size_t num_pts = static_cast<size_t>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
-
-    State startState = pathInfo.sourceState;
     if(preReloPaths.size()>0)
-        startState = State(pathInfo.pre_relocations.back().preReloDubins.targetState.x,
-                            pathInfo.pre_relocations.back().preReloDubins.targetState.y,
+        startState = State(edgePathInfo.pre_relocations.back().preReloDubins.targetState.x,
+                            edgePathInfo.pre_relocations.back().preReloDubins.targetState.y,
                             startState.yaw); // relocated object nominal pose
 
     ompl::base::DubinsStateSpace dubinsSpace(turning_rad);
@@ -82,7 +90,7 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
     for (size_t np=0; np<num_pts; np++)
     {            
         //auto start = std::chrono::steady_clock::now();
-        jeeho_interpolate(dubinsStart, pathInfo.path.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
+        jeeho_interpolate(dubinsStart, edgePathInfo.path.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
                         turning_rad);
 
         State tempState(interState->getX(), interState->getY(),interState->getYaw());
@@ -91,6 +99,7 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
         //final_path.push_back(tempState);
         main_push_path[np] = tempState;
     }
+#pragma endregion
 
     //combine with pre-relocations
     std::vector<State> out_path(0);
@@ -105,8 +114,12 @@ std::shared_ptr<std::vector<State>> interpolate_dubins(graphTools::EdgePathInfo&
         out_path.push_back(it);
     }
 
+    // add path info
+    PathInfo p(edgePathInfo.vertices.getSourceName(),moveType::final,edgePathInfo.sourceState,edgePathInfo.targetState,main_push_path);
+    plist.push_back(p);
 
-    return std::make_shared<std::vector<State>>(out_path);
+
+    return std::make_pair(std::make_shared<std::vector<State>>(out_path),plist);
 }
 
 

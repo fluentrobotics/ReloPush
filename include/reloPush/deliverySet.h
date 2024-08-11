@@ -8,8 +8,24 @@
 #include <reloPush/movableObject.h>
 
 typedef std::vector<std::pair<std::string, State>> relocationPair_list; //index of the mo_list, new state
-typedef std::shared_ptr<StatePath> pathPtr;
-typedef std::shared_ptr<std::vector<StatePath>> pathsPtr;
+typedef std::shared_ptr<StatePath> StatePathPtr;
+typedef std::shared_ptr<std::vector<StatePath>> StatePathsPtr;
+
+class ReloPathInfo
+{
+    public:
+    StatePathPtr statePathPtr;
+    std::string vertexName;
+
+    ReloPathInfo(StatePathPtr pathPtr, std::string vName_in) : statePathPtr(pathPtr), vertexName(vName_in)
+    {}
+};
+
+class ReloPathInfoList
+{
+    public:
+    std::vector<ReloPathInfo> reloPathInfoList;
+};
 
 // context of each delivery
 class deliveryContext
@@ -26,11 +42,11 @@ class deliveryContext
         std::string delivery_obj_name;
 
         // relocating path
-        pathPtr reloPath;
+        StatePathPtr reloPath;
 
         deliveryContext(){}
 
-        deliveryContext(std::vector<movableObject>& mo_list_in, relocationPair_list relocPairs_in, std::string delivery_name, pathPtr pathPtr_in)
+        deliveryContext(std::vector<movableObject>& mo_list_in, relocationPair_list relocPairs_in, std::string delivery_name, StatePathPtr pathPtr_in)
         {
             mo_list = std::vector<movableObject>(mo_list_in);
             relocPairs = relocPairs_in;

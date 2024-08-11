@@ -38,3 +38,20 @@ PathInfoList::PathInfoList()
 {
     paths.clear();
 }
+
+void PathInfoList::push_back(PathInfo& p_in)
+{
+    paths.push_back(p_in);
+}
+
+void PathInfoList::append(PathInfoList& list_in)
+{
+    paths.insert(paths.end(), list_in.paths.begin(), list_in.paths.end());
+}
+
+void DataCollector::append_pathinfo(PathInfoList& list_in)
+{
+    pathInfoList.paths.insert(pathInfoList.paths.end(),
+                             list_in.paths.begin(),
+                             list_in.paths.end());
+}

@@ -81,13 +81,13 @@ class preReloPath{
     {
         preReloDubins = reloDubinsPath(0);
     }
-
+    
     preReloPath(State start, State target, reloDubinsPath& dubins_in, std::shared_ptr<PlanResult<State, Action, double>> path_to_next_prePush)
     {
         preReloDubins = dubins_in;
         preReloDubins.startState = start;
         preReloDubins.targetState = target;
-        pathToNextPush = path_to_next_prePush;
+        pathToNextPush = path_to_next_prePush; // approach path
     }
 };
 

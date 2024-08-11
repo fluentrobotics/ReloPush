@@ -114,6 +114,9 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
 
     StatePathPtr out_path = nullptr;
 
+    // path info list
+    PathInfoList pList();
+
     int num_temp_relocs=0, num_pre_relocs=0;
 
     while(true)
@@ -159,7 +162,9 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         //stopWatch time_path_gen_push_path("push-path", measurement_type::pathPlan);
         // path segments for relocation
         // final pushing
-        push_path = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc);
+        auto push_path_pair = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc);
+        auto push_path = push_path_pair.first;
+        auto push_pathinfo = push_path_pair.second;
         //time_path_gen_push_path.stop();
         //time_watches.push_back(time_path_gen_push_path);
 
@@ -167,10 +172,11 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         //count_pre_relocs += num_prereloc;
 
         // relocation paths
-        pathsPtr relo_paths;    
-
+        StatePathsPtr relo_paths;
+        ReloPathInfoList reloPathInfoList;
         stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
-        std::tie(relo_paths, relocPair) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
+        // list of state paths for temporary relocation of intermediate objects
+        std::tie(reloPathInfoList, relo_paths) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
         time_path_gen_relo_path.stop();
         time_watches.push_back(time_path_gen_relo_path);
 
