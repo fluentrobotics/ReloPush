@@ -1,8 +1,9 @@
 
 #include<pathPlanTools/path_planning_tools.h>
-
-std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, State goal_in, Environment& env, bool print_res)
-{
+#include <chrono>
+std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, State goal_in, Environment& env,float timeout_ms ,bool print_res)
+{  
+    //auto time_start = std::chrono::high_resolution_clock::now();
     // make sure the angle range is in 0~2pi
     start.yaw = jeeho::convertEulerRange_to_2pi(start.yaw);
     goal_in.yaw = jeeho::convertEulerRange_to_2pi(goal_in.yaw);
@@ -50,7 +51,14 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
     
     HybridAStar<State, Action, double, Environment> hybridAStar(env);
     PlanResult<State, Action, double> solution;
-    bool searchSuccess = hybridAStar.search(start_neg, solution);
+    bool searchSuccess = hybridAStar.search(start_neg, solution, 0, timeout_ms);
+
+    //auto time_end = std::chrono::high_resolution_clock::now();
+    //auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count();
+    //if(!searchSuccess)
+    //    std::cout << "= " << "\tFailed" << " =" << std::endl;
+    //std::cout << "=== " << duration << " ===" << std::endl;
+
 
     if (searchSuccess) {
         if(print_res)

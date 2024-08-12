@@ -26,6 +26,8 @@ namespace params
     extern bool use_better_path;
     extern bool print_final_path;
     extern bool use_testdata;
+
+    extern float grid_search_timeout;
 }
 
 #endif

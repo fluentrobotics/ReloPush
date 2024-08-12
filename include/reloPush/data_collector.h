@@ -56,6 +56,9 @@ class DataCollector
     DataCollector()
     {}
 
+    DataCollector(stopWatchSet& watches_in, PathInfoList& list_in) : stopWatches(watches_in), pathInfoList(list_in)
+    {}
+
     void append_pathinfo(PathInfoList& list_in);
 
 };

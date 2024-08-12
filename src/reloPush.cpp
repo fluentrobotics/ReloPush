@@ -100,8 +100,7 @@ void print_graph_path(std::vector<std::size_t>& path, GraphPtr gPtr)
 
 ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_path, strMap& delivery_table,
                                                                 std::vector<State>& robots, relocationPair_list& relocPair, NameMatcher& nameMatcher, 
-                                                                graphTools::EdgeMatcher& edgeMatcher,std::vector<stopWatch>& time_watches, GraphPtr gPtr,
-                                                                collectorPtr dataCollector)
+                                                                graphTools::EdgeMatcher& edgeMatcher,std::vector<stopWatch>& time_watches, GraphPtr gPtr)
 {
     stopWatch time_search("cost_mat", measurement_type::graphPlan);
     auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr);
@@ -115,7 +114,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
     StatePathPtr out_path = nullptr;
 
     // path info list
-    PathInfoList pList();
+    PathInfoList final_pathinfo = PathInfoList();
 
     int num_temp_relocs=0, num_pre_relocs=0;
 
@@ -163,8 +162,8 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         // path segments for relocation
         // final pushing
         auto push_path_pair = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc);
-        auto push_path = push_path_pair.first;
-        auto push_pathinfo = push_path_pair.second;
+        push_path = push_path_pair.first;
+        PathInfoList push_pathinfo = push_path_pair.second;
         //time_path_gen_push_path.stop();
         //time_watches.push_back(time_path_gen_push_path);
 
@@ -173,16 +172,16 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
 
         // relocation paths
         StatePathsPtr relo_paths;
-        ReloPathInfoList reloPathInfoList;
+        ReloPathInfoList relo_pathinfo;
         stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
         // list of state paths for temporary relocation of intermediate objects
-        std::tie(reloPathInfoList, relo_paths) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
+        std::tie(relo_pathinfo, relo_paths) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
         time_path_gen_relo_path.stop();
         time_watches.push_back(time_path_gen_relo_path);
 
         stopWatch time_path_gen_comb_path("motion", measurement_type::pathPlan);
         // combined path for the delivery
-        auto reloPush_path = combine_relo_push(push_path, *relo_paths, robots[0], env, reloc_objects);
+        auto reloPush_path = combine_relo_push(push_path, *relo_paths, push_pathinfo, relo_pathinfo, final_pathinfo, robots[0], env, reloc_objects);
         time_path_gen_comb_path.stop();
         time_watches.push_back(time_path_gen_comb_path);
 
@@ -200,7 +199,6 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
             Color::println("REPLAN", Color::RED,Color::BG_YELLOW);
         }
         
-
         // all necessary paths are found
         else
         {
@@ -216,12 +214,10 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
     }
 
     //return reloPush_path;
-
     auto from_obj = costMat_vertices_pairs[min_list_ind].second.from_obj;
     auto to_obj = costMat_vertices_pairs[min_list_ind].second.to_obj;
-
     
-    return ReloPathResult(true, from_obj, to_obj, min_cost_row, min_cost_col, out_path, num_temp_relocs, num_pre_relocs);
+    return ReloPathResult(true, from_obj, to_obj, min_cost_row, min_cost_col, out_path, num_temp_relocs, num_pre_relocs, final_pathinfo);
 }
 
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
@@ -229,10 +225,11 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 std::vector<stopWatch>& time_watches, std::vector<movableObject>& delivery_list, 
                 strMap& delivery_table, 
                 std::vector<std::shared_ptr<deliveryContext>>& delivery_contexts, std::vector<State>& robots, std::unordered_map<std::string,
-                std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, collectorPtr dataCollector)
+                std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths)
 {    
     std::vector<std::string> deliv_seq(0);
     std::vector<int> vec_num_interm_relocs(0), vec_num_pre_relocs(0);
+    PathInfoList out_pathinfo = PathInfoList();
 
     while(mo_list.size()>0)
     //while(delivery_table.size()>0)
@@ -271,12 +268,10 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         //time_edge.print_us();
         //time_watches.push_back(time_edge);
 
-
         // test: verify objects graph first
         // print edges
         if(params::print_graph)
             print_edges(gPtr);
-
 
         draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
 
@@ -296,7 +291,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         stopWatch time_temp("temp"); 
         ReloPathResult reloPush_path = iterate_remaining_deliveries(env, push_path, delivery_table, robots, relocPair, 
-                                                                    nameMatcher, edgeMatcher, time_watches, gPtr, dataCollector);
+                                                                    nameMatcher, edgeMatcher, time_watches, gPtr);
         time_temp.stop();
         time_temp.print_us();
         ///////////////////
@@ -307,6 +302,8 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         if(reloPush_path.is_succ){
             deliveryContext dSet(mo_list, relocPair, reloPush_path.from_obj->get_name(), reloPush_path.state_path);
             delivery_contexts.push_back(std::make_shared<deliveryContext>(dSet));
+            // save to path info
+            out_pathinfo.append(reloPush_path.pathInfoList);
         }
         else{ // Instance failed
             return reloPlanResult(false);
@@ -355,7 +352,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
     }
 
     return reloPlanResult(true, std::accumulate(vec_num_interm_relocs.begin(), vec_num_interm_relocs.end(), 0),
-                            std::accumulate(vec_num_pre_relocs.begin(), vec_num_pre_relocs.end(), 0), deliv_seq);
+                            std::accumulate(vec_num_pre_relocs.begin(), vec_num_pre_relocs.end(), 0), deliv_seq, out_pathinfo);
 }
 
 void init_visualization(std::vector<movableObject>& initMOList, std::vector<movableObject>& delivery_list)
@@ -539,13 +536,10 @@ int main(int argc, char **argv)
 
     // initial visualization on RViz
     init_visualization(initMOList, delivery_list);
-
-    // collect data
-    std::shared_ptr<DataCollector> dataCollectorPtr(new DataCollector);
    
     /////////////// loop starts ///////////////
     reloPlanResult reloResult = reloLoop(obs, mo_list, delivered_obs, env, params::map_max_x, params::map_max_y, gPtr, edgeMatcher, timeWatches.watches, 
-            delivery_list, delivery_table, deliverySets.delivery_contexts, robots, failed_paths, dataCollectorPtr);
+            delivery_list, delivery_table, deliverySets.delivery_contexts, robots, failed_paths);
     //////////// loop ends ////////////
 
     time_plan.stop();
@@ -554,6 +548,9 @@ int main(int argc, char **argv)
 
     // print measurements
     //timeWatches.print();
+
+    // gather measurements
+    DataCollector dcol(timeWatches,reloResult.pathInfoList);
 
         // print results
     if(reloResult.is_succ)

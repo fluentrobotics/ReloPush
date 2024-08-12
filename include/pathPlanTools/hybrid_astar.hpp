@@ -22,6 +22,9 @@
 #include "neighbor.hpp"
 #include "planresult.hpp"
 
+// for timeout
+#include <chrono>
+
 namespace libMultiRobotPlanning {
 /*!
 \example sh_astar.cpp Implementation of Spatiotemporal Hybrid-State A*
@@ -83,10 +86,18 @@ class HybridAStar {
   ~HybridAStar() {}
 
   bool search(const State& startState,
-              PlanResult<State, Action, Cost>& solution, Cost initialCost = 0) {
+              PlanResult<State, Action, Cost>& solution, Cost initialCost = 0, float timeout_ms = 0) {
     solution.states.clear();
     solution.actions.clear();
     solution.cost = 0;
+
+    bool use_timeout = false;
+    std::chrono::high_resolution_clock::time_point time_start, time_end;
+
+    if(timeout_ms > 0){
+      use_timeout = true;
+      time_start = std::chrono::high_resolution_clock::now();
+    }
 
     openSet_t openSet;
     std::unordered_map<uint64_t, heapHandle_t, std::hash<uint64_t>> stateToHeap;
@@ -105,6 +116,15 @@ class HybridAStar {
     neighbors.reserve(10);
 
     while (!openSet.empty()) {
+      //timeout
+      if(use_timeout)
+      {
+        time_end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count();
+        if(duration > timeout_ms)
+          break; // timeout
+      }
+
       Node current = openSet.top();
       m_env.onExpandNode(current.state, current.fScore, current.gScore);
 

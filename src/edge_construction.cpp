@@ -286,7 +286,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
 
             State arrivalState(state_thres.x,state_thres.y,yaw);
             stopWatch time_mp("pre_mp", measurement_type::pathPlan);
-            auto plan_res = planHybridAstar(find_pre_push(arrivalState), new_prepush, env, false);
+            auto plan_res = planHybridAstar(find_pre_push(arrivalState), new_prepush, env, params::grid_search_timeout, false);
             time_mp.stop();
             time_watches.push_back(time_mp);
             if(plan_res->success)
@@ -516,7 +516,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 State relocation_postpush = find_pre_push(arrivalState);
                 // motion plan
                 stopWatch time_mp("preReloc", measurement_type::pathPlan);
-                auto plan_res =planHybridAstar(relocation_postpush, new_prepush, env, false);
+                auto plan_res =planHybridAstar(relocation_postpush, new_prepush, env, params::grid_search_timeout, false);
                 time_mp.stop();
                 time_watches.push_back(time_mp);
                 

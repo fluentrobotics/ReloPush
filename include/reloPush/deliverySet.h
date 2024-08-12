@@ -16,8 +16,19 @@ class ReloPathInfo
     public:
     StatePathPtr statePathPtr;
     std::string vertexName;
+    State fromPose;
+    State toPose;
 
-    ReloPathInfo(StatePathPtr pathPtr, std::string vName_in) : statePathPtr(pathPtr), vertexName(vName_in)
+    ReloPathInfo()
+    {
+        statePathPtr = nullptr;
+        vertexName = "";
+        fromPose = State();
+        toPose = State();
+    }
+
+    ReloPathInfo(StatePathPtr pathPtr, std::string vName_in, State from_pose, State to_pose) 
+                : statePathPtr(pathPtr), vertexName(vName_in), fromPose(from_pose), toPose(to_pose)
     {}
 };
 
