@@ -5,6 +5,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <tuple>
 #include <graphTools/dijkstra_tools.h>
 #include <graphTools/graph_info.h>
 #include <graphTools/visualizer.h>
@@ -41,9 +42,6 @@ extern ros::Publisher* boundary_pub_ptr;
 extern ros::Publisher* robot_pose_reset_ptr;
 
 extern ros::NodeHandle* nh_ptr;
-
-
-
 
 typedef visualization_msgs::MarkerArray vMArray;
 typedef std::unordered_map<std::string,std::string> strMap;
@@ -404,8 +402,6 @@ std::vector<graphPlanResultPtr> find_min_cost_seq(std::unordered_map<std::string
 
     return out_vec;
 }
-
-
 
 template<typename T>
 std::shared_ptr<std::vector<std::vector<T>>> initDoubleVec(int rows, int cols)
@@ -835,7 +831,7 @@ void generate_temp_env(Environment& env_in, Environment& temp_env, std::vector<S
 // input: pushing path
 //        object to relocate
 //        map with obstacles
-std::pair<ReloPathInfoList, StatePathsPtr> find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list, Environment& env)
+std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list, Environment& env)
 {
     // find where to relocate
     // propagate along pushing directions until find one
@@ -924,7 +920,7 @@ std::pair<ReloPathInfoList, StatePathsPtr> find_relo_path(std::vector<State>& pu
     }
 
     //return std::make_pair(std::make_shared<std::vector<StatePath>>(out_paths), object_relocation);
-    return std::make_pair(outInfo,std::make_shared<std::vector<std::vector<State>>>(out_paths));
+    return std::make_tuple(std::make_shared<std::vector<std::vector<State>>>(out_paths), object_relocation, outInfo);
 }
 
 std::pair<std::vector<State>,PathInfoList> get_push_path(std::vector<Vertex>& vertex_path, 

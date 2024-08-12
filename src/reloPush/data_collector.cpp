@@ -1,5 +1,15 @@
 #include <reloPush/data_collector.h>
 
+std::string moveTypeToStr(moveType mt) {
+    switch(mt) {
+        case pre:   return "pre";
+        case temp:  return "temp";
+        case final: return "final";
+        case app:   return "app";
+        default:    return "Unknown";
+    }
+}
+
 PathInfo::PathInfo()
 {
     vertexName = "";
@@ -47,6 +57,40 @@ void PathInfoList::push_back(PathInfo& p_in)
 void PathInfoList::append(PathInfoList& list_in)
 {
     paths.insert(paths.end(), list_in.paths.begin(), list_in.paths.end());
+}
+
+void PathInfoList::print_seq()
+{
+    for(auto& it : paths)
+    {
+        std::cout << "<- " << it.vertexName << "(" << moveTypeToStr(it.type) << ") ";
+    }
+    std::cout << std::endl;
+}
+
+size_t PathInfoList::count_pre_relocations(void)
+{
+    size_t out_count = 0;
+    for(auto& it : paths)
+    {
+        if(it.type == moveType::pre)
+            out_count++;
+    }
+    return out_count;
+}
+size_t PathInfoList::count_temp_relocations(void)
+{
+    size_t out_count = 0;
+    for(auto& it : paths)
+    {
+        if(it.type == moveType::temp)
+            out_count++;
+    }
+    return out_count;
+}
+size_t PathInfoList::count_total_relocations(void)
+{
+    return (count_pre_relocations() + count_temp_relocations());
 }
 
 void DataCollector::append_pathinfo(PathInfoList& list_in)

@@ -52,16 +52,15 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
         // for each prerelocation (mostly one)
         auto path_poses = it.pathToNextPush->getPath(true); // approach path
         PathInfo p_app(edgePathInfo.vertices.getSourceName(),moveType::app,it.preReloDubins.startState, it.preReloDubins.targetState,path_poses);
-
-        for(auto& p : path_poses) // todo: use better way to augment vector
+        plist.push_back(p_app);   
+          
+        for(auto& _p : path_poses) // todo: use better way to augment vector
         {
-            preReloStateVec.push_back(p);
+            preReloStateVec.push_back(_p);
         }
 
         preReloPaths.push_back(preReloStateVec);
-        // path info
-        plist.push_back(p);
-        plist.push_back(p_app);        
+      
     }
 
     State startState = edgePathInfo.sourceState;

@@ -175,7 +175,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         ReloPathInfoList relo_pathinfo;
         stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
         // list of state paths for temporary relocation of intermediate objects
-        std::tie(relo_pathinfo, relo_paths) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
+        std::tie(relo_paths, relocPair, relo_pathinfo) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
         time_path_gen_relo_path.stop();
         time_watches.push_back(time_path_gen_relo_path);
 
@@ -429,6 +429,7 @@ void init_prompt(std::string& data_file, int& data_ind)
     Color::println("== ind: " + std::to_string(data_ind) + " ===",Color::BG_YELLOW);
     Color::println("== log: " + std::to_string(params::leave_log) + " ===",Color::BG_YELLOW);
     Color::println("== post-push: " + std::to_string(params::post_push_ind) + " ===",Color::BG_YELLOW);
+    Color::println("== timeout (ms): " + std::to_string(params::grid_search_timeout) + " ===",Color::BG_YELLOW);
 }
 
 void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& edgeMatcher, Environment& env,
@@ -551,6 +552,7 @@ int main(int argc, char **argv)
 
     // gather measurements
     DataCollector dcol(timeWatches,reloResult.pathInfoList);
+    dcol.pathInfoList.print_seq();
 
         // print results
     if(reloResult.is_succ)
@@ -561,7 +563,8 @@ int main(int argc, char **argv)
     // log
     if(params::leave_log == 1)
     {
-        jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
+        //jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
+        jeeho::logger records(reloResult.is_succ, dcol.pathInfoList.count_total_relocations(), reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
         // write to file
         records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + removeExtension(data_file) + ".txt");
     }

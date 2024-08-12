@@ -9,6 +9,8 @@
 
 enum moveType {pre,temp,final,app}; // push, push, push, non-push
 
+std::string moveTypeToStr(moveType mt);
+
 class PathInfo
 {
     public:
@@ -38,6 +40,10 @@ class PathInfoList
     PathInfoList();
     void push_back(PathInfo& p_in);
     void append(PathInfoList& list_in);
+    void print_seq(void);
+    size_t count_pre_relocations(void);
+    size_t count_temp_relocations(void);
+    size_t count_total_relocations(void);
 };
 
 class DataCollector
