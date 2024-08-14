@@ -27,7 +27,7 @@ namespace params
     extern bool print_final_path;
     extern bool use_testdata;
 
-    extern float grid_search_timeout;
+    extern int64_t grid_search_timeout;
 }
 
 #endif

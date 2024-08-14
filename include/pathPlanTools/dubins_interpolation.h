@@ -4,8 +4,12 @@
 #include<graphTools/edge_path_info.h>
 
 // interpolate push paths (approaching path already in edgepath)
-std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(graphTools::EdgePathInfo& edgePathInfo, float path_resolution=0.1)
+std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(graphTools::EdgePathInfo& edgePathInfo, float path_resolution=0.1, std::string vertex_name="")
 {
+    std::string vName = vertex_name;
+    if(vName == "")
+        vName = edgePathInfo.vertices.getSourceName();
+
     float turning_rad = edgePathInfo.path.get_turning_radius();
     // path info list
     PathInfoList plist = PathInfoList();
@@ -47,11 +51,11 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
 #pragma endregion
 
         // add to path info
-        PathInfo p(edgePathInfo.vertices.getSourceName(),moveType::pre,it.preReloDubins.startState, it.preReloDubins.targetState,preReloStateVec);
+        PathInfo p(vName,moveType::pre,it.preReloDubins.startState, it.preReloDubins.targetState,preReloStateVec);
         plist.push_back(p);
         // for each prerelocation (mostly one)
         auto path_poses = it.pathToNextPush->getPath(true); // approach path
-        PathInfo p_app(edgePathInfo.vertices.getSourceName(),moveType::app,it.preReloDubins.startState, it.preReloDubins.targetState,path_poses);
+        PathInfo p_app(vName,moveType::app,it.preReloDubins.startState, it.preReloDubins.targetState,path_poses);
         plist.push_back(p_app);   
           
         for(auto& _p : path_poses) // todo: use better way to augment vector
@@ -114,7 +118,7 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
     }
 
     // add path info
-    PathInfo p(edgePathInfo.vertices.getSourceName(),moveType::final,edgePathInfo.sourceState,edgePathInfo.targetState,main_push_path);
+    PathInfo p(vName,moveType::final,edgePathInfo.sourceState,edgePathInfo.targetState,main_push_path); //vertex name of delivering object
     plist.push_back(p);
 
 

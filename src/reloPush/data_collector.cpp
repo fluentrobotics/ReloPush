@@ -44,6 +44,14 @@ float PathInfo::pathLength()
     return totalLength;
 }
 
+void PathInfo::print_path()
+{
+    for(auto& it : path)
+    {
+        std::cout << it.x << "," << it.y << "," << it.yaw << std::endl;
+    }
+}
+
 PathInfoList::PathInfoList()
 {
     paths.clear();
@@ -61,9 +69,10 @@ void PathInfoList::append(PathInfoList& list_in)
 
 void PathInfoList::print_seq()
 {
+    std::cout << "robot ";
     for(auto& it : paths)
     {
-        std::cout << "<- " << it.vertexName << "(" << moveTypeToStr(it.type) << ") ";
+        std::cout << "-> " << it.vertexName << "(" << moveTypeToStr(it.type) << ") ";
     }
     std::cout << std::endl;
 }
@@ -91,6 +100,25 @@ size_t PathInfoList::count_temp_relocations(void)
 size_t PathInfoList::count_total_relocations(void)
 {
     return (count_pre_relocations() + count_temp_relocations());
+}
+
+float PathInfoList::total_path_length()
+{
+    size_t out_length = 0;
+    for(auto& it: paths)
+    {
+        out_length += it.pathLength();
+    }
+    return out_length;
+}
+
+float PathInfoList::print_path()
+{
+    for(auto& it : paths)
+    {
+        std::cout << it.vertexName << "/" << moveTypeToStr(it.type) << std::endl;
+        it.print_path();
+    }
 }
 
 void DataCollector::append_pathinfo(PathInfoList& list_in)

@@ -21,7 +21,7 @@ namespace params
     bool print_log = false;
     bool use_better_path = true;
     bool print_final_path = false;
-    bool use_testdata = false; //use file to initialize planning
+    bool use_testdata = true; //use file to initialize planning
 
-    float grid_search_timeout = 100; //ms (0 for no timeout)
+    int64_t grid_search_timeout = 30; //ms (0 for no timeout)
 }

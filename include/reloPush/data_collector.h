@@ -29,6 +29,9 @@ class PathInfo
 
     // Sum of euclidean distances between consecutive waypoints
     float pathLength();
+
+    // Print Path
+    void print_path();
     
 };
 
@@ -44,6 +47,8 @@ class PathInfoList
     size_t count_pre_relocations(void);
     size_t count_temp_relocations(void);
     size_t count_total_relocations(void);
+    float total_path_length();
+    float print_path();
 };
 
 class DataCollector

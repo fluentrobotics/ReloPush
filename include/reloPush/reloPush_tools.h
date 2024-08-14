@@ -11,6 +11,7 @@
 #include <graphTools/visualizer.h>
 
 #include <omplTools/dubins_tools.h>
+#include <omplTools/State.h>
 #include <reloPush/edge_construction.h>
 #include <pathPlanTools/path_planning_tools.h>
 #include <reloPush/logger.h>
@@ -848,7 +849,7 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
 
     // for movable object update
     relocationPair_list object_relocation;
-
+std::cout << "6" << std::endl;
     // for each movable object
     for(int m = 0; m<relo_list.size(); m++)
     {
@@ -893,7 +894,7 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
             if(valid_position_found)
                 break;
         }
-
+std::cout << "7" << std::endl;
         // pick a valid pose if multiple // todo: find a better way to handle multiple candidates
         int valid_ind = findFirstTrueIndex(valid_vec);
 
@@ -941,6 +942,9 @@ std::pair<std::vector<State>,PathInfoList> get_push_path(std::vector<Vertex>& ve
         Edge edge = boost::edge(source, target, *gPtr).first;
         auto test_ = boost::edge(source, target, *gPtr).second;
 
+        // delivering object
+        std::string vName = graphTools::getVertexName(vertex_path[0],gPtr);
+
         //print vetex names
         //std::cout << graphTools::getVertexName(source, gPtr) << " -> " << graphTools::getVertexName(target,gPtr) << std::endl; 
 
@@ -962,7 +966,7 @@ std::pair<std::vector<State>,PathInfoList> get_push_path(std::vector<Vertex>& ve
         */
 
         // get interpolated list (prepath + final path)
-        auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step);
+        auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step, vName);
         auto interp_path = interp_path_pair.first;
         auto interp_pathinfo = interp_path_pair.second;
         
@@ -1072,7 +1076,9 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         path_segments.push_back(push_path);
         // save to path info
         PathInfo p_final_app(push_pathinfo.paths.back().vertexName,moveType::app,lastLastRelo, pre_push,final_app_path);
-        final_pathinfo.append(push_pathinfo);
+        final_pathinfo.push_back(p_final_app); // add final approach path
+
+        final_pathinfo.append(push_pathinfo); // final delivery path
     }
 
     // no temp relocation
@@ -1089,6 +1095,8 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         path_segments.push_back(push_path);
         // save to path info
         PathInfo p_final_app(push_pathinfo.paths.back().vertexName, moveType::app, robot, pre_push, final_app_path);
+        final_pathinfo.push_back(p_final_app); // approach to delivering object
+
         final_pathinfo.append(push_pathinfo);
     }
 
@@ -1184,6 +1192,19 @@ void update_mo_list(std::vector<movableObject>& mo_list, relocationPair_list& re
         //mo_list[relocPair[n].first].set_y(relocPair[n].second.y);
         //relocPair[n].first->set_th(relocPair[n].second.yaw);
     }
+}
+
+float path_length(StatePath path)
+{
+    float totalLength = 0.0;
+
+    for (size_t i = 1; i < path.size(); ++i) {
+        float dx = path[i].x - path[i-1].x;
+        float dy = path[i].y - path[i-1].y;
+        totalLength += std::sqrt(dx * dx + dy * dy);
+    }
+
+    return totalLength;
 }
 
 #endif

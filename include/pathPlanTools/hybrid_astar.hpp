@@ -86,7 +86,7 @@ class HybridAStar {
   ~HybridAStar() {}
 
   bool search(const State& startState,
-              PlanResult<State, Action, Cost>& solution, Cost initialCost = 0, float timeout_ms = 0) {
+              PlanResult<State, Action, Cost>& solution, Cost initialCost = 0, int64_t timeout_ms = 0) {
     solution.states.clear();
     solution.actions.clear();
     solution.cost = 0;

@@ -4,1197 +4,1197 @@ index:0
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0643717
-Time Graph Plan:0.001886
-Time Path Plan:9.78694
+Time Graph Const:0.0338573
+Time Graph Plan:0.000814
+Time Path Plan:5.58932
 Time Assign:0
-Time Total:9.88201
-Time Reloc Plan:0.00031
+Time Total:5.64666
+Time Reloc Plan:0.000247
 #
 data_name:data_3o_2
 index:1
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0691437
-Time Graph Plan:0.001677
-Time Path Plan:10.1093
+Time Graph Const:0.0292431
+Time Graph Plan:0.000993
+Time Path Plan:5.54935
 Time Assign:0
-Time Total:10.2109
-Time Reloc Plan:0.000282
+Time Total:5.60206
+Time Reloc Plan:0.000239
 #
 data_name:data_3o_2
 index:2
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0632496
-Time Graph Plan:0.001104
-Time Path Plan:9.53844
+Time Graph Const:0.0294272
+Time Graph Plan:0.000826
+Time Path Plan:5.48392
 Time Assign:0
-Time Total:9.63136
-Time Reloc Plan:0.000532
+Time Total:5.53583
+Time Reloc Plan:0.000307
 #
 data_name:data_3o_2
 index:3
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0643798
-Time Graph Plan:0.001183
-Time Path Plan:9.33659
+Time Graph Const:0.0294232
+Time Graph Plan:0.001204
+Time Path Plan:5.48382
 Time Assign:0
-Time Total:9.42992
-Time Reloc Plan:0.000293
+Time Total:5.53645
+Time Reloc Plan:0.000327
 #
 data_name:data_3o_2
 index:4
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0686955
-Time Graph Plan:0.001012
-Time Path Plan:9.51553
+Time Graph Const:0.0307822
+Time Graph Plan:0.001386
+Time Path Plan:5.59106
 Time Assign:0
-Time Total:9.6112
-Time Reloc Plan:0.00029
+Time Total:5.64595
+Time Reloc Plan:0.000394
 #
 data_name:data_3o_2
 index:5
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0671796
-Time Graph Plan:0.001741
-Time Path Plan:9.63441
+Time Graph Const:0.0299921
+Time Graph Plan:0.001295
+Time Path Plan:5.50935
 Time Assign:0
-Time Total:9.73139
-Time Reloc Plan:0.000301
+Time Total:5.56256
+Time Reloc Plan:0.000211
 #
 data_name:data_3o_2
 index:6
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0729159
-Time Graph Plan:0.001204
-Time Path Plan:9.46971
+Time Graph Const:0.0295382
+Time Graph Plan:0.001258
+Time Path Plan:5.54414
 Time Assign:0
-Time Total:9.57106
-Time Reloc Plan:0.000298
+Time Total:5.59789
+Time Reloc Plan:0.000532
 #
 data_name:data_3o_2
 index:7
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0679435
-Time Graph Plan:0.001188
-Time Path Plan:9.58771
+Time Graph Const:0.0298491
+Time Graph Plan:0.001139
+Time Path Plan:5.52633
 Time Assign:0
-Time Total:9.68506
-Time Reloc Plan:0.000292
+Time Total:5.58068
+Time Reloc Plan:0.000217
 #
 data_name:data_3o_2
 index:8
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0630775
-Time Graph Plan:0.001763
-Time Path Plan:9.49606
+Time Graph Const:0.0308481
+Time Graph Plan:0.001023
+Time Path Plan:5.64412
 Time Assign:0
-Time Total:9.58879
-Time Reloc Plan:0.000387
+Time Total:5.69965
+Time Reloc Plan:0.000199
 #
 data_name:data_3o_2
 index:9
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0614325
-Time Graph Plan:0.001638
-Time Path Plan:9.43568
+Time Graph Const:0.0308682
+Time Graph Plan:0.000928
+Time Path Plan:5.57658
 Time Assign:0
-Time Total:9.52499
-Time Reloc Plan:0.000299
+Time Total:5.631
+Time Reloc Plan:0.000183
 #
 data_name:data_3o_2
 index:10
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0637914
-Time Graph Plan:0.001857
-Time Path Plan:9.33928
+Time Graph Const:0.0293402
+Time Graph Plan:0.000993
+Time Path Plan:5.48785
 Time Assign:0
-Time Total:9.43309
-Time Reloc Plan:0.000817
+Time Total:5.54051
+Time Reloc Plan:0.000277
 #
 data_name:data_3o_2
 index:11
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0706216
-Time Graph Plan:0.001305
-Time Path Plan:10.0301
+Time Graph Const:0.0294962
+Time Graph Plan:0.000828
+Time Path Plan:5.5148
 Time Assign:0
-Time Total:10.1323
-Time Reloc Plan:0.000523
+Time Total:5.56747
+Time Reloc Plan:0.000186
 #
 data_name:data_3o_2
 index:12
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0635055
-Time Graph Plan:0.001204
-Time Path Plan:9.34704
+Time Graph Const:0.0292991
+Time Graph Plan:0.001404
+Time Path Plan:5.49481
 Time Assign:0
-Time Total:9.43826
-Time Reloc Plan:0.000296
+Time Total:5.54744
+Time Reloc Plan:0.00021
 #
 data_name:data_3o_2
 index:13
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0639655
-Time Graph Plan:0.001344
-Time Path Plan:9.46941
+Time Graph Const:0.0296592
+Time Graph Plan:0.000994
+Time Path Plan:5.51756
 Time Assign:0
-Time Total:9.56232
-Time Reloc Plan:0.00032
+Time Total:5.57139
+Time Reloc Plan:0.000205
 #
 data_name:data_3o_2
 index:14
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0712587
-Time Graph Plan:0.001409
-Time Path Plan:10.01
+Time Graph Const:0.0298222
+Time Graph Plan:0.001059
+Time Path Plan:5.53529
 Time Assign:0
-Time Total:10.1123
-Time Reloc Plan:0.001365
+Time Total:5.58838
+Time Reloc Plan:0.00018
 #
 data_name:data_3o_2
 index:15
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0616766
-Time Graph Plan:0.001211
-Time Path Plan:9.22849
+Time Graph Const:0.0294132
+Time Graph Plan:0.000927
+Time Path Plan:5.5559
 Time Assign:0
-Time Total:9.31923
-Time Reloc Plan:0.00055
+Time Total:5.60863
+Time Reloc Plan:0.000285
 #
 data_name:data_3o_2
 index:16
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0639256
-Time Graph Plan:0.000914
-Time Path Plan:9.31883
+Time Graph Const:0.0299492
+Time Graph Plan:0.000849
+Time Path Plan:5.58293
 Time Assign:0
-Time Total:9.41041
-Time Reloc Plan:0.000265
+Time Total:5.63591
+Time Reloc Plan:0.000181
 #
 data_name:data_3o_2
 index:17
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0644606
-Time Graph Plan:0.000975
-Time Path Plan:9.64231
+Time Graph Const:0.0295821
+Time Graph Plan:0.001479
+Time Path Plan:5.57126
 Time Assign:0
-Time Total:9.73397
-Time Reloc Plan:0.000278
+Time Total:5.62524
+Time Reloc Plan:0.00024
 #
 data_name:data_3o_2
 index:18
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0626345
-Time Graph Plan:0.001522
-Time Path Plan:9.52318
+Time Graph Const:0.0305141
+Time Graph Plan:0.000893
+Time Path Plan:5.58218
 Time Assign:0
-Time Total:9.61661
-Time Reloc Plan:0.000269
+Time Total:5.63726
+Time Reloc Plan:0.000175
 #
 data_name:data_3o_2
 index:19
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0638666
-Time Graph Plan:0.001011
-Time Path Plan:9.41499
+Time Graph Const:0.0304741
+Time Graph Plan:0.00146
+Time Path Plan:5.52885
 Time Assign:0
-Time Total:9.50696
-Time Reloc Plan:0.00029
+Time Total:5.58395
+Time Reloc Plan:0.000221
 #
 data_name:data_3o_2
 index:20
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0679806
-Time Graph Plan:0.001485
-Time Path Plan:9.49843
+Time Graph Const:0.0298022
+Time Graph Plan:0.000888
+Time Path Plan:5.47127
 Time Assign:0
-Time Total:9.59501
-Time Reloc Plan:0.000315
+Time Total:5.52302
+Time Reloc Plan:0.000201
 #
 data_name:data_3o_2
 index:21
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0631185
-Time Graph Plan:0.001316
-Time Path Plan:9.43161
+Time Graph Const:0.0296202
+Time Graph Plan:0.000949
+Time Path Plan:5.50292
 Time Assign:0
-Time Total:9.52143
-Time Reloc Plan:0.000312
+Time Total:5.55564
+Time Reloc Plan:0.000282
 #
 data_name:data_3o_2
 index:22
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0671574
-Time Graph Plan:0.001147
-Time Path Plan:9.58407
+Time Graph Const:0.0294102
+Time Graph Plan:0.001215
+Time Path Plan:5.55379
 Time Assign:0
-Time Total:9.68161
-Time Reloc Plan:0.000469
+Time Total:5.60762
+Time Reloc Plan:0.000194
 #
 data_name:data_3o_2
 index:23
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0677025
-Time Graph Plan:0.00189
-Time Path Plan:9.64452
+Time Graph Const:0.0288082
+Time Graph Plan:0.000996
+Time Path Plan:5.52042
 Time Assign:0
-Time Total:9.74443
-Time Reloc Plan:0.001132
+Time Total:5.57184
+Time Reloc Plan:0.000182
 #
 data_name:data_3o_2
 index:24
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0626614
-Time Graph Plan:0.001727
-Time Path Plan:9.64008
+Time Graph Const:0.0290552
+Time Graph Plan:0.000985
+Time Path Plan:5.49019
 Time Assign:0
-Time Total:9.73113
-Time Reloc Plan:0.000296
+Time Total:5.54253
+Time Reloc Plan:0.000181
 #
 data_name:data_3o_2
 index:25
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0630633
-Time Graph Plan:0.001648
-Time Path Plan:9.5711
+Time Graph Const:0.0292032
+Time Graph Plan:0.001095
+Time Path Plan:5.49678
 Time Assign:0
-Time Total:9.66193
-Time Reloc Plan:0.000309
+Time Total:5.54936
+Time Reloc Plan:0.0002
 #
 data_name:data_3o_2
 index:26
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0663615
-Time Graph Plan:0.001351
-Time Path Plan:9.81444
+Time Graph Const:0.0293612
+Time Graph Plan:0.000967
+Time Path Plan:5.48697
 Time Assign:0
-Time Total:9.91249
-Time Reloc Plan:0.000431
+Time Total:5.53924
+Time Reloc Plan:0.000206
 #
 data_name:data_3o_2
 index:27
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0655035
-Time Graph Plan:0.001189
-Time Path Plan:9.43878
+Time Graph Const:0.0302082
+Time Graph Plan:0.001082
+Time Path Plan:5.54138
 Time Assign:0
-Time Total:9.53308
-Time Reloc Plan:0.000319
+Time Total:5.59448
+Time Reloc Plan:0.000199
 #
 data_name:data_3o_2
 index:28
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0712959
-Time Graph Plan:0.002004
-Time Path Plan:9.60977
+Time Graph Const:0.0304022
+Time Graph Plan:0.001378
+Time Path Plan:5.56193
 Time Assign:0
-Time Total:9.71143
-Time Reloc Plan:0.000279
+Time Total:5.61632
+Time Reloc Plan:0.000221
 #
 data_name:data_3o_2
 index:29
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0605825
-Time Graph Plan:0.001737
-Time Path Plan:9.34043
+Time Graph Const:0.0303502
+Time Graph Plan:0.001033
+Time Path Plan:5.56511
 Time Assign:0
-Time Total:9.4304
-Time Reloc Plan:0.00045
+Time Total:5.62081
+Time Reloc Plan:0.000184
 #
 data_name:data_3o_2
 index:30
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0656825
-Time Graph Plan:0.001324
-Time Path Plan:9.46255
+Time Graph Const:0.0295632
+Time Graph Plan:0.00116
+Time Path Plan:5.54013
 Time Assign:0
-Time Total:9.55742
-Time Reloc Plan:0.000286
+Time Total:5.5934
+Time Reloc Plan:0.000223
 #
 data_name:data_3o_2
 index:31
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0634894
-Time Graph Plan:0.001113
-Time Path Plan:9.23507
+Time Graph Const:0.0295162
+Time Graph Plan:0.001345
+Time Path Plan:5.52447
 Time Assign:0
-Time Total:9.32858
-Time Reloc Plan:0.000339
+Time Total:5.57795
+Time Reloc Plan:0.00037
 #
 data_name:data_3o_2
 index:32
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0673746
-Time Graph Plan:0.001364
-Time Path Plan:9.41264
+Time Graph Const:0.0294941
+Time Graph Plan:0.000963
+Time Path Plan:5.4727
 Time Assign:0
-Time Total:9.50923
-Time Reloc Plan:0.000284
+Time Total:5.52493
+Time Reloc Plan:0.000205
 #
 data_name:data_3o_2
 index:33
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0702075
-Time Graph Plan:0.002475
-Time Path Plan:9.65714
+Time Graph Const:0.0292782
+Time Graph Plan:0.000918
+Time Path Plan:5.50227
 Time Assign:0
-Time Total:9.76036
-Time Reloc Plan:0.00033
+Time Total:5.55472
+Time Reloc Plan:0.000199
 #
 data_name:data_3o_2
 index:34
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0621875
-Time Graph Plan:0.001052
-Time Path Plan:9.39199
+Time Graph Const:0.0300762
+Time Graph Plan:0.001298
+Time Path Plan:5.59634
 Time Assign:0
-Time Total:9.48257
-Time Reloc Plan:0.000271
+Time Total:5.65014
+Time Reloc Plan:0.000231
 #
 data_name:data_3o_2
 index:35
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0648904
-Time Graph Plan:0.001639
-Time Path Plan:9.50773
+Time Graph Const:0.0293622
+Time Graph Plan:0.001041
+Time Path Plan:5.46391
 Time Assign:0
-Time Total:9.60295
-Time Reloc Plan:0.000312
+Time Total:5.51577
+Time Reloc Plan:0.000171
 #
 data_name:data_3o_2
 index:36
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0632125
-Time Graph Plan:0.001997
-Time Path Plan:9.37777
+Time Graph Const:0.0287871
+Time Graph Plan:0.000971
+Time Path Plan:5.46908
 Time Assign:0
-Time Total:9.47064
-Time Reloc Plan:0.000468
+Time Total:5.5206
+Time Reloc Plan:0.000176
 #
 data_name:data_3o_2
 index:37
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0643946
-Time Graph Plan:0.001563
-Time Path Plan:9.40617
+Time Graph Const:0.0305981
+Time Graph Plan:0.001089
+Time Path Plan:5.52758
 Time Assign:0
-Time Total:9.50002
-Time Reloc Plan:0.000393
+Time Total:5.58081
+Time Reloc Plan:0.000206
 #
 data_name:data_3o_2
 index:38
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0693054
-Time Graph Plan:0.001522
-Time Path Plan:9.47622
+Time Graph Const:0.0303222
+Time Graph Plan:0.001148
+Time Path Plan:5.55811
 Time Assign:0
-Time Total:9.57395
-Time Reloc Plan:0.00032
+Time Total:5.6138
+Time Reloc Plan:0.000209
 #
 data_name:data_3o_2
 index:39
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0636364
-Time Graph Plan:0.001372
-Time Path Plan:9.22245
+Time Graph Const:0.0336311
+Time Graph Plan:0.001331
+Time Path Plan:5.67525
 Time Assign:0
-Time Total:9.31616
-Time Reloc Plan:0.000419
+Time Total:5.73348
+Time Reloc Plan:0.0002
 #
 data_name:data_3o_2
 index:40
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0729018
-Time Graph Plan:0.002067
-Time Path Plan:10.0198
+Time Graph Const:0.0291411
+Time Graph Plan:0.001047
+Time Path Plan:5.51619
 Time Assign:0
-Time Total:10.1259
-Time Reloc Plan:0.000354
+Time Total:5.56882
+Time Reloc Plan:0.000179
 #
 data_name:data_3o_2
 index:41
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0596057
-Time Graph Plan:0.001102
-Time Path Plan:9.40989
+Time Graph Const:0.0303332
+Time Graph Plan:0.001006
+Time Path Plan:5.54203
 Time Assign:0
-Time Total:9.4975
-Time Reloc Plan:0.000303
+Time Total:5.59549
+Time Reloc Plan:0.000181
 #
 data_name:data_3o_2
 index:42
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0668426
-Time Graph Plan:0.001481
-Time Path Plan:9.32684
+Time Graph Const:0.0326993
+Time Graph Plan:0.00138
+Time Path Plan:5.71144
 Time Assign:0
-Time Total:9.42364
-Time Reloc Plan:0.0003
+Time Total:5.76978
+Time Reloc Plan:0.000177
 #
 data_name:data_3o_2
 index:43
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0634685
-Time Graph Plan:0.001468
-Time Path Plan:9.52551
+Time Graph Const:0.0302102
+Time Graph Plan:0.001276
+Time Path Plan:5.55046
 Time Assign:0
-Time Total:9.6185
-Time Reloc Plan:0.000337
+Time Total:5.60391
+Time Reloc Plan:0.000186
 #
 data_name:data_3o_2
 index:44
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0708375
-Time Graph Plan:0.001732
-Time Path Plan:10.2409
+Time Graph Const:0.0296302
+Time Graph Plan:0.000878
+Time Path Plan:5.46309
 Time Assign:0
-Time Total:10.3439
-Time Reloc Plan:0.001215
+Time Total:5.51477
+Time Reloc Plan:0.000184
 #
 data_name:data_3o_2
 index:45
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0604645
-Time Graph Plan:0.001343
-Time Path Plan:9.4681
+Time Graph Const:0.0296081
+Time Graph Plan:0.001118
+Time Path Plan:5.47032
 Time Assign:0
-Time Total:9.55616
-Time Reloc Plan:0.000301
+Time Total:5.52271
+Time Reloc Plan:0.000213
 #
 data_name:data_3o_2
 index:46
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0634925
-Time Graph Plan:0.001115
-Time Path Plan:9.54819
+Time Graph Const:0.0312961
+Time Graph Plan:0.000946
+Time Path Plan:5.55874
 Time Assign:0
-Time Total:9.63964
-Time Reloc Plan:0.000317
+Time Total:5.6132
+Time Reloc Plan:0.000194
 #
 data_name:data_3o_2
 index:47
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0721419
-Time Graph Plan:0.001127
-Time Path Plan:9.80832
+Time Graph Const:0.0305562
+Time Graph Plan:0.001202
+Time Path Plan:5.51748
 Time Assign:0
-Time Total:9.91066
-Time Reloc Plan:0.001285
+Time Total:5.57072
+Time Reloc Plan:0.000211
 #
 data_name:data_3o_2
 index:48
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0607735
-Time Graph Plan:0.001851
-Time Path Plan:9.3363
+Time Graph Const:0.0293932
+Time Graph Plan:0.001278
+Time Path Plan:5.50644
 Time Assign:0
-Time Total:9.42659
-Time Reloc Plan:0.000319
+Time Total:5.5594
+Time Reloc Plan:0.000401
 #
 data_name:data_3o_2
 index:49
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0611155
-Time Graph Plan:0.001854
-Time Path Plan:9.37561
+Time Graph Const:0.0304801
+Time Graph Plan:0.001455
+Time Path Plan:5.58434
 Time Assign:0
-Time Total:9.46527
-Time Reloc Plan:0.000295
+Time Total:5.63876
+Time Reloc Plan:0.000202
 #
 data_name:data_3o_2
 index:50
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0649106
-Time Graph Plan:0.001251
-Time Path Plan:9.48229
+Time Graph Const:0.0300931
+Time Graph Plan:0.001009
+Time Path Plan:5.49634
 Time Assign:0
-Time Total:9.5842
-Time Reloc Plan:0.000335
+Time Total:5.54944
+Time Reloc Plan:0.000203
 #
 data_name:data_3o_2
 index:51
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0660916
-Time Graph Plan:0.001388
-Time Path Plan:9.48089
+Time Graph Const:0.0299202
+Time Graph Plan:0.001176
+Time Path Plan:5.52566
 Time Assign:0
-Time Total:9.57552
-Time Reloc Plan:0.000287
+Time Total:5.57994
+Time Reloc Plan:0.00018
 #
 data_name:data_3o_2
 index:52
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0623735
-Time Graph Plan:0.001081
-Time Path Plan:9.58239
+Time Graph Const:0.0289491
+Time Graph Plan:0.000979
+Time Path Plan:5.48315
 Time Assign:0
-Time Total:9.67416
-Time Reloc Plan:0.000289
+Time Total:5.53536
+Time Reloc Plan:0.000177
 #
 data_name:data_3o_2
 index:53
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0707269
-Time Graph Plan:0.002045
-Time Path Plan:9.48727
+Time Graph Const:0.0296632
+Time Graph Plan:0.001104
+Time Path Plan:5.49071
 Time Assign:0
-Time Total:9.5877
-Time Reloc Plan:0.000344
+Time Total:5.54344
+Time Reloc Plan:0.000184
 #
 data_name:data_3o_2
 index:54
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0644655
-Time Graph Plan:0.001237
-Time Path Plan:9.42083
+Time Graph Const:0.0298252
+Time Graph Plan:0.000868
+Time Path Plan:5.48816
 Time Assign:0
-Time Total:9.51398
-Time Reloc Plan:0.000415
+Time Total:5.54058
+Time Reloc Plan:0.000197
 #
 data_name:data_3o_2
 index:55
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0654755
-Time Graph Plan:0.001371
-Time Path Plan:9.41457
+Time Graph Const:0.0296092
+Time Graph Plan:0.000893
+Time Path Plan:5.51427
 Time Assign:0
-Time Total:9.51142
-Time Reloc Plan:0.000283
+Time Total:5.56648
+Time Reloc Plan:0.000208
 #
 data_name:data_3o_2
 index:56
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0693906
-Time Graph Plan:0.001026
-Time Path Plan:9.70962
+Time Graph Const:0.0302042
+Time Graph Plan:0.001448
+Time Path Plan:5.54939
 Time Assign:0
-Time Total:9.80871
-Time Reloc Plan:0.000302
+Time Total:5.60339
+Time Reloc Plan:0.000182
 #
 data_name:data_3o_2
 index:57
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0710939
-Time Graph Plan:0.001299
-Time Path Plan:9.51737
+Time Graph Const:0.0297732
+Time Graph Plan:0.001103
+Time Path Plan:5.53747
 Time Assign:0
-Time Total:9.6191
-Time Reloc Plan:0.000326
+Time Total:5.59052
+Time Reloc Plan:0.000188
 #
 data_name:data_3o_2
 index:58
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0648485
-Time Graph Plan:0.00142
-Time Path Plan:9.55186
+Time Graph Const:0.0316982
+Time Graph Plan:0.001228
+Time Path Plan:5.57949
 Time Assign:0
-Time Total:9.64822
-Time Reloc Plan:0.000314
+Time Total:5.6348
+Time Reloc Plan:0.000403
 #
 data_name:data_3o_2
 index:59
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0741461
-Time Graph Plan:0.001115
-Time Path Plan:9.93188
+Time Graph Const:0.0301302
+Time Graph Plan:0.001202
+Time Path Plan:5.624
 Time Assign:0
-Time Total:10.0357
-Time Reloc Plan:0.000644
+Time Total:5.6791
+Time Reloc Plan:0.000188
 #
 data_name:data_3o_2
 index:60
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0647896
-Time Graph Plan:0.001047
-Time Path Plan:9.73168
+Time Graph Const:0.0294502
+Time Graph Plan:0.000901
+Time Path Plan:5.52872
 Time Assign:0
-Time Total:9.82601
-Time Reloc Plan:0.00043
+Time Total:5.58218
+Time Reloc Plan:0.000223
 #
 data_name:data_3o_2
 index:61
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0702497
-Time Graph Plan:0.000919
-Time Path Plan:10.5378
+Time Graph Const:0.0299322
+Time Graph Plan:0.001193
+Time Path Plan:5.51535
 Time Assign:0
-Time Total:10.6395
-Time Reloc Plan:0.000311
+Time Total:5.56939
+Time Reloc Plan:0.000395
 #
 data_name:data_3o_2
 index:62
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0670246
-Time Graph Plan:0.001713
-Time Path Plan:9.54795
+Time Graph Const:0.0300622
+Time Graph Plan:0.001227
+Time Path Plan:5.58211
 Time Assign:0
-Time Total:9.64513
-Time Reloc Plan:0.000424
+Time Total:5.63591
+Time Reloc Plan:0.000225
 #
 data_name:data_3o_2
 index:63
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0625454
-Time Graph Plan:0.001601
-Time Path Plan:9.47841
+Time Graph Const:0.0301362
+Time Graph Plan:0.000907
+Time Path Plan:5.61823
 Time Assign:0
-Time Total:9.56955
-Time Reloc Plan:0.00026
+Time Total:5.67303
+Time Reloc Plan:0.000238
 #
 data_name:data_3o_2
 index:64
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0643566
-Time Graph Plan:0.001549
-Time Path Plan:9.40993
+Time Graph Const:0.0306942
+Time Graph Plan:0.001138
+Time Path Plan:5.51648
 Time Assign:0
-Time Total:9.50255
-Time Reloc Plan:0.000298
+Time Total:5.57072
+Time Reloc Plan:0.000191
 #
 data_name:data_3o_2
 index:65
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0608494
-Time Graph Plan:0.001231
-Time Path Plan:9.37996
+Time Graph Const:0.0305822
+Time Graph Plan:0.001021
+Time Path Plan:5.55973
 Time Assign:0
-Time Total:9.4686
-Time Reloc Plan:0.00036
+Time Total:5.61353
+Time Reloc Plan:0.000192
 #
 data_name:data_3o_2
 index:66
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0637886
-Time Graph Plan:0.001113
-Time Path Plan:9.3695
+Time Graph Const:0.0300002
+Time Graph Plan:0.001154
+Time Path Plan:5.4902
 Time Assign:0
-Time Total:9.46207
-Time Reloc Plan:0.000303
+Time Total:5.54327
+Time Reloc Plan:0.000217
 #
 data_name:data_3o_2
 index:67
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0609015
-Time Graph Plan:0.00121
-Time Path Plan:9.18133
+Time Graph Const:0.0295902
+Time Graph Plan:0.000923
+Time Path Plan:5.53465
 Time Assign:0
-Time Total:9.27017
-Time Reloc Plan:0.000311
+Time Total:5.58762
+Time Reloc Plan:0.000164
 #
 data_name:data_3o_2
 index:68
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0645915
-Time Graph Plan:0.002223
-Time Path Plan:9.47695
+Time Graph Const:0.0295971
+Time Graph Plan:0.000815
+Time Path Plan:5.52061
 Time Assign:0
-Time Total:9.57052
-Time Reloc Plan:0.000317
+Time Total:5.57295
+Time Reloc Plan:0.000181
 #
 data_name:data_3o_2
 index:69
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0648095
-Time Graph Plan:0.001751
-Time Path Plan:9.45564
+Time Graph Const:0.0305182
+Time Graph Plan:0.000935
+Time Path Plan:5.53167
 Time Assign:0
-Time Total:9.55024
-Time Reloc Plan:0.000483
+Time Total:5.58569
+Time Reloc Plan:0.000187
 #
 data_name:data_3o_2
 index:70
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0702798
-Time Graph Plan:0.001601
-Time Path Plan:9.46235
+Time Graph Const:0.0297562
+Time Graph Plan:0.001072
+Time Path Plan:5.52535
 Time Assign:0
-Time Total:9.56048
-Time Reloc Plan:0.000372
+Time Total:5.57815
+Time Reloc Plan:0.000178
 #
 data_name:data_3o_2
 index:71
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0656247
-Time Graph Plan:0.001067
-Time Path Plan:9.33235
+Time Graph Const:0.0295472
+Time Graph Plan:0.00131
+Time Path Plan:5.55638
 Time Assign:0
-Time Total:9.42633
-Time Reloc Plan:0.000312
+Time Total:5.61071
+Time Reloc Plan:0.000216
 #
 data_name:data_3o_2
 index:72
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0646616
-Time Graph Plan:0.001343
-Time Path Plan:9.48394
+Time Graph Const:0.0295162
+Time Graph Plan:0.001281
+Time Path Plan:5.54685
 Time Assign:0
-Time Total:9.5781
-Time Reloc Plan:0.000367
+Time Total:5.60012
+Time Reloc Plan:0.000228
 #
 data_name:data_3o_2
 index:73
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0696095
-Time Graph Plan:0.001368
-Time Path Plan:9.80706
+Time Graph Const:0.0298241
+Time Graph Plan:0.001096
+Time Path Plan:5.50228
 Time Assign:0
-Time Total:9.90661
-Time Reloc Plan:0.000282
+Time Total:5.55548
+Time Reloc Plan:0.000227
 #
 data_name:data_3o_2
 index:74
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0641045
-Time Graph Plan:0.001167
-Time Path Plan:9.68607
+Time Graph Const:0.0296712
+Time Graph Plan:0.001299
+Time Path Plan:5.45686
 Time Assign:0
-Time Total:9.77958
-Time Reloc Plan:0.000406
+Time Total:5.50951
+Time Reloc Plan:0.000188
 #
 data_name:data_3o_2
 index:75
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0616227
-Time Graph Plan:0.001394
-Time Path Plan:9.45772
+Time Graph Const:0.0304592
+Time Graph Plan:0.000993
+Time Path Plan:5.49669
 Time Assign:0
-Time Total:9.54843
-Time Reloc Plan:0.000685
+Time Total:5.55079
+Time Reloc Plan:0.000268
 #
 data_name:data_3o_2
 index:76
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0498427
-Time Graph Plan:0.001384
-Time Path Plan:8.54221
+Time Graph Const:0.0295212
+Time Graph Plan:0.000914
+Time Path Plan:5.52775
 Time Assign:0
-Time Total:8.61841
-Time Reloc Plan:0.000439
+Time Total:5.58006
+Time Reloc Plan:0.000184
 #
 data_name:data_3o_2
 index:77
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0522986
-Time Graph Plan:0.00088
-Time Path Plan:8.70428
+Time Graph Const:0.0298192
+Time Graph Plan:0.000704
+Time Path Plan:5.55129
 Time Assign:0
-Time Total:8.78242
-Time Reloc Plan:0.000297
+Time Total:5.60374
+Time Reloc Plan:0.000167
 #
 data_name:data_3o_2
 index:78
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0502247
-Time Graph Plan:0.001199
-Time Path Plan:8.54478
+Time Graph Const:0.0297682
+Time Graph Plan:0.001039
+Time Path Plan:5.49117
 Time Assign:0
-Time Total:8.62121
-Time Reloc Plan:0.000303
+Time Total:5.54377
+Time Reloc Plan:0.000195
 #
 data_name:data_3o_2
 index:79
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0500937
-Time Graph Plan:0.000903
-Time Path Plan:8.51938
+Time Graph Const:0.0298202
+Time Graph Plan:0.001184
+Time Path Plan:5.53991
 Time Assign:0
-Time Total:8.59542
-Time Reloc Plan:0.00025
+Time Total:5.59323
+Time Reloc Plan:0.000209
 #
 data_name:data_3o_2
 index:80
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0501136
-Time Graph Plan:0.001152
-Time Path Plan:8.53003
+Time Graph Const:0.0309332
+Time Graph Plan:0.001277
+Time Path Plan:5.53851
 Time Assign:0
-Time Total:8.60629
-Time Reloc Plan:0.00028
+Time Total:5.59445
+Time Reloc Plan:0.000191
 #
 data_name:data_3o_2
 index:81
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0509187
-Time Graph Plan:0.001218
-Time Path Plan:8.6552
+Time Graph Const:0.0306782
+Time Graph Plan:0.001111
+Time Path Plan:5.52422
 Time Assign:0
-Time Total:8.73223
-Time Reloc Plan:0.000264
+Time Total:5.5793
+Time Reloc Plan:0.000236
 #
 data_name:data_3o_2
 index:82
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0512957
-Time Graph Plan:0.001189
-Time Path Plan:8.63008
+Time Graph Const:0.0297812
+Time Graph Plan:0.000857
+Time Path Plan:5.52313
 Time Assign:0
-Time Total:8.70729
-Time Reloc Plan:0.000433
+Time Total:5.5756
+Time Reloc Plan:0.000194
 #
 data_name:data_3o_2
 index:83
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0483576
-Time Graph Plan:0.000975
-Time Path Plan:8.66483
+Time Graph Const:0.0304422
+Time Graph Plan:0.000982
+Time Path Plan:5.51751
 Time Assign:0
-Time Total:8.7391
-Time Reloc Plan:0.000264
+Time Total:5.57096
+Time Reloc Plan:0.000193
 #
 data_name:data_3o_2
 index:84
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0495147
-Time Graph Plan:0.001106
-Time Path Plan:8.5713
+Time Graph Const:0.0296941
+Time Graph Plan:0.00125
+Time Path Plan:5.59363
 Time Assign:0
-Time Total:8.64808
-Time Reloc Plan:0.000381
+Time Total:5.64822
+Time Reloc Plan:0.000302
 #
 data_name:data_3o_2
 index:85
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0510506
-Time Graph Plan:0.000944
-Time Path Plan:8.57666
+Time Graph Const:0.0293781
+Time Graph Plan:0.001377
+Time Path Plan:5.55115
 Time Assign:0
-Time Total:8.65293
-Time Reloc Plan:0.000274
+Time Total:5.60394
+Time Reloc Plan:0.000193
 #
 data_name:data_3o_2
 index:86
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0495627
-Time Graph Plan:0.001059
-Time Path Plan:8.53749
+Time Graph Const:0.0301962
+Time Graph Plan:0.001137
+Time Path Plan:5.54355
 Time Assign:0
-Time Total:8.61311
-Time Reloc Plan:0.000258
+Time Total:5.59679
+Time Reloc Plan:0.000211
 #
 data_name:data_3o_2
 index:87
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0526617
-Time Graph Plan:0.001159
-Time Path Plan:8.73546
+Time Graph Const:0.0306241
+Time Graph Plan:0.000897
+Time Path Plan:5.55963
 Time Assign:0
-Time Total:8.81411
-Time Reloc Plan:0.000284
+Time Total:5.61336
+Time Reloc Plan:0.000186
 #
 data_name:data_3o_2
 index:88
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0494357
-Time Graph Plan:0.001245
-Time Path Plan:8.524
+Time Graph Const:0.0307472
+Time Graph Plan:0.001158
+Time Path Plan:5.55386
 Time Assign:0
-Time Total:8.59942
-Time Reloc Plan:0.000277
+Time Total:5.60886
+Time Reloc Plan:0.000176
 #
 data_name:data_3o_2
 index:89
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0511936
-Time Graph Plan:0.001158
-Time Path Plan:8.74585
+Time Graph Const:0.0301742
+Time Graph Plan:0.000839
+Time Path Plan:5.54074
 Time Assign:0
-Time Total:8.82384
-Time Reloc Plan:0.000323
+Time Total:5.5938
+Time Reloc Plan:0.000186
 #
 data_name:data_3o_2
 index:90
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0490577
-Time Graph Plan:0.001165
-Time Path Plan:8.4558
+Time Graph Const:0.0298142
+Time Graph Plan:0.001518
+Time Path Plan:5.55124
 Time Assign:0
-Time Total:8.52991
-Time Reloc Plan:0.000456
+Time Total:5.60504
+Time Reloc Plan:0.000189
 #
 data_name:data_3o_2
 index:91
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0501106
-Time Graph Plan:0.001275
-Time Path Plan:8.56446
+Time Graph Const:0.0299842
+Time Graph Plan:0.001434
+Time Path Plan:5.51738
 Time Assign:0
-Time Total:8.64059
-Time Reloc Plan:0.00026
+Time Total:5.57194
+Time Reloc Plan:0.000439
 #
 data_name:data_3o_2
 index:92
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0494737
-Time Graph Plan:0.001522
-Time Path Plan:8.49557
+Time Graph Const:0.0312612
+Time Graph Plan:0.001065
+Time Path Plan:5.72874
 Time Assign:0
-Time Total:8.57122
-Time Reloc Plan:0.000422
+Time Total:5.78474
+Time Reloc Plan:0.000343
 #
 data_name:data_3o_2
 index:93
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0496046
-Time Graph Plan:0.001036
-Time Path Plan:8.38667
+Time Graph Const:0.0290251
+Time Graph Plan:0.000907
+Time Path Plan:5.50633
 Time Assign:0
-Time Total:8.46204
-Time Reloc Plan:0.000278
+Time Total:5.55852
+Time Reloc Plan:0.000191
 #
 data_name:data_3o_2
 index:94
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0524297
-Time Graph Plan:0.001019
-Time Path Plan:8.45375
+Time Graph Const:0.0290471
+Time Graph Plan:0.001194
+Time Path Plan:5.46497
 Time Assign:0
-Time Total:8.53211
-Time Reloc Plan:0.000294
+Time Total:5.51706
+Time Reloc Plan:0.000192
 #
 data_name:data_3o_2
 index:95
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0489306
-Time Graph Plan:0.001254
-Time Path Plan:8.36497
+Time Graph Const:0.0293722
+Time Graph Plan:0.001035
+Time Path Plan:5.50274
 Time Assign:0
-Time Total:8.43958
-Time Reloc Plan:0.000288
+Time Total:5.55507
+Time Reloc Plan:0.000189
 #
 data_name:data_3o_2
 index:96
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0504607
-Time Graph Plan:0.001023
-Time Path Plan:8.4718
+Time Graph Const:0.0321231
+Time Graph Plan:0.000968
+Time Path Plan:5.68761
 Time Assign:0
-Time Total:8.54733
-Time Reloc Plan:0.000263
+Time Total:5.74686
+Time Reloc Plan:0.000242
 #
 data_name:data_3o_2
 index:97
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0503647
-Time Graph Plan:0.001103
-Time Path Plan:8.38714
+Time Graph Const:0.0296492
+Time Graph Plan:0.001297
+Time Path Plan:5.48841
 Time Assign:0
-Time Total:8.46296
-Time Reloc Plan:0.0003
+Time Total:5.54152
+Time Reloc Plan:0.00019
 #
 data_name:data_3o_2
 index:98
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0510557
-Time Graph Plan:0.001146
-Time Path Plan:8.36495
+Time Graph Const:0.0300992
+Time Graph Plan:0.001326
+Time Path Plan:5.54881
 Time Assign:0
-Time Total:8.44173
-Time Reloc Plan:0.000355
+Time Total:5.60224
+Time Reloc Plan:0.00022
 #
 data_name:data_3o_2
 index:99
 Is Success:T
 Number of Relocations:1
 Delivery Sequence:b5,b3,b4,b2,b1
-Time Graph Const:0.0485027
-Time Graph Plan:0.000954
-Time Path Plan:8.37544
+Time Graph Const:0.0300432
+Time Graph Plan:0.001253
+Time Path Plan:5.59011
 Time Assign:0
-Time Total:8.4491
-Time Reloc Plan:0.000303
+Time Total:5.64435
+Time Reloc Plan:0.000224

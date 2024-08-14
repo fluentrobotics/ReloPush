@@ -161,6 +161,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         //stopWatch time_path_gen_push_path("push-path", measurement_type::pathPlan);
         // path segments for relocation
         // final pushing
+        std::cout << "1" << std::endl;
         auto push_path_pair = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc);
         push_path = push_path_pair.first;
         PathInfoList push_pathinfo = push_path_pair.second;
@@ -169,7 +170,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
 
         // count
         //count_pre_relocs += num_prereloc;
-
+        std::cout << 2 << std::endl;
         // relocation paths
         StatePathsPtr relo_paths;
         ReloPathInfoList relo_pathinfo;
@@ -179,9 +180,12 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         time_path_gen_relo_path.stop();
         time_watches.push_back(time_path_gen_relo_path);
 
+        std::cout << "3" << std::endl;
         stopWatch time_path_gen_comb_path("motion", measurement_type::pathPlan);
+
+        PathInfoList tempFinalPathInfo = PathInfoList();
         // combined path for the delivery
-        auto reloPush_path = combine_relo_push(push_path, *relo_paths, push_pathinfo, relo_pathinfo, final_pathinfo, robots[0], env, reloc_objects);
+        auto reloPush_path = combine_relo_push(push_path, *relo_paths, push_pathinfo, relo_pathinfo, tempFinalPathInfo, robots[0], env, reloc_objects);
         time_path_gen_comb_path.stop();
         time_watches.push_back(time_path_gen_comb_path);
 
@@ -208,6 +212,9 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
 
             num_pre_relocs = num_prereloc;
             num_temp_relocs = num_tempreloc;            
+
+            // store in path info
+            final_pathinfo = tempFinalPathInfo;
 
             break;
         }
@@ -469,6 +476,11 @@ int main(int argc, char **argv)
         params::leave_log = std::atoi(argv[3]);
     }
     */
+
+    //const char* args[] = { "program_name", "data_6o.txt", "0", "0" };
+    //argv = const_cast<char**>(args);
+    //argc = 4;
+
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 
     // print initial messages
@@ -556,7 +568,11 @@ int main(int argc, char **argv)
 
         // print results
     if(reloResult.is_succ)
-        std::cout << "Pre-relocations: " << reloResult.num_of_prereloc << std::endl;
+    {
+        std::cout << "Pre-relocations: " << dcol.pathInfoList.count_pre_relocations() << std::endl;
+        std::cout << "Temp-relocations: " << dcol.pathInfoList.count_temp_relocations() << std::endl;
+        std::cout << "Total-relocations: " << dcol.pathInfoList.count_total_relocations() << std::endl;
+    }
     else
         std::cout << "Instance Failed" << std::endl;
 
@@ -578,6 +594,14 @@ int main(int argc, char **argv)
         std::cout << "== Final Path ==" << std::endl;
         for(auto& p : final_path)
             std::cout << p.x << "," << p.y << "," << p.yaw << std::endl;
+
+        // to verify
+        std::cout << std::endl;
+        dcol.pathInfoList.print_path();
+
+        // for verification
+        std::cout << "pathinfo length: " << dcol.pathInfoList.total_path_length() << std::endl;
+        std::cout << "outpath length: " << path_length(final_path) << std::endl;
     }
 
     //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, failed_paths, 10);
