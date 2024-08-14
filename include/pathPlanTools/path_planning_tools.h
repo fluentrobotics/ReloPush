@@ -112,7 +112,18 @@ struct hash<State> {
 using Action = int;  // Action < 6
 
 // for checking state validity of a path
-enum stateValidity {valid, collision, out_of_boundary};
+enum StateValidity {valid, collision, out_of_boundary};
+
+// bool and reason
+struct StateValiditySet{
+  std::pair<bool, StateValidity> data;
+
+  StateValiditySet(bool is_valid, StateValidity validity) : data(is_valid,validity) {}
+
+  operator bool() const {
+        return data.first;
+    }
+};
 
 class Environment {
  public:
@@ -577,17 +588,17 @@ class Environment {
   }
 
 
-  bool stateValid(const State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
+  StateValiditySet stateValid(const State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
                                   float LB = Constants::LB, float LF = Constants::LF) {
     //dynamic obstacles
     auto it = dynamic_obs.equal_range(s.time);
     for (auto itr = it.first; itr != it.second; ++itr) {
-      if (s.agentCollision(itr->second,Constants::LF,Constants::carWidth)) return false;
+      if (s.agentCollision(itr->second,Constants::LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);
     }
     auto itlow = dynamic_obs.lower_bound(-s.time);
     auto itup = dynamic_obs.upper_bound(-1);
     for (auto it = itlow; it != itup; ++it)
-      if (s.agentCollision(it->second,Constants::LF,Constants::carWidth)) return false;
+      if (s.agentCollision(it->second,Constants::LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
 
 
     Eigen::Matrix2f rot;
@@ -603,7 +614,7 @@ class Environment {
         {
           //std::cout << "x: " << obs(0) << " y: " << obs(1) << std::endl;
           //std::cout << "x: " << rotated_obs(0) << " y: " << rotated_obs(1) << std::endl;
-          return false;
+          return StateValiditySet(false, StateValidity::collision);;
         }
     }
 
@@ -611,9 +622,9 @@ class Environment {
     double x_ind = s.x / Constants::mapResolution;
     double y_ind = s.y / Constants::mapResolution;
     if (x_ind < 0 || x_ind >= m_dimx || y_ind < 0 || y_ind >= m_dimy)
-      return false;
+      return StateValiditySet(false, StateValidity::out_of_boundary);;
 
-    return true;
+    return StateValiditySet(true, StateValidity::valid);
     // Eigen::Matrix2f rot;
     // double yaw = M_PI / 2;
     // rot << cos(yaw), -sin(yaw), sin(yaw), cos(yaw);

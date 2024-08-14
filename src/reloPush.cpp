@@ -180,7 +180,21 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         time_path_gen_relo_path.stop();
         time_watches.push_back(time_path_gen_relo_path);
 
-        std::cout << "3" << std::endl;
+        if(relo_paths == nullptr)
+        {
+            // relo path search failed
+            Color::println("ReloPath Failed", Color::RED, Color::BG_YELLOW);
+            //return reloPlanResult(false); // todo: don't return unless this is the only one left
+
+            // mark this path as not feasible by raising cost
+            costMat_vertices_pairs[min_list_ind].first->operator()(min_list[min_list_ind]->min_row, min_list[min_list_ind]->min_col) = std::numeric_limits<float>::infinity();
+
+            // repeat
+            Color::println("REPLAN", Color::RED,Color::BG_YELLOW);
+            continue;
+        }
+
+
         stopWatch time_path_gen_comb_path("motion", measurement_type::pathPlan);
 
         PathInfoList tempFinalPathInfo = PathInfoList();
@@ -201,6 +215,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
 
             // repeat
             Color::println("REPLAN", Color::RED,Color::BG_YELLOW);
+            continue;
         }
         
         // all necessary paths are found
@@ -477,7 +492,7 @@ int main(int argc, char **argv)
     }
     */
 
-    //const char* args[] = { "program_name", "data_6o.txt", "0", "0" };
+    //const char* args[] = { "program_name", "data_6o.txt", "2", "0" };
     //argv = const_cast<char**>(args);
     //argc = 4;
 

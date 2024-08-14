@@ -849,7 +849,7 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
 
     // for movable object update
     relocationPair_list object_relocation;
-std::cout << "6" << std::endl;
+
     // for each movable object
     for(int m = 0; m<relo_list.size(); m++)
     {
@@ -868,6 +868,10 @@ std::cout << "6" << std::endl;
         for(size_t i=0; i<valid_vec.size(); i++)
             valid_vec[i] = false;
 
+        std::vector<bool> out_of_boundary_vec(candidates.size());
+        for(size_t i=0; i<out_of_boundary_vec.size(); i++)
+            out_of_boundary_vec[i] = false;
+
         bool valid_position_found = false;
         while(true) //todo: add condition to quit
         {
@@ -882,19 +886,33 @@ std::cout << "6" << std::endl;
                 candidates[n].y += delta_y;
 
                 // check if this is a valid position
-                if(temp_env.stateValid(candidates[n],Constants::carWidth,0.3,Constants::LB,Constants::LF) == true) //todo: set better values
+                auto validity_check = temp_env.stateValid(candidates[n],Constants::carWidth,0.3,Constants::LB,Constants::LF);
+                if(validity_check == true) //todo: set better values
                 {
                     valid_vec[n] = true;
                     // add break flag
                     valid_position_found = true;
+                }
+                else
+                {
+                    if(validity_check.data.second == StateValidity::out_of_boundary)
+                    {
+                        out_of_boundary_vec[n] = true;
+                    }
                 }
             }
 
             // break if a point is found
             if(valid_position_found)
                 break;
+
+            if(std::all_of(out_of_boundary_vec.begin(), out_of_boundary_vec.end(), [](bool v) { return v; }))
+            {
+                // all candidates expanded out of boundary. search failed
+                return std::make_tuple(nullptr,relocationPair_list(), ReloPathInfoList());
+            }
         }
-std::cout << "7" << std::endl;
+
         // pick a valid pose if multiple // todo: find a better way to handle multiple candidates
         int valid_ind = findFirstTrueIndex(valid_vec);
 
