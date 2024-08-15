@@ -137,7 +137,7 @@ void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
     if(!use_mocap) // todo: parse as param
         test_path_pub = nh.advertise<nav_msgs::Path>("/car/planned_trajectory", 10);
     else
-        test_path_pub = nh.advertise<nav_msgs::Path>("/mushr2/planned_trajectory", 10);
+        test_path_pub = nh.advertise<nav_msgs::Path>("/mushr2/sim_trajectory", 10);
 
     test_path_pub_ptr = new ros::Publisher(test_path_pub);
 
@@ -618,6 +618,7 @@ std::pair<Eigen::Vector3f,Eigen::Vector3f> get_real_robotPose(ros::NodeHandle& n
         // todo: move it to the beginning of the program to do it only once
         auto transform = listen_tf(from_tf, to_tf);
         auto robotPose_mocap = ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/natnet_ros/mushr2/pose", nh);
+        std::cout << "Real Robot Pose: " << robotPose_mocap->pose.position.x << ", " << robotPose_mocap->pose.position.y << std::endl;
 
         if (robotPose_mocap != nullptr) {
             // Robot pose on mocap frame

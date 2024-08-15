@@ -52,6 +52,8 @@ include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} ${OMPL_
 #test programs
 add_executable(test_dubins "test/test_dubins.cpp")
 target_link_libraries(test_dubins ${Boost_LIBRARIES} ${OMPL_LIBRARIES})
+add_executable(mocap_tf "src/mocap_tf.cpp")
+target_link_libraries(mocap_tf ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES})
 
 add_executable(
     ${PROJECT_NAME} 

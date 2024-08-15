@@ -90,6 +90,34 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
     space->freeState(s);
 }
 
+std::vector<State> interpolateStraightPath(const State& start, const State& goal, float resolution) {
+    std::vector<State> path;
+
+    // Calculate distance
+    float dx = goal.x - start.x;
+    float dy = goal.y - start.y;
+    float distance = std::sqrt(dx * dx + dy * dy);
+
+    // Determine the number of steps
+    int num_steps = std::ceil(distance / resolution);
+
+    // Interpolate between the start and goal
+    for (int i = 0; i <= num_steps; ++i) {
+        float t = static_cast<float>(i) / num_steps;
+
+        // Linear interpolation
+        State intermediate;
+        intermediate.x = (1 - t) * start.x + t * goal.x;
+        intermediate.y = (1 - t) * start.y + t * goal.y;
+        intermediate.yaw = (1 - t) * start.yaw + t * goal.yaw;
+
+        // Store the interpolated state
+        path.push_back(intermediate);
+    }
+
+    return path;
+}
+
 
 reloDubinsPath findDubins(State &start, State &goal, double turning_radius, bool print_type)
 {

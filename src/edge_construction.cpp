@@ -58,6 +58,30 @@ StateValidity check_validity_by_interpolation(OmplState* dubinsStart, OmplState*
     return validity;
 }
 
+// straight path
+StateValidity check_validity_by_interpolation(State& from, State& to, float resolution, 
+                                                Environment& env, float max_x, float max_y)
+{
+    StateValidity validity = StateValidity::valid;
+
+    // interpolate the straight path
+    auto interpolated_path = interpolateStraightPath(from,to,resolution);
+
+    for (size_t p=0; p< interpolated_path.size(); p++)
+    {
+        auto v = env.stateValid(interpolated_path[p]);
+
+        if(!v)
+        {
+            validity = v.data.second;
+            break;
+        }
+
+    }
+
+    return validity;
+}
+
 /*
 ** input: turning_radius, pivot_state(from_state), dubinsSpace
 ** output: dubinsStart, interState
@@ -145,6 +169,45 @@ StateValidity check_collision(movableObject fromObj, movableObject toObj, StateP
 
     return validity;
 }
+
+StateValidity check_collision_straight(movableObject fromObj, movableObject toObj, StatePtr pivot_state, VertexPtr pivot_vertex, size_t state_ind,
+                    std::pair<State,State> straight_path, Environment& env, float max_x, float max_y, float turning_radius, bool is_delivery = false)
+{
+
+    // path length
+    auto dx = straight_path.second.x - straight_path.first.x;
+    auto dy = straight_path.second.y - straight_path.first.y;
+    auto path_length = sqrtf(dx*dx + dy*dy);
+
+    size_t num_pts = static_cast<int>(path_length/(0.1*0.5)); //todo: get resolution as a param
+
+    StateValidity validity = StateValidity::valid;
+    
+    std::vector<State> took_out(0);
+    // takeout pivot object from obstacles
+    took_out.push_back(State(fromObj.get_x(),fromObj.get_y(),0));
+    env.remove_obs(State(fromObj.get_x(),fromObj.get_y(),0));
+
+    // takeout target object from obstacles
+    // only if this is not a delivery location
+    if(!is_delivery){
+        took_out.push_back(State(toObj.get_x(),toObj.get_y(),0));
+        env.remove_obs(State(toObj.get_x(),toObj.get_y(),0));
+    }
+
+    // Interpolate dubins path to check for collision on grid map
+    validity = check_validity_by_interpolation(straight_path.first,straight_path.second,Constants::mapResolution,env,max_x,max_y);;
+
+    if(validity == StateValidity::valid && params::print_log)
+        std::cout << "edge found" << std::endl;         
+
+    //put back took-out obstacles
+    for(auto it : took_out)
+        env.add_obs(it);
+
+    return validity;
+}
+
 
 // Comparison function to compare the float values in the tuples
 bool compareTuples(const std::tuple<bool, float, int>& a, const std::tuple<bool, float, int>& b) {
@@ -473,6 +536,16 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
                 // reloacted object pose
                 State long_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
+
+                // check collision of this pre-relocation
+                auto pre_relo_validity = check_collision_straight(fromObj, toObj, std::make_shared<State>(long_thres), pivot_vertex, state_ind, 
+                                                    std::make_pair(*pivot_state,long_thres),env,max_x,max_y,turning_radius, is_delivery);
+
+                if(pre_relo_validity != StateValidity::valid)
+                {
+                    // pre relo path not valid
+                    continue;
+                }
 
                 // find new dubins path
                 auto new_dubins_res = is_good_path(long_thres,*target_state,turning_radius);

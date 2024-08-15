@@ -101,6 +101,8 @@ enum pathType
 void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace::DubinsPath &path, double t,
                        OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius);
 
+std::vector<State> interpolateStraightPath(const State& start, const State& goal, float resolution);
+
 
 reloDubinsPath findDubins(State &start, State &goal, double turning_radius = 1.0, bool print_type = false);
 

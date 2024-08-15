@@ -451,6 +451,7 @@ void init_prompt(std::string& data_file, int& data_ind)
     Color::println("== ind: " + std::to_string(data_ind) + " ===",Color::BG_YELLOW);
     Color::println("== log: " + std::to_string(params::leave_log) + " ===",Color::BG_YELLOW);
     Color::println("== post-push: " + std::to_string(params::post_push_ind) + " ===",Color::BG_YELLOW);
+    Color::println("== use real robot: " + std::to_string(params::use_mocap) + " ===", Color::BG_YELLOW);
     Color::println("== timeout (ms): " + std::to_string(params::grid_search_timeout) + " ===",Color::BG_YELLOW);
 }
 
@@ -505,7 +506,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     nh_ptr = &nh;
     // initialize publishers
-    initialize_publishers(nh);
+    initialize_publishers(nh,params::use_mocap);
 
     // wait for debug attach
     ros::Duration(0.1).sleep();
@@ -540,6 +541,11 @@ int main(int argc, char **argv)
     }
     else{ // parse from input file
         parse_from_input_file(data_file, data_ind, mo_list, robots, delivery_table, delivery_list);
+        if(params::use_mocap)
+        {
+            robots.clear();
+            init_robots(robots, nh, params::use_mocap);
+        }
     }
 
     // save initital mo_list
