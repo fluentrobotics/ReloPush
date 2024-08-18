@@ -6,6 +6,7 @@
  *
  * @copyright Copyright (c) 2020
  *
+ *  Modified: Ahn, Jeeho
  */
 #pragma once
 
@@ -36,6 +37,7 @@ struct PlanResult {
   Cost fmin;
   // success or fail
   bool success;
+
   // return path as a vector of States
   std::vector<State> getPath(bool negateYaw = false)
   {

@@ -339,7 +339,10 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
 
             // check there is a path connecting preRelo to new pre-push
             // add/remove virtual obstacles
-            bool is_path_to_prepush_valid = false;
+
+            // in previous version, motion was being planned here. this is modifed to be done in latter stage.
+            //
+            //bool is_path_to_prepush_valid = false;
             env.remove_obs(*pivot_state);
             // relocated
             env.add_obs(state_thres);
@@ -348,19 +351,22 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
             time_watches.push_back(time_ofb2);
 
             State arrivalState(state_thres.x,state_thres.y,yaw);
-            stopWatch time_mp("pre_mp", measurement_type::pathPlan);
-            auto plan_res = planHybridAstar(find_pre_push(arrivalState), new_prepush, env, params::grid_search_timeout, false);
-            time_mp.stop();
-            time_watches.push_back(time_mp);
-            if(plan_res->success)
-               is_path_to_prepush_valid = true;
+
+            ///////////////////// change of order: don't plan motion here but leave it as a blank. cross it out when it failes during MP stage ///////////////////
+            //stopWatch time_mp("pre_mp", measurement_type::pathPlan);
+            //auto plan_res = planHybridAstar(find_pre_push(arrivalState), new_prepush, env, params::grid_search_timeout, false);
+            //time_mp.stop();
+            //time_watches.push_back(time_mp);
+            //if(plan_res->success)
+            //   is_path_to_prepush_valid = true;
 
             // revert obstacle
             env.add_obs(*pivot_state);
             env.remove_obs(state_thres);
 
             // if yes, go with it. if not, try next best
-            if(is_valid && is_pre_push_valid && is_path_to_prepush_valid)
+            //if(is_valid && is_pre_push_valid && is_path_to_prepush_valid)
+            if(is_valid && is_pre_push_valid)
             {
                 stopWatch time_pre_valid("pre_valid", measurement_type::graphConst);
                 push_found = true;
@@ -372,7 +378,11 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
                 auto dubins_pre = findDubins(*pivot_state,state_thres,turning_radius);
 
                 State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
-                preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,plan_res);
+
+                //leave motion plan as a blank placeholder for now. It will be handled later.
+                //preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,plan_res);
+                State arrivalStatePrepush = find_pre_push(arrivalState);
+                preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,std::make_shared<PathPlanResult>(PathPlanResult(arrivalStatePrepush, new_prepush, *pivot_state, state_thres)));
 
                 // cost for pre-relocations
                 float pre_cost=0;
@@ -580,7 +590,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
                 // check there is a path connecting relocation post-push to new pre-push
                 // add/remove virtual obstacles
-                bool is_path_to_prepush_valid = false;
+                //bool is_path_to_prepush_valid = false;
                 env.remove_obs(*pivot_state);
                 // relocated
                 env.add_obs(long_thres);
@@ -588,13 +598,13 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 State arrivalState(long_thres.x,long_thres.y,yaw);
                 State relocation_postpush = find_pre_push(arrivalState);
                 // motion plan
-                stopWatch time_mp("preReloc", measurement_type::pathPlan);
-                auto plan_res =planHybridAstar(relocation_postpush, new_prepush, env, params::grid_search_timeout, false);
-                time_mp.stop();
-                time_watches.push_back(time_mp);
+                //stopWatch time_mp("preReloc", measurement_type::pathPlan);
+                //auto plan_res =planHybridAstar(relocation_postpush, new_prepush, env, params::grid_search_timeout, false);
+                //time_mp.stop();
+                //time_watches.push_back(time_mp);
                 
-                if(plan_res->success)
-                    is_path_to_prepush_valid = true;
+                //if(plan_res->success)
+                //    is_path_to_prepush_valid = true;
                 
 
                 // revert obstacle
@@ -603,7 +613,8 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
                 // if yes, go with it. if not, try next best
                 
-                if(chk == StateValidity::valid && is_valid && is_pre_push_valid && is_path_to_prepush_valid)
+                //if(chk == StateValidity::valid && is_valid && is_pre_push_valid && is_path_to_prepush_valid)
+                if(chk == StateValidity::valid && is_valid && is_pre_push_valid)
                 {
                     stopWatch time_pre_valid("pre_valid", measurement_type::graphConst);
 
@@ -620,7 +631,8 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     auto dubins_pre = findDubins(preRelocStart,arrivalState,turning_radius);
 
                     // State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
-                    preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,plan_res);
+                    //preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,plan_res);
+                    preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,std::make_shared<PathPlanResult>(PathPlanResult(relocation_postpush, new_prepush, *pivot_state, long_thres)));
                     preRelocs.push_back(prePath);
 
                     // cost for pre-relocations

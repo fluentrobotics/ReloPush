@@ -79,6 +79,14 @@ class stopWatchSet
 				std::cout << it.get_name() << ": " << it.get_measurement() << " us" << std::endl;
 			}
 		}
+
+		void stop_and_append(stopWatch& watch_in, bool print_time = true)
+		{
+			watch_in.stop();
+			if(print_time)
+				watch_in.print_us();
+			watches.push_back(watch_in);
+		}
 };
 
 #endif

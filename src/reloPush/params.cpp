@@ -11,7 +11,7 @@ namespace params
     int post_push_ind = -2; // ind
     float interpolation_step = 0.2f;
 
-    const bool use_mocap = true; //todo: parse as a parameter
+    const bool use_mocap = false; //todo: parse as a parameter
     
     const bool reset_robot_pose = true;
 

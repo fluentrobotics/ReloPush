@@ -75,14 +75,14 @@ private:
 class preReloPath{
     public:
     reloDubinsPath preReloDubins;
-    std::shared_ptr<PlanResult<State, Action, double>> pathToNextPush; // to next pre-push
+    PathPlanResultPtr pathToNextPush; // to next pre-push
 
     preReloPath()
     {
         preReloDubins = reloDubinsPath(0);
     }
     
-    preReloPath(State start, State target, reloDubinsPath& dubins_in, std::shared_ptr<PlanResult<State, Action, double>> path_to_next_prePush)
+    preReloPath(State start, State target, reloDubinsPath& dubins_in, PathPlanResultPtr path_to_next_prePush)
     {
         preReloDubins = dubins_in;
         preReloDubins.startState = start;

@@ -1,5 +1,5 @@
 <!-- -*- mode: XML -*- -->
 <launch>
-    <node pkg="reloPush" type="reloPush" name="reloPush" args="data_6o.txt 0 0">
+    <node pkg="reloPush" type="reloPush" name="reloPush" args="">
     </node>
 </launch>

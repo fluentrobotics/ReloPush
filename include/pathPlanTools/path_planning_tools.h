@@ -111,6 +111,36 @@ struct hash<State> {
 
 using Action = int;  // Action < 6
 
+typedef PlanResult<State, Action, double> PlanResultType;
+
+struct PathPlanResult : PlanResultType
+{
+  State start_pose;
+  State goal_pose;
+  State obs_rm; // need to remove this obstacle from env before planning
+  State obs_add;
+  
+  PathPlanResult()
+  {
+    start_pose = State();
+    goal_pose = State();
+    success = false;
+  }
+  PathPlanResult(State& start_in, State& goal_in) 
+                : start_pose(start_in), goal_pose(goal_in)
+  {
+    success = false;
+  }
+  PathPlanResult(State& start_in, State& goal_in, State& obs_to_rm, State& obs_to_add) 
+                : start_pose(start_in), goal_pose(goal_in), obs_rm(obs_to_rm), obs_add(obs_to_add)
+  {
+    success = false;
+  }
+};
+
+
+typedef std::shared_ptr<PathPlanResult> PathPlanResultPtr;
+
 // for checking state validity of a path
 enum StateValidity {valid, collision, out_of_boundary};
 
@@ -756,6 +786,6 @@ class Environment {
   std::multimap<int, State> dynamic_obs;
 };
 
-std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, State goal_in, Environment& env, int64_t timeout_ms = 0 ,bool print_res = false);
+PathPlanResultPtr planHybridAstar(State start, State goal_in, Environment& env, int64_t timeout_ms = 0 ,bool print_res = false);
 
 #endif

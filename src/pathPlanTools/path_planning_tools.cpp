@@ -1,56 +1,56 @@
 
 #include<pathPlanTools/path_planning_tools.h>
 #include <chrono>
-std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, State goal_in, Environment& env, int64_t timeout_ms ,bool print_res)
+PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& env, int64_t timeout_ms ,bool print_res)
 {  
     //auto time_start = std::chrono::high_resolution_clock::now();
     // make sure the angle range is in 0~2pi
-    start.yaw = jeeho::convertEulerRange_to_2pi(start.yaw);
+    start_in.yaw = jeeho::convertEulerRange_to_2pi(start_in.yaw);
     goal_in.yaw = jeeho::convertEulerRange_to_2pi(goal_in.yaw);
 
     // check if states are valid
-    auto start_valid = env.stateValid(start);
+    auto start_valid = env.stateValid(start_in);
     auto goal_valid = env.stateValid(goal_in);
 
     // not valid start/target
     if(!start_valid)
     {
-        PlanResult<State, Action, double> solution;
+        PathPlanResult solution;
         //std::cout << "\033[1m\033[31m Start not valid \033[0m\n";
         //std::cout << "start not valid: (" << start.x << ", " << start.y << ", " << start.yaw << ")\n";
         solution.cost = -1;
-        return std::make_shared<PlanResult<State, Action, double>>(solution); 
+        return std::make_shared<PathPlanResult>(solution); 
     }
     if(!goal_valid)
     {
-        PlanResult<State, Action, double> solution;
+        PathPlanResult solution;
         //std::cout << "\033[1m\033[31m Target not valid \033[0m\n";
         //std::cout << "target not valid: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
         solution.cost = -1;
-        return std::make_shared<PlanResult<State, Action, double>>(solution); 
+        return std::make_shared<PathPlanResult>(solution); 
 
     }
 
     // if start and goal are the same, return empty path with success
-    if(start == goal_in)
+    if(start_in == goal_in)
     {
-        PlanResult<State, Action, double> solution;
+        PathPlanResult solution(start_in,goal_in);
         solution.states.clear();
         solution.actions.clear();
         //std::cout << "\033[1m\033[31m Target not valid \033[0m\n";
         //std::cout << "target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
         solution.cost = 0;
-        return std::make_shared<PlanResult<State, Action, double>>(solution); 
+        return std::make_shared<PathPlanResult>(solution);
     }
 
     // negate yaw for hybrid astar
-    State start_neg = State(start.x,start.y,-1*start.yaw);
+    State start_neg = State(start_in.x,start_in.y,-1*start_in.yaw);
     State goal_neg = State(goal_in.x, goal_in.y, -1*goal_in.yaw);
     
     env.changeGoal(goal_neg);
     
     HybridAStar<State, Action, double, Environment> hybridAStar(env);
-    PlanResult<State, Action, double> solution;
+    PathPlanResult solution(start_in, goal_in);
     bool searchSuccess = hybridAStar.search(start_neg, solution, 0, timeout_ms);
 
     //auto time_end = std::chrono::high_resolution_clock::now();
@@ -58,7 +58,6 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
     //if(!searchSuccess)
     //    std::cout << "= " << "\tFailed" << " =" << std::endl;
     //std::cout << "=== " << duration << " ===" << std::endl;
-
 
     if (searchSuccess) {
         if(print_res)
@@ -80,5 +79,5 @@ std::shared_ptr<PlanResult<State, Action, double>> planHybridAstar(State start, 
             solution.cost = -1;
     }
 
-    return std::make_shared<PlanResult<State, Action, double>>(solution);    
+    return std::make_shared<PathPlanResult>(solution);    
 }
