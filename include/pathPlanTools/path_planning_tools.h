@@ -46,11 +46,14 @@ static float speed_limit = 0.36f; //0.4
 static float L = 0.29f;
 // [m] --- The minimum turning radius of the vehicle
 static float r_push = L / tanf(fabs(steer_limit_push));
-static float r = L / tanf(fabs(steer_limit_nonpush));
+static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
+static float r = r_nonpush; // non-push as default
 //static float r = 0.5;
 //static const float r = 3;
 //static const float deltat = 6.75 / 180.0 * M_PI;
-static float deltat = speed_limit / r /1.5;
+static float deltat_push = speed_limit / r_push / 1.5;
+static float deltat_nonpush = speed_limit / r_nonpush / 1.5;
+static float deltat = deltat_nonpush; // non-push as default
 // [#] --- A movement cost penalty for turning (choosing non straight motion
 // primitives)
 static const float penaltyTurning = 50;
@@ -67,8 +70,14 @@ static float heuristicWeight = 1.0f;
 
 // map resolution
 static const float mapResolution = 0.1;
-static const float xyResolution = r * deltat;
-static const float yawResolution = deltat;
+
+static const float xyResolution_push = r_push * deltat_push;
+static const float xyResolution_nonpush = r_nonpush * deltat_nonpush;
+static float xyResolution = xyResolution_nonpush; // non-push as default
+
+static const float yawResolution_push = deltat_push;
+static const float yawResolution_nonpush = deltat_nonpush;
+static float yawResolution = yawResolution_nonpush; // non-push as default
 
 // width of car
 static const float carWidth = 0.3;
@@ -80,11 +89,11 @@ static const float LB = 0.12;
 static const float obsRadius = 0.2;
 
 // R = 3, 6.75 DEG
-const double dx[] = {r * deltat, r* sin(deltat),  r* sin(deltat),
+static double dx[] = {r * deltat, r* sin(deltat),  r* sin(deltat),
                      -r* deltat, -r* sin(deltat), -r* sin(deltat)};
-const double dy[] = {0, -r*(1 - cos(deltat)), r*(1 - cos(deltat)),
+static double dy[] = {0, -r*(1 - cos(deltat)), r*(1 - cos(deltat)),
                      0, -r*(1 - cos(deltat)), r*(1 - cos(deltat))};
-const double dyaw[] = {0, deltat, -deltat, 0, -deltat, deltat};
+static double dyaw[] = {0, deltat, -deltat, 0, -deltat, deltat};
 
 static inline float normalizeHeadingRad(float t) {
   if (t < 0) {
@@ -94,7 +103,67 @@ static inline float normalizeHeadingRad(float t) {
 
   return t - 2.f * M_PI * static_cast<int>(t / (2.f * M_PI));
 }
+
+static inline void update_dx()
+{
+  dx[0] = r * deltat;
+  dx[1] = r * sin(deltat);
+  dx[2] = r * sin(deltat);
+  dx[3] = -r * deltat;
+  dx[4] = -r * sin(deltat);
+  dx[5] = -r * sin(deltat);
+}
+
+static inline void update_dy()
+{
+  double y_term = r * (1 - cos(deltat));
+  dy[0] = 0;
+  dy[1] = -y_term;
+  dy[2] = y_term;
+  dy[3] = 0;
+  dy[4] = -y_term;
+  dy[5] = y_term;
+}
+
+static inline void update_dyaw()
+{
+  dyaw[0] = 0;
+  dyaw[1] = deltat;
+  dyaw[2] = -deltat;
+  dyaw[3] = 0;
+  dyaw[4] = -deltat;
+  dyaw[5] = deltat;
+}
+
+static inline void update_dx_dy_dyaw()
+{
+  update_dx();
+  update_dy();
+  update_dyaw;
+}
+
+static inline void switch_to_pushing()
+{
+  r = r_push;
+  deltat = deltat_push;
+  xyResolution = xyResolution_push;
+  yawResolution = yawResolution_push;
+
+  update_dx_dy_dyaw();
+}
+
+static inline void switch_to_nonpushing()
+{
+  r = r_nonpush;
+  deltat = deltat_nonpush;
+  xyResolution = xyResolution_nonpush;
+  yawResolution = yawResolution_nonpush;
+
+  update_dx_dy_dyaw();
+}
+
 }  // namespace Constants
+
 
 // calculate agent collision more precisely BUT need LONGER time
 // #define PRCISE_COLLISION

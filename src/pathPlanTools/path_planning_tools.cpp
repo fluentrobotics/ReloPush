@@ -8,6 +8,7 @@ PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& en
     start_in.yaw = jeeho::convertEulerRange_to_2pi(start_in.yaw);
     goal_in.yaw = jeeho::convertEulerRange_to_2pi(goal_in.yaw);
 
+#pragma region check_validity
     // check if states are valid
     auto start_valid = env.stateValid(start_in);
     auto goal_valid = env.stateValid(goal_in);
@@ -42,6 +43,7 @@ PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& en
         solution.cost = 0;
         return std::make_shared<PathPlanResult>(solution);
     }
+#pragma endregion
 
     // negate yaw for hybrid astar
     State start_neg = State(start_in.x,start_in.y,-1*start_in.yaw);

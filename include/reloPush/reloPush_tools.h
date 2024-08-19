@@ -256,7 +256,8 @@ nav_msgs::Path transformPath(const nav_msgs::Path& input_path, const tf::Transfo
 /// Vertices and paht with cost
 typedef std::shared_ptr<graphPlanResult> graphPlanResultPtr;
 
-typedef std::shared_ptr<Eigen::MatrixXf> MatPtr;
+typedef Eigen::Matrix<float, -1, -1> MatType;
+typedef std::shared_ptr<MatType> MatPtr;
 
 typedef std::pair<MatPtr,ObjectPairPath> ObjectCostMat;
 
@@ -281,7 +282,7 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
         const int cols = target_obj->get_n_side();
 
         // init cost table
-        Eigen::MatrixXf cost_mat(rows,cols);
+        MatType cost_mat(rows,cols);
         // paths
         VertexPath paths(rows);
 
@@ -303,7 +304,7 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
         std::cout << cost_mat << std::endl;
 
         // store in matrix vector
-        ObjectCostMat mat_pair(std::make_shared<Eigen::MatrixXf>(cost_mat),ObjectPairPath(pivot_obj,target_obj,std::make_shared<VertexPath>(paths)));
+        ObjectCostMat mat_pair(std::make_shared<MatType>(cost_mat),ObjectPairPath(pivot_obj,target_obj,std::make_shared<VertexPath>(paths)));
         out_mat_vec.push_back(mat_pair);
     }
     

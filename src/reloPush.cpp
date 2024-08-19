@@ -115,6 +115,54 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         {
             // generate cost matrix by motion planning
 
+            // plan with pushing max radius
+            Constants::switch_to_pushing();
+
+            //for each entry in delivery table
+            for (auto i = delivery_table.begin(); i != delivery_table.end(); i++)
+            {
+                std::cout << i->first << " -> " << i->second << std::endl;
+                auto pivot_obj = nameMatcher.getObject(i->first);
+                auto target_obj = nameMatcher.getObject(i->second);
+
+                auto pivot_names = pivot_obj->get_vertex_names();
+                auto target_names = target_obj->get_vertex_names();
+
+                const int rows = pivot_obj->get_n_side();
+                const int cols = target_obj->get_n_side();
+
+                // init cost table
+                MatType cost_mat(rows,cols);
+                // paths
+                VertexPath paths(rows);
+
+                for(int row=0; row<rows; row++)
+                {
+                    paths[row].resize(cols);
+                    for(int col=0; col<cols; col++)
+                    {                
+                        std::string start_name = pivot_names[row]; // by row
+                        std::string target_name = target_names[col]; // by col
+
+                        auto start_pose = pivot_obj->get_pushing_poses()[row];
+                        auto goal_pose = target_obj->get_pushing_poses()[col];
+
+                        auto plan_res = planHybridAstar(*start_pose,*goal_pose,env,0,false);
+
+                        //paths[row][col] = res.first;
+                        //cost_mat(row,col) = res.second;
+                    }
+                }
+
+                //std::cout << cost_mat << std::endl;
+
+                // store in matrix vector
+                //ObjectCostMat mat_pair(std::make_shared<MatType>(cost_mat),ObjectPairPath(pivot_obj,target_obj,std::make_shared<VertexPath>(paths)));
+                //out_mat_vec.push_back(mat_pair);
+            }
+
+            // switch back to nonpushing for future use
+            Constants::switch_to_nonpushing();
 
             // find minimum cost delivery
 

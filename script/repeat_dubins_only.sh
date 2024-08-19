@@ -31,5 +31,5 @@ lines=$(wc -l < "$file")
 for j in $( seq 0 $lines )
 	do
 		echo $T
-		rosrun reloPush reloPush $T $j 1 1
+		rosrun reloPush reloPush $T $j 1 0
 	done
