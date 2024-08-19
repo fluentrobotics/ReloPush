@@ -115,6 +115,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         {
             // generate cost matrix by motion planning
 
+
             // find minimum cost delivery
 
             // update and repeat
@@ -311,7 +312,10 @@ int main(int argc, char **argv)
         //jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
         jeeho::logger records(reloResult.is_succ, dcol.pathInfoList.count_total_relocations(), reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
         // write to file
-        records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + removeExtension(data_file) + ".txt");
+        if(params::use_better_path)
+            records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + removeExtension(data_file) + ".txt");
+        else
+            records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + removeExtension(data_file) + "_dubins_only.txt");
     }
 
     // generate final navigation path
