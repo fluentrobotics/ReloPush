@@ -110,14 +110,24 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         // genearte name matcher
         NameMatcher nameMatcher(mo_list);
 
+        // Baseline: hybrid Astar only
+        if(params::use_mp_only)
+        {
+            // generate cost matrix by motion planning
+
+            // find minimum cost delivery
+
+            // update and repeat
+        }
+
         // construct edges between objects
-        reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r, edgeMatcher, failed_paths, time_watches.watches);
+        reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r_push, edgeMatcher, failed_paths, time_watches.watches);
     
         // print edges
         if(params::print_graph)
             print_edges(gPtr);
 
-        draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
+        draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r_push);
 
         // add deliverries to graph
         add_delivery_to_graph(delivery_list, mo_list, env, map_max_x, map_max_y, edgeMatcher, nameMatcher, failed_paths, gPtr, time_watches.watches);

@@ -600,7 +600,7 @@ void add_delivery_to_graph(std::vector<movableObject>& delivery_list, std::vecto
     for(auto& it : delivery_list)
         it.add_to_graph(gPtr);
     // add to graph
-    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r,edgeMatcher, failed_paths, time_watches);
+    reloPush::add_deliveries(delivery_list,mo_list,gPtr,env, max_x, max_y ,Constants::r_push,edgeMatcher, failed_paths, time_watches);
     //add to namematcher
     nameMatcher.addVertices(delivery_list);
 }
@@ -944,7 +944,7 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
 }
 
 std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_path, 
-                                  graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr, size_t& num_prereloc, Environment& env)
+                                  graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr, size_t& num_prereloc, Environment& env, std::vector<stopWatch>& time_watches)
 {
     std::vector<State> push_path(0);
     PathInfoList plist;
@@ -992,7 +992,12 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
                 // temporarily modify env
                 env.remove_obs(it.pathToNextPush->obs_rm);
                 env.add_obs(it.pathToNextPush->obs_add);
+
+                stopWatch time_mp("preReloc", measurement_type::pathPlan);
                 it.pathToNextPush = planHybridAstar(it.pathToNextPush->start_pose, it.pathToNextPush->goal_pose, env, params::grid_search_timeout, false);
+                time_mp.stop();
+                time_watches.push_back(time_mp);
+
                 // restore env
                 env.remove_obs(it.pathToNextPush->obs_add);
                 env.add_obs(it.pathToNextPush->obs_rm);
@@ -1366,7 +1371,7 @@ void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& e
         // visualize movable obstacles
         auto mo_vis = draw_obstacles(initMOList, object_marker_pub_ptr);
         // visualize edge paths
-        auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
+        auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r_push);
         // visualize delivery locations
         auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
         // visualize object names
@@ -1381,7 +1386,7 @@ void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& e
 
 ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_path, strMap& delivery_table,
                                                                 std::vector<State>& robots, relocationPair_list& relocPair, NameMatcher& nameMatcher, 
-                                                                graphTools::EdgeMatcher& edgeMatcher,std::vector<stopWatch>& time_watches, GraphPtr gPtr)
+                                                                graphTools::EdgeMatcher& edgeMatcher, std::vector<stopWatch>& time_watches, GraphPtr gPtr)
 {
     stopWatch time_search("cost_mat", measurement_type::graphPlan);
     auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr);
@@ -1443,7 +1448,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         // path segments for relocation
         // final pushing
    
-        auto push_path_pair = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc, env);
+        auto push_path_pair = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc, env, time_watches);
         if(push_path_pair.first == nullptr)
         {
             // relo path search failed
@@ -1487,7 +1492,6 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
             Color::println("REPLAN", Color::RED,Color::BG_YELLOW);
             continue;
         }
-
 
         stopWatch time_path_gen_comb_path("motion", measurement_type::pathPlan);
 

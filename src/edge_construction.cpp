@@ -724,36 +724,6 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
 #pragma region proposed_path_classification
                         if(params::use_better_path)
                         {
-                            /*
-                            // check collision
-                            auto validity = check_collision(mo_list, pivot_state, pivot_vertex, state_ind, n, m, dubins_res, env, max_x, max_y, turning_radius);
-
-                            if(validity == stateValidity::valid)
-                            {
-                                auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
-
-                                Edge e;
-                                bool succ;
-
-                                // for debug only
-                                auto name1 = graphTools::getVertexName(*pivot_vertex,gPtr);
-                                auto name2 = graphTools::getVertexName(*target_vertex,gPtr);
-
-                                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
-                                // add to edge-path matcher
-                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
-                                
-                               
-                            }
-                            else
-                            {
-                                if(params::print_log)
-                                    std::cout << " dubins collision" << std::endl;
-
-                                // store to failed paths
-                                failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
-                            }
-                            */
                             auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
 
                             proposed_edge_construction(pivot_mo,target_mo,pivot_state,target_state,pivot_vertex,target_vertex,
@@ -777,12 +747,12 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 bool succ;
 
                                 // for debug only
-                                auto name1 = graphTools::getVertexName(*pivot_vertex,gPtr);
-                                auto name2 = graphTools::getVertexName(*target_vertex,gPtr);
+                                auto pivot_name = graphTools::getVertexName(*pivot_vertex,gPtr);
+                                auto target_name = graphTools::getVertexName(*target_vertex,gPtr);
 
                                 std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
                                 // add to edge-path matcher
-                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
+                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,dubins_res.first,e,gPtr));
                             }
                             else
                             {
@@ -873,7 +843,7 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
 
                             std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
                             // add to edge-path matcher
-                            edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
+                            edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,dubins_res.first,e,gPtr));
                         }
                         else
                         {

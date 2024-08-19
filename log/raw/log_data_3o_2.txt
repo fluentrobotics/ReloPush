@@ -1198,3 +1198,15 @@ Time Path Plan:1.20377
 Time Assign:0
 Time Total:1.21679
 Time Reloc Plan:4.2e-05
+#
+data_name:data_3o_2
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000546
+Time Path Plan:0.048332
+Time Assign:0
+Time Total:0.067976
+Time Reloc Plan:4.2e-05

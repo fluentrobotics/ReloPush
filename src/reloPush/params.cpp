@@ -17,9 +17,12 @@ namespace params
 
     const bool print_graph = false;
 
+    // baseline: MP only
+    const bool use_mp_only = false;
+
     int leave_log = 0;
     bool print_log = false;
-    bool use_better_path = true;
+    bool use_better_path = false; // true for proposed, false for dubins only
     bool print_final_path = false;
     bool use_testdata = true; //use file to initialize planning
 
