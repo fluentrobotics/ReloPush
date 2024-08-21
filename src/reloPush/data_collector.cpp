@@ -22,6 +22,12 @@ PathInfo::PathInfo(std::string vertex_name, moveType path_type, State& from_pose
 : vertexName(vertex_name), type(path_type), fromPose(from_pose), toPose(to_pose), path(path_in)
 {}
 
+PathInfo::PathInfo(std::string vertex_name, moveType path_type, PathPlanResultPtr planned_path)
+: vertexName(vertex_name), type(path_type), fromPose(planned_path->start_pose), toPose(planned_path->goal_pose)
+{
+    path = planned_path->getPath(true);
+}
+
 bool PathInfo::is_pushing()
 {
     if(type == moveType::app)
@@ -119,6 +125,17 @@ float PathInfoList::print_path()
         std::cout << it.vertexName << "/" << moveTypeToStr(it.type) << std::endl;
         it.print_path();
     }
+}
+
+StatePathPtr PathInfoList::serialized_path()
+{
+    StatePath out_path(0);
+    for(auto& it : paths)
+    {
+        out_path.insert(out_path.end(), it.path.begin(), it.path.end());
+    }
+
+    return std::make_shared<StatePath>(out_path);
 }
 
 void DataCollector::append_pathinfo(PathInfoList& list_in)

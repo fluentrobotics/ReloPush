@@ -61,6 +61,10 @@ namespace graphTools
     // get name of a vertex
     vertexNameType getVertexName(Vertex v, GraphPtr graph);
     vertexNameType getVertexName(Vertex v, Graph& graph);
+
+    //get vertex from sting name
+    Vertex getVertex(const GraphPtr gPtr, const std::string& name);
+    Vertex getVertex(const Graph& graph, const std::string& name);
 }
 
 #endif // !GRAPH_INFO_H

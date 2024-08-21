@@ -5,13 +5,14 @@
 
 #include "graph_info.h"
 
+
 class pathFinder {
     public:
         Vertex getVertexFromString(
             const Graph& graph,
             const std::string& name
         );
-
+        
         std::vector<Vertex> getPath(
             const Graph& graph,
             const std::vector<Vertex>& pMap,

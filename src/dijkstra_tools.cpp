@@ -7,6 +7,7 @@ Vertex pathFinder::getVertexFromString(
     const Graph& graph,
     const std::string& name
 ) {
+    /*
     boost::graph_traits<Graph>::vertex_iterator vi, vend;
     Vertex vertex;
     auto nameMap = boost::get(boost::vertex_name, graph);
@@ -16,7 +17,10 @@ Vertex pathFinder::getVertexFromString(
             vertex = *vi;
     }
     return vertex;
+    */
+   return graphTools::getVertex(graph, name);
 }
+
 
 std::vector<Vertex> pathFinder::getPath(
     const Graph& graph,

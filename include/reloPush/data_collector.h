@@ -4,6 +4,7 @@
 #include <vector>
 #include <reloPush/stopwatch.h>
 #include <omplTools/State.h>
+#include <pathPlanTools/path_planning_tools.h>
 #include <memory>
 #include <string>
 
@@ -24,6 +25,8 @@ class PathInfo
 
     PathInfo(std::string vertex_name, moveType path_type, 
             State& from_pose, State& to_pose, std::vector<State>& path_in);
+    
+    PathInfo(std::string vertex_name, moveType path_type, PathPlanResultPtr planned_path);
     
     bool is_pushing();
 
@@ -49,6 +52,8 @@ class PathInfoList
     size_t count_total_relocations(void);
     float total_path_length();
     float print_path();
+
+    StatePathPtr serialized_path();
 };
 
 class DataCollector

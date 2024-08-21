@@ -99,6 +99,24 @@ namespace graphTools
         return get(boost::vertex_name, graph, v);
     }
 
+    Vertex getVertex(const GraphPtr gPtr, const std::string& name)
+    {
+        Graph g = *gPtr;
+        return getVertex(g,name);
+    }
+    Vertex getVertex(const Graph& graph, const std::string& name)
+    {
+        boost::graph_traits<Graph>::vertex_iterator vi, vend;
+        Vertex vertex;
+        auto nameMap = boost::get(boost::vertex_name, graph);
+        for (boost::tie(vi, vend) = boost::vertices(graph); vi != vend; vi++)
+        {
+            if (nameMap[*vi] == name)
+                vertex = *vi;
+        }
+        return vertex;
+    }
+
     EdgePathInfo::EdgePathInfo() {};
 
     EdgePathInfo::EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s,

@@ -11,6 +11,9 @@ namespace params
     extern float map_max_x; // m
     extern float map_max_y; // m
 
+    // distance in finding pre-push poses
+    extern float pre_push_dist; // m
+
     // index of post-push pose from last state of the path
     extern int post_push_ind;
     extern float interpolation_step;

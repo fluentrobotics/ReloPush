@@ -252,6 +252,21 @@ nav_msgs::Path transformPath(const nav_msgs::Path& input_path, const tf::Transfo
     return output_path;
 }
 
+int find_post_push_ind(StatePath& s, Environment& env){
+
+    int pivot_ind = params::post_push_ind;
+    if(env.stateValid(s.end()[params::post_push_ind]))
+        return pivot_ind;
+
+    while(abs(pivot_ind) < s.size())
+    {
+        pivot_ind--;
+        if(env.stateValid(s.end()[pivot_ind]))
+            return pivot_ind;
+    }
+    // todo: handle all not valid
+}
+
 /// @brief result of dijkstra on graph
 /// Vertices and paht with cost
 typedef std::shared_ptr<graphPlanResult> graphPlanResultPtr;
@@ -261,12 +276,20 @@ typedef std::shared_ptr<MatType> MatPtr;
 
 typedef std::pair<MatPtr,ObjectPairPath> ObjectCostMat;
 
+typedef std::vector<std::vector<PathPlanResultPtr>> PathMat;
+typedef std::vector<PathMat> PathMatList;
+typedef std::shared_ptr<PathMatList> PathMatListPtr;
+
 // generate cost matrix of each delivery
 // return: vector of pairs of costmat and vertices pair
-std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, NameMatcher& nameMatcher,GraphPtr gPtr)
+std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, NameMatcher& nameMatcher,GraphPtr gPtr, 
+                                                        Environment& env, bool mp_only = false, PathMatListPtr pathMatListPtr = nullptr)
 {
     std::vector<ObjectCostMat> out_mat_vec;
     pathFinder pf;
+
+    if(mp_only)
+        pathMatListPtr->clear();
 
     //for each entry in delivery table
     for (auto i = delivery_table.begin(); i != delivery_table.end(); i++)
@@ -286,18 +309,48 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
         // paths
         VertexPath paths(rows);
 
+        //for mp_only
+        PathMat pathMat(rows);
+
         for(int row=0; row<rows; row++)
         {
             paths[row].resize(cols);
+            if(mp_only)
+                pathMat[row].resize(cols);
+
             for(int col=0; col<cols; col++)
             {                
                 std::string start_name = pivot_names[row]; // by row
                 std::string target_name = target_names[col]; // by col
 
-                auto res = pf.djikstra(gPtr,start_name,target_name);
+                if(!mp_only)
+                {
+                    auto res = pf.djikstra(gPtr,start_name,target_name);
 
-                paths[row][col] = res.first;
-                cost_mat(row,col) = res.second;
+                    paths[row][col] = res.first;
+                    cost_mat(row,col) = res.second;
+                }
+                else // motion plan only version
+                {
+                    auto start_pose = pivot_obj->get_pushing_poses()[row];
+                    auto goal_pose = target_obj->get_pushing_poses()[col];
+                    // temporarily remove from env
+                    env.remove_obs(*start_pose);
+                    auto plan_res = planHybridAstar(*start_pose,*goal_pose,env,0,false);
+                    // restore starting obj
+                    env.add_obs(*start_pose);
+
+                    if(!plan_res->success) // plan failed
+                    {
+                        cost_mat(row,col) = std::numeric_limits<float>::infinity();
+                    }
+                    else
+                    {
+                        paths[row][col] = {graphTools::getVertex(gPtr,start_name),graphTools::getVertex(gPtr,target_name)};
+                        cost_mat(row,col) = (float)plan_res->cost;
+                        pathMat[row][col] = plan_res;
+                    }
+                } // end motion plan only
             }
         }
 
@@ -306,6 +359,8 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
         // store in matrix vector
         ObjectCostMat mat_pair(std::make_shared<MatType>(cost_mat),ObjectPairPath(pivot_obj,target_obj,std::make_shared<VertexPath>(paths)));
         out_mat_vec.push_back(mat_pair);
+        if(mp_only)
+            pathMatListPtr->push_back(pathMat);
     }
     
     return out_mat_vec;
@@ -1027,8 +1082,9 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
     // add pose-push pose
     // todo: do it better
     State post_push;
-    if(push_path.size()>=std::abs(params::post_push_ind))
-        post_push = push_path.end()[params::post_push_ind];
+    int post_ind = find_post_push_ind(push_path,env);
+    if(push_path.size()>=std::abs(post_ind))
+        post_push = push_path.end()[post_ind];
     //else
     //    post_push = push_path[0];
     push_path.push_back(post_push);
@@ -1129,7 +1185,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
     // no temp relocation
     else{
         // start to prepush
-        auto pre_push = find_pre_push(push_path.front(),0.6f);
+        auto pre_push = find_pre_push(push_path.front(),params::pre_push_dist);
         //stopWatch hb("hyb");
         auto plan_res = planHybridAstar(robot, pre_push, env, params::grid_search_timeout, false);
         if(!plan_res->success)
@@ -1255,14 +1311,18 @@ float path_length(StatePath path)
 int find_min_path(std::vector<graphPlanResultPtr>& min_list)
 {
     int min_list_ind = -1;
+    float pivot_cost = std::numeric_limits<float>::infinity();
+
     for(int i=0; i<min_list.size(); i++)
     {
-        if(min_list[i]->cost != std::numeric_limits<float>::infinity())
-        {
-            // todo: find one with lowest cost
-            min_list_ind = i;
-            break;
-        }
+        //if(min_list[i]->cost != std::numeric_limits<float>::infinity())
+        //{
+            if(min_list[i]->cost < pivot_cost)
+            {
+                min_list_ind = i;
+                pivot_cost = min_list[i]->cost;
+            }
+        //}
     }
 
     // at least one object cannot be delivered
@@ -1398,7 +1458,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
                                                                 graphTools::EdgeMatcher& edgeMatcher, std::vector<stopWatch>& time_watches, GraphPtr gPtr)
 {
     stopWatch time_search("cost_mat", measurement_type::graphPlan);
-    auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr);
+    auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr, env);
     time_search.stop();
     time_watches.push_back(time_search);
 
@@ -1428,7 +1488,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         // count number of pre-relocations
         //size_t count_pre_relocs = 0;
 
-        // find first on-inf ind
+        // find first non-inf ind
         min_list_ind = find_min_path(min_list); // todo: handle -1
         time_search_min.stop();
         time_watches.push_back(time_search_min);

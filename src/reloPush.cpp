@@ -24,49 +24,6 @@ ros::Publisher* robot_pose_reset_ptr;
 
 ros::NodeHandle* nh_ptr = nullptr;
 
-/*
-void visualization_loop(GraphPtr gPtr, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivery_list
-                        , NameMatcher& nameMatcher, graphTools::EdgeMatcher edgeMatcher, Environment& env, std::shared_ptr<nav_msgs::Path> navPath_ptr,
-                         std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths, double loop_rate=10)
-{
-    ros::Rate r(loop_rate);
-    // visualize vertices
-    auto graph_vis_pair = visualize_graph(*gPtr, nameMatcher, vertex_marker_pub_ptr,edge_marker_pub_ptr);
-    // visualize movable obstacles
-    auto mo_vis = draw_obstacles(mo_list, object_marker_pub_ptr);
-    // visualize edge paths
-    auto vis_path_msg = draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r);
-    // visualize delivery locations
-    auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
-    // visualize object names
-    auto vis_names_msg = draw_texts(mo_list,text_pub_ptr);
-    // publish final path once
-    test_path_pub_ptr->publish(*navPath_ptr); 
-
-    while(ros::ok())
-    {
-        dubins_path_pub_ptr->publish(vis_path_msg);
-        vertex_marker_pub_ptr->publish(graph_vis_pair.first);
-        edge_marker_pub_ptr->publish(graph_vis_pair.second);
-        delivery_marker_pub_ptr->publish(vis_deli_msg);
-        object_marker_pub_ptr->publish(mo_vis);
-
-        //test
-        //test_path_pub_ptr->publish(*navPath_ptr);
-
-        //object names
-        text_pub_ptr->publish(vis_names_msg);
-
-        //testing
-        //auto robotRt = get_real_robotPose(*nh_ptr);
-        //std::cout << robotRt.first.z() << std::endl;
-
-        ros::spinOnce();
-        r.sleep();
-    }
-}
-*/
-
 
 
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
@@ -112,135 +69,186 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         // Baseline: hybrid Astar only
         if(params::use_mp_only)
-        {
-            // generate cost matrix by motion planning
-
-            // plan with pushing max radius
-            Constants::switch_to_pushing();
-
-            //for each entry in delivery table
-            for (auto i = delivery_table.begin(); i != delivery_table.end(); i++)
+        {            
+            for(auto& it : delivery_list)
+                it.add_to_graph(gPtr);
+            nameMatcher.addVertices(delivery_list);
+            PathMatListPtr pathMatListPtr(new PathMatList);
+            auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr, env, true, pathMatListPtr);
+            while(true)
             {
-                std::cout << i->first << " -> " << i->second << std::endl;
-                auto pivot_obj = nameMatcher.getObject(i->first);
-                auto target_obj = nameMatcher.getObject(i->second);
+                // generate cost matrix by motion planning
+                // plan with pushing max radius
+                Constants::switch_to_pushing();              
 
-                auto pivot_names = pivot_obj->get_vertex_names();
-                auto target_names = target_obj->get_vertex_names();
+                // switch back to nonpushing for future use
+                Constants::switch_to_nonpushing();
 
-                const int rows = pivot_obj->get_n_side();
-                const int cols = target_obj->get_n_side();
-
-                // init cost table
-                MatType cost_mat(rows,cols);
-                // paths
-                VertexPath paths(rows);
-
-                for(int row=0; row<rows; row++)
+                // make list of minimum path of each delivery
+                std::vector<graphPlanResultPtr> min_list = find_min_from_mat(costMat_vertices_pairs);
+                auto min_list_ind = find_min_path(min_list);
+                if(min_list_ind == -1) // no solution
                 {
-                    paths[row].resize(cols);
-                    for(int col=0; col<cols; col++)
-                    {                
-                        std::string start_name = pivot_names[row]; // by row
-                        std::string target_name = target_names[col]; // by col
-
-                        auto start_pose = pivot_obj->get_pushing_poses()[row];
-                        auto goal_pose = target_obj->get_pushing_poses()[col];
-
-                        auto plan_res = planHybridAstar(*start_pose,*goal_pose,env,0,false);
-
-                        //paths[row][col] = res.first;
-                        //cost_mat(row,col) = res.second;
-                    }
+                    // return failure //////
+                    return reloPlanResult(false); // instance failed
                 }
+                // print path on graph
+                print_graph_path(min_list[min_list_ind]->path, gPtr);
+                
+                // check feasibility (robot to pre-push)
+                auto min_row = min_list[min_list_ind]->min_row;
+                auto min_col = min_list[min_list_ind]->min_col;
+                auto plan_push = pathMatListPtr->at(min_list_ind)[min_row][min_col];
+                
+                auto push_path = plan_push->getPath(true);
+                auto pre_push_pose = find_pre_push(plan_push->start_pose, params::pre_push_dist);
 
-                //std::cout << cost_mat << std::endl;
+                auto plan_app = planHybridAstar(robots[0], pre_push_pose, env, params::grid_search_timeout, false);
+                if(!plan_app->success)
+                {
+                    // cross out and replan
+                    costMat_vertices_pairs[min_list_ind].first->operator()(min_list[min_list_ind]->min_row, min_list[min_list_ind]->min_col) = std::numeric_limits<float>::infinity();
+                    // repeat
+                    Color::println("REPLAN", Color::RED,Color::BG_YELLOW);
+                    continue;
+                }
+                else // feasible
+                {
 
-                // store in matrix vector
-                //ObjectCostMat mat_pair(std::make_shared<MatType>(cost_mat),ObjectPairPath(pivot_obj,target_obj,std::make_shared<VertexPath>(paths)));
-                //out_mat_vec.push_back(mat_pair);
+                    env.add_obs(plan_push->goal_pose);
+
+                    auto app_path = plan_app->getPath(true);
+                    // add pose-push pose
+                    // todo: do it better
+                    State post_push_app;
+                    auto post_ind_app = find_post_push_ind(app_path,env);
+                    if(app_path.size()>=std::abs(post_ind_app))
+                        post_push_app = app_path.end()[post_ind_app];
+                    //else
+                    //    post_push = push_path[0];
+                    app_path.push_back(post_push_app);
+
+                    // add pose-push pose
+                    // todo: do it better
+                    State post_push;
+                    int post_push_ind = find_post_push_ind(push_path,env);
+                    if(push_path.size()>=std::abs(post_push_ind))
+                        post_push = push_path.end()[post_push_ind];
+                    //else
+                    //    post_push = push_path[0];
+                    push_path.push_back(post_push);
+
+                    auto path_app = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::app,plan_app->start_pose,plan_app->goal_pose,app_path);
+                    auto path_push = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::final,plan_push->start_pose,plan_push->goal_pose,push_path);
+                    out_pathinfo.push_back(path_app);
+                    out_pathinfo.push_back(path_push);
+
+                    // update robot
+                    robots[0] = path_push.path.back();
+
+                    // update movable objects list
+                    for(size_t o = 0; o<mo_list.size(); o++)
+                    {
+                        //auto test_var = min_list[min_list_ind]->object_name;
+                        if(mo_list[o].get_name() == min_list[min_list_ind]->object_name)
+                        {
+                            //delivered_obs.push_back(mo_list[o]);
+                            auto delivery_location_str = delivery_table[mo_list[o].get_name()];
+                            delivered_obs.push_back(*nameMatcher.getObject(delivery_location_str));
+                            mo_list.erase(mo_list.begin() + o);
+                        }
+                    }
+
+                    if(mo_list.size() > 0) // reconstruct graph when it is not done
+                    {
+                        // update nameMatcher
+                        nameMatcher = NameMatcher(mo_list);
+
+                        // update delivery list
+                        /// remove previously assigned delivery
+                        /// delivery map has object name as the key
+                        delivery_table.erase(min_list[min_list_ind]->object_name);
+                    }
+
+                    break;
+                } // end iteration for remaining objects
+            }
+        } // end mp-only
+        else
+        {
+            // construct edges between objects
+            reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r_push, edgeMatcher, failed_paths, time_watches.watches);
+        
+            // print edges
+            if(params::print_graph)
+                print_edges(gPtr);
+
+            draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r_push);
+
+            // add deliverries to graph
+            add_delivery_to_graph(delivery_list, mo_list, env, map_max_x, map_max_y, edgeMatcher, nameMatcher, failed_paths, gPtr, time_watches.watches);
+            
+            // print edges
+            if(params::print_graph)
+                print_edges(gPtr);
+            
+            relocationPair_list relocPair; // for updating movable objects
+            StatePath push_path;
+
+            ReloPathResult reloPush_path = iterate_remaining_deliveries(env, push_path, delivery_table, robots, relocPair, 
+                                                                        nameMatcher, edgeMatcher, time_watches.watches, gPtr);
+
+            // store delivery set
+            if(reloPush_path.is_succ){
+                deliveryContext dSet(mo_list, relocPair, reloPush_path.from_obj->get_name(), reloPush_path.state_path);
+                delivery_contexts.push_back(std::make_shared<deliveryContext>(dSet));
+                // save to path info
+                out_pathinfo.append(reloPush_path.pathInfoList);
+            }
+            else{ // Instance failed
+                return reloPlanResult(false);
             }
 
-            // switch back to nonpushing for future use
-            Constants::switch_to_nonpushing();
-
-            // find minimum cost delivery
-
-            // update and repeat
-        }
-
-        // construct edges between objects
-        reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r_push, edgeMatcher, failed_paths, time_watches.watches);
-    
-        // print edges
-        if(params::print_graph)
-            print_edges(gPtr);
-
-        draw_paths(edgeMatcher,env,failed_paths,dubins_path_pub_ptr,failed_path_pub_ptr,Constants::r_push);
-
-        // add deliverries to graph
-        add_delivery_to_graph(delivery_list, mo_list, env, map_max_x, map_max_y, edgeMatcher, nameMatcher, failed_paths, gPtr, time_watches.watches);
-        
-        // print edges
-        if(params::print_graph)
-            print_edges(gPtr);
-        
-        relocationPair_list relocPair; // for updating movable objects
-        StatePath push_path;
-
-        ReloPathResult reloPush_path = iterate_remaining_deliveries(env, push_path, delivery_table, robots, relocPair, 
-                                                                    nameMatcher, edgeMatcher, time_watches.watches, gPtr);
-
-        // store delivery set
-        if(reloPush_path.is_succ){
-            deliveryContext dSet(mo_list, relocPair, reloPush_path.from_obj->get_name(), reloPush_path.state_path);
-            delivery_contexts.push_back(std::make_shared<deliveryContext>(dSet));
-            // save to path info
-            out_pathinfo.append(reloPush_path.pathInfoList);
-        }
-        else{ // Instance failed
-            return reloPlanResult(false);
-        }
-
-        // add to delivery sequence
-        //deliv_seq.push_back(min_list[min_list_ind]->object_name);
-        deliv_seq.push_back(reloPush_path.from_obj->get_name());
-        
-        stopWatch time_update("update");        
-        // update movable objects list
-        /// move and remove
-        update_mo_list(mo_list,relocPair);
-        //mo_list.erase(mo_list.begin() + min_list[0]->delivery_ind); // fix
-        for(size_t o = 0; o<mo_list.size(); o++)
-        {
-            if(mo_list[o].get_name() == reloPush_path.from_obj->get_name())
+            // add to delivery sequence
+            //deliv_seq.push_back(min_list[min_list_ind]->object_name);
+            deliv_seq.push_back(reloPush_path.from_obj->get_name());
+            
+            stopWatch time_update("update");        
+            // update movable objects list
+            /// move and remove
+            update_mo_list(mo_list,relocPair);
+            //mo_list.erase(mo_list.begin() + min_list[0]->delivery_ind); // fix
+            for(size_t o = 0; o<mo_list.size(); o++)
             {
-                //delivered_obs.push_back(mo_list[o]);
-                auto delivery_location_str = delivery_table[mo_list[o].get_name()];
-                delivered_obs.push_back(*nameMatcher.getObject(delivery_location_str));
-                mo_list.erase(mo_list.begin() + o);
+                if(mo_list[o].get_name() == reloPush_path.from_obj->get_name())
+                {
+                    //delivered_obs.push_back(mo_list[o]);
+                    auto delivery_location_str = delivery_table[mo_list[o].get_name()];
+                    delivered_obs.push_back(*nameMatcher.getObject(delivery_location_str));
+                    mo_list.erase(mo_list.begin() + o);
+                }
             }
+
+            if(mo_list.size() > 0) // reconstruct graph when it is not done
+            {
+                // update nameMatcher
+                nameMatcher = NameMatcher(mo_list);
+
+                // update delivery list
+                /// remove previously assigned delivery
+                /// delivery map has object name as the key
+                delivery_table.erase(reloPush_path.from_obj->get_name());
+            }
+
+            // update robot
+            robots[0] = push_path.back();
+            //robots[0].yaw *= -1;
+            time_watches.stop_and_append(time_update,false);
+
+            // count relocations
+            vec_num_interm_relocs.push_back(reloPush_path.num_interm_reloc);
+            vec_num_pre_relocs.push_back(reloPush_path.num_pre_reloc);
         }
-
-        if(mo_list.size() > 0) // reconstruct graph when it is not done
-        {
-            // update nameMatcher
-            nameMatcher = NameMatcher(mo_list);
-
-            // update delivery list
-            /// remove previously assigned delivery
-            /// delivery map has object name as the key
-            delivery_table.erase(reloPush_path.from_obj->get_name());
-        }
-
-        // update robot
-        robots[0] = push_path.back();
-        //robots[0].yaw *= -1;
-        time_watches.stop_and_append(time_update,false);
-
-        // count relocations
-        vec_num_interm_relocs.push_back(reloPush_path.num_interm_reloc);
-        vec_num_pre_relocs.push_back(reloPush_path.num_pre_reloc);
     }
 
     return reloPlanResult(true, std::accumulate(vec_num_interm_relocs.begin(), vec_num_interm_relocs.end(), 0),
@@ -250,9 +258,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    // const char* args[] = { "program_name", "data_3o_2.txt", "2", "0" };
-    // argv = const_cast<char**>(args);
-    // argc = 4;
+    const char* args[] = {"reloPush", "data_3o.txt", "0", "0" };
+    argv = const_cast<char**>(args);
+    argc = 4;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 
@@ -368,6 +376,8 @@ int main(int argc, char **argv)
 
     // generate final navigation path
     StatePath final_path = deliverySets.serializePath();
+    if(params::use_mp_only)
+        final_path = *reloResult.pathInfoList.serialized_path();
     auto navPath_ptr = statePath_to_navPath(final_path);
 
     if(params::print_final_path)
