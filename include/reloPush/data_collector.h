@@ -53,7 +53,7 @@ class PathInfoList
     float total_path_length();
     float print_path();
 
-    StatePathPtr serialized_path();
+    StatePathPtr serializedPath();
 };
 
 class DataCollector

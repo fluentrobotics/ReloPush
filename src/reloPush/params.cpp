@@ -12,6 +12,9 @@ namespace params
     int post_push_ind = -2; // ind
     float interpolation_step = 0.2f;
 
+    // may change multiple times while running
+    bool is_pushing = false;
+
     const bool use_mocap = false; //todo: parse as a parameter
     
     const bool reset_robot_pose = true;
@@ -19,7 +22,7 @@ namespace params
     const bool print_graph = false;
 
     // baseline: MP only
-    const bool use_mp_only = false;
+    const bool use_mp_only = true;
 
     int leave_log = 0;
     bool print_log = false;

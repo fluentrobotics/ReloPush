@@ -127,7 +127,7 @@ float PathInfoList::print_path()
     }
 }
 
-StatePathPtr PathInfoList::serialized_path()
+StatePathPtr PathInfoList::serializedPath()
 {
     StatePath out_path(0);
     for(auto& it : paths)

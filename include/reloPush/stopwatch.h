@@ -6,7 +6,7 @@
 #include <vector>
 #include <iostream>
 
-enum measurement_type {graphPlan, graphConst, pathPlan, relocatePlan, assign, allPlan};
+enum measurement_type {graphPlan, graphConst, pathPlan, relocatePlan, assign, allPlan, updateEnv};
 
 class stopWatch
 {

@@ -44,7 +44,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         init_static_obstacles(obs, mo_list, delivered_obs);
 
         // reset env
+        stopWatch time_init_env("init_env",measurement_type::updateEnv);
         env = Environment(map_max_x, map_max_y, obs);
+        time_watches.stop_and_append(time_init_env);
 
         // update graph
         update_graph(mo_list, gPtr);
@@ -69,24 +71,30 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         // Baseline: hybrid Astar only
         if(params::use_mp_only)
-        {            
+        {                 
             for(auto& it : delivery_list)
                 it.add_to_graph(gPtr);
             nameMatcher.addVertices(delivery_list);
             PathMatListPtr pathMatListPtr(new PathMatList);
-            auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr, env, true, pathMatListPtr);
+
+            Constants::switch_to_pushing();   
+            Environment env_push(map_max_x, map_max_y, obs);
+            stopWatch time_cost("cost_mat",measurement_type::pathPlan); 
+            // generate cost matrix by motion planning
+            // plan with pushing max radius
+            auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr, env_push, true, pathMatListPtr);
+            time_watches.stop_and_append(time_cost);
+            // switch back to nonpushing for future use
+            Constants::switch_to_nonpushing();
+            
             while(true)
             {
-                // generate cost matrix by motion planning
-                // plan with pushing max radius
-                Constants::switch_to_pushing();              
-
-                // switch back to nonpushing for future use
-                Constants::switch_to_nonpushing();
-
+                stopWatch time_find_min("find_min", measurement_type::graphPlan);
                 // make list of minimum path of each delivery
                 std::vector<graphPlanResultPtr> min_list = find_min_from_mat(costMat_vertices_pairs);
                 auto min_list_ind = find_min_path(min_list);
+                time_watches.stop_and_append(time_find_min);
+
                 if(min_list_ind == -1) // no solution
                 {
                     // return failure //////
@@ -103,7 +111,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 auto push_path = plan_push->getPath(true);
                 auto pre_push_pose = find_pre_push(plan_push->start_pose, params::pre_push_dist);
 
+                stopWatch time_plan_app("plan_app",measurement_type::pathPlan);
                 auto plan_app = planHybridAstar(robots[0], pre_push_pose, env, params::grid_search_timeout, false);
+                time_watches.stop_and_append(time_plan_app);
                 if(!plan_app->success)
                 {
                     // cross out and replan
@@ -114,7 +124,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 }
                 else // feasible
                 {
-
+                    stopWatch time_interp("interpolation", measurement_type::pathPlan);
                     env.add_obs(plan_push->goal_pose);
 
                     auto app_path = plan_app->getPath(true);
@@ -137,6 +147,8 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                     //else
                     //    post_push = push_path[0];
                     push_path.push_back(post_push);
+
+                    time_watches.stop_and_append(time_interp);
 
                     auto path_app = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::app,plan_app->start_pose,plan_app->goal_pose,app_path);
                     auto path_push = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::final,plan_push->start_pose,plan_push->goal_pose,push_path);
@@ -176,6 +188,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         } // end mp-only
         else
         {
+            
             // construct edges between objects
             reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r_push, edgeMatcher, failed_paths, time_watches.watches);
         
@@ -213,7 +226,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
             //deliv_seq.push_back(min_list[min_list_ind]->object_name);
             deliv_seq.push_back(reloPush_path.from_obj->get_name());
             
-            stopWatch time_update("update");        
+            stopWatch time_update("update",measurement_type::updateEnv);        
             // update movable objects list
             /// move and remove
             update_mo_list(mo_list,relocPair);
@@ -258,7 +271,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    const char* args[] = {"reloPush", "data_3o.txt", "0", "0" };
+    const char* args[] = {"reloPush", "data_3o_2.txt", "0", "0" };
     argv = const_cast<char**>(args);
     argc = 4;
 
@@ -366,6 +379,11 @@ int main(int argc, char **argv)
     if(params::leave_log == 1)
     {
         //jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
+        auto file_wo_ext = removeExtension(data_file);
+        if(params::use_mp_only)
+            file_wo_ext += "_mp_only";
+        else if(!params::use_better_path)
+            file_wo_ext += "_dubins_only";
         jeeho::logger records(reloResult.is_succ, dcol.pathInfoList.count_total_relocations(), reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
         // write to file
         if(params::use_better_path)
@@ -377,7 +395,7 @@ int main(int argc, char **argv)
     // generate final navigation path
     StatePath final_path = deliverySets.serializePath();
     if(params::use_mp_only)
-        final_path = *reloResult.pathInfoList.serialized_path();
+        final_path = *reloResult.pathInfoList.serializedPath();
     auto navPath_ptr = statePath_to_navPath(final_path);
 
     if(params::print_final_path)

@@ -334,9 +334,13 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
                 {
                     auto start_pose = pivot_obj->get_pushing_poses()[row];
                     auto goal_pose = target_obj->get_pushing_poses()[col];
+
+                    // find arrival pre-push pose
+                    auto goal_pre_push = find_pre_push(*goal_pose);
+
                     // temporarily remove from env
                     env.remove_obs(*start_pose);
-                    auto plan_res = planHybridAstar(*start_pose,*goal_pose,env,0,false);
+                    auto plan_res = planHybridAstar(*start_pose,goal_pre_push,env,0,false);
                     // restore starting obj
                     env.add_obs(*start_pose);
 

@@ -1,8 +1,104 @@
 
 #include<pathPlanTools/path_planning_tools.h>
 #include <chrono>
+
+namespace Constants {
+    float r = r_nonpush;
+    float deltat = deltat_nonpush;
+    bool allow_reverse = true;
+    float xyResolution = xyResolution_nonpush;
+    float yawResolution = yawResolution_nonpush;
+
+    double dx[] = {r * deltat, r* sin(deltat),  r* sin(deltat),
+                     -r* deltat, -r* sin(deltat), -r* sin(deltat)};
+    double dy[] = {0, -r*(1 - cos(deltat)), r*(1 - cos(deltat)),
+                        0, -r*(1 - cos(deltat)), r*(1 - cos(deltat))};
+    double dyaw[] = {0, deltat, -deltat, 0, -deltat, deltat};
+
+    float normalizeHeadingRad(float t) {
+        if (t < 0) {
+            t = t - 2.f * M_PI * static_cast<int>(t / (2.f * M_PI));
+            return 2.f * M_PI + t;
+        }
+
+        return t - 2.f * M_PI * static_cast<int>(t / (2.f * M_PI));
+    }
+
+    void update_dx()
+    {
+        dx[0] = r * deltat;
+        dx[1] = r * sin(deltat);
+        dx[2] = r * sin(deltat);
+        dx[3] = -r * deltat;
+        dx[4] = -r * sin(deltat);
+        dx[5] = -r * sin(deltat);
+    }
+
+    void update_dy()
+    {
+        double y_term = r * (1 - cos(deltat));
+        dy[0] = 0;
+        dy[1] = -y_term;
+        dy[2] = y_term;
+        dy[3] = 0;
+        dy[4] = -y_term;
+        dy[5] = y_term;
+    }
+
+    void update_dyaw()
+    {
+        dyaw[0] = 0;
+        dyaw[1] = deltat;
+        dyaw[2] = -deltat;
+        dyaw[3] = 0;
+        dyaw[4] = -deltat;
+        dyaw[5] = deltat;
+    }
+
+    void update_dx_dy_dyaw()
+    {
+        update_dx();
+        update_dy();
+        update_dyaw;
+    }
+
+    void switch_to_pushing()
+    {
+        r = r_push;
+        deltat = deltat_push;
+        xyResolution = xyResolution_push;
+        yawResolution = yawResolution_push;
+        allow_reverse = false;
+
+        params::is_pushing = true;
+
+        update_dx_dy_dyaw();
+    }
+
+    void switch_to_nonpushing()
+    {
+        r = r_nonpush;
+        deltat = deltat_nonpush;
+        xyResolution = xyResolution_nonpush;
+        yawResolution = yawResolution_nonpush;
+        allow_reverse = true;
+
+        params::is_pushing = false;
+
+        update_dx_dy_dyaw();
+    }
+
+}
+
+
 PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& env, int64_t timeout_ms ,bool print_res)
 {  
+    // previous static variables aren't applied here
+    if(params::is_pushing)
+        Constants::switch_to_pushing();
+    else
+        Constants::switch_to_nonpushing();
+
     //auto time_start = std::chrono::high_resolution_clock::now();
     // make sure the angle range is in 0~2pi
     start_in.yaw = jeeho::convertEulerRange_to_2pi(start_in.yaw);
