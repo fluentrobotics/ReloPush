@@ -3,8 +3,9 @@
 
 #include <omplTools/State.h>
 #include <pathPlanTools/tf_tools.h>
+#include <reloPush/params.h>
 
-State find_pre_push(State& goalState, float distance = 0.6f);
-State find_post_push(State& goalState, float distance = 0.6f);
+State find_pre_push(State& goalState, float distance = params::pre_push_dist);
+State find_post_push(State& goalState, float distance = params::pre_push_dist);
 
 #endif

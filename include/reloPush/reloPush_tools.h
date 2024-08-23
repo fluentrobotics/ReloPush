@@ -336,7 +336,7 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
                     auto goal_pose = target_obj->get_pushing_poses()[col];
 
                     // find arrival pre-push pose
-                    auto goal_pre_push = find_pre_push(*goal_pose);
+                    auto goal_pre_push = find_pre_push(*goal_pose, params::pre_push_dist);
 
                     // temporarily remove from env
                     env.remove_obs(*start_pose);
@@ -978,8 +978,8 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
         int valid_ind = findFirstTrueIndex(valid_vec);
 
         // path from init pre-push to target pre-push
-        State start_pre_push = find_pre_push(*init_pusing_poses[valid_ind], 0.6f);
-        State goal_pre_push = find_pre_push(candidates[valid_ind], 0.6f);
+        State start_pre_push = find_pre_push(*init_pusing_poses[valid_ind], params::pre_push_dist);
+        State goal_pre_push = find_pre_push(candidates[valid_ind], params::pre_push_dist);
 
         // angle range to 0 ~2 pi
         start_pre_push.yaw = jeeho::convertEulerRange_to_2pi(start_pre_push.yaw);
@@ -1049,9 +1049,11 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
         {
             if(it.pathToNextPush->states.size() == 0) // todo: this could be set more explicitly on earlier stage
             {
+                auto obs_rm = it.pathToNextPush->obs_rm;
+                auto obs_add = it.pathToNextPush->obs_add;
                 // temporarily modify env
-                env.remove_obs(it.pathToNextPush->obs_rm);
-                env.add_obs(it.pathToNextPush->obs_add);
+                env.remove_obs(obs_rm);
+                env.add_obs(obs_add);
 
                 stopWatch time_mp("preReloc", measurement_type::pathPlan);
                 it.pathToNextPush = planHybridAstar(it.pathToNextPush->start_pose, it.pathToNextPush->goal_pose, env, params::grid_search_timeout, false);
@@ -1059,13 +1061,16 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
                 time_watches.push_back(time_mp);
 
                 // restore env
-                env.remove_obs(it.pathToNextPush->obs_add);
-                env.add_obs(it.pathToNextPush->obs_rm);
+                env.remove_obs(obs_add);
+                env.add_obs(obs_rm);
                 if(!it.pathToNextPush->success)
                 {
                     // this plan is infeasible
                     return std::make_pair(nullptr, plist);
                 }
+
+                it.pathToNextPush->obs_add = obs_add;
+                it.pathToNextPush->obs_rm = obs_rm;
             }
         }
 
@@ -1168,7 +1173,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         // relo to push
         auto lastLastRelo = relo_path.back().back();
         // first pre-push
-        auto pre_push = find_pre_push(push_path.front(),0.6f);
+        auto pre_push = find_pre_push(push_path.front(), params::pre_push_dist);
 
         // plan hybrid astar
         plan_res = planHybridAstar(lastLastRelo, pre_push, env, params::grid_search_timeout, false);
@@ -1231,7 +1236,7 @@ std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, 
         for(size_t min_it = 0; min_it < min_list.size(); min_it++)
         {
             auto approach_state = nameMatcher.getVertexStatePair(min_list[min_it]->sourceVertexName)->state;
-            auto pre_push = find_pre_push(*approach_state,0.6f);
+            auto pre_push = find_pre_push(*approach_state, params::pre_push_dist);
 
             auto plan_res = planHybridAstar(robots[r], pre_push, env, params::grid_search_timeout, false);
 
@@ -1412,7 +1417,17 @@ void handle_args(int argc, char **argv, std::string& data_file, int& data_ind)
         data_file = std::string(argv[1]);
         data_ind = std::atoi(argv[2]);        
         params::leave_log = std::atoi(argv[3]);
-        params::use_better_path = std::atoi(argv[4]);
+        //params::use_better_path = std::atoi(argv[4]);
+        std::string mode = std::string(argv[4]);
+        params::use_mp_only = false;
+        if(mode == "proposed")
+            params::use_better_path = true;
+
+        else if(mode == "dubins_only")
+            params::use_better_path = false;
+
+        else if(mode == "mp_only")
+            params::use_mp_only = true;
     }
 
     else

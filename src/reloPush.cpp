@@ -271,9 +271,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    const char* args[] = {"reloPush", "data_3o_2.txt", "0", "0" };
-    argv = const_cast<char**>(args);
-    argc = 4;
+    //const char* args[] = {"reloPush", "data_5o.txt", "8", "0" };
+    //argv = const_cast<char**>(args);
+    //argc = 4;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 

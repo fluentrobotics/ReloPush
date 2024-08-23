@@ -28,7 +28,7 @@ namespace params
     extern const bool print_graph;
 
     // baseline: MP only
-    extern const bool use_mp_only;
+    extern bool use_mp_only;
 
     extern int leave_log;
     extern bool print_log;

@@ -10,6 +10,7 @@
 typedef boost::geometry::model::d2::point_xy<double> Point;
 
 
+
 struct State
 {
     State(double x, double y, double yaw, int time = 0) : x(x), y(y), yaw(yaw), time(time)
@@ -54,6 +55,13 @@ struct State
     boost::numeric::ublas::matrix<double> rot;
     Point corner1, corner2, corner3, corner4;
 };
+
+static inline float StateDistance(const State& s1, const State& s2)
+{
+    float dx = s2.x - s1.x;
+    float dy = s2.y - s1.y;
+    return sqrtf(dx * dx + dy * dy);
+}
 
 
 typedef std::shared_ptr<State> StatePtr;

@@ -212,14 +212,20 @@ void find_alpha_beta_ompl(State& s1, State& s2, double& alpha_out, double& beta_
     alpha_out = fromOMPL::mod2pi(th1 - th), beta_out = fromOMPL::mod2pi(th2 - th);
 }
 
-// returns euclidean distance threshold (not normalized by turning radius)
-float get_longpath_d_thres(State& s1, State& s2, float turning_rad)
+float get_current_longpath_d(State& s1, State& s2)
 {
     double alpha, beta;
     find_alpha_beta_ompl(s1,s2,alpha,beta);
 
+    return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta));
+}
+
+// returns euclidean distance threshold (not normalized by turning radius)
+float get_longpath_d_thres(State& s1, State& s2, float turning_rad)
+{
     //return static_cast<float>(fromOMPL::longpath_thres_dist(s1.yaw,s2.yaw))*turning_rad;
-    return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta))*turning_rad;
+    //return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta))*turning_rad;
+    return StateDistance(s1,s2)/turning_rad;
 }
 
 std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad, bool use_pre_push_pose)

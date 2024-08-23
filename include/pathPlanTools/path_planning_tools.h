@@ -122,6 +122,10 @@ struct hash<State> {
 
 using Action = int;  // Action < 6
 
+// for checking state validity of a path
+enum StateValidity {valid, collision, out_of_boundary};
+enum PlanValidity {success, start_inval, goal_inval, no_sol};
+
 typedef PlanResult<State, Action, double> PlanResultType;
 
 struct PathPlanResult : PlanResultType
@@ -130,6 +134,7 @@ struct PathPlanResult : PlanResultType
   State goal_pose;
   State obs_rm; // need to remove this obstacle from env before planning
   State obs_add;
+  PlanValidity validity;
   
   PathPlanResult()
   {
@@ -142,6 +147,9 @@ struct PathPlanResult : PlanResultType
   {
     success = false;
   }
+  PathPlanResult(State& start_in, State& goal_in, PlanValidity val)
+                : start_pose(start_in), goal_pose(goal_in), validity(val)
+                {}
   PathPlanResult(State& start_in, State& goal_in, State& obs_to_rm, State& obs_to_add) 
                 : start_pose(start_in), goal_pose(goal_in), obs_rm(obs_to_rm), obs_add(obs_to_add)
   {
@@ -152,9 +160,6 @@ struct PathPlanResult : PlanResultType
 
 typedef std::shared_ptr<PathPlanResult> PathPlanResultPtr;
 
-// for checking state validity of a path
-enum StateValidity {valid, collision, out_of_boundary};
-
 // bool and reason
 struct StateValiditySet{
   std::pair<bool, StateValidity> data;
@@ -163,6 +168,11 @@ struct StateValiditySet{
 
   operator bool() const {
         return data.first;
+    }
+
+    StateValidity get_validity()
+    {
+      return data.second;
     }
 };
 

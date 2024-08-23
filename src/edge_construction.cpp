@@ -36,22 +36,26 @@ StateValidity check_validity_by_interpolation(OmplState* dubinsStart, OmplState*
         if(params::print_log)
             std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
 
-        // check if within boundary
-        if(!is_within_boundary(interState,0,0,max_x,max_y))
+
+        auto val = env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15);
+        if(!val) //todo: set better values
         {
-            validity = StateValidity::out_of_boundary;
-            break;
-        }
+            if(val.get_validity()==StateValidity::collision){
+                // for debug
+                float x_debug = interState->getX();
+                float y_debug = interState->getY();
+                float yaw_debug = interState->getYaw();
+                //collision found
+                if(params::print_log)
+                    std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
+                validity = StateValidity::collision;
 
-
-        if(env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15) == false) //todo: set better values
-        {
-            //collision found
-            if(params::print_log)
-                std::cout << "Collision found " << np << "x: "<< interState->getX() << " y: " << interState->getY() << " yaw: " << interState->getYaw() << std::endl;
-            validity = StateValidity::collision;
-
-            break;
+                break;
+            }
+            else if(val.get_validity()==StateValidity::out_of_boundary)
+            {
+                validity = StateValidity::out_of_boundary;
+            }
         }                             
     }
 
@@ -208,6 +212,96 @@ StateValidity check_collision_straight(movableObject fromObj, movableObject toOb
     return validity;
 }
 
+StateValidity check_collision_straight(Environment& env, State& from_state, State& to_state, float path_length, float max_x, float max_y ,bool is_delivery = false)
+{
+    size_t num_pts = static_cast<int>(path_length/(0.1*0.5)); //todo: get resolution as a param
+
+    StateValidity validity = StateValidity::valid;
+    
+    std::vector<State> took_out(0);
+    // takeout pivot object from obstacles
+    took_out.push_back(State(from_state));
+    env.remove_obs(from_state);
+
+    // takeout target object from obstacles
+    // only if this is not a delivery location
+    if(!is_delivery){
+        took_out.push_back(State(to_state));
+        env.remove_obs(to_state);
+    }
+
+    // Interpolate dubins path to check for collision on grid map
+    validity = check_validity_by_interpolation(from_state,to_state,Constants::mapResolution,env,max_x,max_y);
+
+    //put back took-out obstacles
+    for(auto it : took_out)
+        env.add_obs(it);
+
+    return validity;
+}
+
+// todo: use better approximation <Pose,distance,uvec_index>
+std::vector<std::tuple<State,float,int>> find_pre_relo_along_vector(Environment& env, State& pivot_state, State& target_state, float turning_rad, std::vector<Eigen::Vector2f> unit_vectors)
+{
+    // remove obs
+    env.remove_obs(pivot_state);
+
+    //float d_thres = get_longpath_d_thres(pivot_state,target_state,turning_rad);
+
+    std::vector<std::tuple<State,float,int>> found_poses(0);
+
+    for(size_t n=0; n<unit_vectors.size(); n++)
+    {
+        bool is_found = false;
+        auto incre = unit_vectors[n] * Constants::mapResolution; // todo: there may be a better step size
+        //float vec_yaw = atan2f(incre.y(),incre.x());
+        State temp_state = State(pivot_state.x+incre.x(), pivot_state.y+incre.y(), pivot_state.yaw);
+        
+        //validity
+        auto validity = env.stateValid(temp_state,Constants::obsRadius*2, Constants::obsRadius, Constants::obsRadius, Constants:: obsRadius);
+        while(validity.get_validity() != StateValidity::out_of_boundary)
+        {
+            if(validity.get_validity() == StateValidity::valid)
+            {
+                float d_thres = get_longpath_d_thres(temp_state,target_state,turning_rad);
+                // found if a long path
+                float d_temp = get_current_longpath_d(temp_state,target_state);
+                if(d_temp < d_thres)
+                {
+                    is_found = true;
+                    break;
+                }
+                else
+                {
+                    temp_state.x += incre.x();
+                    temp_state.y += incre.y();
+                    validity = env.stateValid(temp_state,Constants::obsRadius*2, Constants::obsRadius, Constants::obsRadius, Constants:: obsRadius);
+                }
+            }
+            else
+            {
+                temp_state.x += incre.x();
+                temp_state.y += incre.y();
+                validity = env.stateValid(temp_state,Constants::obsRadius*2, Constants::obsRadius, Constants::obsRadius, Constants:: obsRadius);
+            }
+        }
+
+        if(is_found)
+            found_poses.push_back(std::make_tuple(temp_state, StateDistance(temp_state,pivot_state),n));
+    }
+
+    //sort by pushing distance
+    // Sort by the float value (second element of the pair) in ascending order
+    std::sort(found_poses.begin(), found_poses.end(), [](const std::tuple<State, float, int>& a, const std::tuple<State, float, int>& b) {
+        return std::get<1>(a) < std::get<1>(b);
+    });
+
+    //return obs
+    env.add_obs(pivot_state);
+
+    return found_poses;
+}
+
 
 // Comparison function to compare the float values in the tuples
 bool compareTuples(const std::tuple<bool, float, int>& a, const std::tuple<bool, float, int>& b) {
@@ -335,7 +429,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
 
             // check if prepush is valid
             State new_prepush = State(state_thres.x,state_thres.y,pivot_state->yaw);
-            auto is_pre_push_valid = env.stateValid(find_pre_push(new_prepush));
+            auto is_pre_push_valid = env.stateValid(find_pre_push(new_prepush, params::pre_push_dist));
 
             // check there is a path connecting preRelo to new pre-push
             // add/remove virtual obstacles
@@ -381,7 +475,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
 
                 //leave motion plan as a blank placeholder for now. It will be handled later.
                 //preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,plan_res);
-                State arrivalStatePrepush = find_pre_push(arrivalState);
+                State arrivalStatePrepush = find_pre_push(arrivalState, params::pre_push_dist);
                 preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,std::make_shared<PathPlanResult>(PathPlanResult(arrivalStatePrepush, new_prepush, *pivot_state, state_thres)));
 
                 // cost for pre-relocations
@@ -467,106 +561,47 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
             stopWatch time_ofb1("ofb1", measurement_type::graphConst);
             auto unit_vecs = pivot_mo.get_push_unitvecs();
 
-            float d_current_sq = powf(target_state->x - pivot_state->x,2) + powf(target_state->y - pivot_state->y,2);
-            
-            // find push indices that moves away from target
-            std::vector<std::tuple<bool,float,size_t>> away_flags(pivot_mo.get_n_side());
-            // MP
-            for(size_t s=0; s<away_flags.size(); s++)
-            {
-                auto scaled_uvec = 0.1 * unit_vecs[s];
-                float x_next = pivot_state->x + scaled_uvec.x();
-                float y_next = pivot_state->y + scaled_uvec.y();
 
-                float d_next_sq = powf(target_state->x - x_next,2) + powf(target_state->y - y_next,2);
-
-                if(d_next_sq > d_current_sq)
-                    away_flags[s] = std::make_tuple(true,d_next_sq - d_current_sq,s);
-                else
-                    away_flags[s] = std::make_tuple(false,-1,s); // todo: what if it can be pushed far
-            }
-
-            float d_current = sqrtf(d_current_sq); // not normalized by turning radius
-            // find d_threshold to be a long path
-            auto d_thres = get_longpath_d_thres(*pivot_state,*target_state, turning_radius) * 1.001; // tie-break
-
-            // if this is already a long path, no edge
-            if(d_current > d_thres)
-            {
-                // store to failed paths
-                failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
-                return;
-            }
-
-            // distance needed (d_thres should be larger than d_current)
-            float d_delta = d_thres - d_current;
+            auto pre_relo_candidates = find_pre_relo_along_vector(env,*pivot_state,*target_state,turning_radius,unit_vecs);
 
             time_ofb1.stop();
             time_watches.push_back(time_ofb1);
 
-            // vector with ture only
-            std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
-            /* todo: it might be a good idea to try all directions */
-            
-            for(auto& it: away_flags)
-            {
-                if(std::get<0>(it))
-                    candidates_vec.push_back(it);
-            }
-            
-            //candidates_vec = std::vector<std::tuple<bool,float,size_t>>(away_flags);
-
-            // sort in decending order of distance difference
-            std::sort(candidates_vec.begin(), candidates_vec.end(), compareTuples);
-
             bool push_found = false;
-            Eigen::Vector2f push_thres;
+
             // check if pushing can make if feasible
-            for(auto& it : candidates_vec)
+            for(auto& it : pre_relo_candidates)
             {
+                State pre_relo_state;
+                float pre_relo_dist;
+                int uvec_ind;
+                std::tie(pre_relo_state,pre_relo_dist,uvec_ind) = it;
+
                 stopWatch time_ofb2("ofb2", measurement_type::graphConst);
-                // how much to push in this direction to meet d_delta
-                /// rotate i.r.t. mo
-                size_t push_ind = std::get<2>(it);
-                float yaw = jeeho::convertEulerRange_to_pi(pivot_mo.get_pushing_poses()[push_ind]->yaw);
-                Eigen::Matrix2f R;
-                R << std::cos(yaw), -std::sin(yaw), std::sin(yaw),  std::cos(yaw);
-                Eigen::Matrix2f R_inv = R.transpose();
-
-                Eigen::Vector2f target_centered_at_pivot = {target_state->x - pivot_state->x, target_state->y - pivot_state->y};
-                Eigen::Vector2f target_irt_pivot = R_inv * target_centered_at_pivot;
-
-                // centered at target i.r.t. start
-                Eigen::Vector2f start_c_target = -1*target_irt_pivot;
-
-                float x_thres = sqrtf(powf(d_thres,2) - powf(start_c_target.y(),2));
-                float dist_to_push = x_thres - start_c_target.x();
-
-                Eigen::Vector2f push_vec = dist_to_push * unit_vecs[push_ind];
-
-                // reloacted object pose
-                State long_thres = State(pivot_state->x + push_vec.x(), pivot_state->y + push_vec.y(), pivot_state->yaw);
 
                 // check collision of this pre-relocation
-                auto pre_relo_validity = check_collision_straight(fromObj, toObj, std::make_shared<State>(long_thres), pivot_vertex, state_ind, 
-                                                    std::make_pair(*pivot_state,long_thres),env,max_x,max_y,turning_radius, is_delivery);
-
-                if(pre_relo_validity != StateValidity::valid)
-                {
-                    // pre relo path not valid
-                    continue;
-                }
+                auto pre_relo_validity = check_collision_straight(env,*pivot_state,pre_relo_state,pre_relo_dist,max_x,max_y,true);
                 time_ofb2.stop();
                 time_watches.push_back(time_ofb2);
 
+                if(pre_relo_validity!=StateValidity::valid)
+                {
+                    // not an option
+                    continue;
+                }
+
                 stopWatch time_dubins2("time_dubins2",measurement_type::pathPlan);
                 // find new dubins path
-                auto new_dubins_res = is_good_path(long_thres,*target_state,turning_radius);
+                auto new_dubins_res = is_good_path(pre_relo_state,*target_state,turning_radius);
+
+                //for test
+                auto d_test_th = get_longpath_d_thres(pre_relo_state, *target_state);
+                auto d_test = get_current_longpath_d(pre_relo_state,*target_state);
 
                 // check if the path is valid
                 //auto is_valid = env.stateValid(long_thres);
                 //auto ofb_start = std::chrono::high_resolution_clock::now();
-                auto chk = check_collision(fromObj, toObj, std::make_shared<State>(long_thres), pivot_vertex, state_ind, new_dubins_res, 
+                auto chk = check_collision(fromObj, toObj, std::make_shared<State>(pre_relo_state), pivot_vertex, state_ind, new_dubins_res, 
                                             env, max_x, max_y, turning_radius, is_delivery);
 
                 time_dubins2.stop();
@@ -577,16 +612,9 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
                 stopWatch time_valid_pre_push("time_validity", measurement_type::pathPlan);
 
-                // check if the state is valid
-                // take out the object first
-                env.remove_obs(State(fromObj.get_x(),fromObj.get_y(),0));
-                auto is_valid = env.stateValid(long_thres);
-                // put it back to env
-                env.add_obs(State(fromObj.get_x(),fromObj.get_y(),0));
-
                 // check if prepush is valid
-                State new_prepose = State(long_thres.x,long_thres.y,pivot_state->yaw);
-                State new_prepush = find_pre_push(new_prepose); 
+                State new_prepose = State(pre_relo_state.x,pre_relo_state.y,pivot_state->yaw);
+                State new_prepush = find_pre_push(new_prepose, params::pre_push_dist); 
 
                 //for test only. not part of the algorithm
                 //auto test = env.stateValid(new_prepush);
@@ -598,37 +626,27 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 //bool is_path_to_prepush_valid = false;
                 env.remove_obs(*pivot_state);
                 // relocated
-                env.add_obs(long_thres);
+                env.add_obs(pre_relo_state);
 
-                State arrivalState(long_thres.x,long_thres.y,yaw);
-                State relocation_postpush = find_pre_push(arrivalState);
+                float yaw = jeeho::convertEulerRange_to_pi(pivot_mo.get_pushing_poses()[uvec_ind]->yaw);
+                State arrivalState(pre_relo_state.x, pre_relo_state.y, yaw);
+                State relocation_postpush = find_pre_push(arrivalState, params::pre_push_dist);
 
                 time_valid_pre_push.stop();
-                time_watches.push_back(time_valid_pre_push);
-
-                // motion plan
-                //stopWatch time_mp("preReloc", measurement_type::pathPlan);
-                //auto plan_res =planHybridAstar(relocation_postpush, new_prepush, env, params::grid_search_timeout, false);
-                //time_mp.stop();
-                //time_watches.push_back(time_mp);
-                
-                //if(plan_res->success)
-                //    is_path_to_prepush_valid = true;
-                
+                time_watches.push_back(time_valid_pre_push);                
 
                 // revert obstacle
                 env.add_obs(*pivot_state);
-                env.remove_obs(long_thres);
+                env.remove_obs(pre_relo_state);
 
                 // if yes, go with it. if not, try next best
                 
                 //if(chk == StateValidity::valid && is_valid && is_pre_push_valid && is_path_to_prepush_valid)
-                if(chk == StateValidity::valid && is_valid && is_pre_push_valid)
+                if(chk == StateValidity::valid && is_pre_push_valid)
                 {
                     stopWatch time_pre_valid("pre_valid", measurement_type::graphConst);
 
                     push_found = true;
-                    push_thres = push_vec;
 
                     // note: not pre-push poses
                     // todo: handle multiple pre-relocations
@@ -641,7 +659,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
                     // State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
                     //preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,plan_res);
-                    preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,std::make_shared<PathPlanResult>(PathPlanResult(relocation_postpush, new_prepush, *pivot_state, long_thres)));
+                    preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,std::make_shared<PathPlanResult>(PathPlanResult(relocation_postpush, new_prepush, *pivot_state, pre_relo_state)));
                     preRelocs.push_back(prePath);
 
                     // cost for pre-relocations

@@ -109,6 +109,7 @@ reloDubinsPath findDubins(State &start, State &goal, double turning_radius = 1.0
 // Function to transform a point from the global frame to the robot's frame
 Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, double robot_y);
 
+float get_current_longpath_d(State& s1, State& s2);
 float get_longpath_d_thres(State& s1, State& s2, float turning_rad = 1.0f);
 std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad, bool use_pre_push_pose = true);
 

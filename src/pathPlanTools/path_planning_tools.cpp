@@ -112,7 +112,7 @@ PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& en
     // not valid start/target
     if(!start_valid)
     {
-        PathPlanResult solution;
+        PathPlanResult solution(start_in,goal_in,PlanValidity::start_inval);
         //std::cout << "\033[1m\033[31m Start not valid \033[0m\n";
         //std::cout << "start not valid: (" << start.x << ", " << start.y << ", " << start.yaw << ")\n";
         solution.cost = -1;
@@ -120,18 +120,17 @@ PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& en
     }
     if(!goal_valid)
     {
-        PathPlanResult solution;
+        PathPlanResult solution(start_in,goal_in,PlanValidity::goal_inval);
         //std::cout << "\033[1m\033[31m Target not valid \033[0m\n";
         //std::cout << "target not valid: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
         solution.cost = -1;
-        return std::make_shared<PathPlanResult>(solution); 
-
+        return std::make_shared<PathPlanResult>(solution);
     }
 
     // if start and goal are the same, return empty path with success
     if(start_in == goal_in)
     {
-        PathPlanResult solution(start_in,goal_in);
+        PathPlanResult solution(start_in,goal_in,PlanValidity::success);
         solution.states.clear();
         solution.actions.clear();
         //std::cout << "\033[1m\033[31m Target not valid \033[0m\n";
@@ -169,12 +168,15 @@ PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& en
                     << "\t fmin:" << solution.fmin << "\n\rDiscover " << env.Dcount
                     << " Nodes and Expand " << env.Ecount << " Nodes." << std::endl;
         } 
+
+        solution.validity = PlanValidity::success;
     }
     else {
         //if(print_res)
-            //std::cout << "\033[1m\033[31m Failed to find a path \033[0m\n";
-            //std::cout << "start: (" << start.x << ", " << start.y << ", " << start.yaw << ") target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
-            solution.cost = -1;
+        //std::cout << "\033[1m\033[31m Failed to find a path \033[0m\n";
+        //std::cout << "start: (" << start.x << ", " << start.y << ", " << start.yaw << ") target: (" << goal_in.x << ", " << goal_in.y << ", " << goal_in.yaw << ")\n";
+        solution.cost = -1;
+        solution.validity = PlanValidity::no_sol;
     }
 
     return std::make_shared<PathPlanResult>(solution);    
