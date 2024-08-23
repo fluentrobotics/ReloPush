@@ -788,6 +788,7 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, dubins_res.second.lengthCost(), *gPtr);
                                 // add to edge-path matcher
                                 edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,dubins_res.first,e,gPtr));
+                                time_edges.stop();
                                 time_watches.push_back(time_edges);
                             }
                             else

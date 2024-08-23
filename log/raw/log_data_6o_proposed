@@ -1,0 +1,2000 @@
+#
+data_name:data_6o
+mode:proposed
+index:0
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0121629
+Time Graph Plan:0.000594
+Time Assign:0
+Time Reloc Plan:0.000248
+Time Task:0.0130049
+Time MP:0.154264
+Time Total:0.237925
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:18.4535
+Length Approaching:44.7176
+Length Approaching:63.1711
+#
+data_name:data_6o
+mode:proposed
+index:1
+Is Success:T
+Number of Relocations:5
+Delivery Sequence:
+Time Graph Const:0.0116509
+Time Graph Plan:0.000607
+Time Assign:0
+Time Reloc Plan:0.000208
+Time Task:0.0124659
+Time MP:0.187472
+Time Total:0.260875
+Num Pre-relo:4
+Num Temp-relo:1
+Num Total relo:5
+Length Pushing:14.4702
+Length Approaching:40.2574
+Length Approaching:54.7276
+#
+data_name:data_6o
+mode:proposed
+index:2
+Is Success:T
+Number of Relocations:4
+Delivery Sequence:
+Time Graph Const:0.0123659
+Time Graph Plan:0.000576
+Time Assign:0
+Time Reloc Plan:0.000322
+Time Task:0.0132639
+Time MP:0.15786
+Time Total:0.237585
+Num Pre-relo:4
+Num Temp-relo:0
+Num Total relo:4
+Length Pushing:19.2473
+Length Approaching:43.0267
+Length Approaching:62.274
+#
+data_name:data_6o
+mode:proposed
+index:3
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0147268
+Time Graph Plan:0.000569
+Time Assign:0
+Time Reloc Plan:0.000171
+Time Task:0.0154668
+Time MP:0.116082
+Time Total:0.192179
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.2901
+Length Approaching:37.6793
+Length Approaching:50.9695
+#
+data_name:data_6o
+mode:proposed
+index:4
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0125348
+Time Graph Plan:0.000628
+Time Assign:0
+Time Reloc Plan:0.000155
+Time Task:0.0133178
+Time MP:0.113632
+Time Total:0.197292
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.2277
+Length Approaching:39.0981
+Length Approaching:52.3258
+#
+data_name:data_6o
+mode:proposed
+index:5
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0134308
+Time Graph Plan:0.000593
+Time Assign:0
+Time Reloc Plan:0.000193
+Time Task:0.0142168
+Time MP:0.132242
+Time Total:0.211081
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.3044
+Length Approaching:36.5453
+Length Approaching:49.8497
+#
+data_name:data_6o
+mode:proposed
+index:6
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0123769
+Time Graph Plan:0.000621
+Time Assign:0
+Time Reloc Plan:0.000105
+Time Task:0.0131029
+Time MP:0.131691
+Time Total:0.212637
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:7
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0130198
+Time Graph Plan:0.000642
+Time Assign:0
+Time Reloc Plan:0.000164
+Time Task:0.0138258
+Time MP:0.196885
+Time Total:0.271122
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:8
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0132358
+Time Graph Plan:0.000593
+Time Assign:0
+Time Reloc Plan:0.000168
+Time Task:0.0139968
+Time MP:0.151255
+Time Total:0.226973
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:17.7635
+Length Approaching:39.2218
+Length Approaching:56.9853
+#
+data_name:data_6o
+mode:proposed
+index:9
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0133028
+Time Graph Plan:0.000573
+Time Assign:0
+Time Reloc Plan:0.000216
+Time Task:0.0140918
+Time MP:0.164853
+Time Total:0.246582
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:10
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0128238
+Time Graph Plan:0.000578
+Time Assign:0
+Time Reloc Plan:0.000192
+Time Task:0.0135938
+Time MP:0.131232
+Time Total:0.213164
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.8512
+Length Approaching:38.7146
+Length Approaching:52.5658
+#
+data_name:data_6o
+mode:proposed
+index:11
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0132308
+Time Graph Plan:0.000588
+Time Assign:0
+Time Reloc Plan:0.000468
+Time Task:0.0142868
+Time MP:0.169745
+Time Total:0.23377
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:12
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0111619
+Time Graph Plan:0.000616
+Time Assign:0
+Time Reloc Plan:0.000199
+Time Task:0.0119769
+Time MP:0.138672
+Time Total:0.218076
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:18.5569
+Length Approaching:39.9459
+Length Approaching:58.5028
+#
+data_name:data_6o
+mode:proposed
+index:13
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0125158
+Time Graph Plan:0.000583
+Time Assign:0
+Time Reloc Plan:0.00018
+Time Task:0.0132788
+Time MP:0.106306
+Time Total:0.18666
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.7261
+Length Approaching:39.0791
+Length Approaching:54.8052
+#
+data_name:data_6o
+mode:proposed
+index:14
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0127338
+Time Graph Plan:0.000575
+Time Assign:0
+Time Reloc Plan:0.000389
+Time Task:0.0136978
+Time MP:0.120113
+Time Total:0.202094
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:15
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0128988
+Time Graph Plan:0.000585
+Time Assign:0
+Time Reloc Plan:0.000186
+Time Task:0.0136698
+Time MP:0.142799
+Time Total:0.222227
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.7959
+Length Approaching:37.1407
+Length Approaching:50.9365
+#
+data_name:data_6o
+mode:proposed
+index:16
+Is Success:T
+Number of Relocations:4
+Delivery Sequence:
+Time Graph Const:0.0116099
+Time Graph Plan:0.000576
+Time Assign:0
+Time Reloc Plan:0.000342
+Time Task:0.0125279
+Time MP:0.138081
+Time Total:0.2154
+Num Pre-relo:4
+Num Temp-relo:0
+Num Total relo:4
+Length Pushing:16.5892
+Length Approaching:40.2618
+Length Approaching:56.851
+#
+data_name:data_6o
+mode:proposed
+index:17
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0126359
+Time Graph Plan:0.000615
+Time Assign:0
+Time Reloc Plan:0.000157
+Time Task:0.0134079
+Time MP:0.125102
+Time Total:0.203595
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.8013
+Length Approaching:39.0017
+Length Approaching:52.803
+#
+data_name:data_6o
+mode:proposed
+index:18
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0127939
+Time Graph Plan:0.000559
+Time Assign:0
+Time Reloc Plan:0.00018
+Time Task:0.0135329
+Time MP:0.118869
+Time Total:0.198093
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.6521
+Length Approaching:32.3355
+Length Approaching:45.9876
+#
+data_name:data_6o
+mode:proposed
+index:19
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0123748
+Time Graph Plan:0.000595
+Time Assign:0
+Time Reloc Plan:0.000697
+Time Task:0.0136668
+Time MP:0.0940531
+Time Total:0.160991
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:20
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0126878
+Time Graph Plan:0.000621
+Time Assign:0
+Time Reloc Plan:0.000204
+Time Task:0.0135128
+Time MP:0.13008
+Time Total:0.209527
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.7927
+Length Approaching:40.6177
+Length Approaching:54.4105
+#
+data_name:data_6o
+mode:proposed
+index:21
+Is Success:T
+Number of Relocations:4
+Delivery Sequence:
+Time Graph Const:0.0130608
+Time Graph Plan:0.000584
+Time Assign:0
+Time Reloc Plan:0.000313
+Time Task:0.0139578
+Time MP:0.159751
+Time Total:0.239468
+Num Pre-relo:4
+Num Temp-relo:0
+Num Total relo:4
+Length Pushing:16.7774
+Length Approaching:38.0184
+Length Approaching:54.7958
+#
+data_name:data_6o
+mode:proposed
+index:22
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0123129
+Time Graph Plan:0.000581
+Time Assign:0
+Time Reloc Plan:0.000171
+Time Task:0.0130649
+Time MP:0.152503
+Time Total:0.232286
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.4111
+Length Approaching:37.1147
+Length Approaching:50.5258
+#
+data_name:data_6o
+mode:proposed
+index:23
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0134628
+Time Graph Plan:0.000592
+Time Assign:0
+Time Reloc Plan:0.000228
+Time Task:0.0142828
+Time MP:0.195263
+Time Total:0.277843
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:24
+Is Success:T
+Number of Relocations:2
+Delivery Sequence:
+Time Graph Const:0.0138618
+Time Graph Plan:0.000606
+Time Assign:0
+Time Reloc Plan:0.00025
+Time Task:0.0147178
+Time MP:0.128691
+Time Total:0.211709
+Num Pre-relo:2
+Num Temp-relo:0
+Num Total relo:2
+Length Pushing:23.6251
+Length Approaching:31.1645
+Length Approaching:54.7896
+#
+data_name:data_6o
+mode:proposed
+index:25
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0136988
+Time Graph Plan:0.000581
+Time Assign:0
+Time Reloc Plan:0.000197
+Time Task:0.0144768
+Time MP:0.13264
+Time Total:0.217381
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.3963
+Length Approaching:39.034
+Length Approaching:54.4303
+#
+data_name:data_6o
+mode:proposed
+index:26
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0136398
+Time Graph Plan:0.000567
+Time Assign:0
+Time Reloc Plan:0.000159
+Time Task:0.0143658
+Time MP:0.125928
+Time Total:0.207331
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.5859
+Length Approaching:36.424
+Length Approaching:50.0099
+#
+data_name:data_6o
+mode:proposed
+index:27
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0135088
+Time Graph Plan:0.000599
+Time Assign:0
+Time Reloc Plan:0.0004
+Time Task:0.0145078
+Time MP:0.0980152
+Time Total:0.162547
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:28
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0123179
+Time Graph Plan:0.000566
+Time Assign:0
+Time Reloc Plan:0.000217
+Time Task:0.0131009
+Time MP:0.145763
+Time Total:0.22538
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:17.9766
+Length Approaching:36.5482
+Length Approaching:54.5249
+#
+data_name:data_6o
+mode:proposed
+index:29
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0131968
+Time Graph Plan:0.000564
+Time Assign:0
+Time Reloc Plan:0.0001
+Time Task:0.0138608
+Time MP:0.128326
+Time Total:0.204352
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:30
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0133728
+Time Graph Plan:0.00059
+Time Assign:0
+Time Reloc Plan:0.000205
+Time Task:0.0141678
+Time MP:0.111742
+Time Total:0.191543
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.834
+Length Approaching:35.9633
+Length Approaching:49.7974
+#
+data_name:data_6o
+mode:proposed
+index:31
+Is Success:T
+Number of Relocations:4
+Delivery Sequence:
+Time Graph Const:0.0125958
+Time Graph Plan:0.000566
+Time Assign:0
+Time Reloc Plan:0.000296
+Time Task:0.0134578
+Time MP:0.146547
+Time Total:0.225488
+Num Pre-relo:4
+Num Temp-relo:0
+Num Total relo:4
+Length Pushing:16.3855
+Length Approaching:37.1598
+Length Approaching:53.5454
+#
+data_name:data_6o
+mode:proposed
+index:32
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0122578
+Time Graph Plan:0.000593
+Time Assign:0
+Time Reloc Plan:0.000153
+Time Task:0.0130038
+Time MP:0.107429
+Time Total:0.187555
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.1224
+Length Approaching:36.4097
+Length Approaching:49.5321
+#
+data_name:data_6o
+mode:proposed
+index:33
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0130889
+Time Graph Plan:0.0006
+Time Assign:0
+Time Reloc Plan:0.000196
+Time Task:0.0138849
+Time MP:0.134659
+Time Total:0.217913
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.6717
+Length Approaching:37.565
+Length Approaching:53.2366
+#
+data_name:data_6o
+mode:proposed
+index:34
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0125868
+Time Graph Plan:0.000593
+Time Assign:0
+Time Reloc Plan:0.000148
+Time Task:0.0133278
+Time MP:0.172724
+Time Total:0.254726
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:12.8858
+Length Approaching:38.4388
+Length Approaching:51.3245
+#
+data_name:data_6o
+mode:proposed
+index:35
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0136588
+Time Graph Plan:0.000587
+Time Assign:0
+Time Reloc Plan:0.000217
+Time Task:0.0144628
+Time MP:0.192383
+Time Total:0.269949
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.6601
+Length Approaching:35.9853
+Length Approaching:51.6454
+#
+data_name:data_6o
+mode:proposed
+index:36
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0120299
+Time Graph Plan:0.000598
+Time Assign:0
+Time Reloc Plan:0.000204
+Time Task:0.0128319
+Time MP:0.130423
+Time Total:0.212557
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.6248
+Length Approaching:37.6922
+Length Approaching:53.317
+#
+data_name:data_6o
+mode:proposed
+index:37
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0122299
+Time Graph Plan:0.000619
+Time Assign:0
+Time Reloc Plan:0.000186
+Time Task:0.0130349
+Time MP:0.131059
+Time Total:0.212365
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:16.3099
+Length Approaching:40.2626
+Length Approaching:56.5725
+#
+data_name:data_6o
+mode:proposed
+index:38
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0128358
+Time Graph Plan:0.000593
+Time Assign:0
+Time Reloc Plan:0.000333
+Time Task:0.0137618
+Time MP:0.0933262
+Time Total:0.174508
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:39
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0135198
+Time Graph Plan:0.000617
+Time Assign:0
+Time Reloc Plan:0.000146
+Time Task:0.0142828
+Time MP:0.141732
+Time Total:0.227386
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.2842
+Length Approaching:29.5518
+Length Approaching:42.8361
+#
+data_name:data_6o
+mode:proposed
+index:40
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0134648
+Time Graph Plan:0.000605
+Time Assign:0
+Time Reloc Plan:0.000105
+Time Task:0.0141748
+Time MP:0.139967
+Time Total:0.220923
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:41
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0126168
+Time Graph Plan:0.000574
+Time Assign:0
+Time Reloc Plan:0.000303
+Time Task:0.0134938
+Time MP:0.10026
+Time Total:0.163919
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:42
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0138318
+Time Graph Plan:0.000616
+Time Assign:0
+Time Reloc Plan:0.000197
+Time Task:0.0146448
+Time MP:0.135298
+Time Total:0.216381
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.5181
+Length Approaching:34.1751
+Length Approaching:47.6932
+#
+data_name:data_6o
+mode:proposed
+index:43
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0137968
+Time Graph Plan:0.00059
+Time Assign:0
+Time Reloc Plan:0.000143
+Time Task:0.0145298
+Time MP:0.111945
+Time Total:0.193604
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.4776
+Length Approaching:32.1519
+Length Approaching:45.6294
+#
+data_name:data_6o
+mode:proposed
+index:44
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0112129
+Time Graph Plan:0.00059
+Time Assign:0
+Time Reloc Plan:0.000166
+Time Task:0.0119689
+Time MP:0.0993881
+Time Total:0.184074
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.3843
+Length Approaching:33.4443
+Length Approaching:46.8286
+#
+data_name:data_6o
+mode:proposed
+index:45
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0119969
+Time Graph Plan:0.000589
+Time Assign:0
+Time Reloc Plan:0.000201
+Time Task:0.0127869
+Time MP:0.136187
+Time Total:0.216972
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.9192
+Length Approaching:41.7455
+Length Approaching:55.6647
+#
+data_name:data_6o
+mode:proposed
+index:46
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0145488
+Time Graph Plan:0.00063
+Time Assign:0
+Time Reloc Plan:0.000157
+Time Task:0.0153358
+Time MP:0.108462
+Time Total:0.186074
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.2334
+Length Approaching:33.9352
+Length Approaching:47.1686
+#
+data_name:data_6o
+mode:proposed
+index:47
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0136398
+Time Graph Plan:0.000583
+Time Assign:0
+Time Reloc Plan:0.000141
+Time Task:0.0143638
+Time MP:0.0921672
+Time Total:0.174079
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:12.9959
+Length Approaching:34.4574
+Length Approaching:47.4533
+#
+data_name:data_6o
+mode:proposed
+index:48
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0120459
+Time Graph Plan:0.000586
+Time Assign:0
+Time Reloc Plan:0.000201
+Time Task:0.0128329
+Time MP:0.134645
+Time Total:0.209663
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:17.5063
+Length Approaching:43.2557
+Length Approaching:60.762
+#
+data_name:data_6o
+mode:proposed
+index:49
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0126808
+Time Graph Plan:0.000585
+Time Assign:0
+Time Reloc Plan:0.000159
+Time Task:0.0134248
+Time MP:0.119041
+Time Total:0.203535
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:14.1613
+Length Approaching:34.5721
+Length Approaching:48.7335
+#
+data_name:data_6o
+mode:proposed
+index:50
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0139698
+Time Graph Plan:0.000591
+Time Assign:0
+Time Reloc Plan:0.000166
+Time Task:0.0147268
+Time MP:0.10993
+Time Total:0.189346
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.5099
+Length Approaching:30.1319
+Length Approaching:43.6419
+#
+data_name:data_6o
+mode:proposed
+index:51
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0135818
+Time Graph Plan:0.000564
+Time Assign:0
+Time Reloc Plan:0.000278
+Time Task:0.0144238
+Time MP:0.114786
+Time Total:0.175063
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:52
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0132118
+Time Graph Plan:0.000584
+Time Assign:0
+Time Reloc Plan:0.000217
+Time Task:0.0140128
+Time MP:0.1748
+Time Total:0.258003
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:53
+Is Success:T
+Number of Relocations:4
+Delivery Sequence:
+Time Graph Const:0.0120818
+Time Graph Plan:0.000655
+Time Assign:0
+Time Reloc Plan:0.00033
+Time Task:0.0130668
+Time MP:0.178159
+Time Total:0.260152
+Num Pre-relo:4
+Num Temp-relo:0
+Num Total relo:4
+Length Pushing:16.9682
+Length Approaching:41.6363
+Length Approaching:58.6046
+#
+data_name:data_6o
+mode:proposed
+index:54
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0133628
+Time Graph Plan:0.000657
+Time Assign:0
+Time Reloc Plan:0.000149
+Time Task:0.0141688
+Time MP:0.105225
+Time Total:0.187455
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:55
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0116879
+Time Graph Plan:0.000618
+Time Assign:0
+Time Reloc Plan:0.000195
+Time Task:0.0125009
+Time MP:0.135389
+Time Total:0.214312
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:17.389
+Length Approaching:40.6429
+Length Approaching:58.0319
+#
+data_name:data_6o
+mode:proposed
+index:56
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0138788
+Time Graph Plan:0.000596
+Time Assign:0
+Time Reloc Plan:0.000188
+Time Task:0.0146628
+Time MP:0.182231
+Time Total:0.263714
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.1499
+Length Approaching:37.3121
+Length Approaching:52.4619
+#
+data_name:data_6o
+mode:proposed
+index:57
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0136298
+Time Graph Plan:0.000564
+Time Assign:0
+Time Reloc Plan:0.000235
+Time Task:0.0144288
+Time MP:0.142908
+Time Total:0.224862
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.8761
+Length Approaching:40.3902
+Length Approaching:54.2663
+#
+data_name:data_6o
+mode:proposed
+index:58
+Is Success:T
+Number of Relocations:5
+Delivery Sequence:
+Time Graph Const:0.0114489
+Time Graph Plan:0.000581
+Time Assign:0
+Time Reloc Plan:0.000191
+Time Task:0.0122209
+Time MP:0.157944
+Time Total:0.234761
+Num Pre-relo:4
+Num Temp-relo:1
+Num Total relo:5
+Length Pushing:16.1409
+Length Approaching:42.1891
+Length Approaching:58.33
+#
+data_name:data_6o
+mode:proposed
+index:59
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0133938
+Time Graph Plan:0.000586
+Time Assign:0
+Time Reloc Plan:0.000187
+Time Task:0.0141668
+Time MP:0.142448
+Time Total:0.223512
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:60
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0128838
+Time Graph Plan:0.00057
+Time Assign:0
+Time Reloc Plan:0.000174
+Time Task:0.0136278
+Time MP:0.106205
+Time Total:0.185485
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.7118
+Length Approaching:33.2623
+Length Approaching:46.9741
+#
+data_name:data_6o
+mode:proposed
+index:61
+Is Success:T
+Number of Relocations:4
+Delivery Sequence:
+Time Graph Const:0.0142988
+Time Graph Plan:0.000575
+Time Assign:0
+Time Reloc Plan:0.000282
+Time Task:0.0151558
+Time MP:0.163561
+Time Total:0.246427
+Num Pre-relo:4
+Num Temp-relo:0
+Num Total relo:4
+Length Pushing:19.1331
+Length Approaching:40.1252
+Length Approaching:59.2583
+#
+data_name:data_6o
+mode:proposed
+index:62
+Is Success:T
+Number of Relocations:4
+Delivery Sequence:
+Time Graph Const:0.0125229
+Time Graph Plan:0.000588
+Time Assign:0
+Time Reloc Plan:0.000315
+Time Task:0.0134259
+Time MP:0.147301
+Time Total:0.229101
+Num Pre-relo:4
+Num Temp-relo:0
+Num Total relo:4
+Length Pushing:16.424
+Length Approaching:38.5541
+Length Approaching:54.9781
+#
+data_name:data_6o
+mode:proposed
+index:63
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0141348
+Time Graph Plan:0.000589
+Time Assign:0
+Time Reloc Plan:0.000167
+Time Task:0.0148908
+Time MP:0.102469
+Time Total:0.186333
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.6321
+Length Approaching:32.9691
+Length Approaching:48.6013
+#
+data_name:data_6o
+mode:proposed
+index:64
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0117759
+Time Graph Plan:0.000598
+Time Assign:0
+Time Reloc Plan:0.000182
+Time Task:0.0125559
+Time MP:0.125087
+Time Total:0.204449
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.7197
+Length Approaching:33.1516
+Length Approaching:46.8713
+#
+data_name:data_6o
+mode:proposed
+index:65
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0132509
+Time Graph Plan:0.000619
+Time Assign:0
+Time Reloc Plan:0.001256
+Time Task:0.0151259
+Time MP:0.0978173
+Time Total:0.164502
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:66
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0113429
+Time Graph Plan:0.000574
+Time Assign:0
+Time Reloc Plan:0.000139
+Time Task:0.0120559
+Time MP:0.0938701
+Time Total:0.174581
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.1104
+Length Approaching:34.1057
+Length Approaching:47.2162
+#
+data_name:data_6o
+mode:proposed
+index:67
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0122478
+Time Graph Plan:0.000572
+Time Assign:0
+Time Reloc Plan:0.000194
+Time Task:0.0130138
+Time MP:0.144441
+Time Total:0.225132
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.9706
+Length Approaching:39.0502
+Length Approaching:53.0208
+#
+data_name:data_6o
+mode:proposed
+index:68
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0121298
+Time Graph Plan:0.000597
+Time Assign:0
+Time Reloc Plan:0.000199
+Time Task:0.0129259
+Time MP:0.0984211
+Time Total:0.177583
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.286
+Length Approaching:33.5447
+Length Approaching:48.8307
+#
+data_name:data_6o
+mode:proposed
+index:69
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0129538
+Time Graph Plan:0.000602
+Time Assign:0
+Time Reloc Plan:0.000163
+Time Task:0.0137188
+Time MP:0.106878
+Time Total:0.187532
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.461
+Length Approaching:37.5751
+Length Approaching:51.036
+#
+data_name:data_6o
+mode:proposed
+index:70
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0143158
+Time Graph Plan:0.000615
+Time Assign:0
+Time Reloc Plan:0.000197
+Time Task:0.0151278
+Time MP:0.169821
+Time Total:0.250191
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:71
+Is Success:T
+Number of Relocations:2
+Delivery Sequence:
+Time Graph Const:0.0128148
+Time Graph Plan:0.000557
+Time Assign:0
+Time Reloc Plan:0.000201
+Time Task:0.0135728
+Time MP:0.0925381
+Time Total:0.171602
+Num Pre-relo:2
+Num Temp-relo:0
+Num Total relo:2
+Length Pushing:21.8088
+Length Approaching:28.2101
+Length Approaching:50.0189
+#
+data_name:data_6o
+mode:proposed
+index:72
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0119328
+Time Graph Plan:0.000569
+Time Assign:0
+Time Reloc Plan:0.000176
+Time Task:0.0126779
+Time MP:0.132144
+Time Total:0.211654
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:16.3862
+Length Approaching:40.3917
+Length Approaching:56.7779
+#
+data_name:data_6o
+mode:proposed
+index:73
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0133378
+Time Graph Plan:0.000572
+Time Assign:0
+Time Reloc Plan:0.000201
+Time Task:0.0141108
+Time MP:0.141436
+Time Total:0.218651
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:74
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0132008
+Time Graph Plan:0.000568
+Time Assign:0
+Time Reloc Plan:0.000183
+Time Task:0.0139518
+Time MP:0.132242
+Time Total:0.211154
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:17.9112
+Length Approaching:42.9548
+Length Approaching:60.866
+#
+data_name:data_6o
+mode:proposed
+index:75
+Is Success:T
+Number of Relocations:2
+Delivery Sequence:
+Time Graph Const:0.0128138
+Time Graph Plan:0.00055
+Time Assign:0
+Time Reloc Plan:0.000203
+Time Task:0.0135668
+Time MP:0.0996402
+Time Total:0.181935
+Num Pre-relo:2
+Num Temp-relo:0
+Num Total relo:2
+Length Pushing:21.9167
+Length Approaching:35.6528
+Length Approaching:57.5695
+#
+data_name:data_6o
+mode:proposed
+index:76
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0115889
+Time Graph Plan:0.000629
+Time Assign:0
+Time Reloc Plan:0.000182
+Time Task:0.0123999
+Time MP:0.129631
+Time Total:0.203497
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.5792
+Length Approaching:35.3245
+Length Approaching:48.9037
+#
+data_name:data_6o
+mode:proposed
+index:77
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0125358
+Time Graph Plan:0.000647
+Time Assign:0
+Time Reloc Plan:0.00029
+Time Task:0.0134728
+Time MP:0.135058
+Time Total:0.219413
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:78
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0113929
+Time Graph Plan:0.000675
+Time Assign:0
+Time Reloc Plan:0.000152
+Time Task:0.0122199
+Time MP:0.12204
+Time Total:0.195937
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.7704
+Length Approaching:37.1755
+Length Approaching:50.9459
+#
+data_name:data_6o
+mode:proposed
+index:79
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0127708
+Time Graph Plan:0.000604
+Time Assign:0
+Time Reloc Plan:0.000202
+Time Task:0.0135768
+Time MP:0.142222
+Time Total:0.225698
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:18.1609
+Length Approaching:41.0286
+Length Approaching:59.1895
+#
+data_name:data_6o
+mode:proposed
+index:80
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0108199
+Time Graph Plan:0.000598
+Time Assign:0
+Time Reloc Plan:0.000147
+Time Task:0.0115649
+Time MP:0.11291
+Time Total:0.191423
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.4464
+Length Approaching:37.1302
+Length Approaching:50.5767
+#
+data_name:data_6o
+mode:proposed
+index:81
+Is Success:T
+Number of Relocations:2
+Delivery Sequence:
+Time Graph Const:0.0115199
+Time Graph Plan:0.000583
+Time Assign:0
+Time Reloc Plan:0.000197
+Time Task:0.0122999
+Time MP:0.0824521
+Time Total:0.162912
+Num Pre-relo:2
+Num Temp-relo:0
+Num Total relo:2
+Length Pushing:21.6698
+Length Approaching:34.1558
+Length Approaching:55.8255
+#
+data_name:data_6o
+mode:proposed
+index:82
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0132428
+Time Graph Plan:0.000581
+Time Assign:0
+Time Reloc Plan:0.000291
+Time Task:0.0141148
+Time MP:0.11845
+Time Total:0.18475
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:83
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0118489
+Time Graph Plan:0.000588
+Time Assign:0
+Time Reloc Plan:0.000177
+Time Task:0.0126139
+Time MP:0.146222
+Time Total:0.224821
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.734
+Length Approaching:45.531
+Length Approaching:59.265
+#
+data_name:data_6o
+mode:proposed
+index:84
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0109119
+Time Graph Plan:0.000623
+Time Assign:0
+Time Reloc Plan:0.000199
+Time Task:0.0117339
+Time MP:0.120957
+Time Total:0.20438
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.9997
+Length Approaching:38.0642
+Length Approaching:52.0639
+#
+data_name:data_6o
+mode:proposed
+index:85
+Is Success:T
+Number of Relocations:2
+Delivery Sequence:
+Time Graph Const:0.0106729
+Time Graph Plan:0.000626
+Time Assign:0
+Time Reloc Plan:0.000224
+Time Task:0.0115229
+Time MP:0.0987781
+Time Total:0.175973
+Num Pre-relo:2
+Num Temp-relo:0
+Num Total relo:2
+Length Pushing:21.6535
+Length Approaching:31.7998
+Length Approaching:53.4534
+#
+data_name:data_6o
+mode:proposed
+index:86
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0117219
+Time Graph Plan:0.00062
+Time Assign:0
+Time Reloc Plan:0.000162
+Time Task:0.0125039
+Time MP:0.11091
+Time Total:0.193351
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.2442
+Length Approaching:36.7352
+Length Approaching:49.9794
+#
+data_name:data_6o
+mode:proposed
+index:87
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0106709
+Time Graph Plan:0.00062
+Time Assign:0
+Time Reloc Plan:0.000147
+Time Task:0.0114379
+Time MP:0.117085
+Time Total:0.195794
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.674
+Length Approaching:37.0277
+Length Approaching:52.7016
+#
+data_name:data_6o
+mode:proposed
+index:88
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0103019
+Time Graph Plan:0.000605
+Time Assign:0
+Time Reloc Plan:0.000174
+Time Task:0.0110809
+Time MP:0.135209
+Time Total:0.218016
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:18.0818
+Length Approaching:35.01
+Length Approaching:53.0917
+#
+data_name:data_6o
+mode:proposed
+index:89
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0117089
+Time Graph Plan:0.000591
+Time Assign:0
+Time Reloc Plan:0.000159
+Time Task:0.0124589
+Time MP:0.101098
+Time Total:0.181585
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.2641
+Length Approaching:30.5666
+Length Approaching:43.8307
+#
+data_name:data_6o
+mode:proposed
+index:90
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0106509
+Time Graph Plan:0.000626
+Time Assign:0
+Time Reloc Plan:0.000179
+Time Task:0.0114559
+Time MP:0.125153
+Time Total:0.201791
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:13.7358
+Length Approaching:35.0718
+Length Approaching:48.8076
+#
+data_name:data_6o
+mode:proposed
+index:91
+Is Success:T
+Number of Relocations:2
+Delivery Sequence:
+Time Graph Const:0.0112189
+Time Graph Plan:0.000598
+Time Assign:0
+Time Reloc Plan:0.000215
+Time Task:0.0120319
+Time MP:0.110395
+Time Total:0.185506
+Num Pre-relo:2
+Num Temp-relo:0
+Num Total relo:2
+Length Pushing:21.7164
+Length Approaching:28.3362
+Length Approaching:50.0526
+#
+data_name:data_6o
+mode:proposed
+index:92
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0126659
+Time Graph Plan:0.000622
+Time Assign:0
+Time Reloc Plan:0.000195
+Time Task:0.0134829
+Time MP:0.138424
+Time Total:0.219696
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.9446
+Length Approaching:36.7347
+Length Approaching:52.6793
+#
+data_name:data_6o
+mode:proposed
+index:93
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0123308
+Time Graph Plan:0.000645
+Time Assign:0
+Time Reloc Plan:0.000181
+Time Task:0.0131568
+Time MP:0.145614
+Time Total:0.229442
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:94
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0111079
+Time Graph Plan:0.000594
+Time Assign:0
+Time Reloc Plan:0.000168
+Time Task:0.0118699
+Time MP:0.111794
+Time Total:0.189775
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:16.5861
+Length Approaching:37.37
+Length Approaching:53.9561
+#
+data_name:data_6o
+mode:proposed
+index:95
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0111369
+Time Graph Plan:0.00062
+Time Assign:0
+Time Reloc Plan:0.000176
+Time Task:0.0119329
+Time MP:0.0980422
+Time Total:0.17803
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.1498
+Length Approaching:35.9923
+Length Approaching:51.1421
+#
+data_name:data_6o
+mode:proposed
+index:96
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0117589
+Time Graph Plan:0.000579
+Time Assign:0
+Time Reloc Plan:0.000205
+Time Task:0.0125429
+Time MP:0.0992941
+Time Total:0.181981
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:17.969
+Length Approaching:44.3078
+Length Approaching:62.2768
+#
+data_name:data_6o
+mode:proposed
+index:97
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0122158
+Time Graph Plan:0.000609
+Time Assign:0
+Time Reloc Plan:0.000202
+Time Task:0.0130268
+Time MP:0.162351
+Time Total:0.237776
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:98
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.0108339
+Time Graph Plan:0.000579
+Time Assign:0
+Time Reloc Plan:0.000571
+Time Task:0.0119839
+Time MP:0.0846442
+Time Total:0.147208
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+#
+data_name:data_6o
+mode:proposed
+index:99
+Is Success:T
+Number of Relocations:3
+Delivery Sequence:
+Time Graph Const:0.0108439
+Time Graph Plan:0.000586
+Time Assign:0
+Time Reloc Plan:0.000208
+Time Task:0.0116379
+Time MP:0.0983632
+Time Total:0.179679
+Num Pre-relo:3
+Num Temp-relo:0
+Num Total relo:3
+Length Pushing:15.4218
+Length Approaching:33.3944
+Length Approaching:48.8162

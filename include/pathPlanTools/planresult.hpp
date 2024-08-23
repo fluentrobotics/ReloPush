@@ -36,7 +36,7 @@ struct PlanResult {
   //! lower bound of the cost (for suboptimal solvers)
   Cost fmin;
   // success or fail
-  bool success;
+  bool success = false;
 
   // return path as a vector of States
   std::vector<State> getPath(bool negateYaw = false)

@@ -1,0 +1,3600 @@
+#
+data_name:data_3o_2
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000139
+Time Path Plan:0.016116
+Time Assign:0
+Time Total:0.02782
+Time Reloc Plan:2.6e-05
+#
+data_name:data_3o_2
+index:1
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000133
+Time Path Plan:0.017504
+Time Assign:0
+Time Total:0.029272
+Time Reloc Plan:7.1e-05
+#
+data_name:data_3o_2
+index:2
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000143
+Time Path Plan:0.018798
+Time Assign:0
+Time Total:0.030494
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:3
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000141
+Time Path Plan:0.019803
+Time Assign:0
+Time Total:0.03153
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:4
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.023893
+Time Assign:0
+Time Total:0.035814
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:5
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000132
+Time Path Plan:0.018882
+Time Assign:0
+Time Total:0.03006
+Time Reloc Plan:4.1e-05
+#
+data_name:data_3o_2
+index:6
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000199
+Time Path Plan:0.018387
+Time Assign:0
+Time Total:0.032609
+Time Reloc Plan:4.9e-05
+#
+data_name:data_3o_2
+index:7
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000132
+Time Path Plan:0.027473
+Time Assign:0
+Time Total:0.039071
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:8
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000134
+Time Path Plan:0.012193
+Time Assign:0
+Time Total:0.023464
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:9
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000154
+Time Path Plan:0.012157
+Time Assign:0
+Time Total:0.023362
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:10
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000149
+Time Path Plan:0.011947
+Time Assign:0
+Time Total:0.02329
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:11
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.01485
+Time Assign:0
+Time Total:0.02596
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:12
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.00014
+Time Path Plan:0.016539
+Time Assign:0
+Time Total:0.031187
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:13
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000149
+Time Path Plan:0.019381
+Time Assign:0
+Time Total:0.030729
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:14
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:1e-06
+Time Graph Plan:0.000161
+Time Path Plan:0.016659
+Time Assign:0
+Time Total:0.029179
+Time Reloc Plan:8e-05
+#
+data_name:data_3o_2
+index:15
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000142
+Time Path Plan:0.015455
+Time Assign:0
+Time Total:0.027267
+Time Reloc Plan:2.9e-05
+#
+data_name:data_3o_2
+index:16
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000173
+Time Path Plan:0.027781
+Time Assign:0
+Time Total:0.043428
+Time Reloc Plan:4e-05
+#
+data_name:data_3o_2
+index:17
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000242
+Time Path Plan:0.025793
+Time Assign:0
+Time Total:0.039213
+Time Reloc Plan:4.8e-05
+#
+data_name:data_3o_2
+index:18
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000159
+Time Path Plan:0.017128
+Time Assign:0
+Time Total:0.031698
+Time Reloc Plan:4.3e-05
+#
+data_name:data_3o_2
+index:19
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000155
+Time Path Plan:0.016093
+Time Assign:0
+Time Total:0.030468
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:20
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000143
+Time Path Plan:0.026113
+Time Assign:0
+Time Total:0.038289
+Time Reloc Plan:3.9e-05
+#
+data_name:data_3o_2
+index:21
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.00014
+Time Path Plan:0.01757
+Time Assign:0
+Time Total:0.029605
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:22
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:3e-06
+Time Graph Plan:0.000186
+Time Path Plan:0.021713
+Time Assign:0
+Time Total:0.037559
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:23
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000147
+Time Path Plan:0.016219
+Time Assign:0
+Time Total:0.027985
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:24
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:3e-06
+Time Graph Plan:0.000185
+Time Path Plan:0.021305
+Time Assign:0
+Time Total:0.036956
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:25
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000139
+Time Path Plan:0.02761
+Time Assign:0
+Time Total:0.0397
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:26
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000156
+Time Path Plan:0.023609
+Time Assign:0
+Time Total:0.038185
+Time Reloc Plan:4e-05
+#
+data_name:data_3o_2
+index:27
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000151
+Time Path Plan:0.022855
+Time Assign:0
+Time Total:0.034927
+Time Reloc Plan:3.9e-05
+#
+data_name:data_3o_2
+index:28
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000134
+Time Path Plan:0.018014
+Time Assign:0
+Time Total:0.030615
+Time Reloc Plan:2.9e-05
+#
+data_name:data_3o_2
+index:29
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:4e-06
+Time Graph Plan:0.000205
+Time Path Plan:0.031687
+Time Assign:0
+Time Total:0.047767
+Time Reloc Plan:4.2e-05
+#
+data_name:data_3o_2
+index:30
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000155
+Time Path Plan:0.016784
+Time Assign:0
+Time Total:0.028676
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:31
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:3e-06
+Time Graph Plan:0.000191
+Time Path Plan:0.021909
+Time Assign:0
+Time Total:0.038069
+Time Reloc Plan:4.9e-05
+#
+data_name:data_3o_2
+index:32
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:5e-06
+Time Graph Plan:0.000253
+Time Path Plan:0.037793
+Time Assign:0
+Time Total:0.05432
+Time Reloc Plan:5.8e-05
+#
+data_name:data_3o_2
+index:33
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000142
+Time Path Plan:0.019765
+Time Assign:0
+Time Total:0.030991
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:34
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000145
+Time Path Plan:0.027832
+Time Assign:0
+Time Total:0.039492
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:35
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000135
+Time Path Plan:0.015195
+Time Assign:0
+Time Total:0.027054
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:36
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000126
+Time Path Plan:0.019811
+Time Assign:0
+Time Total:0.03145
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:37
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.032421
+Time Assign:0
+Time Total:0.044077
+Time Reloc Plan:3.9e-05
+#
+data_name:data_3o_2
+index:38
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000128
+Time Path Plan:0.017551
+Time Assign:0
+Time Total:0.03059
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:39
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:2e-06
+Time Graph Plan:0.000132
+Time Path Plan:0.017174
+Time Assign:0
+Time Total:0.029895
+Time Reloc Plan:7.1e-05
+#
+data_name:data_3o_2
+index:40
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.000128
+Time Path Plan:0.015974
+Time Assign:0
+Time Total:0.027793
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:41
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000134
+Time Path Plan:0.015263
+Time Assign:0
+Time Total:0.027049
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:42
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000135
+Time Path Plan:0.016431
+Time Assign:0
+Time Total:0.028124
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:43
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000131
+Time Path Plan:0.015843
+Time Assign:0
+Time Total:0.027593
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:44
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000137
+Time Path Plan:0.024013
+Time Assign:0
+Time Total:0.036459
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:45
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.00023
+Time Path Plan:0.026342
+Time Assign:0
+Time Total:0.042296
+Time Reloc Plan:4.4e-05
+#
+data_name:data_3o_2
+index:46
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000134
+Time Path Plan:0.017811
+Time Assign:0
+Time Total:0.029639
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:47
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000123
+Time Path Plan:0.01595
+Time Assign:0
+Time Total:0.027627
+Time Reloc Plan:2.6e-05
+#
+data_name:data_3o_2
+index:48
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000129
+Time Path Plan:0.028272
+Time Assign:0
+Time Total:0.039684
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:49
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000144
+Time Path Plan:0.02675
+Time Assign:0
+Time Total:0.038563
+Time Reloc Plan:4e-05
+#
+data_name:data_3o_2
+index:50
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.00012
+Time Path Plan:0.016347
+Time Assign:0
+Time Total:0.028218
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:51
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000144
+Time Path Plan:0.021344
+Time Assign:0
+Time Total:0.035576
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:52
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:3e-06
+Time Graph Plan:0.000175
+Time Path Plan:0.030049
+Time Assign:0
+Time Total:0.045365
+Time Reloc Plan:4.2e-05
+#
+data_name:data_3o_2
+index:53
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:3e-06
+Time Graph Plan:0.000132
+Time Path Plan:0.02231
+Time Assign:0
+Time Total:0.034009
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:54
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.00013
+Time Path Plan:0.026802
+Time Assign:0
+Time Total:0.038492
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:55
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000134
+Time Path Plan:0.015337
+Time Assign:0
+Time Total:0.026972
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:56
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000129
+Time Path Plan:0.016721
+Time Assign:0
+Time Total:0.028454
+Time Reloc Plan:2.9e-05
+#
+data_name:data_3o_2
+index:57
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.016264
+Time Assign:0
+Time Total:0.027939
+Time Reloc Plan:3.9e-05
+#
+data_name:data_3o_2
+index:58
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000163
+Time Path Plan:0.017167
+Time Assign:0
+Time Total:0.030775
+Time Reloc Plan:4.2e-05
+#
+data_name:data_3o_2
+index:59
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000132
+Time Path Plan:0.021307
+Time Assign:0
+Time Total:0.032838
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:60
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000125
+Time Path Plan:0.022052
+Time Assign:0
+Time Total:0.03346
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:61
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000125
+Time Path Plan:0.020151
+Time Assign:0
+Time Total:0.031713
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:62
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000136
+Time Path Plan:0.026194
+Time Assign:0
+Time Total:0.037654
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:63
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000127
+Time Path Plan:0.020429
+Time Assign:0
+Time Total:0.03218
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:64
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000128
+Time Path Plan:0.015597
+Time Assign:0
+Time Total:0.027395
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:65
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.000122
+Time Path Plan:0.015707
+Time Assign:0
+Time Total:0.027546
+Time Reloc Plan:2.9e-05
+#
+data_name:data_3o_2
+index:66
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000139
+Time Path Plan:0.016831
+Time Assign:0
+Time Total:0.028511
+Time Reloc Plan:3e-05
+#
+data_name:data_3o_2
+index:67
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.00013
+Time Path Plan:0.01528
+Time Assign:0
+Time Total:0.027692
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:68
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000125
+Time Path Plan:0.016152
+Time Assign:0
+Time Total:0.027621
+Time Reloc Plan:7.5e-05
+#
+data_name:data_3o_2
+index:69
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000135
+Time Path Plan:0.015307
+Time Assign:0
+Time Total:0.027168
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:70
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000141
+Time Path Plan:0.015898
+Time Assign:0
+Time Total:0.027655
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:71
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000126
+Time Path Plan:0.024675
+Time Assign:0
+Time Total:0.036245
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:72
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000125
+Time Path Plan:0.015874
+Time Assign:0
+Time Total:0.027358
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:73
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.000125
+Time Path Plan:0.014765
+Time Assign:0
+Time Total:0.026801
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:74
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.016202
+Time Assign:0
+Time Total:0.027988
+Time Reloc Plan:7.5e-05
+#
+data_name:data_3o_2
+index:75
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000123
+Time Path Plan:0.015894
+Time Assign:0
+Time Total:0.027487
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:76
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000137
+Time Path Plan:0.020932
+Time Assign:0
+Time Total:0.033337
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:77
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000131
+Time Path Plan:0.016106
+Time Assign:0
+Time Total:0.02796
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:78
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000141
+Time Path Plan:0.029058
+Time Assign:0
+Time Total:0.040675
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:79
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000133
+Time Path Plan:0.015572
+Time Assign:0
+Time Total:0.027546
+Time Reloc Plan:3e-05
+#
+data_name:data_3o_2
+index:80
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000152
+Time Path Plan:0.023041
+Time Assign:0
+Time Total:0.034972
+Time Reloc Plan:4.1e-05
+#
+data_name:data_3o_2
+index:81
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000122
+Time Path Plan:0.015884
+Time Assign:0
+Time Total:0.027566
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:82
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000123
+Time Path Plan:0.015817
+Time Assign:0
+Time Total:0.027572
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:83
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000126
+Time Path Plan:0.016414
+Time Assign:0
+Time Total:0.027951
+Time Reloc Plan:7.4e-05
+#
+data_name:data_3o_2
+index:84
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.013558
+Time Assign:0
+Time Total:0.025486
+Time Reloc Plan:4e-05
+#
+data_name:data_3o_2
+index:85
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000143
+Time Path Plan:0.019345
+Time Assign:0
+Time Total:0.032282
+Time Reloc Plan:2.9e-05
+#
+data_name:data_3o_2
+index:86
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.015376
+Time Assign:0
+Time Total:0.027085
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:87
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000123
+Time Path Plan:0.016121
+Time Assign:0
+Time Total:0.027722
+Time Reloc Plan:2.6e-05
+#
+data_name:data_3o_2
+index:88
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000188
+Time Path Plan:0.018004
+Time Assign:0
+Time Total:0.030752
+Time Reloc Plan:4.9e-05
+#
+data_name:data_3o_2
+index:89
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000123
+Time Path Plan:0.019616
+Time Assign:0
+Time Total:0.03121
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:90
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.022569
+Time Assign:0
+Time Total:0.034211
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:91
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000142
+Time Path Plan:0.025607
+Time Assign:0
+Time Total:0.037341
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:92
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000134
+Time Path Plan:0.016902
+Time Assign:0
+Time Total:0.028944
+Time Reloc Plan:7.1e-05
+#
+data_name:data_3o_2
+index:93
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000124
+Time Path Plan:0.022998
+Time Assign:0
+Time Total:0.034527
+Time Reloc Plan:3.9e-05
+#
+data_name:data_3o_2
+index:94
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000121
+Time Path Plan:0.016144
+Time Assign:0
+Time Total:0.027792
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:95
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000178
+Time Path Plan:0.027951
+Time Assign:0
+Time Total:0.046464
+Time Reloc Plan:4.6e-05
+#
+data_name:data_3o_2
+index:96
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.00015
+Time Path Plan:0.017971
+Time Assign:0
+Time Total:0.030005
+Time Reloc Plan:4e-05
+#
+data_name:data_3o_2
+index:97
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000126
+Time Path Plan:0.026359
+Time Assign:0
+Time Total:0.038034
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:98
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000131
+Time Path Plan:0.032291
+Time Assign:0
+Time Total:0.044034
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:99
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000129
+Time Path Plan:0.021166
+Time Assign:0
+Time Total:0.032851
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.00012
+Time Path Plan:0.015045
+Time Assign:0
+Time Total:0.026605
+Time Reloc Plan:2.6e-05
+#
+data_name:data_3o_2
+index:1
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:4e-06
+Time Graph Plan:0.000177
+Time Path Plan:0.02209
+Time Assign:0
+Time Total:0.03761
+Time Reloc Plan:8e-05
+#
+data_name:data_3o_2
+index:2
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000125
+Time Path Plan:0.018039
+Time Assign:0
+Time Total:0.029502
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:3
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000126
+Time Path Plan:0.019407
+Time Assign:0
+Time Total:0.031182
+Time Reloc Plan:5.4e-05
+#
+data_name:data_3o_2
+index:4
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000129
+Time Path Plan:0.024365
+Time Assign:0
+Time Total:0.036088
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:5
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000125
+Time Path Plan:0.022171
+Time Assign:0
+Time Total:0.033783
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:6
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000123
+Time Path Plan:0.018601
+Time Assign:0
+Time Total:0.030157
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:7
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000132
+Time Path Plan:0.02724
+Time Assign:0
+Time Total:0.038688
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:8
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:3e-06
+Time Graph Plan:0.000182
+Time Path Plan:0.02119
+Time Assign:0
+Time Total:0.036958
+Time Reloc Plan:3.9e-05
+#
+data_name:data_3o_2
+index:9
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000129
+Time Path Plan:0.015245
+Time Assign:0
+Time Total:0.026969
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:10
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.000125
+Time Path Plan:0.015704
+Time Assign:0
+Time Total:0.027312
+Time Reloc Plan:2.5e-05
+#
+data_name:data_3o_2
+index:11
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000124
+Time Path Plan:0.01823
+Time Assign:0
+Time Total:0.029899
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:12
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000132
+Time Path Plan:0.015765
+Time Assign:0
+Time Total:0.027301
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:13
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000141
+Time Path Plan:0.023569
+Time Assign:0
+Time Total:0.035348
+Time Reloc Plan:3.9e-05
+#
+data_name:data_3o_2
+index:14
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000238
+Time Path Plan:0.020217
+Time Assign:0
+Time Total:0.031941
+Time Reloc Plan:9.6e-05
+#
+data_name:data_3o_2
+index:15
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:4e-06
+Time Graph Plan:0.000179
+Time Path Plan:0.0243
+Time Assign:0
+Time Total:0.040364
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:16
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000131
+Time Path Plan:0.025261
+Time Assign:0
+Time Total:0.036826
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:17
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000137
+Time Path Plan:0.020379
+Time Assign:0
+Time Total:0.032255
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:18
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.016553
+Time Assign:0
+Time Total:0.028354
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:19
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000126
+Time Path Plan:0.01592
+Time Assign:0
+Time Total:0.027424
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:20
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000126
+Time Path Plan:0.026135
+Time Assign:0
+Time Total:0.037656
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:21
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.015975
+Time Assign:0
+Time Total:0.027849
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:22
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000122
+Time Path Plan:0.016401
+Time Assign:0
+Time Total:0.028037
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:23
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.000136
+Time Path Plan:0.01637
+Time Assign:0
+Time Total:0.027918
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:24
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.000123
+Time Path Plan:0.015737
+Time Assign:0
+Time Total:0.027241
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:25
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.030206
+Time Assign:0
+Time Total:0.043682
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:26
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000124
+Time Path Plan:0.019065
+Time Assign:0
+Time Total:0.03074
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:27
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:3e-06
+Time Graph Plan:0.000131
+Time Path Plan:0.024963
+Time Assign:0
+Time Total:0.039186
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:28
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.00012
+Time Path Plan:0.015942
+Time Assign:0
+Time Total:0.027652
+Time Reloc Plan:2.9e-05
+#
+data_name:data_3o_2
+index:29
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000122
+Time Path Plan:0.024961
+Time Assign:0
+Time Total:0.036515
+Time Reloc Plan:3.3e-05
+#
+data_name:data_3o_2
+index:30
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.00012
+Time Path Plan:0.015511
+Time Assign:0
+Time Total:0.027147
+Time Reloc Plan:2.5e-05
+#
+data_name:data_3o_2
+index:31
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000133
+Time Path Plan:0.0185
+Time Assign:0
+Time Total:0.029923
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:32
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000125
+Time Path Plan:0.027669
+Time Assign:0
+Time Total:0.039199
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:33
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000126
+Time Path Plan:0.022591
+Time Assign:0
+Time Total:0.034135
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:34
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.026735
+Time Assign:0
+Time Total:0.038267
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:35
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.014046
+Time Assign:0
+Time Total:0.025753
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:36
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000132
+Time Path Plan:0.017836
+Time Assign:0
+Time Total:0.029665
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:37
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000137
+Time Path Plan:0.032961
+Time Assign:0
+Time Total:0.044596
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:38
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:3e-06
+Time Graph Plan:0.000187
+Time Path Plan:0.022327
+Time Assign:0
+Time Total:0.038165
+Time Reloc Plan:4e-05
+#
+data_name:data_3o_2
+index:39
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:1e-06
+Time Graph Plan:0.000137
+Time Path Plan:0.015959
+Time Assign:0
+Time Total:0.027657
+Time Reloc Plan:7.3e-05
+#
+data_name:data_3o_2
+index:40
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.000122
+Time Path Plan:0.015675
+Time Assign:0
+Time Total:0.027521
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:41
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000126
+Time Path Plan:0.015927
+Time Assign:0
+Time Total:0.027637
+Time Reloc Plan:2.6e-05
+#
+data_name:data_3o_2
+index:42
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.015915
+Time Assign:0
+Time Total:0.027682
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:43
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.015521
+Time Assign:0
+Time Total:0.027198
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:44
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000125
+Time Path Plan:0.022518
+Time Assign:0
+Time Total:0.034264
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:45
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000125
+Time Path Plan:0.018247
+Time Assign:0
+Time Total:0.029807
+Time Reloc Plan:3.3e-05
+#
+data_name:data_3o_2
+index:46
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000127
+Time Path Plan:0.017376
+Time Assign:0
+Time Total:0.028909
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:47
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.000168
+Time Path Plan:0.021472
+Time Assign:0
+Time Total:0.037197
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:48
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000124
+Time Path Plan:0.027908
+Time Assign:0
+Time Total:0.039365
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:49
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000131
+Time Path Plan:0.026972
+Time Assign:0
+Time Total:0.038709
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:50
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000129
+Time Path Plan:0.016525
+Time Assign:0
+Time Total:0.028531
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:51
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000134
+Time Path Plan:0.023203
+Time Assign:0
+Time Total:0.03491
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:52
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000131
+Time Path Plan:0.027113
+Time Assign:0
+Time Total:0.038947
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:53
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.021928
+Time Assign:0
+Time Total:0.033419
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:54
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.00013
+Time Path Plan:0.02587
+Time Assign:0
+Time Total:0.037538
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:55
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000122
+Time Path Plan:0.015232
+Time Assign:0
+Time Total:0.027076
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:56
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000128
+Time Path Plan:0.022112
+Time Assign:0
+Time Total:0.036435
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:57
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000132
+Time Path Plan:0.015543
+Time Assign:0
+Time Total:0.027208
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:58
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000136
+Time Path Plan:0.015496
+Time Assign:0
+Time Total:0.027127
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:59
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000123
+Time Path Plan:0.02165
+Time Assign:0
+Time Total:0.033055
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:60
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.023777
+Time Assign:0
+Time Total:0.035298
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:61
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000122
+Time Path Plan:0.01959
+Time Assign:0
+Time Total:0.031093
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:62
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000135
+Time Path Plan:0.027213
+Time Assign:0
+Time Total:0.038766
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:63
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000131
+Time Path Plan:0.019691
+Time Assign:0
+Time Total:0.031186
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:64
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000131
+Time Path Plan:0.01527
+Time Assign:0
+Time Total:0.029063
+Time Reloc Plan:3.1e-05
+#
+data_name:data_3o_2
+index:65
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.00012
+Time Path Plan:0.015823
+Time Assign:0
+Time Total:0.027561
+Time Reloc Plan:2.6e-05
+#
+data_name:data_3o_2
+index:66
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000136
+Time Path Plan:0.017305
+Time Assign:0
+Time Total:0.029901
+Time Reloc Plan:2.9e-05
+#
+data_name:data_3o_2
+index:67
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2e-06
+Time Graph Plan:0.00013
+Time Path Plan:0.015642
+Time Assign:0
+Time Total:0.027488
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:68
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000131
+Time Path Plan:0.015501
+Time Assign:0
+Time Total:0.027213
+Time Reloc Plan:7.7e-05
+#
+data_name:data_3o_2
+index:69
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000126
+Time Path Plan:0.015996
+Time Assign:0
+Time Total:0.027758
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:70
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000133
+Time Path Plan:0.015454
+Time Assign:0
+Time Total:0.027897
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:71
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000177
+Time Path Plan:0.026306
+Time Assign:0
+Time Total:0.038312
+Time Reloc Plan:5e-05
+#
+data_name:data_3o_2
+index:72
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000126
+Time Path Plan:0.015791
+Time Assign:0
+Time Total:0.027822
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:73
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000125
+Time Path Plan:0.01674
+Time Assign:0
+Time Total:0.029664
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:74
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:1e-06
+Time Graph Plan:0.000139
+Time Path Plan:0.016622
+Time Assign:0
+Time Total:0.028387
+Time Reloc Plan:7.4e-05
+#
+data_name:data_3o_2
+index:75
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000123
+Time Path Plan:0.015703
+Time Assign:0
+Time Total:0.027569
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:76
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000135
+Time Path Plan:0.021485
+Time Assign:0
+Time Total:0.033253
+Time Reloc Plan:3.7e-05
+#
+data_name:data_3o_2
+index:77
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000128
+Time Path Plan:0.019225
+Time Assign:0
+Time Total:0.030819
+Time Reloc Plan:2.6e-05
+#
+data_name:data_3o_2
+index:78
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.00013
+Time Path Plan:0.029911
+Time Assign:0
+Time Total:0.044544
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:79
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:4e-06
+Time Graph Plan:0.000142
+Time Path Plan:0.014457
+Time Assign:0
+Time Total:0.026096
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:80
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000141
+Time Path Plan:0.021974
+Time Assign:0
+Time Total:0.033826
+Time Reloc Plan:3.8e-05
+#
+data_name:data_3o_2
+index:81
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000125
+Time Path Plan:0.015135
+Time Assign:0
+Time Total:0.026844
+Time Reloc Plan:2.6e-05
+#
+data_name:data_3o_2
+index:82
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000142
+Time Path Plan:0.019288
+Time Assign:0
+Time Total:0.031009
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:83
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000142
+Time Path Plan:0.016484
+Time Assign:0
+Time Total:0.028126
+Time Reloc Plan:7.4e-05
+#
+data_name:data_3o_2
+index:84
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000128
+Time Path Plan:0.014483
+Time Assign:0
+Time Total:0.026
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:85
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000134
+Time Path Plan:0.016427
+Time Assign:0
+Time Total:0.028249
+Time Reloc Plan:2.7e-05
+#
+data_name:data_3o_2
+index:86
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.00014
+Time Path Plan:0.01567
+Time Assign:0
+Time Total:0.027398
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:87
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:0.000126
+Time Path Plan:0.016108
+Time Assign:0
+Time Total:0.028523
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:88
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:2e-06
+Time Graph Plan:0.000129
+Time Path Plan:0.016095
+Time Assign:0
+Time Total:0.027659
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:89
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:3e-06
+Time Graph Plan:0.000178
+Time Path Plan:0.025382
+Time Assign:0
+Time Total:0.04081
+Time Reloc Plan:4.1e-05
+#
+data_name:data_3o_2
+index:90
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000153
+Time Path Plan:0.022267
+Time Assign:0
+Time Total:0.035234
+Time Reloc Plan:4e-05
+#
+data_name:data_3o_2
+index:91
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000128
+Time Path Plan:0.023516
+Time Assign:0
+Time Total:0.035174
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:92
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b1,b3,b2
+Time Graph Const:0
+Time Graph Plan:0.000131
+Time Path Plan:0.015728
+Time Assign:0
+Time Total:0.027198
+Time Reloc Plan:7.2e-05
+#
+data_name:data_3o_2
+index:93
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000143
+Time Path Plan:0.023161
+Time Assign:0
+Time Total:0.03478
+Time Reloc Plan:3.6e-05
+#
+data_name:data_3o_2
+index:94
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1e-06
+Time Graph Plan:0.000119
+Time Path Plan:0.016409
+Time Assign:0
+Time Total:0.028108
+Time Reloc Plan:2.8e-05
+#
+data_name:data_3o_2
+index:95
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.00017
+Time Path Plan:0.028034
+Time Assign:0
+Time Total:0.042056
+Time Reloc Plan:4.6e-05
+#
+data_name:data_3o_2
+index:96
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000127
+Time Path Plan:0.016377
+Time Assign:0
+Time Total:0.028475
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:97
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.000128
+Time Path Plan:0.02579
+Time Assign:0
+Time Total:0.037422
+Time Reloc Plan:3.5e-05
+#
+data_name:data_3o_2
+index:98
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:1e-06
+Time Graph Plan:0.000128
+Time Path Plan:0.030821
+Time Assign:0
+Time Total:0.042382
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:99
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:b2,b1,b3
+Time Graph Const:0
+Time Graph Plan:0.00013
+Time Path Plan:0.020949
+Time Assign:0
+Time Total:0.032629
+Time Reloc Plan:3.4e-05
+#
+data_name:data_3o_2
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.387414
+Time Assign:0
+Time Total:0.390058
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:1
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.490868
+Time Assign:0
+Time Total:0.493532
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:2
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.7e-05
+Time Path Plan:0.035725
+Time Assign:0
+Time Total:0.038312
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:3
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2.1e-05
+Time Path Plan:0.450115
+Time Assign:0
+Time Total:0.45276
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:4
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.035767
+Time Assign:0
+Time Total:0.038385
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:5
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.7e-05
+Time Path Plan:0.358682
+Time Assign:0
+Time Total:0.361344
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:6
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.029246
+Time Assign:0
+Time Total:0.031829
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:7
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.3e-05
+Time Path Plan:0.040648
+Time Assign:0
+Time Total:0.043209
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:8
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.3e-05
+Time Path Plan:0.035414
+Time Assign:0
+Time Total:0.037991
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:9
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.8e-05
+Time Path Plan:0.468
+Time Assign:0
+Time Total:0.470639
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:10
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.8e-05
+Time Path Plan:0.041308
+Time Assign:0
+Time Total:0.043919
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:11
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.7e-05
+Time Path Plan:0.032029
+Time Assign:0
+Time Total:0.034643
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:12
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.411492
+Time Assign:0
+Time Total:0.414126
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:13
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.3e-05
+Time Path Plan:0.035546
+Time Assign:0
+Time Total:0.03811
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:14
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.434343
+Time Assign:0
+Time Total:0.436981
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:15
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2e-05
+Time Path Plan:0.313084
+Time Assign:0
+Time Total:0.315798
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:16
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.031481
+Time Assign:0
+Time Total:0.034085
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:17
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.045903
+Time Assign:0
+Time Total:0.048541
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:18
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.376167
+Time Assign:0
+Time Total:0.378793
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:19
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.442326
+Time Assign:0
+Time Total:0.444906
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:20
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.3e-05
+Time Path Plan:0.033939
+Time Assign:0
+Time Total:0.036582
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:21
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.426223
+Time Assign:0
+Time Total:0.428796
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:22
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.526679
+Time Assign:0
+Time Total:0.529295
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:23
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.415297
+Time Assign:0
+Time Total:0.41794
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:24
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.452849
+Time Assign:0
+Time Total:0.455457
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:25
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.385067
+Time Assign:0
+Time Total:0.387704
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:26
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.036422
+Time Assign:0
+Time Total:0.039029
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:27
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.037969
+Time Assign:0
+Time Total:0.040534
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:28
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.477851
+Time Assign:0
+Time Total:0.480418
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:29
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.029004
+Time Assign:0
+Time Total:0.031632
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:30
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2.1e-05
+Time Path Plan:0.47214
+Time Assign:0
+Time Total:0.474804
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:31
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2e-05
+Time Path Plan:0.034547
+Time Assign:0
+Time Total:0.037161
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:32
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.7e-05
+Time Path Plan:0.297586
+Time Assign:0
+Time Total:0.300248
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:33
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.032851
+Time Assign:0
+Time Total:0.035645
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:34
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.3e-05
+Time Path Plan:0.031387
+Time Assign:0
+Time Total:0.033942
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:35
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.035964
+Time Assign:0
+Time Total:0.038551
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:36
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.036867
+Time Assign:0
+Time Total:0.039469
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:37
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.033467
+Time Assign:0
+Time Total:0.036106
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:38
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.505165
+Time Assign:0
+Time Total:0.507742
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:39
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.3e-05
+Time Path Plan:0.03672
+Time Assign:0
+Time Total:0.039354
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:40
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2.1e-05
+Time Path Plan:0.497309
+Time Assign:0
+Time Total:0.499937
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:41
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.7e-05
+Time Path Plan:0.524685
+Time Assign:0
+Time Total:0.527321
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:42
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.8e-05
+Time Path Plan:0.037011
+Time Assign:0
+Time Total:0.039616
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:43
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.569997
+Time Assign:0
+Time Total:0.572667
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:44
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2.1e-05
+Time Path Plan:0.455644
+Time Assign:0
+Time Total:0.458256
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:45
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.033129
+Time Assign:0
+Time Total:0.035695
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:46
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.362093
+Time Assign:0
+Time Total:0.36476
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:47
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.032801
+Time Assign:0
+Time Total:0.035406
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:48
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.033398
+Time Assign:0
+Time Total:0.036004
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:49
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.039874
+Time Assign:0
+Time Total:0.042471
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:50
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.7e-05
+Time Path Plan:0.336763
+Time Assign:0
+Time Total:0.339372
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:51
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.333474
+Time Assign:0
+Time Total:0.336109
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:52
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.038368
+Time Assign:0
+Time Total:0.040944
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:53
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.042879
+Time Assign:0
+Time Total:0.045453
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:54
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.033927
+Time Assign:0
+Time Total:0.036563
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:55
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.048631
+Time Assign:0
+Time Total:0.051221
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:56
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.036831
+Time Assign:0
+Time Total:0.039477
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:57
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.374923
+Time Assign:0
+Time Total:0.37759
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:58
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.032928
+Time Assign:0
+Time Total:0.035504
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:59
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.033173
+Time Assign:0
+Time Total:0.03577
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:60
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.033043
+Time Assign:0
+Time Total:0.035621
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:61
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.7e-05
+Time Path Plan:0.489704
+Time Assign:0
+Time Total:0.492368
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:62
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2e-05
+Time Path Plan:0.036774
+Time Assign:0
+Time Total:0.039384
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:63
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.030423
+Time Assign:0
+Time Total:0.033235
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:64
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.036541
+Time Assign:0
+Time Total:0.039199
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:65
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.520801
+Time Assign:0
+Time Total:0.52355
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:66
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.453539
+Time Assign:0
+Time Total:0.456214
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:67
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.9e-05
+Time Path Plan:0.528621
+Time Assign:0
+Time Total:0.531214
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:68
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.438313
+Time Assign:0
+Time Total:0.440975
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:69
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.357747
+Time Assign:0
+Time Total:0.360347
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:70
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2.5e-05
+Time Path Plan:0.418367
+Time Assign:0
+Time Total:0.421053
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:71
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.035284
+Time Assign:0
+Time Total:0.037944
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:72
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.485557
+Time Assign:0
+Time Total:0.488206
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:73
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.8e-05
+Time Path Plan:0.408399
+Time Assign:0
+Time Total:0.411448
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:74
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.9e-05
+Time Path Plan:0.327967
+Time Assign:0
+Time Total:0.330586
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:75
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.517563
+Time Assign:0
+Time Total:0.520154
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:76
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.036439
+Time Assign:0
+Time Total:0.039054
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:77
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.445566
+Time Assign:0
+Time Total:0.448211
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:78
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.9e-05
+Time Path Plan:0.036796
+Time Assign:0
+Time Total:0.039388
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:79
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.035763
+Time Assign:0
+Time Total:0.038337
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:80
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.038075
+Time Assign:0
+Time Total:0.040695
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:81
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.465199
+Time Assign:0
+Time Total:0.467843
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:82
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.365785
+Time Assign:0
+Time Total:0.36842
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:83
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.450129
+Time Assign:0
+Time Total:0.452746
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:84
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.034498
+Time Assign:0
+Time Total:0.037102
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:85
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.3e-05
+Time Path Plan:0.037736
+Time Assign:0
+Time Total:0.040385
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:86
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.034413
+Time Assign:0
+Time Total:0.037025
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:87
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.9e-05
+Time Path Plan:0.432257
+Time Assign:0
+Time Total:0.434912
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:88
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.288519
+Time Assign:0
+Time Total:0.29114
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:89
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.413628
+Time Assign:0
+Time Total:0.416239
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:90
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.506977
+Time Assign:0
+Time Total:0.509615
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:91
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.040179
+Time Assign:0
+Time Total:0.042807
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:92
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:2e-05
+Time Path Plan:0.444648
+Time Assign:0
+Time Total:0.44728
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:93
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.031516
+Time Assign:0
+Time Total:0.034114
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:94
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.5e-05
+Time Path Plan:0.488403
+Time Assign:0
+Time Total:0.49115
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:95
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.3e-05
+Time Path Plan:0.034508
+Time Assign:0
+Time Total:0.037106
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:96
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.043725
+Time Assign:0
+Time Total:0.046323
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:97
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.6e-05
+Time Path Plan:0.030326
+Time Assign:0
+Time Total:0.032896
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:98
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.4e-05
+Time Path Plan:0.039142
+Time Assign:0
+Time Total:0.041727
+Time Reloc Plan:0
+#
+data_name:data_3o_2
+index:99
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:1.9e-05
+Time Path Plan:0.035291
+Time Assign:0
+Time Total:0.037904
+Time Reloc Plan:0

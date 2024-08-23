@@ -149,7 +149,9 @@ struct PathPlanResult : PlanResultType
   }
   PathPlanResult(State& start_in, State& goal_in, PlanValidity val)
                 : start_pose(start_in), goal_pose(goal_in), validity(val)
-                {}
+                {
+                  success = false;
+                }
   PathPlanResult(State& start_in, State& goal_in, State& obs_to_rm, State& obs_to_add) 
                 : start_pose(start_in), goal_pose(goal_in), obs_rm(obs_to_rm), obs_add(obs_to_add)
   {

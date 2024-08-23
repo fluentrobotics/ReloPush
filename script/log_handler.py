@@ -7,7 +7,9 @@ current_directory = os.path.dirname(__file__)
 # Function to create Excel file for each list of dictionaries
 def create_excel_file(data):
     for sublist in data:
-        data_name = sublist[0]['data_name']
+        data_name = sublist[0]['data_name'] # just use one in the first data
+        mode_name = sublist[0]['mode']
+        
         wb = Workbook()
         ws = wb.active
         keys = sublist[0].keys()
@@ -23,7 +25,8 @@ def create_excel_file(data):
         
         # Save Excel file with data_name as file name
         current_directory = os.path.dirname(__file__)
-        file_path = os.path.join(os.path.dirname(current_directory) + "/log", f'{data_name}.xlsx')
+        file_name = (data_name+'_'+mode_name)
+        file_path = os.path.join(os.path.dirname(current_directory) + "/log", f'{file_name}.xlsx')
         print(file_path)
         wb.save(file_path)
 

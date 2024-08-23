@@ -24,6 +24,19 @@ ros::Publisher* robot_pose_reset_ptr;
 
 ros::NodeHandle* nh_ptr = nullptr;
 
+std::string get_mode_name()
+{
+    if(params::use_mp_only)
+        return "mp_only";
+    else
+    {
+        if(params::use_better_path)
+            return "proposed";
+        else
+            return "dubins_only";
+    }
+}
+
 
 
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
@@ -380,16 +393,15 @@ int main(int argc, char **argv)
     {
         //jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
         auto file_wo_ext = removeExtension(data_file);
-        if(params::use_mp_only)
-            file_wo_ext += "_mp_only";
-        else if(!params::use_better_path)
-            file_wo_ext += "_dubins_only";
-        jeeho::logger records(reloResult.is_succ, dcol.pathInfoList.count_total_relocations(), reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
+        auto mode_name = get_mode_name();
+        
+        //jeeho::logger records(reloResult.is_succ, dcol.pathInfoList.count_total_relocations(), reloResult.delivery_sequence, timeWatches, file_wo_ext, data_ind, mode_name);
+
+        jeeho::logger records(reloResult.is_succ, dcol, file_wo_ext, data_ind, mode_name);
+
         // write to file
-        if(params::use_better_path)
-            records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + removeExtension(data_file) + ".txt");
-        else
-            records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + removeExtension(data_file) + "_dubins_only.txt");
+        records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + file_wo_ext + "_" + mode_name);
+
     }
 
     // generate final navigation path
