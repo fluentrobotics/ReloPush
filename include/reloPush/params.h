@@ -35,6 +35,7 @@ namespace params
     extern bool use_better_path;
     extern bool print_final_path;
     extern bool use_testdata;
+    extern bool measure_exec_time;
 
     extern int64_t grid_search_timeout;
 }

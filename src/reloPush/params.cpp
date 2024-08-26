@@ -32,5 +32,7 @@ namespace params
     bool print_final_path = false;
     bool use_testdata = true; //use file to initialize planning
 
+    bool measure_exec_time = true; //measure execution time for each instance 
+
     int64_t grid_search_timeout = 0; //ms (0 for no timeout)
 }

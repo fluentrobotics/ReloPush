@@ -429,6 +429,11 @@ int main(int argc, char **argv)
 
     if(!params::leave_log)
         vis_loop(initMOList, edgeMatcher, env, failed_paths, delivery_list, navPath_ptr);
+
+    else if(params::measure_exec_time)
+    {
+        // wait for exec time return
+    }
     
     else
         ros::Duration(0.01).sleep();
