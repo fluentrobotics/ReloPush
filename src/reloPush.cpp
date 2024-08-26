@@ -433,6 +433,7 @@ int main(int argc, char **argv)
     else if(params::measure_exec_time)
     {
         // wait for exec time return
+        
     }
     
     else
