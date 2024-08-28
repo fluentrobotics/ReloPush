@@ -385,7 +385,9 @@ int main(int argc, char **argv)
         std::cout << "Total-relocations: " << dcol.pathInfoList.count_total_relocations() << std::endl;
     }
     else
+    {
         std::cout << "Instance Failed" << std::endl;
+    }
 
 
 
@@ -419,19 +421,27 @@ int main(int argc, char **argv)
 
     else if(params::measure_exec_time)
     {
-        test_path_pub_ptr->publish(*navPath_ptr);
-        ros::spinOnce();
-        ros::Duration(0.01).sleep();
-        // todo: check mushr_rhc is running
-        std::cout << "\twaiting for execution time" << std::endl;
-        // wait for exec time return
-        std::string exec_time_topic_name = "/car/execution_time";
-        if(params::use_mocap)
-            exec_time_topic_name = "/mushr2/execution_time";
+        if(reloResult.is_succ)
+        {
+            test_path_pub_ptr->publish(*navPath_ptr);
+            ros::spinOnce();
+            ros::Duration(0.01).sleep();
+            // todo: check mushr_rhc is running
+            std::cout << "\twaiting for execution time" << std::endl;
+            // wait for exec time return
+            std::string exec_time_topic_name = "/car/execution_time";
+            if(params::use_mocap)
+                exec_time_topic_name = "/mushr2/execution_time";
 
-        std_msgs::Float32ConstPtr msg = ros::topic::waitForMessage<std_msgs::Float32>(exec_time_topic_name);
-        exec_time_in = msg->data;
-        std::cout << "\tExecution Time: " << exec_time_in << std::endl;
+            std_msgs::Float32ConstPtr msg = ros::topic::waitForMessage<std_msgs::Float32>(exec_time_topic_name);
+            exec_time_in = msg->data;
+            std::cout << "\tExecution Time: " << exec_time_in << std::endl;
+        }
+        else
+        {
+            // failed. skip execution
+            exec_time_in = -1;
+        }
     }
 
     // log
