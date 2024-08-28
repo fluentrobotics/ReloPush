@@ -31,6 +31,7 @@ namespace jeeho
             DataCollector dataColtr;
             float push_length = 0;
             float approach_length = 0; // path length for approaching objects
+            float execution_time = 0;
 
         public:
         /*
@@ -73,8 +74,8 @@ namespace jeeho
                 }
             }
         */
-            logger(bool is_succ, DataCollector dCol, std::string data_name, int data_ind, std::string mode) 
-            : is_success(is_succ), dataColtr(dCol), testdata_name(data_name), testdata_ind(data_ind), mode_name(mode)
+            logger(bool is_succ, DataCollector dCol, std::string data_name, int data_ind, std::string mode, float exec_time) 
+            : is_success(is_succ), dataColtr(dCol), testdata_name(data_name), testdata_ind(data_ind), mode_name(mode), execution_time(exec_time)
             {
                 // handle stopwatch measurements
                 for(auto& it : dataColtr.stopWatches.watches)
@@ -194,6 +195,8 @@ namespace jeeho
                     // total length
                     outFile << "Length Approaching" << header_delim << push_length + approach_length << "\n";
 
+                    // execution time
+                    outFile << "Execution Time" << header_delim << execution_time << "\n";
 
                     outFile.close();
                     std::cout << "Data successfully written to " << file_name << std::endl;

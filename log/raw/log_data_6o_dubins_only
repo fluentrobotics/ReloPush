@@ -5,13 +5,13 @@ index:0
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000494
+Time Graph Const:6.2e-05
+Time Graph Plan:0.00068
 Time Assign:0
-Time Reloc Plan:0.000105
-Time Task:0.000614
-Time MP:0.092396
-Time Total:0.221573
+Time Reloc Plan:0.000235
+Time Task:0.000977
+Time MP:0.0644128
+Time Total:0.132986
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -25,13 +25,13 @@ index:1
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000475
+Time Graph Const:3.4e-05
+Time Graph Plan:0.00114
 Time Assign:0
-Time Reloc Plan:6e-05
-Time Task:0.000548
-Time MP:0.055273
-Time Total:0.149575
+Time Reloc Plan:0.000146
+Time Task:0.00132
+Time MP:0.0795268
+Time Total:0.286049
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -45,13 +45,13 @@ index:2
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3.2e-05
-Time Graph Plan:0.000534
+Time Graph Const:0.000129
+Time Graph Plan:0.001294
 Time Assign:0
-Time Reloc Plan:0.000124
-Time Task:0.00069
-Time MP:0.0801821
-Time Total:0.213374
+Time Reloc Plan:0.00012
+Time Task:0.001543
+Time MP:0.0843719
+Time Total:0.291398
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -65,13 +65,13 @@ index:3
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2e-05
-Time Graph Plan:0.00054
+Time Graph Const:6.1e-05
+Time Graph Plan:0.000988
 Time Assign:0
-Time Reloc Plan:0.000112
-Time Task:0.000672
-Time MP:0.0713841
-Time Total:0.204068
+Time Reloc Plan:0.000451
+Time Task:0.0015
+Time MP:0.0845338
+Time Total:0.162906
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -85,13 +85,13 @@ index:4
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3e-05
-Time Graph Plan:0.000537
+Time Graph Const:1.2e-05
+Time Graph Plan:0.001257
 Time Assign:0
-Time Reloc Plan:0.000118
-Time Task:0.000685
-Time MP:0.076636
-Time Total:0.205743
+Time Reloc Plan:0.000123
+Time Task:0.001392
+Time MP:0.0985268
+Time Total:0.298982
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -105,13 +105,13 @@ index:5
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000524
+Time Graph Const:5.7e-05
+Time Graph Plan:0.001271
 Time Assign:0
-Time Reloc Plan:0.000184
-Time Task:0.00073
-Time MP:0.091728
-Time Total:0.264023
+Time Reloc Plan:0.000141
+Time Task:0.001469
+Time MP:0.0887067
+Time Total:0.285873
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -125,13 +125,13 @@ index:6
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000506
+Time Graph Const:4.6e-05
+Time Graph Plan:0.001098
 Time Assign:0
-Time Reloc Plan:0.000105
-Time Task:0.000625
-Time MP:0.073915
-Time Total:0.201097
+Time Reloc Plan:8.9e-05
+Time Task:0.001233
+Time MP:0.0814387
+Time Total:0.234988
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -145,13 +145,13 @@ index:7
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.9e-05
-Time Graph Plan:0.000486
+Time Graph Const:5.4e-05
+Time Graph Plan:0.001596
 Time Assign:0
-Time Reloc Plan:0.000115
-Time Task:0.00062
-Time MP:0.075555
-Time Total:0.203775
+Time Reloc Plan:0.000126
+Time Task:0.001776
+Time MP:0.105935
+Time Total:0.306793
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -165,13 +165,13 @@ index:8
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000484
+Time Graph Const:2e-05
+Time Graph Plan:0.001351
 Time Assign:0
-Time Reloc Plan:0.000116
-Time Task:0.000613
-Time MP:0.0744521
-Time Total:0.202888
+Time Reloc Plan:0.000121
+Time Task:0.001492
+Time MP:0.0870597
+Time Total:0.285711
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -185,13 +185,13 @@ index:9
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000479
+Time Graph Const:5e-05
+Time Graph Plan:0.001219
 Time Assign:0
-Time Reloc Plan:0.000112
-Time Task:0.000613
-Time MP:0.079175
-Time Total:0.208543
+Time Reloc Plan:6.3e-05
+Time Task:0.001332
+Time MP:0.114289
+Time Total:0.269401
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -205,13 +205,13 @@ index:10
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000456
+Time Graph Const:6.7e-05
+Time Graph Plan:0.000883
 Time Assign:0
-Time Reloc Plan:4.4e-05
-Time Task:0.000515
-Time MP:0.066951
-Time Total:0.159894
+Time Reloc Plan:0.001556
+Time Task:0.002506
+Time MP:0.0648628
+Time Total:0.161826
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -225,13 +225,13 @@ index:11
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.000427
+Time Graph Const:4.2e-05
+Time Graph Plan:0.001271
 Time Assign:0
-Time Reloc Plan:0.000497
-Time Task:0.000945
-Time MP:0.0668011
-Time Total:0.126696
+Time Reloc Plan:0.000107
+Time Task:0.00142
+Time MP:0.0868329
+Time Total:0.243559
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -245,13 +245,13 @@ index:12
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.8e-05
-Time Graph Plan:0.000535
+Time Graph Const:4.6e-05
+Time Graph Plan:0.000774
 Time Assign:0
-Time Reloc Plan:0.00012
-Time Task:0.000673
-Time MP:0.0773202
-Time Total:0.206421
+Time Reloc Plan:0.000606
+Time Task:0.001426
+Time MP:0.0686348
+Time Total:0.14356
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -265,13 +265,13 @@ index:13
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000539
+Time Graph Const:5.4e-05
+Time Graph Plan:0.002654
 Time Assign:0
-Time Reloc Plan:0.000175
-Time Task:0.000731
-Time MP:0.0788661
-Time Total:0.248587
+Time Reloc Plan:0.00013
+Time Task:0.002838
+Time MP:0.0870108
+Time Total:0.29361
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -285,13 +285,13 @@ index:14
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000507
+Time Graph Const:3.7e-05
+Time Graph Plan:0.000892
 Time Assign:0
-Time Reloc Plan:0.000132
-Time Task:0.000661
-Time MP:0.0791281
-Time Total:0.208327
+Time Reloc Plan:0.00071
+Time Task:0.001639
+Time MP:0.0649508
+Time Total:0.139815
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -305,13 +305,13 @@ index:15
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000478
+Time Graph Const:5.8e-05
+Time Graph Plan:0.001511
 Time Assign:0
-Time Reloc Plan:4.3e-05
-Time Task:0.000545
-Time MP:0.091791
-Time Total:0.184784
+Time Reloc Plan:0.000132
+Time Task:0.001701
+Time MP:0.103094
+Time Total:0.303505
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -325,13 +325,13 @@ index:16
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000531
+Time Graph Const:4.5e-05
+Time Graph Plan:0.001296
 Time Assign:0
-Time Reloc Plan:0.00012
-Time Task:0.000666
-Time MP:0.066617
-Time Total:0.195684
+Time Reloc Plan:0.000146
+Time Task:0.001487
+Time MP:0.10605
+Time Total:0.310561
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -345,13 +345,13 @@ index:17
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.000538
+Time Graph Const:8.4e-05
+Time Graph Plan:0.001583
 Time Assign:0
-Time Reloc Plan:0.000183
-Time Task:0.000744
-Time MP:0.101357
-Time Total:0.268709
+Time Reloc Plan:0.000121
+Time Task:0.001788
+Time MP:0.0902719
+Time Total:0.310347
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -365,13 +365,13 @@ index:18
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000466
+Time Graph Const:2.8e-05
+Time Graph Plan:0.000883
 Time Assign:0
-Time Reloc Plan:6.4e-05
-Time Task:0.000544
-Time MP:0.063036
-Time Total:0.154117
+Time Reloc Plan:0.000568
+Time Task:0.001479
+Time MP:0.0704309
+Time Total:0.150361
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -385,13 +385,13 @@ index:19
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:9e-06
-Time Graph Plan:0.000431
+Time Graph Const:2.8e-05
+Time Graph Plan:0.001464
 Time Assign:0
-Time Reloc Plan:0.000364
-Time Task:0.000804
-Time MP:0.0564011
-Time Total:0.115003
+Time Reloc Plan:0.000166
+Time Task:0.001658
+Time MP:0.118189
+Time Total:0.322501
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -405,13 +405,13 @@ index:20
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000491
+Time Graph Const:5.9e-05
+Time Graph Plan:0.001436
 Time Assign:0
-Time Reloc Plan:0.000109
-Time Task:0.000614
-Time MP:0.0722691
-Time Total:0.201825
+Time Reloc Plan:6.3e-05
+Time Task:0.001558
+Time MP:0.104417
+Time Total:0.260973
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -425,13 +425,13 @@ index:21
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000481
+Time Graph Const:0.000141
+Time Graph Plan:0.001305
 Time Assign:0
-Time Reloc Plan:0.000115
-Time Task:0.000612
-Time MP:0.0630631
-Time Total:0.191311
+Time Reloc Plan:6.2e-05
+Time Task:0.001508
+Time MP:0.0827688
+Time Total:0.239452
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -445,13 +445,13 @@ index:22
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.8e-05
-Time Graph Plan:0.000486
+Time Graph Const:6.7e-05
+Time Graph Plan:0.001237
 Time Assign:0
-Time Reloc Plan:0.000106
-Time Task:0.00061
-Time MP:0.075393
-Time Total:0.204639
+Time Reloc Plan:0.000152
+Time Task:0.001456
+Time MP:0.089631
+Time Total:0.289951
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -465,13 +465,13 @@ index:23
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000504
+Time Graph Const:7.4e-05
+Time Graph Plan:0.001328
 Time Assign:0
-Time Reloc Plan:0.000113
-Time Task:0.000632
-Time MP:0.100646
-Time Total:0.230339
+Time Reloc Plan:0.000163
+Time Task:0.001565
+Time MP:0.12386
+Time Total:0.32577
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -485,13 +485,13 @@ index:24
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.8e-05
-Time Graph Plan:0.000543
+Time Graph Const:6.1e-05
+Time Graph Plan:0.001317
 Time Assign:0
-Time Reloc Plan:0.000166
-Time Task:0.000727
-Time MP:0.105868
-Time Total:0.235103
+Time Reloc Plan:0.000145
+Time Task:0.001523
+Time MP:0.0952928
+Time Total:0.315924
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -505,13 +505,13 @@ index:25
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2e-05
-Time Graph Plan:0.000503
+Time Graph Const:5.7e-05
+Time Graph Plan:0.000957
 Time Assign:0
-Time Reloc Plan:0.000136
-Time Task:0.000659
-Time MP:0.0672701
-Time Total:0.196355
+Time Reloc Plan:0.000592
+Time Task:0.001606
+Time MP:0.0689898
+Time Total:0.146396
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -525,13 +525,13 @@ index:26
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000496
+Time Graph Const:5.6e-05
+Time Graph Plan:0.001204
 Time Assign:0
-Time Reloc Plan:0.000111
-Time Task:0.000622
-Time MP:0.085813
-Time Total:0.21445
+Time Reloc Plan:0.000172
+Time Task:0.001432
+Time MP:0.11288
+Time Total:0.316075
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -545,13 +545,13 @@ index:27
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000424
+Time Graph Const:8.7e-05
+Time Graph Plan:0.00115
 Time Assign:0
-Time Reloc Plan:0.000373
-Time Task:0.000814
-Time MP:0.0637481
-Time Total:0.125193
+Time Reloc Plan:0.000147
+Time Task:0.001384
+Time MP:0.11829
+Time Total:0.318713
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -565,13 +565,13 @@ index:28
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.1e-05
-Time Graph Plan:0.000468
+Time Graph Const:9.1e-05
+Time Graph Plan:0.001105
 Time Assign:0
-Time Reloc Plan:0.000117
-Time Task:0.000596
-Time MP:0.070469
-Time Total:0.200529
+Time Reloc Plan:0.000168
+Time Task:0.001364
+Time MP:0.116062
+Time Total:0.316337
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -585,13 +585,13 @@ index:29
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000431
+Time Graph Const:4.3e-05
+Time Graph Plan:0.001295
 Time Assign:0
-Time Reloc Plan:6.7e-05
-Time Task:0.000514
-Time MP:0.062491
-Time Total:0.153613
+Time Reloc Plan:0.000147
+Time Task:0.001485
+Time MP:0.0892949
+Time Total:0.294749
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -605,13 +605,13 @@ index:30
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.6e-05
-Time Graph Plan:0.000591
+Time Graph Const:4.3e-05
+Time Graph Plan:0.000942
 Time Assign:0
-Time Reloc Plan:0.000181
-Time Task:0.000798
-Time MP:0.0779531
-Time Total:0.243007
+Time Reloc Plan:0.000512
+Time Task:0.001497
+Time MP:0.0621348
+Time Total:0.134997
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -625,13 +625,13 @@ index:31
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2e-05
-Time Graph Plan:0.000512
+Time Graph Const:6.1e-05
+Time Graph Plan:0.001559
 Time Assign:0
-Time Reloc Plan:0.000118
-Time Task:0.00065
-Time MP:0.0622321
-Time Total:0.189786
+Time Reloc Plan:0.000124
+Time Task:0.001744
+Time MP:0.112415
+Time Total:0.312812
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -645,13 +645,13 @@ index:32
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000543
+Time Graph Const:4.9e-05
+Time Graph Plan:0.001337
 Time Assign:0
-Time Reloc Plan:0.00019
-Time Task:0.000757
-Time MP:0.0827922
-Time Total:0.250209
+Time Reloc Plan:0.000126
+Time Task:0.001512
+Time MP:0.0840588
+Time Total:0.289789
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -665,13 +665,13 @@ index:33
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000581
+Time Graph Const:6.5e-05
+Time Graph Plan:0.001054
 Time Assign:0
-Time Reloc Plan:0.00024
-Time Task:0.000838
-Time MP:0.103018
-Time Total:0.271147
+Time Reloc Plan:0.000115
+Time Task:0.001234
+Time MP:0.0894599
+Time Total:0.289803
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -686,12 +686,12 @@ Is Success:F
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:2.5e-05
-Time Graph Plan:0.000516
+Time Graph Plan:0.001409
 Time Assign:0
-Time Reloc Plan:0.000106
-Time Task:0.000647
-Time MP:0.111501
-Time Total:0.239684
+Time Reloc Plan:0.000129
+Time Task:0.001563
+Time MP:0.091126
+Time Total:0.300248
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -705,13 +705,13 @@ index:35
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.7e-05
-Time Graph Plan:0.000493
+Time Graph Const:8.1e-05
+Time Graph Plan:0.001157
 Time Assign:0
-Time Reloc Plan:0.000114
-Time Task:0.000634
-Time MP:0.104573
-Time Total:0.233819
+Time Reloc Plan:0.000123
+Time Task:0.001361
+Time MP:0.0835058
+Time Total:0.283449
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -725,13 +725,13 @@ index:36
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000484
+Time Graph Const:7.4e-05
+Time Graph Plan:0.001271
 Time Assign:0
-Time Reloc Plan:0.000118
-Time Task:0.000618
-Time MP:0.063664
-Time Total:0.193108
+Time Reloc Plan:0.000135
+Time Task:0.00148
+Time MP:0.0919048
+Time Total:0.294066
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -745,13 +745,13 @@ index:37
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.000476
+Time Graph Const:3.7e-05
+Time Graph Plan:0.00118
 Time Assign:0
-Time Reloc Plan:0.000107
-Time Task:0.000606
-Time MP:0.096108
-Time Total:0.225893
+Time Reloc Plan:7e-05
+Time Task:0.001287
+Time MP:0.0861488
+Time Total:0.238704
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -765,13 +765,13 @@ index:38
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000565
+Time Graph Const:1.3e-05
+Time Graph Plan:0.000984
 Time Assign:0
-Time Reloc Plan:0.000203
-Time Task:0.000792
-Time MP:0.067272
-Time Total:0.233309
+Time Reloc Plan:0.000412
+Time Task:0.001409
+Time MP:0.0626128
+Time Total:0.136446
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -785,13 +785,13 @@ index:39
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000575
+Time Graph Const:0.00013
+Time Graph Plan:0.001636
 Time Assign:0
-Time Reloc Plan:0.000256
-Time Task:0.000847
-Time MP:0.106882
-Time Total:0.273994
+Time Reloc Plan:0.000272
+Time Task:0.002038
+Time MP:0.0923168
+Time Total:0.304249
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -805,13 +805,13 @@ index:40
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.5e-05
-Time Graph Plan:0.000499
+Time Graph Const:0.000161
+Time Graph Plan:0.001453
 Time Assign:0
-Time Reloc Plan:0.000106
-Time Task:0.00063
-Time MP:0.0879459
-Time Total:0.217244
+Time Reloc Plan:0.000134
+Time Task:0.001748
+Time MP:0.0761688
+Time Total:0.279314
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -825,13 +825,13 @@ index:41
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000405
+Time Graph Const:3.5e-05
+Time Graph Plan:0.001414
 Time Assign:0
-Time Reloc Plan:0.000376
-Time Task:0.000794
-Time MP:0.050657
-Time Total:0.109564
+Time Reloc Plan:0.000149
+Time Task:0.001598
+Time MP:0.0921418
+Time Total:0.291909
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -845,13 +845,13 @@ index:42
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.00054
+Time Graph Const:8.3e-05
+Time Graph Plan:0.000962
 Time Assign:0
-Time Reloc Plan:0.000109
-Time Task:0.00067
-Time MP:0.096663
-Time Total:0.226048
+Time Reloc Plan:0.000141
+Time Task:0.001186
+Time MP:0.112224
+Time Total:0.321987
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -865,13 +865,13 @@ index:43
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000612
+Time Graph Const:4.5e-05
+Time Graph Plan:0.001094
 Time Assign:0
-Time Reloc Plan:0.000196
-Time Task:0.000822
-Time MP:0.078908
-Time Total:0.245852
+Time Reloc Plan:6.5e-05
+Time Task:0.001204
+Time MP:0.109724
+Time Total:0.268254
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -885,13 +885,13 @@ index:44
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.000593
+Time Graph Const:3.4e-05
+Time Graph Plan:0.001178
 Time Assign:0
-Time Reloc Plan:0.000202
-Time Task:0.000816
-Time MP:0.076437
-Time Total:0.243721
+Time Reloc Plan:0.000139
+Time Task:0.001351
+Time MP:0.100496
+Time Total:0.30509
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -905,13 +905,13 @@ index:45
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.2e-05
-Time Graph Plan:0.000499
+Time Graph Const:8e-05
+Time Graph Plan:0.001129
 Time Assign:0
-Time Reloc Plan:0.000111
-Time Task:0.000622
-Time MP:0.077847
-Time Total:0.205043
+Time Reloc Plan:7.4e-05
+Time Task:0.001283
+Time MP:0.0777358
+Time Total:0.232046
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -925,13 +925,13 @@ index:46
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3.7e-05
-Time Graph Plan:0.000567
+Time Graph Const:0.000119
+Time Graph Plan:0.001571
 Time Assign:0
-Time Reloc Plan:0.000185
-Time Task:0.000789
-Time MP:0.081263
-Time Total:0.247402
+Time Reloc Plan:0.000131
+Time Task:0.001821
+Time MP:0.0860998
+Time Total:0.288978
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -945,13 +945,13 @@ index:47
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.9e-05
-Time Graph Plan:0.00054
+Time Graph Const:5.1e-05
+Time Graph Plan:0.001279
 Time Assign:0
-Time Reloc Plan:0.000115
-Time Task:0.000674
-Time MP:0.0752141
-Time Total:0.206447
+Time Reloc Plan:0.000123
+Time Task:0.001453
+Time MP:0.104143
+Time Total:0.30406
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -965,13 +965,13 @@ index:48
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.6e-05
-Time Graph Plan:0.000551
+Time Graph Const:8.4e-05
+Time Graph Plan:0.001166
 Time Assign:0
-Time Reloc Plan:0.000118
-Time Task:0.000695
-Time MP:0.0869622
-Time Total:0.221037
+Time Reloc Plan:0.000137
+Time Task:0.001387
+Time MP:0.117496
+Time Total:0.320035
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -985,13 +985,13 @@ index:49
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000456
+Time Graph Const:5.3e-05
+Time Graph Plan:0.000971
 Time Assign:0
-Time Reloc Plan:4.4e-05
-Time Task:0.000524
-Time MP:0.081694
-Time Total:0.172598
+Time Reloc Plan:6.3e-05
+Time Task:0.001087
+Time MP:0.0973668
+Time Total:0.252025
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1005,13 +1005,13 @@ index:50
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.7e-05
-Time Graph Plan:0.000606
+Time Graph Const:1.7e-05
+Time Graph Plan:0.001413
 Time Assign:0
-Time Reloc Plan:0.000184
-Time Task:0.000817
-Time MP:0.088891
-Time Total:0.256025
+Time Reloc Plan:0.000127
+Time Task:0.001557
+Time MP:0.0771518
+Time Total:0.276154
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1025,13 +1025,13 @@ index:51
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1e-05
-Time Graph Plan:0.000443
+Time Graph Const:4.8e-05
+Time Graph Plan:0.001089
 Time Assign:0
-Time Reloc Plan:0.000573
-Time Task:0.001026
-Time MP:0.052652
-Time Total:0.112261
+Time Reloc Plan:0.000122
+Time Task:0.001259
+Time MP:0.113851
+Time Total:0.340227
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1045,13 +1045,13 @@ index:52
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.00047
+Time Graph Const:6e-05
+Time Graph Plan:0.00118
 Time Assign:0
-Time Reloc Plan:5.3e-05
-Time Task:0.000539
-Time MP:0.0600121
-Time Total:0.1521
+Time Reloc Plan:0.000132
+Time Task:0.001372
+Time MP:0.0845787
+Time Total:0.284225
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1065,13 +1065,13 @@ index:53
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.9e-05
-Time Graph Plan:0.000558
+Time Graph Const:0.000118
+Time Graph Plan:0.001372
 Time Assign:0
-Time Reloc Plan:0.000111
-Time Task:0.000688
-Time MP:0.097347
-Time Total:0.227967
+Time Reloc Plan:0.00012
+Time Task:0.00161
+Time MP:0.115468
+Time Total:0.317836
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1085,13 +1085,13 @@ index:54
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.000545
+Time Graph Const:5e-05
+Time Graph Plan:0.001408
 Time Assign:0
-Time Reloc Plan:0.000129
-Time Task:0.000697
-Time MP:0.0778671
-Time Total:0.205691
+Time Reloc Plan:0.000118
+Time Task:0.001576
+Time MP:0.0994648
+Time Total:0.30105
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1105,13 +1105,13 @@ index:55
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000601
+Time Graph Const:4.9e-05
+Time Graph Plan:0.001288
 Time Assign:0
-Time Reloc Plan:0.000228
-Time Task:0.000851
-Time MP:0.105111
-Time Total:0.276908
+Time Reloc Plan:0.000121
+Time Task:0.001458
+Time MP:0.093012
+Time Total:0.292843
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1125,13 +1125,13 @@ index:56
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000536
+Time Graph Const:0.000115
+Time Graph Plan:0.001362
 Time Assign:0
-Time Reloc Plan:0.000115
-Time Task:0.000675
-Time MP:0.101062
-Time Total:0.232554
+Time Reloc Plan:7.7e-05
+Time Task:0.001554
+Time MP:0.0850589
+Time Total:0.261014
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1145,13 +1145,13 @@ index:57
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000515
+Time Graph Const:6e-05
+Time Graph Plan:0.001432
 Time Assign:0
-Time Reloc Plan:0.000113
-Time Task:0.000652
-Time MP:0.085922
-Time Total:0.219166
+Time Reloc Plan:0.000135
+Time Task:0.001627
+Time MP:0.0903629
+Time Total:0.29456
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1165,13 +1165,13 @@ index:58
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000459
+Time Graph Const:3.1e-05
+Time Graph Plan:0.001431
 Time Assign:0
-Time Reloc Plan:6e-05
-Time Task:0.000536
-Time MP:0.065945
-Time Total:0.160213
+Time Reloc Plan:0.000136
+Time Task:0.001598
+Time MP:0.0839969
+Time Total:0.279585
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1185,13 +1185,13 @@ index:59
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000534
+Time Graph Const:6.1e-05
+Time Graph Plan:0.001154
 Time Assign:0
-Time Reloc Plan:0.000123
-Time Task:0.000672
-Time MP:0.0716611
-Time Total:0.203159
+Time Reloc Plan:0.000135
+Time Task:0.00135
+Time MP:0.0816418
+Time Total:0.284162
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1205,13 +1205,13 @@ index:60
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3e-05
-Time Graph Plan:0.000525
+Time Graph Const:7.6e-05
+Time Graph Plan:0.001397
 Time Assign:0
-Time Reloc Plan:0.000114
-Time Task:0.000669
-Time MP:0.0900351
-Time Total:0.221332
+Time Reloc Plan:0.000127
+Time Task:0.0016
+Time MP:0.0789008
+Time Total:0.277271
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1225,13 +1225,13 @@ index:61
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3.3e-05
-Time Graph Plan:0.000479
+Time Graph Const:2.9e-05
+Time Graph Plan:0.001206
 Time Assign:0
-Time Reloc Plan:5.6e-05
-Time Task:0.000568
-Time MP:0.072325
-Time Total:0.167351
+Time Reloc Plan:8.2e-05
+Time Task:0.001317
+Time MP:0.106002
+Time Total:0.266994
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1245,13 +1245,13 @@ index:62
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3.8e-05
-Time Graph Plan:0.000556
+Time Graph Const:3.4e-05
+Time Graph Plan:0.001198
 Time Assign:0
-Time Reloc Plan:0.000117
-Time Task:0.000711
-Time MP:0.0728551
-Time Total:0.204931
+Time Reloc Plan:0.000122
+Time Task:0.001354
+Time MP:0.0832919
+Time Total:0.287378
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1265,13 +1265,13 @@ index:63
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2e-05
-Time Graph Plan:0.000636
+Time Graph Const:0.000135
+Time Graph Plan:0.001243
 Time Assign:0
-Time Reloc Plan:0.000197
-Time Task:0.000853
-Time MP:0.074199
-Time Total:0.24639
+Time Reloc Plan:0.000126
+Time Task:0.001504
+Time MP:0.115651
+Time Total:0.319878
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1285,13 +1285,13 @@ index:64
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000538
+Time Graph Const:8e-06
+Time Graph Plan:0.001017
 Time Assign:0
-Time Reloc Plan:0.000113
-Time Task:0.000675
-Time MP:0.076086
-Time Total:0.207789
+Time Reloc Plan:0.000624
+Time Task:0.001649
+Time MP:0.0570319
+Time Total:0.128783
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1305,13 +1305,13 @@ index:65
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.5e-05
-Time Graph Plan:0.000473
+Time Graph Const:0.000107
+Time Graph Plan:0.001309
 Time Assign:0
-Time Reloc Plan:0.001016
-Time Task:0.001514
-Time MP:0.05459
-Time Total:0.11483
+Time Reloc Plan:0.000132
+Time Task:0.001548
+Time MP:0.0797387
+Time Total:0.285544
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1325,13 +1325,13 @@ index:66
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.7e-05
-Time Graph Plan:0.000522
+Time Graph Const:7.5e-05
+Time Graph Plan:0.001377
 Time Assign:0
-Time Reloc Plan:0.00012
-Time Task:0.000669
-Time MP:0.0759162
-Time Total:0.212268
+Time Reloc Plan:0.000133
+Time Task:0.001585
+Time MP:0.0765228
+Time Total:0.279402
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1345,13 +1345,13 @@ index:67
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2e-05
-Time Graph Plan:0.000521
+Time Graph Const:1.5e-05
+Time Graph Plan:0.001151
 Time Assign:0
-Time Reloc Plan:0.000114
-Time Task:0.000655
-Time MP:0.074711
-Time Total:0.205376
+Time Reloc Plan:0.000159
+Time Task:0.001325
+Time MP:0.112991
+Time Total:0.316833
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1365,13 +1365,13 @@ index:68
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3.3e-05
-Time Graph Plan:0.000573
+Time Graph Const:3.6e-05
+Time Graph Plan:0.00143
 Time Assign:0
-Time Reloc Plan:0.000132
-Time Task:0.000738
-Time MP:0.0814172
-Time Total:0.212084
+Time Reloc Plan:0.000158
+Time Task:0.001624
+Time MP:0.0834369
+Time Total:0.284794
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1385,13 +1385,13 @@ index:69
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.00057
+Time Graph Const:0.000168
+Time Graph Plan:0.001253
 Time Assign:0
-Time Reloc Plan:0.000111
-Time Task:0.000704
-Time MP:0.081534
-Time Total:0.21378
+Time Reloc Plan:0.00013
+Time Task:0.001551
+Time MP:0.113694
+Time Total:0.31625
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1406,12 +1406,12 @@ Is Success:F
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:3.9e-05
-Time Graph Plan:0.00054
+Time Graph Plan:0.001676
 Time Assign:0
-Time Reloc Plan:0.000202
-Time Task:0.000781
-Time MP:0.075247
-Time Total:0.246314
+Time Reloc Plan:0.000137
+Time Task:0.001852
+Time MP:0.0879488
+Time Total:0.31845
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1425,13 +1425,13 @@ index:71
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000532
+Time Graph Const:6.8e-05
+Time Graph Plan:0.001303
 Time Assign:0
-Time Reloc Plan:0.000122
-Time Task:0.000668
-Time MP:0.0731201
-Time Total:0.20487
+Time Reloc Plan:0.00013
+Time Task:0.001501
+Time MP:0.0809858
+Time Total:0.282765
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1445,13 +1445,13 @@ index:72
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.000441
+Time Graph Const:8.5e-05
+Time Graph Plan:0.001201
 Time Assign:0
-Time Reloc Plan:4.5e-05
-Time Task:0.000507
-Time MP:0.0695371
-Time Total:0.161113
+Time Reloc Plan:0.000123
+Time Task:0.001409
+Time MP:0.106552
+Time Total:0.331391
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1465,13 +1465,13 @@ index:73
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000508
+Time Graph Const:6.8e-05
+Time Graph Plan:0.001152
 Time Assign:0
-Time Reloc Plan:0.000119
-Time Task:0.000641
-Time MP:0.0668201
-Time Total:0.195837
+Time Reloc Plan:0.000121
+Time Task:0.001341
+Time MP:0.113777
+Time Total:0.315011
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1485,13 +1485,13 @@ index:74
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000557
+Time Graph Const:7.4e-05
+Time Graph Plan:0.001205
 Time Assign:0
-Time Reloc Plan:0.000135
-Time Task:0.000707
-Time MP:0.075095
-Time Total:0.204603
+Time Reloc Plan:0.000136
+Time Task:0.001415
+Time MP:0.106381
+Time Total:0.308705
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1505,13 +1505,13 @@ index:75
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000536
+Time Graph Const:7.6e-05
+Time Graph Plan:0.001119
 Time Assign:0
-Time Reloc Plan:0.000118
-Time Task:0.000671
-Time MP:0.08104
-Time Total:0.210565
+Time Reloc Plan:0.00013
+Time Task:0.001325
+Time MP:0.0899898
+Time Total:0.293218
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1525,13 +1525,13 @@ index:76
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3.2e-05
-Time Graph Plan:0.000516
+Time Graph Const:3.1e-05
+Time Graph Plan:0.001369
 Time Assign:0
-Time Reloc Plan:0.000102
-Time Task:0.00065
-Time MP:0.086332
-Time Total:0.21497
+Time Reloc Plan:0.00014
+Time Task:0.00154
+Time MP:0.0807058
+Time Total:0.280687
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1545,13 +1545,13 @@ index:77
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000581
+Time Graph Const:3.9e-05
+Time Graph Plan:0.001324
 Time Assign:0
-Time Reloc Plan:0.000254
-Time Task:0.00085
-Time MP:0.105936
-Time Total:0.279737
+Time Reloc Plan:0.000131
+Time Task:0.001494
+Time MP:0.0862246
+Time Total:0.286724
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1565,13 +1565,13 @@ index:78
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000477
+Time Graph Const:5.3e-05
+Time Graph Plan:0.001234
 Time Assign:0
-Time Reloc Plan:0.000105
-Time Task:0.000596
-Time MP:0.086284
-Time Total:0.214893
+Time Reloc Plan:0.000133
+Time Task:0.00142
+Time MP:0.110271
+Time Total:0.308435
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1585,13 +1585,13 @@ index:79
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.00048
+Time Graph Const:7.7e-05
+Time Graph Plan:0.001757
 Time Assign:0
-Time Reloc Plan:0.000115
-Time Task:0.000608
-Time MP:0.066354
-Time Total:0.19631
+Time Reloc Plan:0.000148
+Time Task:0.001982
+Time MP:0.0892007
+Time Total:0.296302
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1605,13 +1605,13 @@ index:80
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.2e-05
-Time Graph Plan:0.000529
+Time Graph Const:6e-05
+Time Graph Plan:0.001184
 Time Assign:0
-Time Reloc Plan:0.000207
-Time Task:0.000748
-Time MP:0.0900342
-Time Total:0.25715
+Time Reloc Plan:0.000147
+Time Task:0.001391
+Time MP:0.0867109
+Time Total:0.284086
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1625,13 +1625,13 @@ index:81
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.7e-05
-Time Graph Plan:0.000495
+Time Graph Const:9.7e-05
+Time Graph Plan:0.001443
 Time Assign:0
-Time Reloc Plan:0.000133
-Time Task:0.000655
-Time MP:0.065764
-Time Total:0.194724
+Time Reloc Plan:0.000119
+Time Task:0.001659
+Time MP:0.0825468
+Time Total:0.289672
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1645,13 +1645,13 @@ index:82
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.9e-05
-Time Graph Plan:0.000421
+Time Graph Const:6.6e-05
+Time Graph Plan:0.001275
 Time Assign:0
-Time Reloc Plan:0.00056
-Time Task:0.001
-Time MP:0.059511
-Time Total:0.118913
+Time Reloc Plan:0.000134
+Time Task:0.001475
+Time MP:0.0779058
+Time Total:0.302269
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1665,13 +1665,13 @@ index:83
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000531
+Time Graph Const:5.3e-05
+Time Graph Plan:0.001287
 Time Assign:0
-Time Reloc Plan:0.00011
-Time Task:0.000665
-Time MP:0.076587
-Time Total:0.208792
+Time Reloc Plan:0.000123
+Time Task:0.001463
+Time MP:0.111815
+Time Total:0.32115
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1685,13 +1685,13 @@ index:84
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000485
+Time Graph Const:6.5e-05
+Time Graph Plan:0.001484
 Time Assign:0
-Time Reloc Plan:0.000107
-Time Task:0.000607
-Time MP:0.0696961
-Time Total:0.199224
+Time Reloc Plan:0.000137
+Time Task:0.001686
+Time MP:0.0754668
+Time Total:0.27582
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1705,13 +1705,13 @@ index:85
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.000546
+Time Graph Const:3e-05
+Time Graph Plan:0.001202
 Time Assign:0
-Time Reloc Plan:0.000205
-Time Task:0.000774
-Time MP:0.086377
-Time Total:0.253011
+Time Reloc Plan:0.000129
+Time Task:0.001361
+Time MP:0.105146
+Time Total:0.322389
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1725,13 +1725,13 @@ index:86
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.8e-05
-Time Graph Plan:0.000556
+Time Graph Const:4.7e-05
+Time Graph Plan:0.001323
 Time Assign:0
-Time Reloc Plan:0.000185
-Time Task:0.000759
-Time MP:0.090271
-Time Total:0.258923
+Time Reloc Plan:0.000122
+Time Task:0.001492
+Time MP:0.0884288
+Time Total:0.29082
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1745,13 +1745,13 @@ index:87
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.000545
+Time Graph Const:0.000116
+Time Graph Plan:0.000856
 Time Assign:0
-Time Reloc Plan:0.000119
-Time Task:0.000685
-Time MP:0.0933151
-Time Total:0.226406
+Time Reloc Plan:0.000683
+Time Task:0.001655
+Time MP:0.0610799
+Time Total:0.134353
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1765,13 +1765,13 @@ index:88
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000445
+Time Graph Const:3.2e-05
+Time Graph Plan:0.000945
 Time Assign:0
-Time Reloc Plan:5.5e-05
-Time Task:0.000522
-Time MP:0.0683761
-Time Total:0.159613
+Time Reloc Plan:0.000585
+Time Task:0.001562
+Time MP:0.0587698
+Time Total:0.131815
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1785,13 +1785,13 @@ index:89
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000543
+Time Graph Const:4e-05
+Time Graph Plan:0.001318
 Time Assign:0
-Time Reloc Plan:0.000208
-Time Task:0.000773
-Time MP:0.08306
-Time Total:0.253527
+Time Reloc Plan:0.000138
+Time Task:0.001496
+Time MP:0.0801836
+Time Total:0.281882
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1805,13 +1805,13 @@ index:90
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.8e-05
-Time Graph Plan:0.0005
+Time Graph Const:6.6e-05
+Time Graph Plan:0.001353
 Time Assign:0
-Time Reloc Plan:0.000106
-Time Task:0.000624
-Time MP:0.091032
-Time Total:0.223546
+Time Reloc Plan:0.000124
+Time Task:0.001543
+Time MP:0.0864659
+Time Total:0.284066
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1825,13 +1825,13 @@ index:91
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000574
+Time Graph Const:3.8e-05
+Time Graph Plan:0.00122
 Time Assign:0
-Time Reloc Plan:0.00026
-Time Task:0.000849
-Time MP:0.108106
-Time Total:0.276727
+Time Reloc Plan:0.00013
+Time Task:0.001388
+Time MP:0.0803819
+Time Total:0.281596
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1845,13 +1845,13 @@ index:92
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3e-05
-Time Graph Plan:0.000559
+Time Graph Const:4.5e-05
+Time Graph Plan:0.001148
 Time Assign:0
-Time Reloc Plan:0.00022
-Time Task:0.000809
-Time MP:0.105445
-Time Total:0.273574
+Time Reloc Plan:0.000125
+Time Task:0.001318
+Time MP:0.0877519
+Time Total:0.287394
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1865,13 +1865,13 @@ index:93
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.00054
+Time Graph Const:5e-06
+Time Graph Plan:0.000903
 Time Assign:0
-Time Reloc Plan:0.000116
-Time Task:0.000679
-Time MP:0.0738771
-Time Total:0.205311
+Time Reloc Plan:0.00023
+Time Task:0.001138
+Time MP:0.0614139
+Time Total:0.132426
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1885,13 +1885,13 @@ index:94
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3.2e-05
-Time Graph Plan:0.000443
+Time Graph Const:4.3e-05
+Time Graph Plan:0.001225
 Time Assign:0
-Time Reloc Plan:5.3e-05
-Time Task:0.000528
-Time MP:0.0959171
-Time Total:0.188667
+Time Reloc Plan:0.000131
+Time Task:0.001399
+Time MP:0.0872878
+Time Total:0.284336
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1905,13 +1905,13 @@ index:95
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000439
+Time Graph Const:9.3e-05
+Time Graph Plan:0.00116
 Time Assign:0
-Time Reloc Plan:5.3e-05
-Time Task:0.000505
-Time MP:0.0576141
-Time Total:0.156885
+Time Reloc Plan:0.000143
+Time Task:0.001396
+Time MP:0.0857218
+Time Total:0.312583
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1925,13 +1925,13 @@ index:96
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.000585
+Time Graph Const:1.2e-05
+Time Graph Plan:0.00147
 Time Assign:0
-Time Reloc Plan:0.000228
-Time Task:0.000834
-Time MP:0.078058
-Time Total:0.248785
+Time Reloc Plan:0.000167
+Time Task:0.001649
+Time MP:0.113367
+Time Total:0.315326
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1945,13 +1945,13 @@ index:97
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000487
+Time Graph Const:1.8e-05
+Time Graph Plan:0.001461
 Time Assign:0
-Time Reloc Plan:0.00012
-Time Task:0.000623
-Time MP:0.0692711
-Time Total:0.198994
+Time Reloc Plan:6.5e-05
+Time Task:0.001544
+Time MP:0.0805799
+Time Total:0.236199
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1965,13 +1965,13 @@ index:98
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000431
+Time Graph Const:4.3e-05
+Time Graph Plan:0.001215
 Time Assign:0
-Time Reloc Plan:0.000369
-Time Task:0.000817
-Time MP:0.05632
-Time Total:0.116024
+Time Reloc Plan:0.000616
+Time Task:0.001874
+Time MP:0.0580269
+Time Total:0.130339
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1985,13 +1985,13 @@ index:99
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000529
+Time Graph Const:1.1e-05
+Time Graph Plan:0.001152
 Time Assign:0
-Time Reloc Plan:0.000119
-Time Task:0.000664
-Time MP:0.0639681
-Time Total:0.197271
+Time Reloc Plan:0.000126
+Time Task:0.001289
+Time MP:0.0780088
+Time Total:0.272661
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0

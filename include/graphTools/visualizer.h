@@ -193,7 +193,7 @@ visualization_msgs::MarkerArray draw_obstacles(std::vector<movableObject>& mo_li
     return marker_array;
 }
 
-visualization_msgs::MarkerArray draw_texts(std::vector<movableObject>& mo_list, ros::Publisher* pub_ptr, float size = 0.15f)
+visualization_msgs::MarkerArray draw_texts(std::vector<movableObject> &mo_list, std::vector<movableObject> &d_list, ros::Publisher *pub_ptr, float size = 0.15f)
 {
     visualization_msgs::MarkerArray marker_array;
     for (size_t i = 0; i < mo_list.size(); ++i) {
@@ -217,9 +217,34 @@ visualization_msgs::MarkerArray draw_texts(std::vector<movableObject>& mo_list, 
 
         marker.text = mo_list[i].get_name(); // Text to display
 
-        
         marker_array.markers.push_back(marker);
     }
+
+    for (size_t i = mo_list.size(); i < d_list.size()+mo_list.size(); ++i)
+    {
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = params::world_frame;
+        marker.header.stamp = ros::Time::now();
+        marker.ns = "text_markers";
+        marker.id = i;
+        marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = d_list[i - mo_list.size()].get_x();
+        marker.pose.position.y = d_list[i - mo_list.size()].get_y();
+        marker.pose.position.z = size / 2 + 0.1;
+        marker.pose.orientation.w = 1.0;
+        marker.scale.z = 0.1; // Text size
+        marker.color.r = 0.0; // Text color: red
+        marker.color.g = 0.0;
+        marker.color.b = 0.0;
+        marker.color.a = 1.0;              // Alpha (transparency)
+        marker.lifetime = ros::Duration(); // Persistent marker
+
+        marker.text = d_list[i-mo_list.size()].get_name(); // Text to display
+
+        marker_array.markers.push_back(marker);
+    }
+
     pub_ptr->publish(marker_array);
 
     return marker_array;

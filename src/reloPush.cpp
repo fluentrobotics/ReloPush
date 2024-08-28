@@ -37,8 +37,6 @@ std::string get_mode_name()
     }
 }
 
-
-
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
                 Environment& env, float map_max_x, float map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
                 stopWatchSet& time_watches, std::vector<movableObject>& delivery_list, 
@@ -58,7 +56,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         // reset env
         stopWatch time_init_env("init_env",measurement_type::updateEnv);
-        //env = Environment(map_max_x, map_max_y, obs);
+        env = Environment(map_max_x, map_max_y, obs, Constants::r_push, false);
         time_watches.stop_and_append(time_init_env);
 
         // update graph
@@ -91,11 +89,11 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
             PathMatListPtr pathMatListPtr(new PathMatList);
 
             //Constants::switch_to_pushing();   
-            Environment env_push(map_max_x, map_max_y, env.get_obs(), Constants::r_push, false); //todo: get size fro env
+            //Environment env_push(map_max_x, map_max_y, env.get_obs(), Constants::r_push, false); //todo: get size fro env
             stopWatch time_cost("cost_mat",measurement_type::pathPlan); 
             // generate cost matrix by motion planning
             // plan with pushing max radius
-            auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr, env_push, true, pathMatListPtr);
+            auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr, env, true, pathMatListPtr);
             time_watches.stop_and_append(time_cost);
             // switch back to nonpushing for future use
             //Constants::switch_to_nonpushing();
@@ -125,7 +123,8 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 auto pre_push_pose = find_pre_push(plan_push->start_pose, params::pre_push_dist);
 
                 stopWatch time_plan_app("plan_app",measurement_type::pathPlan);
-                auto plan_app = planHybridAstar(robots[0], pre_push_pose, env, params::grid_search_timeout, false);
+                Environment env_nonpush(params::map_max_x, params::map_max_y,env.get_obs(),Constants::r_nonpush,true);
+                auto plan_app = planHybridAstar(robots[0], pre_push_pose, env_nonpush, params::grid_search_timeout, false);
                 time_watches.stop_and_append(time_plan_app);
                 if(!plan_app->success)
                 {
@@ -284,7 +283,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    //const char* args[] = {"reloPush", "data_5o.txt", "8", "0" };
+    //const char* args[] = {"reloPush", "data_6o.txt", "6", "0" };
     //argv = const_cast<char**>(args);
     //argc = 4;
 
@@ -320,7 +319,7 @@ int main(int argc, char **argv)
     // initialize grid map
     std::unordered_set<State> obs;
     //State goal(0,0,0); // arbitrary goal
-    Environment env(params::map_max_x, params::map_max_y, obs, Constants::r_nonpush, true);
+    Environment env(params::map_max_x, params::map_max_y, obs, Constants::r_push, false);
 
     if(!params::use_testdata){
         // init objects and add to graph
@@ -388,21 +387,7 @@ int main(int argc, char **argv)
     else
         std::cout << "Instance Failed" << std::endl;
 
-    // log
-    if(params::leave_log == 1)
-    {
-        //jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
-        auto file_wo_ext = removeExtension(data_file);
-        auto mode_name = get_mode_name();
-        
-        //jeeho::logger records(reloResult.is_succ, dcol.pathInfoList.count_total_relocations(), reloResult.delivery_sequence, timeWatches, file_wo_ext, data_ind, mode_name);
 
-        jeeho::logger records(reloResult.is_succ, dcol, file_wo_ext, data_ind, mode_name);
-
-        // write to file
-        records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + file_wo_ext + "_" + mode_name);
-
-    }
 
     // generate final navigation path
     StatePath final_path = deliverySets.serializePath();
@@ -427,15 +412,43 @@ int main(int argc, char **argv)
 
     //visualization_loop(gPtr, mo_list, delivery_list, nameMatcher, edgeMatcher, env, navPath_ptr, failed_paths, 10);
 
+    float exec_time_in = -1;
+
     if(!params::leave_log)
         vis_loop(initMOList, edgeMatcher, env, failed_paths, delivery_list, navPath_ptr);
 
     else if(params::measure_exec_time)
     {
+        test_path_pub_ptr->publish(*navPath_ptr);
+        ros::spinOnce();
+        ros::Duration(0.01).sleep();
+        // todo: check mushr_rhc is running
+        std::cout << "\twaiting for execution time" << std::endl;
         // wait for exec time return
-        
+        std::string exec_time_topic_name = "/car/execution_time";
+        if(params::use_mocap)
+            exec_time_topic_name = "/mushr2/execution_time";
+
+        std_msgs::Float32ConstPtr msg = ros::topic::waitForMessage<std_msgs::Float32>(exec_time_topic_name);
+        exec_time_in = msg->data;
+        std::cout << "\tExecution Time: " << exec_time_in << std::endl;
     }
-    
+
+    // log
+    if (params::leave_log == 1)
+    {
+        // jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
+        auto file_wo_ext = removeExtension(data_file);
+        auto mode_name = get_mode_name();
+
+        // jeeho::logger records(reloResult.is_succ, dcol.pathInfoList.count_total_relocations(), reloResult.delivery_sequence, timeWatches, file_wo_ext, data_ind, mode_name);
+
+        jeeho::logger records(reloResult.is_succ, dcol, file_wo_ext, data_ind, mode_name,exec_time_in);
+
+        // write to file
+        records.write_to_file(std::string(CMAKE_SOURCE_DIR) + "/log/raw" + "/log_" + file_wo_ext + "_" + mode_name);
+    } 
+
     else
         ros::Duration(0.01).sleep();
 

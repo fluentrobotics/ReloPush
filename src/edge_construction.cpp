@@ -590,6 +590,14 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     continue;
                 }
 
+                // is additional pre-push valid
+                //auto final_push = State(pre_relo_state.x,pre_relo_state.y,pivot_state->yaw);
+                //if(!env.stateValid(find_pre_push(final_push)));
+                //{
+                    // last pre-push not valid
+                //    continue;
+                //}
+
                 stopWatch time_dubins2("time_dubins2",measurement_type::pathPlan);
                 // find new dubins path
                 auto new_dubins_res = is_good_path(pre_relo_state,*target_state,turning_radius);

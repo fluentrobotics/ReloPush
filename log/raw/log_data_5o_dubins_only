@@ -5,199 +5,199 @@ index:0
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000376
+Time Graph Const:5.3e-05
+Time Graph Plan:0.000998
 Time Assign:0
-Time Reloc Plan:9.5e-05
-Time Task:0.000486
-Time MP:0.089932
-Time Total:0.168314
+Time Reloc Plan:7.6e-05
+Time Task:0.001127
+Time MP:0.057757
+Time Total:0.151649
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.1878
-Length Approaching:26.3104
-Length Approaching:43.4982
+Length Pushing:12.3694
+Length Approaching:24.6896
+Length Approaching:37.059
 #
 data_name:data_5o
 mode:dubins_only
 index:1
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:9e-06
-Time Graph Plan:0.000427
+Time Graph Const:2.5e-05
+Time Graph Plan:0.000918
 Time Assign:0
-Time Reloc Plan:0.000112
-Time Task:0.000548
-Time MP:0.085361
-Time Total:0.166337
+Time Reloc Plan:0.000116
+Time Task:0.001059
+Time MP:0.073849
+Time Total:0.171616
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.4463
+Length Approaching:28.6704
+Length Approaching:46.1167
 #
 data_name:data_5o
 mode:dubins_only
 index:2
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1e-05
-Time Graph Plan:0.000409
+Time Graph Const:4.4e-05
+Time Graph Plan:0.001038
 Time Assign:0
-Time Reloc Plan:0.000105
-Time Task:0.000524
-Time MP:0.084948
-Time Total:0.163438
+Time Reloc Plan:0.000114
+Time Task:0.001196
+Time MP:0.065652
+Time Total:0.18995
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.462
+Length Approaching:27.8308
+Length Approaching:46.2929
 #
 data_name:data_5o
 mode:dubins_only
 index:3
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:6e-06
-Time Graph Plan:0.000384
+Time Graph Const:5.4e-05
+Time Graph Plan:0.001043
 Time Assign:0
-Time Reloc Plan:0.000107
-Time Task:0.000497
-Time MP:0.077256
-Time Total:0.15725
+Time Reloc Plan:0.000113
+Time Task:0.00121
+Time MP:0.0588239
+Time Total:0.155374
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.5334
+Length Approaching:32.6278
+Length Approaching:50.1612
 #
 data_name:data_5o
 mode:dubins_only
 index:4
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1e-05
-Time Graph Plan:0.000419
+Time Graph Const:2.5e-05
+Time Graph Plan:0.00112
 Time Assign:0
-Time Reloc Plan:0.000108
-Time Task:0.000537
-Time MP:0.076598
-Time Total:0.156548
+Time Reloc Plan:7e-05
+Time Task:0.001215
+Time MP:0.056223
+Time Total:0.155213
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3404
+Length Approaching:20.5298
+Length Approaching:32.8702
 #
 data_name:data_5o
 mode:dubins_only
 index:5
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000406
+Time Graph Const:1.4e-05
+Time Graph Plan:0.001073
 Time Assign:0
-Time Reloc Plan:0.000101
-Time Task:0.000523
-Time MP:0.094757
-Time Total:0.176113
+Time Reloc Plan:0.000114
+Time Task:0.001201
+Time MP:0.061147
+Time Total:0.170804
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.5546
+Length Approaching:29.0474
+Length Approaching:46.602
 #
 data_name:data_5o
 mode:dubins_only
 index:6
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3.3e-05
-Time Graph Plan:0.000394
+Time Graph Const:1.2e-05
+Time Graph Plan:0.000881
 Time Assign:0
-Time Reloc Plan:0.000107
-Time Task:0.000534
-Time MP:0.0952389
-Time Total:0.179985
+Time Reloc Plan:6.2e-05
+Time Task:0.000955
+Time MP:0.057973
+Time Total:0.151479
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.1804
+Length Approaching:22.933
+Length Approaching:35.1134
 #
 data_name:data_5o
 mode:dubins_only
 index:7
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000392
+Time Graph Const:8e-06
+Time Graph Plan:0.001012
 Time Assign:0
-Time Reloc Plan:0.000103
-Time Task:0.000508
-Time MP:0.0890149
-Time Total:0.167
+Time Reloc Plan:0.000102
+Time Task:0.001122
+Time MP:0.064444
+Time Total:0.156649
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.5815
+Length Approaching:31.6181
+Length Approaching:49.1996
 #
 data_name:data_5o
 mode:dubins_only
 index:8
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.9e-05
-Time Graph Plan:0.000384
+Time Graph Const:1.5e-05
+Time Graph Plan:0.000824
 Time Assign:0
-Time Reloc Plan:9.9e-05
-Time Task:0.000502
-Time MP:0.086848
-Time Total:0.163005
+Time Reloc Plan:0.000107
+Time Task:0.000946
+Time MP:0.0633029
+Time Total:0.175269
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.8301
+Length Approaching:28.9091
+Length Approaching:47.7392
 #
 data_name:data_5o
 mode:dubins_only
 index:9
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000396
+Time Graph Const:4.7e-05
+Time Graph Plan:0.000778
 Time Assign:0
-Time Reloc Plan:9.8e-05
-Time Task:0.000511
-Time MP:0.089651
-Time Total:0.167725
+Time Reloc Plan:6.7e-05
+Time Task:0.000892
+Time MP:0.056118
+Time Total:0.148855
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3403
+Length Approaching:22.9707
+Length Approaching:35.311
 #
 data_name:data_5o
 mode:dubins_only
@@ -205,39 +205,39 @@ index:10
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:4e-06
-Time Graph Plan:0.000359
+Time Graph Const:2.4e-05
+Time Graph Plan:0.000785
 Time Assign:0
-Time Reloc Plan:9.9e-05
-Time Task:0.000462
-Time MP:0.084375
-Time Total:0.161568
+Time Reloc Plan:0.000102
+Time Task:0.000911
+Time MP:0.067208
+Time Total:0.159131
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.4794
-Length Approaching:26.2226
-Length Approaching:43.702
+Length Pushing:18.614
+Length Approaching:28.5581
+Length Approaching:47.1721
 #
 data_name:data_5o
 mode:dubins_only
 index:11
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000366
+Time Graph Const:4.6e-05
+Time Graph Plan:0.000904
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000483
-Time MP:0.097465
-Time Total:0.17581
+Time Reloc Plan:0.000107
+Time Task:0.001057
+Time MP:0.062155
+Time Total:0.159128
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6399
+Length Approaching:28.5269
+Length Approaching:47.1669
 #
 data_name:data_5o
 mode:dubins_only
@@ -245,13 +245,13 @@ index:12
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.1e-05
-Time Graph Plan:0.000364
+Time Graph Const:1.7e-05
+Time Graph Plan:0.000847
 Time Assign:0
-Time Reloc Plan:0.000102
-Time Task:0.000477
-Time MP:0.08744
-Time Total:0.165655
+Time Reloc Plan:4.7e-05
+Time Task:0.000911
+Time MP:0.059648
+Time Total:0.15055
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -265,13 +265,13 @@ index:13
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.8e-05
-Time Graph Plan:0.000354
+Time Graph Const:2.6e-05
+Time Graph Plan:0.000931
 Time Assign:0
-Time Reloc Plan:9.3e-05
-Time Task:0.000475
-Time MP:0.0890419
-Time Total:0.167369
+Time Reloc Plan:5.3e-05
+Time Task:0.00101
+Time MP:0.053944
+Time Total:0.143809
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -282,22 +282,22 @@ Length Approaching:0
 data_name:data_5o
 mode:dubins_only
 index:14
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000368
+Time Graph Const:6.9e-05
+Time Graph Plan:0.000739
 Time Assign:0
-Time Reloc Plan:9.8e-05
-Time Task:0.000483
-Time MP:0.096344
-Time Total:0.174995
+Time Reloc Plan:0.000102
+Time Task:0.00091
+Time MP:0.060193
+Time Total:0.151952
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.8142
+Length Approaching:28.347
+Length Approaching:47.1612
 #
 data_name:data_5o
 mode:dubins_only
@@ -305,259 +305,259 @@ index:15
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000378
+Time Graph Const:6.6e-05
+Time Graph Plan:0.001127
 Time Assign:0
-Time Reloc Plan:0.000166
-Time Task:0.000559
-Time MP:0.092273
-Time Total:0.17182
+Time Reloc Plan:9.7e-05
+Time Task:0.00129
+Time MP:0.059563
+Time Total:0.155141
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:18.22
-Length Approaching:28.5184
-Length Approaching:46.7384
+Length Pushing:18.6654
+Length Approaching:29.725
+Length Approaching:48.3903
 #
 data_name:data_5o
 mode:dubins_only
 index:16
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.6e-05
-Time Graph Plan:0.000401
+Time Graph Const:3e-05
+Time Graph Plan:0.001125
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000524
-Time MP:0.0957569
-Time Total:0.175488
+Time Reloc Plan:0.000155
+Time Task:0.00131
+Time MP:0.061528
+Time Total:0.171293
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.5888
+Length Approaching:31.8092
+Length Approaching:50.398
 #
 data_name:data_5o
 mode:dubins_only
 index:17
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1e-05
-Time Graph Plan:0.000366
+Time Graph Const:2.1e-05
+Time Graph Plan:0.001077
 Time Assign:0
-Time Reloc Plan:9.5e-05
-Time Task:0.000471
-Time MP:0.079788
-Time Total:0.156064
+Time Reloc Plan:0.00011
+Time Task:0.001208
+Time MP:0.066945
+Time Total:0.157157
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.4431
+Length Approaching:30.4049
+Length Approaching:47.848
 #
 data_name:data_5o
 mode:dubins_only
 index:18
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.00038
+Time Graph Const:3.9e-05
+Time Graph Plan:0.001008
 Time Assign:0
-Time Reloc Plan:9.3e-05
-Time Task:0.000497
-Time MP:0.087188
-Time Total:0.164638
+Time Reloc Plan:0.000109
+Time Task:0.001156
+Time MP:0.065777
+Time Total:0.159512
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7096
+Length Approaching:29.2781
+Length Approaching:47.9877
 #
 data_name:data_5o
 mode:dubins_only
 index:19
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.9e-05
-Time Graph Plan:0.000372
+Time Graph Const:2.5e-05
+Time Graph Plan:0.001053
 Time Assign:0
-Time Reloc Plan:0.000101
-Time Task:0.000492
-Time MP:0.091261
-Time Total:0.169487
+Time Reloc Plan:0.000119
+Time Task:0.001197
+Time MP:0.0600859
+Time Total:0.156412
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.8657
+Length Approaching:29.403
+Length Approaching:48.2687
 #
 data_name:data_5o
 mode:dubins_only
 index:20
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000383
+Time Graph Const:4.8e-05
+Time Graph Plan:0.000796
 Time Assign:0
-Time Reloc Plan:0.000113
-Time Task:0.000511
-Time MP:0.084839
-Time Total:0.162769
+Time Reloc Plan:0.000103
+Time Task:0.000947
+Time MP:0.0612799
+Time Total:0.153815
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.4672
+Length Approaching:29.8889
+Length Approaching:47.3561
 #
 data_name:data_5o
 mode:dubins_only
 index:21
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000396
+Time Graph Const:2.3e-05
+Time Graph Plan:0.000855
 Time Assign:0
-Time Reloc Plan:0.000104
-Time Task:0.000516
-Time MP:0.084457
-Time Total:0.163879
+Time Reloc Plan:0.000108
+Time Task:0.000986
+Time MP:0.065436
+Time Total:0.159556
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6693
+Length Approaching:31.5063
+Length Approaching:50.1756
 #
 data_name:data_5o
 mode:dubins_only
 index:22
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:8e-06
-Time Graph Plan:0.000347
+Time Graph Const:4.5e-05
+Time Graph Plan:0.000727
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000452
-Time MP:0.085259
-Time Total:0.16387
+Time Reloc Plan:6.8e-05
+Time Task:0.00084
+Time MP:0.0572149
+Time Total:0.154137
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.4509
+Length Approaching:22.8407
+Length Approaching:35.2916
 #
 data_name:data_5o
 mode:dubins_only
 index:23
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000367
+Time Graph Const:7.4e-05
+Time Graph Plan:0.000924
 Time Assign:0
-Time Reloc Plan:0.000101
-Time Task:0.000482
-Time MP:0.087158
-Time Total:0.16513
+Time Reloc Plan:0.00011
+Time Task:0.001108
+Time MP:0.062988
+Time Total:0.154772
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7031
+Length Approaching:29.071
+Length Approaching:47.7741
 #
 data_name:data_5o
 mode:dubins_only
 index:24
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000389
+Time Graph Const:6.3e-05
+Time Graph Plan:0.000833
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000503
-Time MP:0.084305
-Time Total:0.161636
+Time Reloc Plan:0.000111
+Time Task:0.001007
+Time MP:0.067459
+Time Total:0.179102
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.5083
+Length Approaching:27.8985
+Length Approaching:45.4069
 #
 data_name:data_5o
 mode:dubins_only
 index:25
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000372
+Time Graph Const:2.8e-05
+Time Graph Plan:0.000821
 Time Assign:0
-Time Reloc Plan:9.8e-05
-Time Task:0.000492
-Time MP:0.095267
-Time Total:0.173825
+Time Reloc Plan:0.000118
+Time Task:0.000967
+Time MP:0.066265
+Time Total:0.159939
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7007
+Length Approaching:28.3609
+Length Approaching:47.0616
 #
 data_name:data_5o
 mode:dubins_only
 index:26
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000377
+Time Graph Const:3.2e-05
+Time Graph Plan:0.000867
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000493
-Time MP:0.085541
-Time Total:0.164641
+Time Reloc Plan:6.4e-05
+Time Task:0.000963
+Time MP:0.056352
+Time Total:0.147295
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3115
+Length Approaching:24.9399
+Length Approaching:37.2514
 #
 data_name:data_5o
 mode:dubins_only
 index:27
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000416
+Time Graph Const:2.4e-05
+Time Graph Plan:0.001045
 Time Assign:0
-Time Reloc Plan:0.000102
-Time Task:0.000533
-Time MP:0.085619
-Time Total:0.164245
+Time Reloc Plan:0.000107
+Time Task:0.001176
+Time MP:0.0626769
+Time Total:0.155568
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.6206
+Length Approaching:28.2564
+Length Approaching:45.8771
 #
 data_name:data_5o
 mode:dubins_only
@@ -565,59 +565,59 @@ index:28
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000364
+Time Graph Const:3.3e-05
+Time Graph Plan:0.000875
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000475
-Time MP:0.084561
-Time Total:0.162131
+Time Reloc Plan:0.000111
+Time Task:0.001019
+Time MP:0.061318
+Time Total:0.152308
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.1959
-Length Approaching:26.4859
-Length Approaching:43.6819
+Length Pushing:18.6565
+Length Approaching:29.5353
+Length Approaching:48.1918
 #
 data_name:data_5o
 mode:dubins_only
 index:29
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.2e-05
-Time Graph Plan:0.000378
+Time Graph Const:6.8e-05
+Time Graph Plan:0.000843
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000487
-Time MP:0.078559
-Time Total:0.156716
+Time Reloc Plan:6.4e-05
+Time Task:0.000975
+Time MP:0.0619599
+Time Total:0.154371
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.4795
+Length Approaching:30.9079
+Length Approaching:43.3874
 #
 data_name:data_5o
 mode:dubins_only
 index:30
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.8e-05
-Time Graph Plan:0.000352
+Time Graph Const:0.000118
+Time Graph Plan:0.00079
 Time Assign:0
-Time Reloc Plan:9.5e-05
-Time Task:0.000465
-Time MP:0.088802
-Time Total:0.167927
+Time Reloc Plan:0.0001
+Time Task:0.001008
+Time MP:0.0710879
+Time Total:0.164479
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.5203
+Length Approaching:27.3477
+Length Approaching:44.868
 #
 data_name:data_5o
 mode:dubins_only
@@ -625,99 +625,99 @@ index:31
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000391
+Time Graph Const:1.4e-05
+Time Graph Plan:0.000835
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.000502
-Time MP:0.090459
-Time Total:0.168277
+Time Reloc Plan:0.000111
+Time Task:0.00096
+Time MP:0.056908
+Time Total:0.149399
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.3012
-Length Approaching:32.2502
-Length Approaching:49.5513
+Length Pushing:18.6719
+Length Approaching:31.0226
+Length Approaching:49.6945
 #
 data_name:data_5o
 mode:dubins_only
 index:32
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000369
+Time Graph Const:2.9e-05
+Time Graph Plan:0.001021
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000479
-Time MP:0.079494
-Time Total:0.157526
+Time Reloc Plan:0.000118
+Time Task:0.001168
+Time MP:0.0617089
+Time Total:0.174543
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6698
+Length Approaching:28.1608
+Length Approaching:46.8307
 #
 data_name:data_5o
 mode:dubins_only
 index:33
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000376
+Time Graph Const:8.4e-05
+Time Graph Plan:0.000895
 Time Assign:0
-Time Reloc Plan:0.000102
-Time Task:0.000492
-Time MP:0.088936
-Time Total:0.168286
+Time Reloc Plan:6.5e-05
+Time Task:0.001044
+Time MP:0.063075
+Time Total:0.16169
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.2893
+Length Approaching:20.2275
+Length Approaching:32.5168
 #
 data_name:data_5o
 mode:dubins_only
 index:34
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.2e-05
-Time Graph Plan:0.000362
+Time Graph Const:4.3e-05
+Time Graph Plan:0.000881
 Time Assign:0
-Time Reloc Plan:9.9e-05
-Time Task:0.000473
-Time MP:0.083088
-Time Total:0.161598
+Time Reloc Plan:0.000105
+Time Task:0.001029
+Time MP:0.062899
+Time Total:0.155363
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.8739
+Length Approaching:26.7299
+Length Approaching:45.6039
 #
 data_name:data_5o
 mode:dubins_only
 index:35
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000385
+Time Graph Const:3.5e-05
+Time Graph Plan:0.000744
 Time Assign:0
-Time Reloc Plan:9.8e-05
-Time Task:0.000499
-Time MP:0.083242
-Time Total:0.160451
+Time Reloc Plan:6e-05
+Time Task:0.000839
+Time MP:0.056514
+Time Total:0.149919
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.2198
+Length Approaching:25.8486
+Length Approaching:38.0684
 #
 data_name:data_5o
 mode:dubins_only
@@ -725,139 +725,139 @@ index:36
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000357
+Time Graph Const:3.2e-05
+Time Graph Plan:0.0009
 Time Assign:0
-Time Reloc Plan:9.5e-05
-Time Task:0.000465
-Time MP:0.056649
-Time Total:0.134649
+Time Reloc Plan:0.000111
+Time Task:0.001043
+Time MP:0.0598189
+Time Total:0.154599
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.4159
-Length Approaching:27.2544
-Length Approaching:44.6702
+Length Pushing:18.4674
+Length Approaching:28.0454
+Length Approaching:46.5128
 #
 data_name:data_5o
 mode:dubins_only
 index:37
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000364
+Time Graph Const:3.2e-05
+Time Graph Plan:0.001044
 Time Assign:0
-Time Reloc Plan:9.4e-05
-Time Task:0.000472
-Time MP:0.082908
-Time Total:0.159736
+Time Reloc Plan:0.000104
+Time Task:0.00118
+Time MP:0.062393
+Time Total:0.154593
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.2485
+Length Approaching:27.1753
+Length Approaching:44.4237
 #
 data_name:data_5o
 mode:dubins_only
 index:38
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.6e-05
-Time Graph Plan:0.000384
+Time Graph Const:4.2e-05
+Time Graph Plan:0.000849
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.00051
-Time MP:0.0990849
-Time Total:0.178352
+Time Reloc Plan:0.000109
+Time Task:0.001
+Time MP:0.0604379
+Time Total:0.155015
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6837
+Length Approaching:28.808
+Length Approaching:47.4917
 #
 data_name:data_5o
 mode:dubins_only
 index:39
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000382
+Time Graph Const:2.5e-05
+Time Graph Plan:0.000737
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.000495
-Time MP:0.096492
-Time Total:0.181002
+Time Reloc Plan:5.9e-05
+Time Task:0.000821
+Time MP:0.057571
+Time Total:0.1517
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3956
+Length Approaching:23.3705
+Length Approaching:35.7661
 #
 data_name:data_5o
 mode:dubins_only
 index:40
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000401
+Time Graph Const:3.5e-05
+Time Graph Plan:0.001313
 Time Assign:0
-Time Reloc Plan:0.000103
-Time Task:0.000519
-Time MP:0.083717
-Time Total:0.162769
+Time Reloc Plan:0.000107
+Time Task:0.001455
+Time MP:0.066281
+Time Total:0.161239
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.4689
+Length Approaching:30.7844
+Length Approaching:49.2533
 #
 data_name:data_5o
 mode:dubins_only
 index:41
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.1e-05
-Time Graph Plan:0.000387
+Time Graph Const:3.3e-05
+Time Graph Plan:0.000891
 Time Assign:0
-Time Reloc Plan:0.000108
-Time Task:0.000506
-Time MP:0.085767
-Time Total:0.163365
+Time Reloc Plan:0.000111
+Time Task:0.001035
+Time MP:0.065998
+Time Total:0.158257
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7134
+Length Approaching:27.6555
+Length Approaching:46.369
 #
 data_name:data_5o
 mode:dubins_only
 index:42
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:9e-06
-Time Graph Plan:0.00037
+Time Graph Const:1e-05
+Time Graph Plan:0.000807
 Time Assign:0
-Time Reloc Plan:0.00011
-Time Task:0.000489
-Time MP:0.081186
-Time Total:0.158889
+Time Reloc Plan:6.4e-05
+Time Task:0.000881
+Time MP:0.055568
+Time Total:0.145757
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.2608
+Length Approaching:24.7775
+Length Approaching:37.0383
 #
 data_name:data_5o
 mode:dubins_only
@@ -865,13 +865,13 @@ index:43
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:6.1e-05
-Time Graph Plan:0.000395
+Time Graph Const:1.5e-05
+Time Graph Plan:0.000834
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.000552
-Time MP:0.100961
-Time Total:0.17911
+Time Reloc Plan:4.7e-05
+Time Task:0.000896
+Time MP:0.053762
+Time Total:0.145114
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -885,13 +885,13 @@ index:44
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.2e-05
-Time Graph Plan:0.000385
+Time Graph Const:5.4e-05
+Time Graph Plan:0.000749
 Time Assign:0
-Time Reloc Plan:9.8e-05
-Time Task:0.000495
-Time MP:0.086249
-Time Total:0.165311
+Time Reloc Plan:4.8e-05
+Time Task:0.000851
+Time MP:0.0591209
+Time Total:0.170558
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -902,342 +902,342 @@ Length Approaching:0
 data_name:data_5o
 mode:dubins_only
 index:45
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000408
+Time Graph Const:0.000104
+Time Graph Plan:0.001149
 Time Assign:0
-Time Reloc Plan:0.000108
-Time Task:0.000533
-Time MP:0.085731
-Time Total:0.164146
+Time Reloc Plan:0.00011
+Time Task:0.001363
+Time MP:0.0624499
+Time Total:0.158138
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.4737
+Length Approaching:28.6408
+Length Approaching:47.1145
 #
 data_name:data_5o
 mode:dubins_only
 index:46
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000386
+Time Graph Const:2.5e-05
+Time Graph Plan:0.001039
 Time Assign:0
-Time Reloc Plan:9.8e-05
-Time Task:0.000497
-Time MP:0.08467
-Time Total:0.166267
+Time Reloc Plan:0.000112
+Time Task:0.001176
+Time MP:0.062314
+Time Total:0.155694
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.5595
+Length Approaching:30.1459
+Length Approaching:47.7054
 #
 data_name:data_5o
 mode:dubins_only
 index:47
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.000378
+Time Graph Const:3e-05
+Time Graph Plan:0.000621
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.000495
-Time MP:0.092265
-Time Total:0.171654
+Time Reloc Plan:6.3e-05
+Time Task:0.000714
+Time MP:0.0546689
+Time Total:0.146606
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.2729
+Length Approaching:22.2897
+Length Approaching:34.5626
 #
 data_name:data_5o
 mode:dubins_only
 index:48
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000404
+Time Graph Const:1.2e-05
+Time Graph Plan:0.00087
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.000522
-Time MP:0.0925609
-Time Total:0.171172
+Time Reloc Plan:7.2e-05
+Time Task:0.000954
+Time MP:0.055986
+Time Total:0.149328
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3254
+Length Approaching:23.9184
+Length Approaching:36.2438
 #
 data_name:data_5o
 mode:dubins_only
 index:49
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000404
+Time Graph Const:4.4e-05
+Time Graph Plan:0.000927
 Time Assign:0
-Time Reloc Plan:0.000102
-Time Task:0.000522
-Time MP:0.088886
-Time Total:0.167068
+Time Reloc Plan:0.000107
+Time Task:0.001078
+Time MP:0.0579619
+Time Total:0.151367
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7413
+Length Approaching:27.9727
+Length Approaching:46.7141
 #
 data_name:data_5o
 mode:dubins_only
 index:50
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:4.1e-05
-Time Graph Plan:0.000366
+Time Graph Const:2.3e-05
+Time Graph Plan:0.000883
 Time Assign:0
-Time Reloc Plan:0.000101
-Time Task:0.000508
-Time MP:0.0904
-Time Total:0.168077
+Time Reloc Plan:6.3e-05
+Time Task:0.000969
+Time MP:0.057463
+Time Total:0.162355
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.4009
+Length Approaching:24.8507
+Length Approaching:37.2516
 #
 data_name:data_5o
 mode:dubins_only
 index:51
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000381
+Time Graph Const:3e-05
+Time Graph Plan:0.000968
 Time Assign:0
-Time Reloc Plan:9.4e-05
-Time Task:0.000488
-Time MP:0.087306
-Time Total:0.165336
+Time Reloc Plan:0.000104
+Time Task:0.001102
+Time MP:0.06149
+Time Total:0.15393
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.4272
+Length Approaching:29.4996
+Length Approaching:47.9267
 #
 data_name:data_5o
 mode:dubins_only
 index:52
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000374
+Time Graph Const:4.5e-05
+Time Graph Plan:0.001086
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000488
-Time MP:0.085376
-Time Total:0.163106
+Time Reloc Plan:6.6e-05
+Time Task:0.001197
+Time MP:0.05827
+Time Total:0.155478
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.4285
+Length Approaching:23.8112
+Length Approaching:36.2398
 #
 data_name:data_5o
 mode:dubins_only
 index:53
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.000383
+Time Graph Const:8.4e-05
+Time Graph Plan:0.000951
 Time Assign:0
-Time Reloc Plan:9.5e-05
-Time Task:0.000493
-Time MP:0.088085
-Time Total:0.165578
+Time Reloc Plan:0.000109
+Time Task:0.001144
+Time MP:0.057098
+Time Total:0.149208
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.5105
+Length Approaching:28.4587
+Length Approaching:46.9692
 #
 data_name:data_5o
 mode:dubins_only
 index:54
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000395
+Time Graph Const:5.8e-05
+Time Graph Plan:0.000946
 Time Assign:0
-Time Reloc Plan:0.000103
-Time Task:0.000522
-Time MP:0.091323
-Time Total:0.170834
+Time Reloc Plan:0.0001
+Time Task:0.001104
+Time MP:0.064603
+Time Total:0.158823
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.3061
+Length Approaching:28.2096
+Length Approaching:45.5157
 #
 data_name:data_5o
 mode:dubins_only
 index:55
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000364
+Time Graph Const:1.2e-05
+Time Graph Plan:0.000889
 Time Assign:0
-Time Reloc Plan:0.000103
-Time Task:0.00048
-Time MP:0.086483
-Time Total:0.165344
+Time Reloc Plan:0.000101
+Time Task:0.001002
+Time MP:0.0647979
+Time Total:0.160064
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7716
+Length Approaching:28.7101
+Length Approaching:47.4817
 #
 data_name:data_5o
 mode:dubins_only
 index:56
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:4.3e-05
-Time Graph Plan:0.000391
+Time Graph Const:7.3e-05
+Time Graph Plan:0.000895
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.00053
-Time MP:0.0959439
-Time Total:0.173453
+Time Reloc Plan:7.8e-05
+Time Task:0.001046
+Time MP:0.057274
+Time Total:0.152235
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.2888
+Length Approaching:23.4233
+Length Approaching:35.7122
 #
 data_name:data_5o
 mode:dubins_only
 index:57
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1e-05
-Time Graph Plan:0.000391
+Time Graph Const:0.000108
+Time Graph Plan:0.001083
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000501
-Time MP:0.080604
-Time Total:0.159135
+Time Reloc Plan:0.000111
+Time Task:0.001302
+Time MP:0.0661799
+Time Total:0.164289
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.4791
+Length Approaching:27.9211
+Length Approaching:46.4002
 #
 data_name:data_5o
 mode:dubins_only
 index:58
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000366
+Time Graph Const:4.7e-05
+Time Graph Plan:0.000951
 Time Assign:0
 Time Reloc Plan:0.0001
-Time Task:0.00049
-Time MP:0.09344
-Time Total:0.172098
+Time Task:0.001098
+Time MP:0.060787
+Time Total:0.153321
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.8073
+Length Approaching:31.7551
+Length Approaching:50.5624
 #
 data_name:data_5o
 mode:dubins_only
 index:59
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000377
+Time Graph Const:1.6e-05
+Time Graph Plan:0.000698
 Time Assign:0
-Time Reloc Plan:0.000108
-Time Task:0.000498
-Time MP:0.086418
-Time Total:0.163998
+Time Reloc Plan:0.000102
+Time Task:0.000816
+Time MP:0.067686
+Time Total:0.158129
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.8149
+Length Approaching:31.153
+Length Approaching:49.968
 #
 data_name:data_5o
 mode:dubins_only
 index:60
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.8e-05
-Time Graph Plan:0.000362
+Time Graph Const:1.3e-05
+Time Graph Plan:0.000808
 Time Assign:0
-Time Reloc Plan:9.9e-05
-Time Task:0.000479
-Time MP:0.093937
-Time Total:0.173471
+Time Reloc Plan:0.000115
+Time Task:0.000936
+Time MP:0.058878
+Time Total:0.15015
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7693
+Length Approaching:27.7702
+Length Approaching:46.5395
 #
 data_name:data_5o
 mode:dubins_only
 index:61
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.5e-05
-Time Graph Plan:0.00037
+Time Graph Const:3.5e-05
+Time Graph Plan:0.001156
 Time Assign:0
-Time Reloc Plan:9.8e-05
-Time Task:0.000483
-Time MP:0.090888
-Time Total:0.169678
+Time Reloc Plan:0.000114
+Time Task:0.001305
+Time MP:0.068172
+Time Total:0.161148
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6443
+Length Approaching:27.5512
+Length Approaching:46.1955
 #
 data_name:data_5o
 mode:dubins_only
@@ -1245,119 +1245,119 @@ index:62
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.000361
+Time Graph Const:7.7e-05
+Time Graph Plan:0.000807
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000481
-Time MP:0.0662009
-Time Total:0.145467
+Time Reloc Plan:9.9e-05
+Time Task:0.000983
+Time MP:0.061751
+Time Total:0.157866
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.3006
-Length Approaching:25.4285
-Length Approaching:42.729
+Length Pushing:18.3562
+Length Approaching:27.3923
+Length Approaching:45.7485
 #
 data_name:data_5o
 mode:dubins_only
 index:63
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:0.000117
-Time Graph Plan:0.000374
+Time Graph Const:0.000111
+Time Graph Plan:0.000847
 Time Assign:0
-Time Reloc Plan:9.9e-05
-Time Task:0.00059
-Time MP:0.086459
-Time Total:0.165061
+Time Reloc Plan:0.000119
+Time Task:0.001077
+Time MP:0.077428
+Time Total:0.180444
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.4982
+Length Approaching:28.0041
+Length Approaching:46.5023
 #
 data_name:data_5o
 mode:dubins_only
 index:64
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3e-05
-Time Graph Plan:0.000376
+Time Graph Const:1.2e-05
+Time Graph Plan:0.000956
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000503
-Time MP:0.0995529
-Time Total:0.179502
+Time Reloc Plan:0.000108
+Time Task:0.001076
+Time MP:0.058584
+Time Total:0.151764
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.5884
+Length Approaching:27.2486
+Length Approaching:45.837
 #
 data_name:data_5o
 mode:dubins_only
 index:65
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.00039
+Time Graph Const:1.2e-05
+Time Graph Plan:0.001127
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000508
-Time MP:0.089658
-Time Total:0.168099
+Time Reloc Plan:0.000106
+Time Task:0.001245
+Time MP:0.060545
+Time Total:0.150617
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.687
+Length Approaching:28.6859
+Length Approaching:46.3728
 #
 data_name:data_5o
 mode:dubins_only
 index:66
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.000408
+Time Graph Const:2.2e-05
+Time Graph Plan:0.000959
 Time Assign:0
 Time Reloc Plan:0.000101
-Time Task:0.00053
-Time MP:0.085587
-Time Total:0.164607
+Time Task:0.001082
+Time MP:0.05959
+Time Total:0.15362
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.5562
+Length Approaching:29.1693
+Length Approaching:47.7255
 #
 data_name:data_5o
 mode:dubins_only
 index:67
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000367
+Time Graph Const:6.2e-05
+Time Graph Plan:0.000906
 Time Assign:0
-Time Reloc Plan:9.5e-05
-Time Task:0.000486
-Time MP:0.096735
-Time Total:0.175037
+Time Reloc Plan:9.8e-05
+Time Task:0.001066
+Time MP:0.0613339
+Time Total:0.156993
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6451
+Length Approaching:30.4119
+Length Approaching:49.0571
 #
 data_name:data_5o
 mode:dubins_only
@@ -1365,119 +1365,119 @@ index:68
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.5e-05
-Time Graph Plan:0.000353
+Time Graph Const:1.7e-05
+Time Graph Plan:0.000962
 Time Assign:0
-Time Reloc Plan:9.3e-05
-Time Task:0.000471
-Time MP:0.068023
-Time Total:0.146376
+Time Reloc Plan:9.7e-05
+Time Task:0.001076
+Time MP:0.0679819
+Time Total:0.162021
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.3201
-Length Approaching:25.6495
-Length Approaching:42.9697
+Length Pushing:17.4294
+Length Approaching:28.4236
+Length Approaching:45.853
 #
 data_name:data_5o
 mode:dubins_only
 index:69
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.2e-05
-Time Graph Plan:0.000373
+Time Graph Const:1.6e-05
+Time Graph Plan:0.000878
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000485
-Time MP:0.089393
-Time Total:0.167266
+Time Reloc Plan:7.2e-05
+Time Task:0.000966
+Time MP:0.056692
+Time Total:0.148884
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.206
+Length Approaching:22.967
+Length Approaching:35.173
 #
 data_name:data_5o
 mode:dubins_only
 index:70
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.1e-05
-Time Graph Plan:0.000381
+Time Graph Const:3e-05
+Time Graph Plan:0.000779
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000502
-Time MP:0.089368
-Time Total:0.167197
+Time Reloc Plan:6.3e-05
+Time Task:0.000872
+Time MP:0.059739
+Time Total:0.154147
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3219
+Length Approaching:21.851
+Length Approaching:34.173
 #
 data_name:data_5o
 mode:dubins_only
 index:71
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000369
+Time Graph Const:3.8e-05
+Time Graph Plan:0.001292
 Time Assign:0
-Time Reloc Plan:9.5e-05
-Time Task:0.000477
-Time MP:0.084673
-Time Total:0.162151
+Time Reloc Plan:0.000123
+Time Task:0.001453
+Time MP:0.083061
+Time Total:0.184513
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7138
+Length Approaching:29.0393
+Length Approaching:47.7531
 #
 data_name:data_5o
 mode:dubins_only
 index:72
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.9e-05
-Time Graph Plan:0.000383
+Time Graph Const:7.4e-05
+Time Graph Plan:0.000916
 Time Assign:0
-Time Reloc Plan:9.8e-05
-Time Task:0.0005
-Time MP:0.097053
-Time Total:0.176276
+Time Reloc Plan:6.7e-05
+Time Task:0.001057
+Time MP:0.058635
+Time Total:0.153482
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.2257
+Length Approaching:25.5152
+Length Approaching:37.7409
 #
 data_name:data_5o
 mode:dubins_only
 index:73
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000381
+Time Graph Const:0.000105
+Time Graph Plan:0.001064
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000505
-Time MP:0.095301
-Time Total:0.174925
+Time Reloc Plan:7.5e-05
+Time Task:0.001244
+Time MP:0.0598239
+Time Total:0.157318
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.5705
+Length Approaching:25.7281
+Length Approaching:38.2986
 #
 data_name:data_5o
 mode:dubins_only
@@ -1485,19 +1485,19 @@ index:74
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000385
+Time Graph Const:5.1e-05
+Time Graph Plan:0.000878
 Time Assign:0
-Time Reloc Plan:0.000179
-Time Task:0.000577
-Time MP:0.092944
-Time Total:0.170662
+Time Reloc Plan:0.0001
+Time Task:0.001029
+Time MP:0.062812
+Time Total:0.154671
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:18.175
-Length Approaching:25.7077
-Length Approaching:43.8827
+Length Pushing:18.4297
+Length Approaching:27.2458
+Length Approaching:45.6754
 #
 data_name:data_5o
 mode:dubins_only
@@ -1505,119 +1505,119 @@ index:75
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.00037
+Time Graph Const:6.5e-05
+Time Graph Plan:0.001056
 Time Assign:0
-Time Reloc Plan:0.000179
-Time Task:0.000572
-Time MP:0.108755
-Time Total:0.189721
+Time Reloc Plan:6.6e-05
+Time Task:0.001187
+Time MP:0.058738
+Time Total:0.158483
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:18.4434
-Length Approaching:26.4929
-Length Approaching:44.9363
+Length Pushing:12.2438
+Length Approaching:21.2148
+Length Approaching:33.4586
 #
 data_name:data_5o
 mode:dubins_only
 index:76
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.8e-05
-Time Graph Plan:0.000427
+Time Graph Const:6.6e-05
+Time Graph Plan:0.001058
 Time Assign:0
-Time Reloc Plan:0.000116
-Time Task:0.000561
-Time MP:0.0898
-Time Total:0.168022
+Time Reloc Plan:0.0001
+Time Task:0.001224
+Time MP:0.0657799
+Time Total:0.163039
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7259
+Length Approaching:27.8828
+Length Approaching:46.6087
 #
 data_name:data_5o
 mode:dubins_only
 index:77
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1e-05
-Time Graph Plan:0.00036
+Time Graph Const:3.5e-05
+Time Graph Plan:0.001172
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.000466
-Time MP:0.088463
-Time Total:0.165929
+Time Reloc Plan:0.000102
+Time Task:0.001309
+Time MP:0.059742
+Time Total:0.155301
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.5909
+Length Approaching:27.9432
+Length Approaching:45.5341
 #
 data_name:data_5o
 mode:dubins_only
 index:78
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.1e-05
-Time Graph Plan:0.000369
+Time Graph Const:1.4e-05
+Time Graph Plan:0.000955
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.000476
-Time MP:0.087648
-Time Total:0.164676
+Time Reloc Plan:6.2e-05
+Time Task:0.001031
+Time MP:0.0516179
+Time Total:0.144361
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3625
+Length Approaching:22.0696
+Length Approaching:34.4322
 #
 data_name:data_5o
 mode:dubins_only
 index:79
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.5e-05
-Time Graph Plan:0.0004
+Time Graph Const:8.9e-05
+Time Graph Plan:0.00069
 Time Assign:0
-Time Reloc Plan:0.000104
-Time Task:0.000529
-Time MP:0.092039
-Time Total:0.171317
+Time Reloc Plan:0.00011
+Time Task:0.000889
+Time MP:0.058947
+Time Total:0.174679
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7395
+Length Approaching:29.5976
+Length Approaching:48.3371
 #
 data_name:data_5o
 mode:dubins_only
 index:80
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.1e-05
-Time Graph Plan:0.00036
+Time Graph Const:6.7e-05
+Time Graph Plan:0.000875
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000468
-Time MP:0.0834371
-Time Total:0.160935
+Time Reloc Plan:6.3e-05
+Time Task:0.001005
+Time MP:0.04955
+Time Total:0.141759
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.4361
+Length Approaching:23.1514
+Length Approaching:35.5875
 #
 data_name:data_5o
 mode:dubins_only
@@ -1625,119 +1625,119 @@ index:81
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000408
+Time Graph Const:6.4e-05
+Time Graph Plan:0.001136
 Time Assign:0
-Time Reloc Plan:0.000102
-Time Task:0.000532
-Time MP:0.093505
-Time Total:0.173383
+Time Reloc Plan:0.000105
+Time Task:0.001305
+Time MP:0.065798
+Time Total:0.162802
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.3172
-Length Approaching:25.8175
-Length Approaching:43.1347
+Length Pushing:18.4492
+Length Approaching:28.864
+Length Approaching:47.3132
 #
 data_name:data_5o
 mode:dubins_only
 index:82
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000394
+Time Graph Const:0.000116
+Time Graph Plan:0.000824
 Time Assign:0
-Time Reloc Plan:9.3e-05
-Time Task:0.000504
-Time MP:0.084422
-Time Total:0.161917
+Time Reloc Plan:0.000108
+Time Task:0.001048
+Time MP:0.0635709
+Time Total:0.15884
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.4944
+Length Approaching:28.6818
+Length Approaching:46.1762
 #
 data_name:data_5o
 mode:dubins_only
 index:83
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.6e-05
-Time Graph Plan:0.000395
+Time Graph Const:6.9e-05
+Time Graph Plan:0.001018
 Time Assign:0
-Time Reloc Plan:0.000102
-Time Task:0.000513
-Time MP:0.090808
-Time Total:0.169651
+Time Reloc Plan:0.000103
+Time Task:0.00119
+Time MP:0.0587049
+Time Total:0.151494
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6346
+Length Approaching:28.815
+Length Approaching:47.4496
 #
 data_name:data_5o
 mode:dubins_only
 index:84
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:3e-05
-Time Graph Plan:0.000387
+Time Graph Const:7e-05
+Time Graph Plan:0.000767
 Time Assign:0
-Time Reloc Plan:0.000101
-Time Task:0.000518
-Time MP:0.0932309
-Time Total:0.171577
+Time Reloc Plan:0.000112
+Time Task:0.000949
+Time MP:0.067515
+Time Total:0.160598
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.4529
+Length Approaching:29.2313
+Length Approaching:46.6842
 #
 data_name:data_5o
 mode:dubins_only
 index:85
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.3e-05
-Time Graph Plan:0.00038
+Time Graph Const:7.7e-05
+Time Graph Plan:0.000867
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000503
-Time MP:0.085202
-Time Total:0.163465
+Time Reloc Plan:0.000113
+Time Task:0.001057
+Time MP:0.0608689
+Time Total:0.15212
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6648
+Length Approaching:28.8117
+Length Approaching:47.4766
 #
 data_name:data_5o
 mode:dubins_only
 index:86
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.1e-05
-Time Graph Plan:0.000354
+Time Graph Const:8.9e-05
+Time Graph Plan:0.00069
 Time Assign:0
-Time Reloc Plan:0.000101
-Time Task:0.000466
-Time MP:0.084679
-Time Total:0.163328
+Time Reloc Plan:6.4e-05
+Time Task:0.000843
+Time MP:0.061051
+Time Total:0.157761
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3304
+Length Approaching:21.9878
+Length Approaching:34.3182
 #
 data_name:data_5o
 mode:dubins_only
@@ -1745,119 +1745,119 @@ index:87
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000383
+Time Graph Const:2.8e-05
+Time Graph Plan:0.00106
 Time Assign:0
-Time Reloc Plan:0.000101
-Time Task:0.000501
-Time MP:0.0767679
-Time Total:0.156125
+Time Reloc Plan:8.1e-05
+Time Task:0.001169
+Time MP:0.059025
+Time Total:0.175972
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.1902
-Length Approaching:23.6556
-Length Approaching:40.8459
+Length Pushing:12.3666
+Length Approaching:22.6218
+Length Approaching:34.9883
 #
 data_name:data_5o
 mode:dubins_only
 index:88
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000371
+Time Graph Const:0.000106
+Time Graph Plan:0.000669
 Time Assign:0
-Time Reloc Plan:9.6e-05
-Time Task:0.00048
-Time MP:0.092103
-Time Total:0.170761
+Time Reloc Plan:0.000106
+Time Task:0.000881
+Time MP:0.0719299
+Time Total:0.174103
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:17.5363
+Length Approaching:29.5145
+Length Approaching:47.0508
 #
 data_name:data_5o
 mode:dubins_only
 index:89
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.9e-05
-Time Graph Plan:0.000372
+Time Graph Const:3e-05
+Time Graph Plan:0.000895
 Time Assign:0
-Time Reloc Plan:9.3e-05
-Time Task:0.000484
-Time MP:0.087854
-Time Total:0.173368
+Time Reloc Plan:0.000107
+Time Task:0.001032
+Time MP:0.070208
+Time Total:0.168315
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.6283
+Length Approaching:31.9416
+Length Approaching:50.5698
 #
 data_name:data_5o
 mode:dubins_only
 index:90
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.1e-05
-Time Graph Plan:0.000457
+Time Graph Const:5.4e-05
+Time Graph Plan:0.00075
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000565
-Time MP:0.084918
-Time Total:0.162033
+Time Reloc Plan:0.00011
+Time Task:0.000914
+Time MP:0.0642739
+Time Total:0.161093
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7386
+Length Approaching:29.1295
+Length Approaching:47.8682
 #
 data_name:data_5o
 mode:dubins_only
 index:91
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000372
+Time Graph Const:8.5e-05
+Time Graph Plan:0.000662
 Time Assign:0
-Time Reloc Plan:9.3e-05
-Time Task:0.000479
-Time MP:0.084413
-Time Total:0.161667
+Time Reloc Plan:0.000104
+Time Task:0.000851
+Time MP:0.0663559
+Time Total:0.163139
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.9093
+Length Approaching:27.9293
+Length Approaching:46.8387
 #
 data_name:data_5o
 mode:dubins_only
 index:92
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.7e-05
-Time Graph Plan:0.000374
+Time Graph Const:9.7e-05
+Time Graph Plan:0.000964
 Time Assign:0
-Time Reloc Plan:0.000102
-Time Task:0.000493
-Time MP:0.0872499
-Time Total:0.167269
+Time Reloc Plan:6.2e-05
+Time Task:0.001123
+Time MP:0.053034
+Time Total:0.15141
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:12.3259
+Length Approaching:23.6213
+Length Approaching:35.9473
 #
 data_name:data_5o
 mode:dubins_only
@@ -1865,99 +1865,99 @@ index:93
 Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.9e-05
-Time Graph Plan:0.000385
+Time Graph Const:1.6e-05
+Time Graph Plan:0.000927
 Time Assign:0
-Time Reloc Plan:9.4e-05
-Time Task:0.000508
-Time MP:0.090683
-Time Total:0.169243
+Time Reloc Plan:0.000104
+Time Task:0.001047
+Time MP:0.0614449
+Time Total:0.157668
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:17.301
-Length Approaching:28.6082
-Length Approaching:45.9092
+Length Pushing:18.7332
+Length Approaching:27.3805
+Length Approaching:46.1138
 #
 data_name:data_5o
 mode:dubins_only
 index:94
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1e-05
-Time Graph Plan:0.000386
+Time Graph Const:3.2e-05
+Time Graph Plan:0.000847
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000493
-Time MP:0.086988
-Time Total:0.16469
+Time Reloc Plan:0.000105
+Time Task:0.000984
+Time MP:0.0610899
+Time Total:0.155297
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.7375
+Length Approaching:27.235
+Length Approaching:45.9726
 #
 data_name:data_5o
 mode:dubins_only
 index:95
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.2e-05
-Time Graph Plan:0.000377
+Time Graph Const:2.3e-05
+Time Graph Plan:0.000916
 Time Assign:0
 Time Reloc Plan:9.7e-05
-Time Task:0.000486
-Time MP:0.083674
-Time Total:0.161796
+Time Task:0.001036
+Time MP:0.0732289
+Time Total:0.183776
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.237
+Length Approaching:26.9426
+Length Approaching:45.1796
 #
 data_name:data_5o
 mode:dubins_only
 index:96
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.2e-05
-Time Graph Plan:0.000401
+Time Graph Const:1.9e-05
+Time Graph Plan:0.000847
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000523
-Time MP:0.0966
-Time Total:0.188408
+Time Reloc Plan:0.000103
+Time Task:0.000969
+Time MP:0.0648009
+Time Total:0.15669
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.5822
+Length Approaching:30.3033
+Length Approaching:48.8855
 #
 data_name:data_5o
 mode:dubins_only
 index:97
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:2.4e-05
-Time Graph Plan:0.000394
+Time Graph Const:2e-05
+Time Graph Plan:0.001044
 Time Assign:0
-Time Reloc Plan:0.000116
-Time Task:0.000534
-Time MP:0.0997009
-Time Total:0.178764
+Time Reloc Plan:0.000106
+Time Task:0.00117
+Time MP:0.0643509
+Time Total:0.157015
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.5377
+Length Approaching:29.6934
+Length Approaching:48.2311
 #
 data_name:data_5o
 mode:dubins_only
@@ -1965,13 +1965,13 @@ index:98
 Is Success:F
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.3e-05
-Time Graph Plan:0.000376
+Time Graph Const:1.6e-05
+Time Graph Plan:0.001046
 Time Assign:0
-Time Reloc Plan:9.7e-05
-Time Task:0.000486
-Time MP:0.087727
-Time Total:0.165152
+Time Reloc Plan:5e-05
+Time Task:0.001112
+Time MP:0.0608799
+Time Total:0.156436
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
@@ -1982,19 +1982,19 @@ Length Approaching:0
 data_name:data_5o
 mode:dubins_only
 index:99
-Is Success:F
+Is Success:T
 Number of Relocations:0
 Delivery Sequence:
-Time Graph Const:1.4e-05
-Time Graph Plan:0.000415
+Time Graph Const:3.5e-05
+Time Graph Plan:0.000869
 Time Assign:0
-Time Reloc Plan:0.0001
-Time Task:0.000529
-Time MP:0.093883
-Time Total:0.173531
+Time Reloc Plan:0.000101
+Time Task:0.001005
+Time MP:0.05748
+Time Total:0.151641
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:0
-Length Approaching:0
-Length Approaching:0
+Length Pushing:18.4936
+Length Approaching:30.3719
+Length Approaching:48.8655

@@ -205,7 +205,7 @@ dataset_five_obj.mo_list = [
     movableObject(1, 1.5,0,"b1",4),
     movableObject(1.4, 2.3,0,"b2",4),
     #movableObject(2, 4,0,"b3",4),
-    movableObject(1.85, 4,0,"b3",4),
+    movableObject(1.35, 4,0,"b3",4),
     #movableObject(3.4, 2.3,0,"b4",4),
     movableObject(3, 2.3,0,"b4",4),
     movableObject(1.58,4.7,0,"b5",4)
@@ -236,7 +236,7 @@ dataset_six_obj.d_list = [
     movableObject(2, 2.56,0,"d3",4), 
     movableObject(3.02991373378123, 3.2185004448812062,0,"d4",4), 
     movableObject(0.9, 4.3,0,"d5",4), 
-    movableObject(3.1734931508421695, 0.8606829184492558,0,"d6",4)
+    movableObject(3.4734931508421695, 0.4606829184492558,0,"d6",4)
 ]
 dataset_six_obj.robot = [pose2D(3.5, 3.5, 3.14)] ## robot
 dataset_six_obj.d_table = {"b1":"d1", "b2":"d2", "b3":"d3", "b4":"d4", "b5":"d5", "b6":"d6"}
@@ -249,7 +249,7 @@ dataset_six_obj.d_table = {"b1":"d1", "b2":"d2", "b3":"d3", "b4":"d4", "b5":"d5"
 #dataset_four.write_to_file()
 #dataset_five.write_to_file()
 dataset_five_obj.write_to_file()
-#dataset_six_obj.write_to_file()
+dataset_six_obj.write_to_file()
 
 #print(dataset_one.add_randomness().serialize())
 print('done')

@@ -29,6 +29,8 @@
 
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 
+#include <std_msgs/Float32.h>
+
 extern ros::Publisher* vertex_marker_pub_ptr;
 extern ros::Publisher* edge_marker_pub_ptr;
 extern ros::Publisher* object_marker_pub_ptr;
@@ -1011,9 +1013,12 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
 
     num_prereloc = 0;
 
+    // Env to find non-pushing path
+    Environment env_nonpush(params::map_max_x, params::map_max_y, env.get_obs(), Constants::r_nonpush, true);
+
     // augment dubins path
     // don't do multi-processing
-    for(size_t i=vertex_path.size()-1; i>0; i--)
+    for (size_t i = vertex_path.size() - 1; i > 0; i--)
     {
         //find edge //todo: handle multiple edges
         Vertex source = vertex_path[i];
@@ -1052,17 +1057,17 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
                 auto obs_rm = it.pathToNextPush->obs_rm;
                 auto obs_add = it.pathToNextPush->obs_add;
                 // temporarily modify env
-                env.remove_obs(obs_rm);
-                env.add_obs(obs_add);
+                env_nonpush.remove_obs(obs_rm);
+                env_nonpush.add_obs(obs_add);
 
                 stopWatch time_mp("preReloc", measurement_type::pathPlan);
-                it.pathToNextPush = planHybridAstar(it.pathToNextPush->start_pose, it.pathToNextPush->goal_pose, env, params::grid_search_timeout, false);
+                it.pathToNextPush = planHybridAstar(it.pathToNextPush->start_pose, it.pathToNextPush->goal_pose, env_nonpush, params::grid_search_timeout, false);
                 time_mp.stop();
                 time_watches.push_back(time_mp);
 
                 // restore env
-                env.remove_obs(obs_add);
-                env.add_obs(obs_rm);
+                env_nonpush.remove_obs(obs_add);
+                env_nonpush.add_obs(obs_rm);
                 if(!it.pathToNextPush->success)
                 {
                     // this plan is infeasible
@@ -1109,11 +1114,12 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
                                                     State& robot, Environment& env, std::vector<movableObjectPtr>& relo_list)
 {
     std::vector<std::vector<State>> path_segments;
+    Environment env_nonpush(params::map_max_x, params::map_max_y, env.get_obs(), Constants::r_nonpush, true);
     // one or more temp relocations
     if(relo_path.size()>0)
     {
-        // plan approach to first temp relocation
-        auto plan_res =planHybridAstar(robot, relo_path[0][0], env, params::grid_search_timeout,false);
+        // plan approach to first temp relocation        
+        auto plan_res =planHybridAstar(robot, relo_path[0][0], env_nonpush, params::grid_search_timeout,false);
         if(!plan_res->success)
             return std::make_pair(std::vector<State>(0),false); // return false
 
@@ -1131,10 +1137,10 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
 #pragma region modify_env_rm
         // remove pushed object
         auto moPtr = relo_list[0];
-        env.remove_obs(State(moPtr->get_x(), moPtr->get_y(), moPtr->get_th()));
+        env_nonpush.remove_obs(State(moPtr->get_x(), moPtr->get_y(), moPtr->get_th()));
         // relocated
         auto relocated_obs = find_post_push(relo_path[0].back());
-        env.add_obs(relocated_obs);
+        env_nonpush.add_obs(relocated_obs);
 #pragma endregion
 
         // relo
@@ -1147,10 +1153,10 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
             auto firstNextRelo = relo_path[p+1].front();
 
             auto moPtr_loop = relo_list[p+1];
-            env.remove_obs(State(moPtr_loop->get_x(), moPtr_loop->get_y(), moPtr_loop->get_th()));
+            env_nonpush.remove_obs(State(moPtr_loop->get_x(), moPtr_loop->get_y(), moPtr_loop->get_th()));
 
             // plan hybrid astar path
-            plan_res = planHybridAstar(lastThisRelo, firstNextRelo, env, params::grid_search_timeout, false);
+            plan_res = planHybridAstar(lastThisRelo, firstNextRelo, env_nonpush, params::grid_search_timeout, false);
             if(!plan_res->success)
                 return std::make_pair(std::vector<State>(0),false); // return false
 
@@ -1166,7 +1172,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
 
 #pragma region modify_env_restore
             // put it back
-            env.add_obs(find_post_push(relo_path[p+1].back()));
+            env_nonpush.add_obs(find_post_push(relo_path[p + 1].back()));
 #pragma endregion
         }
 
@@ -1176,7 +1182,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         auto pre_push = find_pre_push(push_path.front(), params::pre_push_dist);
 
         // plan hybrid astar
-        plan_res = planHybridAstar(lastLastRelo, pre_push, env, params::grid_search_timeout, false);
+        plan_res = planHybridAstar(lastLastRelo, pre_push, env_nonpush, params::grid_search_timeout, false);
         if(!plan_res->success)
             return std::make_pair(std::vector<State>(0),false); // return false
 
@@ -1196,7 +1202,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         // start to prepush
         auto pre_push = find_pre_push(push_path.front(),params::pre_push_dist);
         //stopWatch hb("hyb");
-        auto plan_res = planHybridAstar(robot, pre_push, env, params::grid_search_timeout, false);
+        auto plan_res = planHybridAstar(robot, pre_push, env_nonpush, params::grid_search_timeout, false);
         if(!plan_res->success)
                 return std::make_pair(std::vector<State>(0),false); // return false
 
@@ -1355,7 +1361,7 @@ void print_graph_path(std::vector<std::size_t>& path, GraphPtr gPtr)
 void init_visualization(std::vector<movableObject>& initMOList, std::vector<movableObject>& delivery_list)
 {
     draw_obstacles(initMOList, object_marker_pub_ptr);
-    draw_texts(initMOList,text_pub_ptr);
+    draw_texts(initMOList,delivery_list,text_pub_ptr);
     draw_deliveries(delivery_list,delivery_marker_pub_ptr);
     visualize_workspace_boundary(params::map_max_x, params::map_max_y, boundary_pub_ptr);
 }
@@ -1410,6 +1416,8 @@ void handle_args(int argc, char **argv, std::string& data_file, int& data_ind)
         data_file = std::string(argv[1]);
         data_ind = std::atoi(argv[2]);        
         params::leave_log = std::atoi(argv[3]);
+        params::use_better_path = true;
+        params::use_mp_only = false;
     }
 
     else if(argc==5)
@@ -1446,6 +1454,8 @@ void init_prompt(std::string& data_file, int& data_ind)
     Color::println("== post-push: " + std::to_string(params::post_push_ind) + " ===",Color::BG_YELLOW);
     Color::println("== use real robot: " + std::to_string(params::use_mocap) + " ===", Color::BG_YELLOW);
     Color::println("== timeout (ms): " + std::to_string(params::grid_search_timeout) + " ===",Color::BG_YELLOW);
+    Color::println("== use-proposed: " + std::to_string(params::use_better_path) + " ===", Color::BG_YELLOW);
+    Color::println("== is-mp-only: " + std::to_string(params::use_mp_only) + " ===", Color::BG_YELLOW);
 }
 
 void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& edgeMatcher, Environment& env,
@@ -1463,7 +1473,7 @@ void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& e
         // visualize delivery locations
         auto vis_deli_msg = draw_deliveries(delivery_list,delivery_marker_pub_ptr);
         // visualize object names
-        auto vis_names_msg = draw_texts(initMOList,text_pub_ptr);
+        auto vis_names_msg = draw_texts(initMOList, delivery_list, text_pub_ptr);
 
         ros::spinOnce();
         ros::Duration(0.5).sleep();                
