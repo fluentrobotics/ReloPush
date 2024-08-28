@@ -1,0 +1,5 @@
+<!-- -*- mode: XML -*- -->
+<launch>
+    <node pkg="reloPush" type="test_hastar" name="test_hastar">
+    </node>
+</launch>

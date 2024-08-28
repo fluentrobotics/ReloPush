@@ -40,6 +40,27 @@ using libMultiRobotPlanning::Neighbor;
 using libMultiRobotPlanning::PlanResult;
 using namespace libMultiRobotPlanning;
 
+struct PlanningContext{
+  bool allow_reverse = true;
+  float turning_radius = 1.0f; //r
+  float deltat;
+  float speed_limit = 0.385f;
+
+  float xyResolution;
+  float yawResolution;
+  std::vector<double> dx;
+  std::vector<double> dy;
+  std::vector<double> dyaw;
+
+  PlanningContext();
+
+  PlanningContext(bool use_reverse, float turning_r, float speed_lim = 0.385);
+
+  void update_dx();
+  void update_dy();
+  void update_dyaw();  
+};
+
 namespace Constants {
   static float steer_limit_push = 0.2; // 0.3
   static float steer_limit_nonpush = 0.3; // 0.3
@@ -48,13 +69,13 @@ namespace Constants {
   // [m] --- The minimum turning radius of the vehicle
   static float r_push = L / tanf(fabs(steer_limit_push));
   static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
-  extern float r; // non-push as default
+  //extern float r; // non-push as default
   //static float r = 0.5;
   //static const float r = 3;
   //static const float deltat = 6.75 / 180.0 * M_PI;
   static float deltat_push = speed_limit / r_push / 1.5;
   static float deltat_nonpush = speed_limit / r_nonpush / 1.5;
-  extern float deltat; // non-push as default
+  //extern float deltat; // non-push as default
   // [#] --- A movement cost penalty for turning (choosing non straight motion
   // primitives)
   static const float penaltyTurning = 50;
@@ -65,7 +86,7 @@ namespace Constants {
   // primitives < 3 to primitives > 2)
   static const float penaltyCOD = 2.0;
 
-  extern bool allow_reverse; // only when not pushing
+  //extern bool allow_reverse; // only when not pushing
 
   static float heuristicWeight = 1.0f;
 
@@ -74,11 +95,11 @@ namespace Constants {
 
   static const float xyResolution_push = r_push * deltat_push;
   static const float xyResolution_nonpush = r_nonpush * deltat_nonpush;
-  extern float xyResolution; // non-push as default
+  //extern float xyResolution; // non-push as default
 
   static const float yawResolution_push = deltat_push;
   static const float yawResolution_nonpush = deltat_nonpush;
-  extern float yawResolution; // non-push as default
+  //extern float yawResolution; // non-push as default
 
   // width of car
   static const float carWidth = 0.3;
@@ -90,18 +111,20 @@ namespace Constants {
   static const float obsRadius = 0.2;
 
   // R = 3, 6.75 DEG
-  extern double dx[];
-  extern double dy[];
-  extern double dyaw[];
+  //extern double dx[];
+  //extern double dy[];
+  //extern double dyaw[];
 
   float normalizeHeadingRad(float t);
 
+  /*
   void update_dx();
   void update_dy();
   void update_dyaw();
   void update_dx_dy_dyaw();
   void switch_to_pushing();
   void switch_to_nonpushing();
+  */
 }  // namespace Constants
 
 
@@ -212,11 +235,14 @@ class Environment {
   }
   */
   
-  Environment(float maxx, float maxy, std::unordered_set<State> obstacles,
-            State goal = State(0,0,0))
+  Environment(float maxx, float maxy, std::unordered_set<State> obstacles, float turning_rad_in, bool use_reverse,
+            State goal = State(0,0,0), float speed = 0.385f)
     : m_obstacles(std::move(obstacles)),
       m_goal(goal)  // NOLINT
   {
+    // set planning context
+    planCont = PlanningContext(use_reverse, turning_rad_in, speed);
+
     m_dimx = static_cast<int>(maxx / static_cast<float>(Constants::mapResolution));
     m_dimy = static_cast<int>(maxy / static_cast<float>(Constants::mapResolution));
     // std::cout << "env build " << m_dimx << " " << m_dimy << " "
@@ -240,6 +266,7 @@ class Environment {
     }
   };
 
+  /*
   uint64_t calcIndex(const State& s) {
     return (uint64_t)(Constants::normalizeHeadingRad(s.yaw) /
                       Constants::yawResolution) *
@@ -249,7 +276,18 @@ class Environment {
                (m_dimx * Constants::mapResolution / Constants::xyResolution) +
            (uint64_t)(s.x / Constants::xyResolution);
   }
+  */
+  uint64_t calcIndex(const State& s) {
+    return (uint64_t)(Constants::normalizeHeadingRad(s.yaw) /
+                      planCont.yawResolution) *
+               (m_dimx * Constants::mapResolution / planCont.xyResolution) *
+               (m_dimy * Constants::mapResolution / planCont.xyResolution) +
+           (uint64_t)(s.y / planCont.xyResolution) *
+               (m_dimx * Constants::mapResolution / planCont.xyResolution) +
+           (uint64_t)(s.x / planCont.xyResolution);
+  }
 
+/*
    int admissibleHeuristic(const State &s) {
     double reedsSheppCost = 0;
     // non-holonomic-without-obstacles heuristic: use a Reeds-Shepp (or Dubins if reversing not allowed)
@@ -286,13 +324,63 @@ class Environment {
 
     return Constants::heuristicWeight * std::max({reedsSheppCost, euclideanCost, twoDCost});
   }
+  */
 
+    int admissibleHeuristic(const State &s) {
+      double reedsSheppCost = 0;
+      // non-holonomic-without-obstacles heuristic: use a Reeds-Shepp (or Dubins if reversing not allowed)
+      std::unique_ptr<ompl::base::SE2StateSpace> path(
+          planCont.allow_reverse ? (ompl::base::SE2StateSpace *)(new ompl::base::ReedsSheppStateSpace(planCont.turning_radius))
+                                  : (ompl::base::SE2StateSpace *)(new ompl::base::DubinsStateSpace(planCont.turning_radius))
+      );
+      OmplState* rsStart = (OmplState *)path->allocState();
+      OmplState* rsEnd = (OmplState *)path->allocState();
+      rsStart->setXY(s.x, s.y);
+      rsStart->setYaw(s.yaw);
+      rsEnd->setXY(m_goal.x, m_goal.y);
+      rsEnd->setYaw(m_goal.yaw);
+      reedsSheppCost = path->distance(rsStart, rsEnd);
+      path->freeState(rsStart);
+      path->freeState(rsEnd);
+      // std::cout << "ReedsShepps cost:" << reedsSheppCost << std::endl;
+      // Euclidean distance
+      double euclideanCost =
+          sqrt(pow(m_goal.x - s.x, 2) + pow(m_goal.y - s.y, 2));
+      // std::cout << "Euclidean cost:" << euclideanCost << std::endl;
+      // holonomic-with-obstacles heuristic
+      double twoDoffset = sqrt(pow((s.x - static_cast<int>(s.x)) -
+                                      (m_goal.x - static_cast<int>(m_goal.x)),
+                                  2) +
+                              pow((s.y - static_cast<int>(s.y)) -
+                                      (m_goal.y - static_cast<int>(m_goal.y)),
+                                  2));
+      double twoDCost =
+          holonomic_cost_map[static_cast<int>(s.x / Constants::mapResolution)]
+                            [static_cast<int>(s.y / Constants::mapResolution)] -
+          twoDoffset;
+      // std::cout << "holonomic cost:" << twoDCost << std::endl;
+
+      return Constants::heuristicWeight * std::max({reedsSheppCost, euclideanCost, twoDCost});
+  }
+
+  /*
    bool isSolution(
       const State &state, double gscore,
       std::unordered_map<State, std::tuple<State, Action, double, double>,
                          std::hash<State>> &_camefrom) {
     
     bool isSol = Constants::allow_reverse ? isSolutionWithReverse(state, gscore, _camefrom) : isSolutionWithoutReverse(state, gscore, _camefrom);
+    
+    return isSol;
+  }
+  */
+
+  bool isSolution(
+    const State &state, double gscore,
+    std::unordered_map<State, std::tuple<State, Action, double, double>,
+                        std::hash<State>> &_camefrom) {
+    
+    bool isSol = planCont.allow_reverse ? isSolutionWithReverse(state, gscore, _camefrom) : isSolutionWithoutReverse(state, gscore, _camefrom);
     
     return isSol;
   }
@@ -305,7 +393,8 @@ class Environment {
         sqrt(pow(state.x - m_goal.x, 2) + pow(state.y - m_goal.y, 2));
     if (goal_distance > 2 * (Constants::LB + Constants::LF)) return false;
 
-    ompl::base::ReedsSheppStateSpace reedsSheppSpace(Constants::r);
+    //ompl::base::ReedsSheppStateSpace reedsSheppSpace(Constants::r);
+    ompl::base::ReedsSheppStateSpace reedsSheppSpace(planCont.turning_radius);
     OmplState* rsStart = (OmplState*)reedsSheppSpace.allocState();
     OmplState* rsEnd = (OmplState*)reedsSheppSpace.allocState();
     rsStart->setXY(state.x, state.y);
@@ -330,26 +419,29 @@ class Environment {
           break;
         case 1:  // RS_LEFT
           deltat = -reedsShepppath.length_[pathidx];
-          dx = Constants::r * sin(-deltat);
+          //dx = Constants::r * sin(-deltat);
+          dx = planCont.turning_radius * sin(-deltat);
           // dy = Constants::r * (1 - cos(-deltat));
           act = 2;
-          cost = reedsShepppath.length_[pathidx] * Constants::r *
-                 Constants::penaltyTurning;
+          //cost = reedsShepppath.length_[pathidx] * Constants::r * Constants::penaltyTurning;
+          cost = reedsShepppath.length_[pathidx] * planCont.turning_radius * Constants::penaltyTurning;
           break;
         case 2:  // RS_STRAIGHT
           deltat = 0;
-          dx = reedsShepppath.length_[pathidx] * Constants::r;
+          //dx = reedsShepppath.length_[pathidx] * Constants::r;
+          dx = reedsShepppath.length_[pathidx] * planCont.turning_radius;
           // dy = 0;
           act = 0;
           cost = dx;
           break;
         case 3:  // RS_RIGHT
           deltat = reedsShepppath.length_[pathidx];
-          dx = Constants::r * sin(deltat);
+          //dx = Constants::r * sin(deltat);
+          dx = planCont.turning_radius * sin(deltat);
           // dy = -Constants::r * (1 - cos(deltat));
           act = 1;
-          cost = reedsShepppath.length_[pathidx] * Constants::r *
-                 Constants::penaltyTurning;
+          //cost = reedsShepppath.length_[pathidx] * Constants::r * Constants::penaltyTurning;
+          cost = reedsShepppath.length_[pathidx] * planCont.turning_radius * Constants::penaltyTurning;
           break;
         default:
           std::cout << "\033[1m\033[31m"
@@ -405,7 +497,8 @@ class Environment {
 
   ompl::base::DubinsStateSpace::DubinsPath findDubins(State& start, State& goal)
   {
-    ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
+    //ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
+    ompl::base::DubinsStateSpace dubinsSpace(planCont.turning_radius);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
     OmplState *dubinsEnd = (OmplState *)dubinsSpace.allocState();
     dubinsStart->setXY(start.x, start.y);
@@ -445,7 +538,8 @@ class Environment {
     double goal_distance =
         sqrt(pow(state.x - getGoal().x, 2) + pow(state.y - getGoal().y, 2));
     if (goal_distance > 10 * (Constants::LB + Constants::LF)) return false;
-    ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
+    //ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
+    ompl::base::DubinsStateSpace dubinsSpace(planCont.turning_radius);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
     OmplState *dubinsEnd = (OmplState *)dubinsSpace.allocState();
     dubinsStart->setXY(state.x, state.y);
@@ -469,26 +563,29 @@ class Environment {
       switch (dubinsPath.type_[pathidx]) {
         case 0:  // DUBINS_LEFT
           deltat = -dubinsPath.length_[pathidx];
-          dx = Constants::r * sin(-deltat);
+          //dx = Constants::r * sin(-deltat);
+          dx = planCont.turning_radius * sin(-deltat);
           // dy = Constants::r * (1 - cos(-deltat));
           act = 2;
-          cost = dubinsPath.length_[pathidx] * Constants::r *
-                 Constants::penaltyTurning;
+          //cost = dubinsPath.length_[pathidx] * Constants::r * Constants::penaltyTurning;
+          cost = dubinsPath.length_[pathidx] * planCont.turning_radius * Constants::penaltyTurning;
           break;
         case 1:  // DUBINS_STRAIGHT
           deltat = 0;
-          dx = dubinsPath.length_[pathidx] * Constants::r;
+          //dx = dubinsPath.length_[pathidx] * Constants::r;
+          dx = dubinsPath.length_[pathidx] * planCont.turning_radius;
           // dy = 0;
           act = 0;
           cost = dx;
           break;
         case 2:  // DUBINS_RIGHT
           deltat = dubinsPath.length_[pathidx];
-          dx = Constants::r * sin(deltat);
+         //dx = Constants::r * sin(deltat);
+         dx = planCont.turning_radius * sin(deltat);
           // dy = -Constants::r * (1 - cos(deltat));
           act = 1;
-          cost = dubinsPath.length_[pathidx] * Constants::r *
-                 Constants::penaltyTurning;
+          //cost = dubinsPath.length_[pathidx] * Constants::r * Constants::penaltyTurning;
+          cost = dubinsPath.length_[pathidx] * planCont.turning_radius * Constants::penaltyTurning;
           break;
         default:
           std::cout << "\033[1m\033[31m"
@@ -545,6 +642,7 @@ class Environment {
     return true;
   }
 
+/*
   void getNeighbors(const State& s, Action action,
                     std::vector<Neighbor<State, Action, double>>& neighbors) {
     neighbors.clear();
@@ -574,6 +672,42 @@ class Environment {
     }
      // wait
     g = Constants::dx[0];
+    State tempState(s.x, s.y, s.yaw, s.time + 1);
+    if (stateValid(tempState)) {
+      neighbors.emplace_back(Neighbor<State, Action, double>(tempState, 6, g));
+    }
+  }
+  */
+
+  void getNeighbors(const State& s, Action action,
+                    std::vector<Neighbor<State, Action, double>>& neighbors) {
+    neighbors.clear();
+    double g = planCont.dx[0];
+    //for (Action act = 0; act < 6; act++) {  // has 6 directions for Reeds-Shepp
+    for (Action act = 0; act < (planCont.allow_reverse ? 6 : 3); act++) {  // has 6 directions for Reeds-Shepp, 3 for Dubins
+      double xSucc, ySucc, yawSucc;
+      double g = planCont.dx[0];
+      xSucc = s.x + planCont.dx[act] * cos(-s.yaw) -
+              planCont.dy[act] * sin(-s.yaw);
+      ySucc = s.y + planCont.dx[act] * sin(-s.yaw) +
+              planCont.dy[act] * cos(-s.yaw);
+      yawSucc = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act]);
+      if (act != action) {  // penalize turning
+        g = g * Constants::penaltyTurning;
+        if (act >= 3)  // penalize change of direction
+          g = g * Constants::penaltyCOD;
+      }
+      if (act > 3) {  // backwards
+        g = g * Constants::penaltyReversing;
+      }
+      State tempState(xSucc, ySucc, yawSucc, s.time+1);
+      if (stateValid(tempState)) {
+        neighbors.emplace_back(
+            Neighbor<State, Action, double>(tempState, act, g));
+      }
+    }
+     // wait
+    g = planCont.dx[0];
     State tempState(s.x, s.y, s.yaw, s.time + 1);
     if (stateValid(tempState)) {
       neighbors.emplace_back(Neighbor<State, Action, double>(tempState, 6, g));
@@ -687,6 +821,11 @@ class Environment {
     // std::cout << ro(0) << ro(1) << std::endl;
   }
 
+  std::unordered_set<State> get_obs()
+  {
+    return m_obstacles;
+  }
+
  private:
   void updateCostmap() {
     boost::heap::fibonacci_heap<std::pair<State, double>,
@@ -738,6 +877,7 @@ class Environment {
     // }
   }
 
+/*
   std::vector<std::pair<State, double>> generatePath(State startState, int act,
                                                      double deltaSteer,
                                                      double deltaLength) {
@@ -799,12 +939,77 @@ class Environment {
 
     return result;
   }
+  */
+
+   std::vector<std::pair<State, double>> generatePath(State startState, int act,
+                                                     double deltaSteer,
+                                                     double deltaLength) {
+      std::vector<std::pair<State, double>> result;
+      double xSucc, ySucc, yawSucc, dx, dy, dyaw, ratio;
+      result.emplace_back(std::make_pair<>(startState, 0));
+      if (act == 0 || act == 3) {
+        for (size_t i = 0; i < (size_t)(deltaLength / planCont.dx[act]); i++) {
+          State s = result.back().first;
+          xSucc = s.x + planCont.dx[act] * cos(-s.yaw) -
+                  planCont.dy[act] * sin(-s.yaw);
+          ySucc = s.y + planCont.dx[act] * sin(-s.yaw) +
+                  planCont.dy[act] * cos(-s.yaw);
+          yawSucc = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act]);
+          result.emplace_back(
+              std::make_pair<>(State(xSucc, ySucc, yawSucc,s.time+1), planCont.dx[0]));
+        }
+        ratio =
+            (deltaLength - static_cast<int>(deltaLength / planCont.dx[act]) *
+                              planCont.dx[act]) /
+            planCont.dx[act];
+        dyaw = 0;
+        dx = ratio * planCont.dx[act];
+        dy = 0;
+      } else {
+        for (size_t i = 0; i < (size_t)(deltaSteer / planCont.dyaw[act]); i++) {
+          State s = result.back().first;
+          xSucc = s.x + planCont.dx[act] * cos(-s.yaw) -
+                  planCont.dy[act] * sin(-s.yaw);
+          ySucc = s.y + planCont.dx[act] * sin(-s.yaw) +
+                  planCont.dy[act] * cos(-s.yaw);
+          yawSucc = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act]);
+          result.emplace_back(
+              std::make_pair<>(State(xSucc, ySucc, yawSucc,s.time+1),
+                              planCont.dx[0] * Constants::penaltyTurning));
+        }
+        ratio =
+            (deltaSteer - static_cast<int>(deltaSteer / planCont.dyaw[act]) *
+                              planCont.dyaw[act]) /
+            planCont.dyaw[act];
+        dyaw = ratio * planCont.dyaw[act];
+        dx = planCont.turning_radius * sin(dyaw);
+        dy = -planCont.turning_radius * (1 - cos(dyaw));
+        if (act == 2 || act == 5) {
+          dx = -dx;
+          dy = -dy;
+        }
+      }
+      State s = result.back().first;
+      xSucc = s.x + dx * cos(-s.yaw) - dy * sin(-s.yaw);
+      ySucc = s.y + dx * sin(-s.yaw) + dy * cos(-s.yaw);
+      yawSucc = Constants::normalizeHeadingRad(s.yaw + dyaw);
+      result.emplace_back(std::make_pair<>(State(xSucc, ySucc, yawSucc,s.time+1),
+                                          ratio * planCont.dx[0]));
+      // std::cout << "Have generate " << result.size() << " path segments:\n\t";
+      // for (auto iter = result.begin(); iter != result.end(); iter++)
+      //   std::cout << iter->first << ":" << iter->second << "->";
+      // std::cout << std::endl;
+
+      return result;
+    }
 
   int m_dimx;
   int m_dimy;
   std::unordered_set<State> m_obstacles;
   std::vector<std::vector<double>> holonomic_cost_map;
   State m_goal;
+
+  PlanningContext planCont;
 
   std::multimap<int, State> dynamic_obs;
 };

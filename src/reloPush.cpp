@@ -58,7 +58,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         // reset env
         stopWatch time_init_env("init_env",measurement_type::updateEnv);
-        env = Environment(map_max_x, map_max_y, obs);
+        //env = Environment(map_max_x, map_max_y, obs);
         time_watches.stop_and_append(time_init_env);
 
         // update graph
@@ -90,15 +90,15 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
             nameMatcher.addVertices(delivery_list);
             PathMatListPtr pathMatListPtr(new PathMatList);
 
-            Constants::switch_to_pushing();   
-            Environment env_push(map_max_x, map_max_y, obs);
+            //Constants::switch_to_pushing();   
+            Environment env_push(map_max_x, map_max_y, env.get_obs(), Constants::r_push, false); //todo: get size fro env
             stopWatch time_cost("cost_mat",measurement_type::pathPlan); 
             // generate cost matrix by motion planning
             // plan with pushing max radius
             auto costMat_vertices_pairs = get_cost_mat_vertices_pair(delivery_table, nameMatcher, gPtr, env_push, true, pathMatListPtr);
             time_watches.stop_and_append(time_cost);
             // switch back to nonpushing for future use
-            Constants::switch_to_nonpushing();
+            //Constants::switch_to_nonpushing();
             
             while(true)
             {
@@ -320,7 +320,7 @@ int main(int argc, char **argv)
     // initialize grid map
     std::unordered_set<State> obs;
     //State goal(0,0,0); // arbitrary goal
-    Environment env(params::map_max_x, params::map_max_y, obs);
+    Environment env(params::map_max_x, params::map_max_y, obs, Constants::r_nonpush, true);
 
     if(!params::use_testdata){
         // init objects and add to graph

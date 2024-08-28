@@ -43,7 +43,7 @@ struct State
 
     friend std::ostream &operator<<(std::ostream &os, const State &s)
     {
-        return os << "(" << s.x << "," << s.y << ":" << s.yaw << ")";
+        return os << "(" << s.x << "," << s.y << "," << s.yaw << ")";
     }
 
     double x;

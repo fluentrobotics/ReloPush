@@ -52,6 +52,11 @@ include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} ${OMPL_
 #test programs
 add_executable(test_dubins "test/test_dubins.cpp")
 target_link_libraries(test_dubins ${Boost_LIBRARIES} ${OMPL_LIBRARIES})
+
+add_executable(test_hastar "test/test_hastar.cpp" "src/reloPush/params.cpp" "src/pathPlanTools/path_planning_tools.cpp" "src/pathPlanTools/tf_tools.inl"
+    "src/pathPlanTools/tf_tools.cpp")
+target_link_libraries(test_hastar ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES})
+
 add_executable(mocap_tf "src/mocap_tf.cpp")
 target_link_libraries(mocap_tf ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES})
 
@@ -76,9 +81,12 @@ add_executable(
 
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES})
 
-
-
 install(TARGETS test_dubins
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(TARGETS test_hastar
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

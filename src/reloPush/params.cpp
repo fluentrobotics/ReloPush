@@ -13,7 +13,7 @@ namespace params
     float interpolation_step = 0.2f;
 
     // may change multiple times while running
-    bool is_pushing = false;
+    //bool is_pushing = false;
 
     const bool use_mocap = false; //todo: parse as a parameter
     

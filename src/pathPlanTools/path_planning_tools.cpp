@@ -2,7 +2,57 @@
 #include<pathPlanTools/path_planning_tools.h>
 #include <chrono>
 
+PlanningContext::PlanningContext()
+{}
+
+PlanningContext::PlanningContext(bool use_reverse, float turning_r, float speed_lim) : allow_reverse(use_reverse), turning_radius(turning_r), speed_limit(speed_lim)
+{
+    deltat = speed_limit / turning_r / 1.5;
+    xyResolution = turning_r * deltat;
+    yawResolution = deltat;
+
+    dx.resize(6);
+    dy.resize(6);
+    dyaw.resize(6);
+
+    update_dx();
+    update_dy();
+    update_dyaw();
+}
+
+void PlanningContext::update_dx()
+{
+    dx[0] = turning_radius * deltat;
+    dx[1] = turning_radius * sin(deltat);
+    dx[2] = turning_radius * sin(deltat);
+    dx[3] = -turning_radius * deltat;
+    dx[4] = -turning_radius * sin(deltat);
+    dx[5] = -turning_radius * sin(deltat);
+}
+void PlanningContext::update_dy()
+{
+    double y_term = turning_radius * (1 - cos(deltat));
+    dy[0] = 0;
+    dy[1] = -y_term;
+    dy[2] = y_term;
+    dy[3] = 0;
+    dy[4] = -y_term;
+    dy[5] = y_term;
+}
+void PlanningContext::update_dyaw()
+{
+    dyaw[0] = 0;
+    dyaw[1] = deltat;
+    dyaw[2] = -deltat;
+    dyaw[3] = 0;
+    dyaw[4] = -deltat;
+    dyaw[5] = deltat;
+}
+
+
 namespace Constants {
+
+    /*
     float r = r_nonpush;
     float deltat = deltat_nonpush;
     bool allow_reverse = true;
@@ -14,6 +64,7 @@ namespace Constants {
     double dy[] = {0, -r*(1 - cos(deltat)), r*(1 - cos(deltat)),
                         0, -r*(1 - cos(deltat)), r*(1 - cos(deltat))};
     double dyaw[] = {0, deltat, -deltat, 0, -deltat, deltat};
+    */
 
     float normalizeHeadingRad(float t) {
         if (t < 0) {
@@ -23,7 +74,7 @@ namespace Constants {
 
         return t - 2.f * M_PI * static_cast<int>(t / (2.f * M_PI));
     }
-
+/*
     void update_dx()
     {
         dx[0] = r * deltat;
@@ -87,18 +138,13 @@ namespace Constants {
 
         update_dx_dy_dyaw();
     }
+    */
 
 }
 
 
 PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& env, int64_t timeout_ms ,bool print_res)
 {  
-    // previous static variables aren't applied here
-    if(params::is_pushing)
-        Constants::switch_to_pushing();
-    else
-        Constants::switch_to_nonpushing();
-
     //auto time_start = std::chrono::high_resolution_clock::now();
     // make sure the angle range is in 0~2pi
     start_in.yaw = jeeho::convertEulerRange_to_2pi(start_in.yaw);
@@ -144,6 +190,7 @@ PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& en
     State start_neg = State(start_in.x,start_in.y,-1*start_in.yaw);
     State goal_neg = State(goal_in.x, goal_in.y, -1*goal_in.yaw);
     
+    // choose 
     env.changeGoal(goal_neg);
     
     HybridAStar<State, Action, double, Environment> hybridAStar(env);
