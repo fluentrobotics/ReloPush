@@ -267,6 +267,8 @@ int find_post_push_ind(StatePath& s, Environment& env){
             return pivot_ind;
     }
     // todo: handle all not valid
+    return -3;
+
 }
 
 /// @brief result of dijkstra on graph

@@ -44,7 +44,7 @@ struct PlanningContext{
   bool allow_reverse = true;
   float turning_radius = 1.0f; //r
   float deltat;
-  float speed_limit = 0.385f;
+  float speed_limit = 0.36f;
 
   float xyResolution;
   float yawResolution;

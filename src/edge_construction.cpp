@@ -37,7 +37,7 @@ StateValidity check_validity_by_interpolation(OmplState* dubinsStart, OmplState*
             std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
 
 
-        auto val = env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15);
+        auto val = env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15); // todo: change values
         if(!val) //todo: set better values
         {
             if(val.get_validity()==StateValidity::collision){
