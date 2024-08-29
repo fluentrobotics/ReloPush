@@ -193,7 +193,7 @@ namespace jeeho
                     outFile << "Length Approaching" << header_delim << approach_length << "\n";
 
                     // total length
-                    outFile << "Length Approaching" << header_delim << push_length + approach_length << "\n";
+                    outFile << "Length Total" << header_delim << push_length + approach_length << "\n";
 
                     // execution time
                     outFile << "Execution Time" << header_delim << execution_time << "\n";

@@ -63,7 +63,7 @@ struct PlanningContext{
 
 namespace Constants {
   static float steer_limit_push = 0.2; // 0.3
-  static float steer_limit_nonpush = 0.3; // 0.3
+  static float steer_limit_nonpush = 0.28; // 0.3
   static float speed_limit = 0.36f; //0.4
   static float L = 0.29f;
   // [m] --- The minimum turning radius of the vehicle
@@ -102,13 +102,13 @@ namespace Constants {
   //extern float yawResolution; // non-push as default
 
   // width of car
-  static const float carWidth = 0.3;
+  static const float carWidth = 0.3; //0.3
   // distance from rear to vehicle front end
-  static const float LF = 0.3;
+  static const float LF = 0.3;  //0.3
   // distance from rear to vehicle back end
   static const float LB = 0.12;
   // obstacle default radius
-  static const float obsRadius = 0.2;
+  static const float obsRadius = 0.15;
 
   // R = 3, 6.75 DEG
   //extern double dx[];

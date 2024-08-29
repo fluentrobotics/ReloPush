@@ -283,9 +283,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    const char* args[] = {"reloPush", "data_6o.txt", "20", "0", "mp_only"};
-    argv = const_cast<char**>(args);
-    argc = 5;
+    //const char* args[] = {"reloPush", "data_4o.txt", "0", "0", "proposed"};
+    //argv = const_cast<char**>(args);
+    //argc = 5;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 
@@ -416,7 +416,7 @@ int main(int argc, char **argv)
 
     float exec_time_in = -1;
 
-    if(!params::leave_log)
+    if(!params::leave_log && reloResult.is_succ)
         vis_loop(initMOList, edgeMatcher, env, failed_paths, delivery_list, navPath_ptr);
 
     else if(params::measure_exec_time)
@@ -450,6 +450,8 @@ int main(int argc, char **argv)
         // jeeho::logger records(reloResult.is_succ, reloResult.num_of_reloc, reloResult.delivery_sequence, timeWatches, removeExtension(data_file), data_ind);
         auto file_wo_ext = removeExtension(data_file);
         auto mode_name = get_mode_name();
+        if(params::use_mocap)
+            mode_name += "_real";
 
         // jeeho::logger records(reloResult.is_succ, dcol.pathInfoList.count_total_relocations(), reloResult.delivery_sequence, timeWatches, file_wo_ext, data_ind, mode_name);
 

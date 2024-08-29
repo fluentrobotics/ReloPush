@@ -1,0 +1,126 @@
+#
+data_name:data_4o
+mode:proposed_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00354502
+Time Graph Plan:0.000237
+Time Assign:0
+Time Reloc Plan:0.000114
+Time Task:0.00389602
+Time MP:0.035569
+Time Total:0.050309
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:proposed_real
+index:3
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00359002
+Time Graph Plan:0.000246
+Time Assign:0
+Time Reloc Plan:0.000108
+Time Task:0.00394402
+Time MP:0.06331
+Time Total:0.078168
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:proposed_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00353002
+Time Graph Plan:0.000255
+Time Assign:0
+Time Reloc Plan:0.000111
+Time Task:0.00389602
+Time MP:0.033012
+Time Total:0.047857
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:proposed_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00419602
+Time Graph Plan:0.000277
+Time Assign:0
+Time Reloc Plan:0.000127
+Time Task:0.00460002
+Time MP:0.065983
+Time Total:0.081691
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:proposed_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00358802
+Time Graph Plan:0.000232
+Time Assign:0
+Time Reloc Plan:0.000109
+Time Task:0.00392902
+Time MP:0.033058
+Time Total:0.047998
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:proposed_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00199501
+Time Graph Plan:0.000336
+Time Assign:0
+Time Reloc Plan:0.000419
+Time Task:0.00275001
+Time MP:0.290041
+Time Total:0.300189
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Approaching:0
+Execution Time:-1

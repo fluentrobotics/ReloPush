@@ -8,7 +8,7 @@ namespace params
     float map_max_x = 4; // m
     float map_max_y = 5.4; // m
 
-    float pre_push_dist = 0.6f;
+    float pre_push_dist = 0.68f;
     int post_push_ind = -2; // ind
     float interpolation_step = 0.2f;
 

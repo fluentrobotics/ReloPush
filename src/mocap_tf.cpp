@@ -65,6 +65,7 @@ public:
 private:
     void pathCallback(const nav_msgs::Path::ConstPtr& msg)
     {
+        std::cout << "Received Sim Path: " << msg->poses.size() << std::endl;
         nav_msgs::Path transformed_path;
         transformed_path.header.frame_id = "map_mocap";
         transformed_path.header.stamp = ros::Time::now();
