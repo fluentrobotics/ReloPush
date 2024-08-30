@@ -13,6 +13,7 @@ namespace params
 
     // distance in finding pre-push poses
     extern float pre_push_dist; // m
+    extern float pre_relo_pre_push_offset;
 
     // index of post-push pose from last state of the path
     extern int post_push_ind;

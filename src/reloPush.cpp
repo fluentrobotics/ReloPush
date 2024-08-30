@@ -283,9 +283,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    //const char* args[] = {"reloPush", "data_4o.txt", "0", "0", "proposed"};
-    //argv = const_cast<char**>(args);
-    //argc = 5;
+    const char* args[] = {"reloPush", "data_4o.txt", "0", "1", "mp_only"};
+    argv = const_cast<char**>(args);
+    argc = 5;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 
@@ -395,7 +395,7 @@ int main(int argc, char **argv)
     StatePath final_path = deliverySets.serializePath();
     if(params::use_mp_only)
         final_path = *reloResult.pathInfoList.serializedPath();
-    auto navPath_ptr = statePath_to_navPath(final_path);
+    auto navPath_ptr = statePath_to_navPath(final_path); 
 
     if(params::print_final_path)
     {

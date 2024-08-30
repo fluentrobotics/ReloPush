@@ -127,6 +127,13 @@ namespace graphTools
         cost = path_in.lengthCost();
         sourceState = source_s;
         targetState = target_s;
+        // goal state of the last pre-relocation should be the final pusing pose with starting yaw
+        if(pre_relocations.size() > 0)
+        {
+            finalPushState = pre_relocations.back().nextPushState;
+        }
+        else
+            finalPushState = sourceState;
     }
 
     EdgePathInfo::EdgePathInfo(vertexPair pair_in, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in) 

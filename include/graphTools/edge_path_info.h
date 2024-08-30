@@ -33,6 +33,7 @@ namespace graphTools
             // todo: with reloDubinsPath, these aren't necessary as they are also 'path'
             State sourceState;
             State targetState;
+            State finalPushState; // if there is one or more pre-relocations
             //dubins set
             reloDubinsPath path;
             //cost

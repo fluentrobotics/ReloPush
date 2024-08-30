@@ -76,18 +76,20 @@ class preReloPath{
     public:
     reloDubinsPath preReloDubins;
     PathPlanResultPtr pathToNextPush; // to next pre-push
+    State nextPushState;
 
     preReloPath()
     {
         preReloDubins = reloDubinsPath(0);
     }
     
-    preReloPath(State start, State target, reloDubinsPath& dubins_in, PathPlanResultPtr path_to_next_prePush)
+    preReloPath(State start, State target, reloDubinsPath& dubins_in, PathPlanResultPtr path_to_next_prePush, State& next_push)
     {
         preReloDubins = dubins_in;
         preReloDubins.startState = start;
         preReloDubins.targetState = target;
         pathToNextPush = path_to_next_prePush; // approach path
+        nextPushState = next_push; // push pose to next target
     }
 };
 

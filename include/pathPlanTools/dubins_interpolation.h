@@ -67,16 +67,17 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
       
     }
 
-    State startState = edgePathInfo.sourceState;
+    //State startState = edgePathInfo.sourceState;
+    State startState = edgePathInfo.finalPushState;
 #pragma region interpolation
     // interpolate
     auto l = edgePathInfo.path.lengthCost(); // unit cost * turning rad
     auto num_pts = static_cast<size_t>(l/path_resolution);
     //size_t num_pts = static_cast<size_t>(partial_path_info.path.length()/0.4); //todo: get resolution as a param
-    if(preReloPaths.size()>0)
-        startState = State(edgePathInfo.pre_relocations.back().preReloDubins.targetState.x,
-                            edgePathInfo.pre_relocations.back().preReloDubins.targetState.y,
-                            startState.yaw); // relocated object nominal pose
+    //if(preReloPaths.size()>0)
+    //    startState = State(edgePathInfo.pre_relocations.back().preReloDubins.targetState.x,
+    //                        edgePathInfo.pre_relocations.back().preReloDubins.targetState.y,
+    //                        startState.yaw); // relocated object nominal pose
 
     ompl::base::DubinsStateSpace dubinsSpace(turning_rad);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();

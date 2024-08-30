@@ -308,6 +308,7 @@ bool compareTuples(const std::tuple<bool, float, int>& a, const std::tuple<bool,
     return std::get<1>(a) > std::get<1>(b); // Compare the second element (float)
 }
 
+/*
 void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pivot_state, StatePtr target_state, VertexPtr pivot_vertex, VertexPtr target_vertex,
                                 size_t& state_ind, size_t& n, size_t& m, std::pair<pathType, reloDubinsPath>& dubins_res, Environment& env,
                                 float& max_x, float& max_y, float& turning_radius, GraphPtr gPtr, preRelocList& preRelocs, graphTools::EdgeMatcher& edgeMatcher,
@@ -387,7 +388,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
 
         // vector with ture only
         std::vector<std::tuple<bool,float,size_t>> candidates_vec(0);
-        /* it might be a good idea to try all directions */
+        // it might be a good idea to try all directions 
         
         for(auto& it: away_flags)
         {
@@ -476,7 +477,9 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
                 //leave motion plan as a blank placeholder for now. It will be handled later.
                 //preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,plan_res);
                 State arrivalStatePrepush = find_pre_push(arrivalState, params::pre_push_dist);
-                preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,std::make_shared<PathPlanResult>(PathPlanResult(arrivalStatePrepush, new_prepush, *pivot_state, state_thres)));
+                preReloPath prePath = preReloPath(prePath_start,state_thres,dubins_pre,
+                                                    std::make_shared<PathPlanResult>(PathPlanResult(arrivalStatePrepush, new_prepush, *pivot_state, state_thres))
+                                                    , );
 
                 // cost for pre-relocations
                 float pre_cost=0;
@@ -507,7 +510,7 @@ void proposed_edge_construction(std::vector<movableObject>& mo_list, StatePtr pi
         }
     }
 }
-
+*/
 
 
 
@@ -561,7 +564,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
             stopWatch time_ofb1("ofb1", measurement_type::graphConst);
             auto unit_vecs = pivot_mo.get_push_unitvecs();
 
-
+            // find possible pre-relocations on pushing axes
             auto pre_relo_candidates = find_pre_relo_along_vector(env,*pivot_state,*target_state,turning_radius,unit_vecs);
 
             time_ofb1.stop();
@@ -580,7 +583,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 stopWatch time_ofb2("ofb2", measurement_type::graphConst);
 
                 // check collision of this pre-relocation
-                auto pre_relo_validity = check_collision_straight(env,*pivot_state,pre_relo_state,pre_relo_dist,max_x,max_y,true);
+                auto pre_relo_validity = check_collision_straight(env,*pivot_state,pre_relo_state,pre_relo_dist,max_x,max_y,true); // collision check from initial to pre-relo pose
                 time_ofb2.stop();
                 time_watches.push_back(time_ofb2);
 
@@ -606,11 +609,9 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 auto d_test_th = get_longpath_d_thres(pre_relo_state, *target_state);
                 auto d_test = get_current_longpath_d(pre_relo_state,*target_state);
 
-                // check if the path is valid
-                //auto is_valid = env.stateValid(long_thres);
-                //auto ofb_start = std::chrono::high_resolution_clock::now();
+                // check if the path from initial pose to pre-relo is valid
                 auto chk = check_collision(fromObj, toObj, std::make_shared<State>(pre_relo_state), pivot_vertex, state_ind, new_dubins_res, 
-                                            env, max_x, max_y, turning_radius, is_delivery);
+                                            env, max_x, max_y, turning_radius, is_delivery); // collision check from pre-relo to final pose
 
                 time_dubins2.stop();
                 time_watches.push_back(time_dubins2);
@@ -621,13 +622,13 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 stopWatch time_valid_pre_push("time_validity", measurement_type::pathPlan);
 
                 // check if prepush is valid
-                State new_prepose = State(pre_relo_state.x,pre_relo_state.y,pivot_state->yaw);
-                State new_prepush = find_pre_push(new_prepose, params::pre_push_dist); 
+                State prerelo_final_push = State(pre_relo_state.x,pre_relo_state.y,pivot_state->yaw); // object pose for final push
+                State prerelo_final_prepush = find_pre_push(prerelo_final_push, params::pre_push_dist); // pre-push for final push
 
                 //for test only. not part of the algorithm
                 //auto test = env.stateValid(new_prepush);
 
-                auto is_pre_push_valid = env.stateValid(new_prepush);                
+                auto is_final_pre_push_valid = env.stateValid(prerelo_final_prepush);                
 
                 // check there is a path connecting relocation post-push to new pre-push
                 // add/remove virtual obstacles
@@ -636,9 +637,9 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 // relocated
                 env.add_obs(pre_relo_state);
 
-                float yaw = jeeho::convertEulerRange_to_pi(pivot_mo.get_pushing_poses()[uvec_ind]->yaw);
-                State arrivalState(pre_relo_state.x, pre_relo_state.y, yaw);
-                State relocation_postpush = find_pre_push(arrivalState, params::pre_push_dist);
+                float pre_yaw = jeeho::convertEulerRange_to_pi(pivot_mo.get_pushing_poses()[uvec_ind]->yaw);
+                State prerelo_arrival(pre_relo_state.x, pre_relo_state.y, pre_yaw);
+                State prerelo_arrival_post_push = find_pre_push(prerelo_arrival, params::pre_push_dist + params::pre_relo_pre_push_offset);
 
                 time_valid_pre_push.stop();
                 time_watches.push_back(time_valid_pre_push);                
@@ -650,7 +651,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                 // if yes, go with it. if not, try next best
                 
                 //if(chk == StateValidity::valid && is_valid && is_pre_push_valid && is_path_to_prepush_valid)
-                if(chk == StateValidity::valid && is_pre_push_valid)
+                if(chk == StateValidity::valid && is_final_pre_push_valid)
                 {
                     stopWatch time_pre_valid("pre_valid", measurement_type::graphConst);
 
@@ -661,13 +662,16 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     //preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
 
                     // find dubins
-                    State preRelocStart(pivot_state->x, pivot_state->y, arrivalState.yaw);
+                    State preRelocStart(pivot_state->x, pivot_state->y, prerelo_arrival.yaw);
                     //State preRelocStart_prepush = find_pre_push(preRelocStart);
-                    auto dubins_pre = findDubins(preRelocStart,arrivalState,turning_radius);
+                    auto dubins_pre = findDubins(preRelocStart,prerelo_arrival_post_push,turning_radius);
 
                     // State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
                     //preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,plan_res);
-                    preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,std::make_shared<PathPlanResult>(PathPlanResult(relocation_postpush, new_prepush, *pivot_state, pre_relo_state)));
+                    preReloPath prePath = preReloPath(preRelocStart,prerelo_arrival_post_push,dubins_pre,
+                                                        std::make_shared<PathPlanResult>(PathPlanResult(prerelo_arrival_post_push, prerelo_final_prepush,
+                                                                                            *pivot_state, pre_relo_state)),
+                                                        prerelo_final_push);
                     preRelocs.push_back(prePath);
 
                     // cost for pre-relocations
