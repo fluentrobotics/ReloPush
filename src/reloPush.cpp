@@ -37,6 +37,38 @@ std::string get_mode_name()
     }
 }
 
+void save_StatePath_to_file(StatePath& path_in, std::string file_name)
+{
+    // Open a file in write mode
+    std::ofstream file(file_name);
+
+    if (file.is_open()) {
+        for (const auto& state : path_in) {
+            file << state.x << " " << state.y << " " << state.yaw << "\n";
+        }
+        file.close();
+        std::cout << "File saved successfully." << std::endl;
+    } else {
+        std::cerr << "Unable to open file." << std::endl;
+    }
+}
+
+void save_StrVec_to_file(StrVec& strvec_in, std::string file_name)
+{
+    // Open a file in write mode
+    std::ofstream file(file_name);
+
+    if (file.is_open()) {
+        for (const auto& s : strvec_in) {
+            file << s << "\n";
+        }
+        file.close();
+        std::cout << "File saved successfully." << std::endl;
+    } else {
+        std::cerr << "Unable to open file." << std::endl;
+    }
+}
+
 reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObject>& mo_list, std::vector<movableObject>& delivered_obs,
                 Environment& env, float map_max_x, float map_max_y, GraphPtr gPtr, graphTools::EdgeMatcher& edgeMatcher,
                 stopWatchSet& time_watches, std::vector<movableObject>& delivery_list, 
@@ -148,7 +180,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                         post_push_app = app_path.end()[post_ind_app];
                     //else
                     //    post_push = push_path[0];
-                    app_path.push_back(post_push_app);
+                   //app_path.push_back(post_push_app);
 
                     // add pose-push pose
                     // todo: do it better
@@ -200,7 +232,6 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
         } // end mp-only
         else
         {
-            
             // construct edges between objects
             reloPush::construct_edges(mo_list, gPtr, env, map_max_x, map_max_y, Constants::r_push, edgeMatcher, failed_paths, time_watches.watches);
         
@@ -389,13 +420,26 @@ int main(int argc, char **argv)
         std::cout << "Instance Failed" << std::endl;
     }
 
-
-
     // generate final navigation path
     StatePath final_path = deliverySets.serializePath();
+
+
+
+
     if(params::use_mp_only)
         final_path = *reloResult.pathInfoList.serializedPath();
     auto navPath_ptr = statePath_to_navPath(final_path); 
+
+
+    // for dev
+    //save_StatePath_to_file(final_path, "old.txt");
+
+    //StatePath new_final_path = *dcol.pathInfoList.serializedPath();
+    //save_StatePath_to_file(new_final_path, "new.txt");
+
+    //auto mode_str = *dcol.pathInfoList.serializedPathWithMode().second;
+    //save_StrVec_to_file(mode_str,"mode");
+
 
     if(params::print_final_path)
     {
@@ -424,6 +468,19 @@ int main(int argc, char **argv)
         if(reloResult.is_succ)
         {
             test_path_pub_ptr->publish(*navPath_ptr);
+            
+            // path and mode
+            auto final_nav_path_pair = dcol.pathInfoList.serializedPathWithMode();
+            if(params::use_mocap)
+            {
+                // send to mocap_tf. mocap_tf will send to controller
+            }
+            else
+            {
+                // send directly to controller
+            }
+
+
             ros::spinOnce();
             ros::Duration(0.01).sleep();
             // todo: check mushr_rhc is running

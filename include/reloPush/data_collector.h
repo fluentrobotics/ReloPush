@@ -8,6 +8,9 @@
 #include <memory>
 #include <string>
 
+typedef std::vector<std::string> StrVec;
+typedef std::shared_ptr<StrVec> StrVecPtr;
+
 enum moveType {pre,temp,final,app}; // push, push, push, non-push
 
 std::string moveTypeToStr(moveType mt);
@@ -54,6 +57,7 @@ class PathInfoList
     float print_path();
 
     StatePathPtr serializedPath();
+    std::pair<StatePathPtr,StrVecPtr> serializedPathWithMode();
 };
 
 class DataCollector

@@ -138,6 +138,26 @@ StatePathPtr PathInfoList::serializedPath()
     return std::make_shared<StatePath>(out_path);
 }
 
+std::pair<StatePathPtr,StrVecPtr> PathInfoList::serializedPathWithMode()
+{
+    StatePath out_path(0);
+    StrVec out_strvec(0);
+    for(auto& it : paths)
+    {
+        out_path.insert(out_path.end(), it.path.begin(), it.path.end());
+
+        std::string mode_str = "p"; // default: pusing
+        if(it.type == moveType::app) // non-pushing
+            mode_str = "n";
+        
+        StrVec temp_vec(it.path.size(),mode_str);
+        out_strvec.insert(out_strvec.end(), temp_vec.begin(), temp_vec.end());
+    }
+
+    return std::make_pair(std::make_shared<StatePath>(out_path),std::make_shared<StrVec>(out_strvec));
+}
+
+
 void DataCollector::append_pathinfo(PathInfoList& list_in)
 {
     pathInfoList.paths.insert(pathInfoList.paths.end(),

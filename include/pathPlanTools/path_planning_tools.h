@@ -81,7 +81,7 @@ namespace Constants {
   static const float penaltyTurning = 50;
   // [#] --- A movement cost penalty for reversing (choosing motion primitives >
   // 2)
-  static const float penaltyReversing = 8.0;
+  static const float penaltyReversing = 5.0; //8
   // [#] --- A movement cost penalty for change of direction (changing from
   // primitives < 3 to primitives > 2)
   static const float penaltyCOD = 2.0;

@@ -1209,8 +1209,18 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
                 return std::make_pair(std::vector<State>(0),false); // return false
 
         auto final_app_path = plan_res->getPath(true);
+        
+        // interpolate appraoching path
+        //auto int_app = interpolateStraightPath(final_app_path.back(),push_path.front(),0.2f);
+
+        // append
+        //final_app_path.insert(final_app_path.end(), int_app.begin(), int_app.end());
+
         path_segments.push_back(final_app_path);
+        //path_segments.push_back(int_app);
         path_segments.push_back(push_path);
+
+
         // save to path info
         PathInfo p_final_app(push_pathinfo.paths.back().vertexName, moveType::app, robot, pre_push, final_app_path);
         final_pathinfo.push_back(p_final_app); // approach to delivering object
