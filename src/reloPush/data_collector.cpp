@@ -157,6 +157,42 @@ std::pair<StatePathPtr,StrVecPtr> PathInfoList::serializedPathWithMode()
     return std::make_pair(std::make_shared<StatePath>(out_path),std::make_shared<StrVec>(out_strvec));
 }
 
+std::string PathInfoList::serializeAllinStr()
+{
+
+    auto final_nav_path_pair = serializedPathWithMode();
+
+    // send to mocap_tf. mocap_tf will send to controller
+    std::string group_delim = "!";
+    std::string data_delim = ";";
+    std::string elem_delim = ",";
+
+    std::string out_str = "";
+
+    for(size_t n=0; n < final_nav_path_pair.first->size(); n++)
+    {
+        State& it = final_nav_path_pair.first->at(n);
+        auto x_hex_str = jeeho::float2hexstr(it.x);
+        auto y_hex_str = jeeho::float2hexstr(it.y);
+        auto yaw_hex_str = jeeho::float2hexstr(it.yaw);
+
+        std::string temp_str = x_hex_str + elem_delim + y_hex_str + elem_delim + yaw_hex_str; // x,y,yaw
+        out_str += temp_str;
+        if(n!=final_nav_path_pair.first->size()-1)
+            out_str += data_delim;
+    }
+    
+    out_str += group_delim;
+
+    for(size_t n=0; n < final_nav_path_pair.second->size(); n++)
+    {
+        std::string& it = final_nav_path_pair.second->at(n);
+
+        out_str += it;
+        if(n!=final_nav_path_pair.second->size()-1)
+            out_str += data_delim;
+    }
+}
 
 void DataCollector::append_pathinfo(PathInfoList& list_in)
 {

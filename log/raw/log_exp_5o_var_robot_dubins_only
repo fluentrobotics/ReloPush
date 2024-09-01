@@ -1,0 +1,420 @@
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.5e-05
+Time Graph Plan:0.000399
+Time Assign:0
+Time Reloc Plan:6.4e-05
+Time Task:0.000488
+Time MP:0.0514029
+Time Total:0.13075
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.0379
+Length Total:34.4073
+Execution Time:98.0924
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:1
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.2e-05
+Time Graph Plan:0.000446
+Time Assign:0
+Time Reloc Plan:6.8e-05
+Time Task:0.000536
+Time MP:0.048104
+Time Total:0.12793
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.0549
+Length Total:34.4243
+Execution Time:98.2278
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:2
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.1e-05
+Time Graph Plan:0.000412
+Time Assign:0
+Time Reloc Plan:6.6e-05
+Time Task:0.000499
+Time MP:0.043476
+Time Total:0.122652
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.4634
+Length Total:34.8328
+Execution Time:99.2697
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:3
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:3.2e-05
+Time Graph Plan:0.000393
+Time Assign:0
+Time Reloc Plan:6.7e-05
+Time Task:0.000492
+Time MP:0.0517319
+Time Total:0.131636
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.9427
+Length Total:34.3121
+Execution Time:97.8996
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:4
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:3e-05
+Time Graph Plan:0.000405
+Time Assign:0
+Time Reloc Plan:6.8e-05
+Time Task:0.000503
+Time MP:0.0522919
+Time Total:0.132846
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.4362
+Length Total:34.8056
+Execution Time:99.3401
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:5
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:4.2e-05
+Time Graph Plan:0.00045
+Time Assign:0
+Time Reloc Plan:6.8e-05
+Time Task:0.00056
+Time MP:0.0554999
+Time Total:0.13816
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.1052
+Length Total:34.4746
+Execution Time:98.3741
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:6
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:4e-05
+Time Graph Plan:0.000435
+Time Assign:0
+Time Reloc Plan:6.8e-05
+Time Task:0.000543
+Time MP:0.054401
+Time Total:0.140791
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.0053
+Length Total:34.3747
+Execution Time:98.0912
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:7
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.2e-05
+Time Graph Plan:0.000458
+Time Assign:0
+Time Reloc Plan:6.4e-05
+Time Task:0.000544
+Time MP:0.043376
+Time Total:0.122228
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.4169
+Length Total:34.7863
+Execution Time:99.2102
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:8
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.9e-05
+Time Graph Plan:0.000388
+Time Assign:0
+Time Reloc Plan:6.3e-05
+Time Task:0.00048
+Time MP:0.0513739
+Time Total:0.130925
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.946
+Length Total:34.3154
+Execution Time:97.8482
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:9
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:4.7e-05
+Time Graph Plan:0.000433
+Time Assign:0
+Time Reloc Plan:6.5e-05
+Time Task:0.000545
+Time MP:0.053509
+Time Total:0.13343
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.9667
+Length Total:34.3361
+Execution Time:97.8976
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:10
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:4.3e-05
+Time Graph Plan:0.000421
+Time Assign:0
+Time Reloc Plan:6.6e-05
+Time Task:0.00053
+Time MP:0.0541
+Time Total:0.139246
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.9268
+Length Total:34.2962
+Execution Time:97.7923
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:11
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.6e-05
+Time Graph Plan:0.000413
+Time Assign:0
+Time Reloc Plan:6.6e-05
+Time Task:0.000505
+Time MP:0.051173
+Time Total:0.130483
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.9707
+Length Total:34.3401
+Execution Time:98.0021
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:12
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:3.2e-05
+Time Graph Plan:0.000397
+Time Assign:0
+Time Reloc Plan:6.6e-05
+Time Task:0.000495
+Time MP:0.051094
+Time Total:0.130898
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.483
+Length Total:34.8524
+Execution Time:99.3421
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:13
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:3.3e-05
+Time Graph Plan:0.000434
+Time Assign:0
+Time Reloc Plan:6.5e-05
+Time Task:0.000532
+Time MP:0.054044
+Time Total:0.134728
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.4638
+Length Total:34.8332
+Execution Time:99.3575
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:14
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1.3e-05
+Time Graph Plan:0.000423
+Time Assign:0
+Time Reloc Plan:6.9e-05
+Time Task:0.000505
+Time MP:0.03941
+Time Total:0.118147
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.0339
+Length Total:34.4033
+Execution Time:98.0933
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:15
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.7e-05
+Time Graph Plan:0.000424
+Time Assign:0
+Time Reloc Plan:6.7e-05
+Time Task:0.000518
+Time MP:0.047349
+Time Total:0.127027
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.8928
+Length Total:34.2622
+Execution Time:97.7654
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:16
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.9e-05
+Time Graph Plan:0.000442
+Time Assign:0
+Time Reloc Plan:6.5e-05
+Time Task:0.000536
+Time MP:0.050302
+Time Total:0.129836
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.9928
+Length Total:34.3622
+Execution Time:98.0445
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:17
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:2.7e-05
+Time Graph Plan:0.000439
+Time Assign:0
+Time Reloc Plan:6.7e-05
+Time Task:0.000533
+Time MP:0.051549
+Time Total:0.131343
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.081
+Length Total:34.4504
+Execution Time:98.2212
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:18
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:1.8e-05
+Time Graph Plan:0.000419
+Time Assign:0
+Time Reloc Plan:7e-05
+Time Task:0.000507
+Time MP:0.043811
+Time Total:0.123281
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.9677
+Length Total:34.3371
+Execution Time:97.91
+#
+data_name:exp_5o_var_robot
+mode:dubins_only
+index:19
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:3.3e-05
+Time Graph Plan:0.000404
+Time Assign:0
+Time Reloc Plan:6.7e-05
+Time Task:0.000504
+Time MP:0.0529859
+Time Total:0.138938
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:21.9684
+Length Total:34.3378
+Execution Time:97.913

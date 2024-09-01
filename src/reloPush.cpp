@@ -314,9 +314,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    const char* args[] = {"reloPush", "data_4o.txt", "0", "1", "mp_only"};
-    argv = const_cast<char**>(args);
-    argc = 5;
+    //const char* args[] = {"reloPush", "data_4o.txt", "0", "1", "mp_only"};
+    //argv = const_cast<char**>(args);
+    //argc = 5;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 
@@ -473,7 +473,8 @@ int main(int argc, char **argv)
             auto final_nav_path_pair = dcol.pathInfoList.serializedPathWithMode();
             if(params::use_mocap)
             {
-                // send to mocap_tf. mocap_tf will send to controller
+
+
             }
             else
             {

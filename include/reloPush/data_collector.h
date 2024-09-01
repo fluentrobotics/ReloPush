@@ -7,6 +7,7 @@
 #include <pathPlanTools/path_planning_tools.h>
 #include <memory>
 #include <string>
+#include <reloPush/hexNfloat.h>
 
 typedef std::vector<std::string> StrVec;
 typedef std::shared_ptr<StrVec> StrVecPtr;
@@ -58,6 +59,7 @@ class PathInfoList
 
     StatePathPtr serializedPath();
     std::pair<StatePathPtr,StrVecPtr> serializedPathWithMode();
+    std::string serializeAllinStr();
 };
 
 class DataCollector
