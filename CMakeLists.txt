@@ -57,8 +57,13 @@ add_executable(test_hastar "test/test_hastar.cpp" "src/reloPush/params.cpp" "src
     "src/pathPlanTools/tf_tools.cpp")
 target_link_libraries(test_hastar ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES})
 
-add_executable(mocap_tf "src/mocap_tf.cpp")
-target_link_libraries(mocap_tf ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES})
+add_executable(mocap_tf "src/mocap_tf.cpp" 
+                "src/reloPush/params.cpp" 
+                "src/pathPlanTools/path_planning_tools.cpp" 
+                "src/pathPlanTools/tf_tools.inl" 
+                "src/pathPlanTools/tf_tools.cpp"
+                "src/reloPush/hexNfloat.cpp")
+target_link_libraries(mocap_tf ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OMPL_LIBRARIES})
 
 add_executable(
     ${PROJECT_NAME} 

@@ -1,0 +1,105 @@
+#
+data_name:data_2o1r
+mode:proposed
+index:0
+Is Success:T
+Number of Relocations:1
+Delivery Sequence:
+Time Graph Const:0.015171
+Time Graph Plan:0.00112
+Time Assign:0
+Time Reloc Plan:0.000237
+Time Task:0.016528
+Time MP:0.084213
+Time Total:0.117924
+Num Pre-relo:0
+Num Temp-relo:1
+Num Total relo:1
+Length Pushing:8.18666
+Length Approaching:17.5727
+Length Total:25.7594
+Execution Time:45.6327
+#
+data_name:data_2o1r
+mode:proposed
+index:0
+Is Success:T
+Number of Relocations:1
+Delivery Sequence:
+Time Graph Const:0.015251
+Time Graph Plan:0.001638
+Time Assign:0
+Time Reloc Plan:0.000249
+Time Task:0.017138
+Time MP:0.086546
+Time Total:0.119058
+Num Pre-relo:0
+Num Temp-relo:1
+Num Total relo:1
+Length Pushing:8.18666
+Length Approaching:17.5727
+Length Total:25.7594
+Execution Time:65.7719
+#
+data_name:data_2o1r
+mode:proposed
+index:0
+Is Success:T
+Number of Relocations:1
+Delivery Sequence:
+Time Graph Const:0.015102
+Time Graph Plan:0.002087
+Time Assign:0
+Time Reloc Plan:0.000258
+Time Task:0.017447
+Time MP:0.085216
+Time Total:0.119587
+Num Pre-relo:0
+Num Temp-relo:1
+Num Total relo:1
+Length Pushing:8.18666
+Length Approaching:17.5727
+Length Total:25.7594
+Execution Time:47.8124
+#
+data_name:data_2o1r
+mode:proposed
+index:0
+Is Success:T
+Number of Relocations:1
+Delivery Sequence:
+Time Graph Const:0.01487
+Time Graph Plan:0.001082
+Time Assign:0
+Time Reloc Plan:0.000259
+Time Task:0.016211
+Time MP:0.101231
+Time Total:0.134062
+Num Pre-relo:0
+Num Temp-relo:1
+Num Total relo:1
+Length Pushing:8.18666
+Length Approaching:17.5727
+Length Total:25.7594
+Execution Time:44.9968
+#
+data_name:data_2o1r
+mode:proposed
+index:0
+Is Success:T
+Number of Relocations:1
+Delivery Sequence:
+Time Graph Const:0.015054
+Time Graph Plan:0.001026
+Time Assign:0
+Time Reloc Plan:0.000235
+Time Task:0.016315
+Time MP:0.085308
+Time Total:0.117284
+Num Pre-relo:0
+Num Temp-relo:1
+Num Total relo:1
+Length Pushing:8.18666
+Length Approaching:17.5727
+Length Total:25.7594
+Execution Time:75.4164

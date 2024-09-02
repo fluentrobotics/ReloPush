@@ -21,6 +21,7 @@ ros::Publisher* boundary_pub_ptr;
 
 ros::Publisher* robot_pose_reset_ptr;
 
+ros::Publisher *path_info_pub_ptr;
 
 ros::NodeHandle* nh_ptr = nullptr;
 
@@ -314,9 +315,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    //const char* args[] = {"reloPush", "data_4o.txt", "0", "1", "mp_only"};
-    //argv = const_cast<char**>(args);
-    //argc = 5;
+    const char* args[] = {"reloPush", "data_2o1r.txt", "0", "1", "proposed"};
+    argv = const_cast<char**>(args);
+    argc = 5;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 
@@ -330,6 +331,9 @@ int main(int argc, char **argv)
     initialize_publishers(nh,params::use_mocap);
 
     // wait for debug attach
+    ros::Duration(0.1).sleep();
+    // occasionally, the first message gets ignored if pub starts after sub
+    // ros::spinOnce();
     ros::Duration(0.1).sleep();
     if(!params::leave_log)
         ros::Duration(1.0).sleep();
@@ -467,23 +471,16 @@ int main(int argc, char **argv)
     {
         if(reloResult.is_succ)
         {
-            test_path_pub_ptr->publish(*navPath_ptr);
+            //test_path_pub_ptr->publish(*navPath_ptr); // previous way
             
             // path and mode
-            auto final_nav_path_pair = dcol.pathInfoList.serializedPathWithMode();
-            if(params::use_mocap)
-            {
-
-
-            }
-            else
-            {
-                // send directly to controller
-            }
-
+            auto final_nav_path_str = dcol.pathInfoList.serializeAllinStr();
+            std_msgs::String strmsg;
+            strmsg.data = final_nav_path_str;
+            path_info_pub_ptr->publish(strmsg);
 
             ros::spinOnce();
-            ros::Duration(0.01).sleep();
+            ros::Duration(0.05).sleep();
             // todo: check mushr_rhc is running
             std::cout << "\twaiting for execution time" << std::endl;
             // wait for exec time return

@@ -30,6 +30,7 @@
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 
 #include <std_msgs/Float32.h>
+#include <std_msgs/String.h>
 
 extern ros::Publisher* vertex_marker_pub_ptr;
 extern ros::Publisher* edge_marker_pub_ptr;
@@ -44,7 +45,10 @@ extern ros::Publisher* text_pub_ptr;
 extern ros::Publisher* boundary_pub_ptr;
 extern ros::Publisher* robot_pose_reset_ptr;
 
-extern ros::NodeHandle* nh_ptr;
+// publish serialized string path info
+extern ros::Publisher *path_info_pub_ptr;
+
+    extern ros::NodeHandle *nh_ptr;
 
 typedef visualization_msgs::MarkerArray vMArray;
 typedef std::unordered_map<std::string,std::string> strMap;
@@ -143,8 +147,6 @@ void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
 
     test_path_pub_ptr = new ros::Publisher(test_path_pub);
 
-
-
     ros::Publisher text_pub = nh.advertise<visualization_msgs::MarkerArray>("object_names", 5);
     text_pub_ptr = new ros::Publisher(text_pub);
 
@@ -155,6 +157,17 @@ void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
     // robot pose reset
     ros::Publisher robot_pose_reset = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/initialpose", 10);
     robot_pose_reset_ptr = new ros::Publisher(robot_pose_reset);
+
+    // publish results with path mode
+    std::string path_info_topic_name = "/planned_path_serialized";
+    if(params::use_mocap)
+        path_info_topic_name = "/mocap/mushr2" + path_info_topic_name;
+    else
+        path_info_topic_name = "/car" + path_info_topic_name; // car
+
+    ros::Publisher path_info_pub = nh.advertise<std_msgs::String>(path_info_topic_name,10);
+    path_info_pub_ptr = new ros::Publisher(path_info_pub);
+
 }
 
 void free_publisher_pointers()
@@ -169,6 +182,7 @@ void free_publisher_pointers()
     delete(test_path_pub_ptr);
     delete(text_pub_ptr);
     delete(boundary_pub_ptr);
+    delete (path_info_pub_ptr);
 }
 
 std::pair<size_t,size_t> find_min_row_col(Eigen::MatrixXf& mat)

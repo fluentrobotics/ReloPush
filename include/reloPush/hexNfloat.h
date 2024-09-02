@@ -12,11 +12,14 @@
 #include <iomanip>
 #include <iostream>
 
-
 using namespace std;
 
 namespace jeeho{
-        /**
+    static const std::string group_delim = "!";
+    static const std::string data_delim = ";";
+    static const std::string elem_delim = ",";
+
+    /**
      * @brief Split a string by a deliminator
      * @return Splited string in std vector
      */
@@ -29,7 +32,6 @@ namespace jeeho{
     std::string join(const vector<string>& vec, string delim);
 
     std::string join(const std::vector<std::string>& vec, char delim);
-
 
     double hexstr2double(const std::string& hexstr);
 

@@ -163,9 +163,7 @@ std::string PathInfoList::serializeAllinStr()
     auto final_nav_path_pair = serializedPathWithMode();
 
     // send to mocap_tf. mocap_tf will send to controller
-    std::string group_delim = "!";
-    std::string data_delim = ";";
-    std::string elem_delim = ",";
+    
 
     std::string out_str = "";
 
@@ -176,13 +174,13 @@ std::string PathInfoList::serializeAllinStr()
         auto y_hex_str = jeeho::float2hexstr(it.y);
         auto yaw_hex_str = jeeho::float2hexstr(it.yaw);
 
-        std::string temp_str = x_hex_str + elem_delim + y_hex_str + elem_delim + yaw_hex_str; // x,y,yaw
+        std::string temp_str = x_hex_str + jeeho::elem_delim + y_hex_str + jeeho::elem_delim + yaw_hex_str; // x,y,yaw
         out_str += temp_str;
         if(n!=final_nav_path_pair.first->size()-1)
-            out_str += data_delim;
+            out_str += jeeho::data_delim;
     }
-    
-    out_str += group_delim;
+
+    out_str += jeeho::group_delim;
 
     for(size_t n=0; n < final_nav_path_pair.second->size(); n++)
     {
@@ -190,8 +188,33 @@ std::string PathInfoList::serializeAllinStr()
 
         out_str += it;
         if(n!=final_nav_path_pair.second->size()-1)
-            out_str += data_delim;
+            out_str += jeeho::data_delim;
     }
+
+    // add timing. First pose is 0
+    out_str += jeeho::group_delim + jeeho::float2hexstr(0) + jeeho::data_delim;
+    float last_t = 0;
+    // do not use MP
+    for (size_t n = 1; n < final_nav_path_pair.first->size(); n++)
+    {
+        // delta distance
+        float dx = final_nav_path_pair.first->at(n).x - final_nav_path_pair.first->at(n - 1).x;
+        float dy = final_nav_path_pair.first->at(n).y - final_nav_path_pair.first->at(n - 1).y;
+        // double dz = out_path.poses[n].pose.position.z - out_path.poses[n-1].pose.position.z;
+        float dist = std::sqrt(dx * dx + dy * dy);
+
+        // delta time
+        float dTime = dist / Constants::speed_limit;
+        last_t += dTime;
+        out_str += jeeho::float2hexstr(last_t);
+        if (n != final_nav_path_pair.first->size() - 1)
+            out_str += jeeho::data_delim;
+    }
+
+    // add frame name
+    out_str += jeeho::group_delim + params::world_frame;
+
+    return out_str;
 }
 
 void DataCollector::append_pathinfo(PathInfoList& list_in)
