@@ -24,11 +24,12 @@ class PathInfo
     State fromPose;
     State toPose;
     std::vector<State> path;
+    std::vector<bool> is_forward;
 
     PathInfo();
 
     PathInfo(std::string vertex_name, moveType path_type, 
-            State& from_pose, State& to_pose, std::vector<State>& path_in);
+            State& from_pose, State& to_pose, std::vector<State>& path_in, const std::vector<bool>& is_forward_drive);
     
     PathInfo(std::string vertex_name, moveType path_type, PathPlanResultPtr planned_path);
     
@@ -59,6 +60,7 @@ class PathInfoList
 
     StatePathPtr serializedPath();
     std::pair<StatePathPtr,StrVecPtr> serializedPathWithMode();
+    std::shared_ptr<std::vector<bool>> serializeDrivingActions();
     std::string serializeAllinStr();
 };
 

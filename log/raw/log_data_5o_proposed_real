@@ -1,0 +1,105 @@
+#
+data_name:data_5o
+mode:proposed_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00308601
+Time Graph Plan:0.000503
+Time Assign:0
+Time Reloc Plan:0.003389
+Time Task:0.00697801
+Time MP:0.116458
+Time Total:0.133478
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
+#
+data_name:data_5o
+mode:proposed_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00366302
+Time Graph Plan:0.000491
+Time Assign:0
+Time Reloc Plan:0.003368
+Time Task:0.00752202
+Time MP:0.119381
+Time Total:0.137014
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
+#
+data_name:data_5o
+mode:proposed_real
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00664597
+Time Graph Plan:0.000386
+Time Assign:0
+Time Reloc Plan:6.2e-05
+Time Task:0.00709397
+Time MP:0.046946
+Time Total:0.079534
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.1374
+Length Total:34.5068
+Execution Time:102.423
+#
+data_name:data_5o
+mode:proposed_real
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00659896
+Time Graph Plan:0.000427
+Time Assign:0
+Time Reloc Plan:5.8e-05
+Time Task:0.00708396
+Time MP:0.046716
+Time Total:0.079493
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.079
+Length Total:34.4484
+Execution Time:104.297
+#
+data_name:data_5o
+mode:proposed_real
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0.00656997
+Time Graph Plan:0.000408
+Time Assign:0
+Time Reloc Plan:5.9e-05
+Time Task:0.00703697
+Time MP:0.0530209
+Time Total:0.085349
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:12.3694
+Length Approaching:22.0355
+Length Total:34.4049
+Execution Time:104.173

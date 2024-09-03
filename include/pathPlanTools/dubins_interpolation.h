@@ -51,11 +51,11 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
 #pragma endregion
 
         // add to path info
-        PathInfo p(vName,moveType::pre,it.preReloDubins.startState, it.preReloDubins.targetState,preReloStateVec);
+        PathInfo p(vName,moveType::pre,it.preReloDubins.startState, it.preReloDubins.targetState,preReloStateVec,std::vector<bool>(preReloStateVec.size(),true));
         plist.push_back(p);
         // for each prerelocation (mostly one)
         auto path_poses = it.pathToNextPush->getPath(true); // approach path
-        PathInfo p_app(vName,moveType::app,it.preReloDubins.startState, it.preReloDubins.targetState,path_poses);
+        PathInfo p_app(vName,moveType::app,it.preReloDubins.startState, it.preReloDubins.targetState,path_poses,std::vector<bool>(path_poses.size(),true));
         plist.push_back(p_app);   
           
         for(auto& _p : path_poses) // todo: use better way to augment vector
@@ -119,7 +119,7 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
     }
 
     // add path info
-    PathInfo p(vName,moveType::final,edgePathInfo.sourceState,edgePathInfo.targetState,main_push_path); //vertex name of delivering object
+    PathInfo p(vName,moveType::final,edgePathInfo.sourceState,edgePathInfo.targetState,main_push_path,std::vector<bool>(main_push_path.size(),true)); //vertex name of delivering object
     plist.push_back(p);
 
 

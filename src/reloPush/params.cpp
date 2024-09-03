@@ -18,7 +18,7 @@ namespace params
     // may change multiple times while running
     //bool is_pushing = false;
 
-    const bool use_mocap = false; //todo: parse as a parameter
+    const bool use_mocap = true; //todo: parse as a parameter
     
     const bool reset_robot_pose = true;
 

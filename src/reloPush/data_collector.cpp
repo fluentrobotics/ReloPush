@@ -18,8 +18,8 @@ PathInfo::PathInfo()
     path.clear();
 }
 
-PathInfo::PathInfo(std::string vertex_name, moveType path_type, State& from_pose, State& to_pose, std::vector<State>& path_in) 
-: vertexName(vertex_name), type(path_type), fromPose(from_pose), toPose(to_pose), path(path_in)
+PathInfo::PathInfo(std::string vertex_name, moveType path_type, State& from_pose, State& to_pose, std::vector<State>& path_in, const std::vector<bool>& is_forward_drive) 
+: vertexName(vertex_name), type(path_type), fromPose(from_pose), toPose(to_pose), path(path_in), is_forward(is_forward_drive)
 {}
 
 PathInfo::PathInfo(std::string vertex_name, moveType path_type, PathPlanResultPtr planned_path)
@@ -157,10 +157,58 @@ std::pair<StatePathPtr,StrVecPtr> PathInfoList::serializedPathWithMode()
     return std::make_pair(std::make_shared<StatePath>(out_path),std::make_shared<StrVec>(out_strvec));
 }
 
+std::shared_ptr<std::vector<bool>> PathInfoList::serializeDrivingActions()
+{
+    std::vector<bool> out_vec(0);
+    for(auto& it : paths)
+    {
+        out_vec.insert(out_vec.end(), it.is_forward.begin(), it.is_forward.end());
+    }
+
+    return std::make_shared<std::vector<bool>>(out_vec);
+}
+
+bool is_forward(State& current, State& next)
+{
+    // Calculate the direction vector from the current state to the next state
+    double dx = next.x - current.x;
+    double dy = next.y - current.y;
+
+    // Calculate the angle of the direction vector
+    double direction_angle = atan2(dy, dx);
+
+    // Normalize the current yaw to be between -pi and pi
+    double yaw1 = atan2(sin(current.yaw), cos(current.yaw));
+
+    // Calculate the angular difference between the current yaw and the direction
+    double angle_diff = direction_angle - yaw1;
+
+    // Normalize the angle difference to be between -pi and pi
+    angle_diff = atan2(sin(angle_diff), cos(angle_diff));
+
+    if (std::abs(angle_diff) < M_PI / 3) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool change_dir(State& prev, State& current, State& next)
+{
+    bool before = is_forward(prev,current);
+    bool after = is_forward(current,next);
+
+    if(before != after)
+        return true;
+    else
+        return false;
+}
+
 std::string PathInfoList::serializeAllinStr()
 {
 
     auto final_nav_path_pair = serializedPathWithMode();
+    auto driving_actions = serializeDrivingActions();
 
     // send to mocap_tf. mocap_tf will send to controller
     
@@ -203,11 +251,46 @@ std::string PathInfoList::serializeAllinStr()
         // double dz = out_path.poses[n].pose.position.z - out_path.poses[n-1].pose.position.z;
         float dist = std::sqrt(dx * dx + dy * dy);
 
+        float dTime=0;
+
+        bool is_not_last = false;
+        if (n != final_nav_path_pair.first->size() - 1)
+            is_not_last = true;
+
+        /*
+        // between piecewise paths
+        if(dist == 0)
+        {
+            dTime = 0.01;
+        }
+
+        else
+        {
+            // delta time
+            dTime = dist / Constants::speed_limit;
+
+            // wait more if changing directions
+            if (is_not_last)
+            {
+                if(driving_actions->at(n) != driving_actions->at(n-1))
+                    dTime *=2;
+            }
+        }
+        */
+
         // delta time
-        float dTime = dist / Constants::speed_limit;
+        dTime = dist / Constants::speed_limit;
+
+        //if(is_not_last)
+       // {
+        //    bool req_dir_change = change_dir(final_nav_path_pair.first->at(n-1),final_nav_path_pair.first->at(n),final_nav_path_pair.first->at(n+1));
+        //    if(req_dir_change)
+        //        dTime *=1.2;
+        //}
+
         last_t += dTime;
         out_str += jeeho::float2hexstr(last_t);
-        if (n != final_nav_path_pair.first->size() - 1)
+        if (is_not_last)
             out_str += jeeho::data_delim;
     }
 

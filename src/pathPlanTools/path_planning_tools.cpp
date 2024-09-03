@@ -143,7 +143,7 @@ namespace Constants {
 }
 
 
-PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& env, int64_t timeout_ms ,bool print_res)
+PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& env, int64_t timeout_ms ,bool print_res,float car_width, float obs_rad)
 {  
     //auto time_start = std::chrono::high_resolution_clock::now();
     // make sure the angle range is in 0~2pi
@@ -152,8 +152,8 @@ PathPlanResultPtr planHybridAstar(State start_in, State goal_in, Environment& en
 
 #pragma region check_validity
     // check if states are valid
-    auto start_valid = env.stateValid(start_in);
-    auto goal_valid = env.stateValid(goal_in);
+    auto start_valid = env.stateValid(start_in, car_width,obs_rad);
+    auto goal_valid = env.stateValid(goal_in, car_width, obs_rad);
 
     // not valid start/target
     if(!start_valid)

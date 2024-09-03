@@ -173,6 +173,8 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                     env.add_obs(plan_push->goal_pose);
 
                     auto app_path = plan_app->getPath(true);
+                    // get driving actions
+                    auto driving_actions = get_driving_actions(plan_app);
                     // add pose-push pose
                     // todo: do it better
                     State post_push_app;
@@ -195,8 +197,8 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
                     time_watches.stop_and_append(time_interp);
 
-                    auto path_app = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::app,plan_app->start_pose,plan_app->goal_pose,app_path);
-                    auto path_push = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::final,plan_push->start_pose,plan_push->goal_pose,push_path);
+                    auto path_app = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::app,plan_app->start_pose,plan_app->goal_pose,app_path,driving_actions);
+                    auto path_push = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::final,plan_push->start_pose,plan_push->goal_pose,push_path, std::vector<bool>(push_path.size(),true));
                     out_pathinfo.push_back(path_app);
                     out_pathinfo.push_back(path_push);
 
@@ -315,9 +317,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    const char* args[] = {"reloPush", "data_2o1r.txt", "0", "1", "proposed"};
-    argv = const_cast<char**>(args);
-    argc = 5;
+    //const char* args[] = {"reloPush", "data_4o.txt", "0", "1", "proposed"};
+    //argv = const_cast<char**>(args);
+    //argc = 5;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 
@@ -426,8 +428,6 @@ int main(int argc, char **argv)
 
     // generate final navigation path
     StatePath final_path = deliverySets.serializePath();
-
-
 
 
     if(params::use_mp_only)

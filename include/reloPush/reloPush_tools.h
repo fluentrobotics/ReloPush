@@ -31,6 +31,7 @@
 
 #include <std_msgs/Float32.h>
 #include <std_msgs/String.h>
+#include "data_collector.h"
 
 extern ros::Publisher* vertex_marker_pub_ptr;
 extern ros::Publisher* edge_marker_pub_ptr;
@@ -354,11 +355,11 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
                     auto goal_pose = target_obj->get_pushing_poses()[col];
 
                     // find arrival pre-push pose
-                    auto goal_pre_push = find_pre_push(*goal_pose, params::pre_push_dist);
+                    auto goal_pre_push = find_pre_push(*goal_pose, params::pre_push_dist-0.1);
 
                     // temporarily remove from env
                     env.remove_obs(*start_pose);
-                    auto plan_res = planHybridAstar(*start_pose,goal_pre_push,env,0,false);
+                    auto plan_res = planHybridAstar(*start_pose,goal_pre_push,env,0,false,0.2,0.05);
                     // restore starting obj
                     env.add_obs(*start_pose);
 
@@ -669,6 +670,36 @@ void init_static_obstacles(std::unordered_set<State>& obs, std::vector<movableOb
     }    
 }
 
+std::vector<bool> get_driving_actions(PathPlanResultPtr plan_res)
+{
+    std::vector<bool> driving_actions(plan_res->actions.size());
+    for(size_t n=0; n<driving_actions.size(); n++)
+        {
+            auto da = plan_res->actions[n].first;
+            if(da == 0 || da == 1 || da ==2)
+                driving_actions[n] = true;
+            else
+                driving_actions[n] = false;
+        }
+
+    if(plan_res->actions.size() != plan_res->states.size())
+    {
+        if(plan_res->actions.size() < plan_res->states.size())
+        {
+            if(plan_res->states.size() - plan_res->actions.size() == 1)
+            {
+                //driving_actions.push_back(driving_actions.back());
+                driving_actions.insert(driving_actions.begin(),driving_actions[0]);
+            }
+        }
+        else
+        {
+            std::cout << "actions size mismatch" << std::endl; // should not happen
+        }
+    }
+    
+    return driving_actions;
+}
 
 
 void add_delivery_to_graph(std::vector<movableObject>& delivery_list, std::vector<movableObject>& mo_list, Environment& env, float max_x, float max_y,
@@ -1106,6 +1137,10 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
             last_pose = interp_path->end()-1;
 
         push_path.insert(push_path.end(), interp_path->begin(), last_pose);
+        // todo: find this better
+        interp_pathinfo.paths.back().path.pop_back();       
+        interp_pathinfo.paths.back().is_forward.pop_back();
+
         plist.append(interp_pathinfo);
     }    
 
@@ -1119,7 +1154,8 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
     //    post_push = push_path[0];
     push_path.push_back(post_push);
     plist.paths.back().path.push_back(post_push); // add to path info as well
-
+    plist.paths.back().is_forward.push_back(false);
+    
     //return final_path, pathinfo list;
     return std::make_pair(std::make_shared<StatePath>(push_path),plist);
 }
@@ -1139,15 +1175,17 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         if(!plan_res->success)
             return std::make_pair(std::vector<State>(0),false); // return false
 
-        auto planned_path = plan_res->getPath(true);        
+        auto planned_path = plan_res->getPath(true);
+        // get driving actions
+        std::vector<bool> driving_actions = get_driving_actions(plan_res);
         // start to first relo
         path_segments.push_back(planned_path);
         path_segments.push_back(relo_path[0]);
         // save to path info
         auto rpath = relo_pathinfo.reloPathInfoList[0];
-        PathInfo p_first_app(rpath.vertexName,moveType::app,robot,relo_path[0][0],planned_path);
+        PathInfo p_first_app(rpath.vertexName,moveType::app,robot,relo_path[0][0],planned_path,driving_actions);
         final_pathinfo.push_back(p_first_app);        
-        PathInfo p_first_relo(rpath.vertexName, moveType::temp, rpath.fromPose, rpath.toPose, *rpath.statePathPtr);
+        PathInfo p_first_relo(rpath.vertexName, moveType::temp, rpath.fromPose, rpath.toPose, *rpath.statePathPtr, std::vector<bool>(rpath.statePathPtr->size(),true));
         final_pathinfo.push_back(p_first_relo);
 
 #pragma region modify_env_rm
@@ -1177,13 +1215,15 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
                 return std::make_pair(std::vector<State>(0),false); // return false
 
             auto _path = plan_res->getPath(true);
+            //get driving actions
+            std::vector<bool> driving_actions = get_driving_actions(plan_res);
             path_segments.push_back(_path);
             path_segments.push_back(relo_path[p+1]);
             // save to path info
             auto rpath = relo_pathinfo.reloPathInfoList[p+1];
-            PathInfo p_app(rpath.vertexName,moveType::app,lastThisRelo, firstNextRelo,_path);
+            PathInfo p_app(rpath.vertexName,moveType::app,lastThisRelo, firstNextRelo,_path, driving_actions);
             final_pathinfo.push_back(p_app);        
-            PathInfo p_relo(rpath.vertexName, moveType::temp, rpath.fromPose, rpath.toPose, *rpath.statePathPtr);
+            PathInfo p_relo(rpath.vertexName, moveType::temp, rpath.fromPose, rpath.toPose, *rpath.statePathPtr, std::vector<bool>(rpath.statePathPtr->size(),true));
             final_pathinfo.push_back(p_relo);
 
 #pragma region modify_env_restore
@@ -1203,18 +1243,21 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
             return std::make_pair(std::vector<State>(0),false); // return false
 
         auto final_app_path = plan_res->getPath(true);
+        // get driving actions
+        driving_actions = get_driving_actions(plan_res);
 
         path_segments.push_back(final_app_path);
         path_segments.push_back(push_path);
         // save to path info
-        PathInfo p_final_app(push_pathinfo.paths.back().vertexName,moveType::app,lastLastRelo, pre_push,final_app_path);
+        PathInfo p_final_app(push_pathinfo.paths.back().vertexName,moveType::app,lastLastRelo, pre_push,final_app_path,driving_actions);
         final_pathinfo.push_back(p_final_app); // add final approach path
 
         final_pathinfo.append(push_pathinfo); // final delivery path
     }
 
     // no temp relocation
-    else{
+    else
+    {
         // start to prepush
         auto pre_push = find_pre_push(push_path.front(),params::pre_push_dist);
         //stopWatch hb("hyb");
@@ -1223,6 +1266,8 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
                 return std::make_pair(std::vector<State>(0),false); // return false
 
         auto final_app_path = plan_res->getPath(true);
+        // get driving actions
+        auto driving_actions = get_driving_actions(plan_res);
         
         // interpolate appraoching path
         //auto int_app = interpolateStraightPath(final_app_path.back(),push_path.front(),0.2f);
@@ -1236,7 +1281,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
 
 
         // save to path info
-        PathInfo p_final_app(push_pathinfo.paths.back().vertexName, moveType::app, robot, pre_push, final_app_path);
+        PathInfo p_final_app(push_pathinfo.paths.back().vertexName, moveType::app, robot, pre_push, final_app_path,driving_actions);
         final_pathinfo.push_back(p_final_app); // approach to delivering object
 
         final_pathinfo.append(push_pathinfo);

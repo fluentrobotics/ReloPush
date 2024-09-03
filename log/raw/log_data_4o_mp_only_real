@@ -6,19 +6,166 @@ Is Success:T
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:0
-Time Graph Plan:3e-05
+Time Graph Plan:6.4e-05
 Time Assign:0
 Time Reloc Plan:0
-Time Task:3e-05
-Time MP:1.29963
-Time Total:1.30081
+Time Task:6.4e-05
+Time MP:11.3624
+Time Total:11.3725
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
 Length Pushing:41.395
-Length Approaching:25.0822
-Length Total:66.4772
-Execution Time:191.776
+Length Approaching:22.4718
+Length Total:63.8668
+Execution Time:184.252
+#
+data_name:data_4o
+mode:mp_only_real
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:6.4e-05
+Time Assign:0
+Time Reloc Plan:0
+Time Task:6.4e-05
+Time MP:11.4227
+Time Total:11.4307
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:41.395
+Length Approaching:24.6
+Length Total:65.995
+Execution Time:190.275
+#
+data_name:data_4o
+mode:mp_only_real
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:5.5e-05
+Time Assign:0
+Time Reloc Plan:0
+Time Task:5.5e-05
+Time MP:11.3386
+Time Total:11.3486
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:41.395
+Length Approaching:30.3194
+Length Total:71.7144
+Execution Time:197.711
+#
+data_name:data_4o
+mode:mp_only_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:6.1e-05
+Time Assign:0
+Time Reloc Plan:0
+Time Task:6.1e-05
+Time MP:5.5649
+Time Total:5.57295
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:mp_only_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:8.6e-05
+Time Assign:0
+Time Reloc Plan:0
+Time Task:8.6e-05
+Time MP:8.80098
+Time Total:8.8089
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:mp_only_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:7.8e-05
+Time Assign:0
+Time Reloc Plan:0
+Time Task:7.8e-05
+Time MP:8.77511
+Time Total:8.78269
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:mp_only_real
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:6e-05
+Time Assign:0
+Time Reloc Plan:0
+Time Task:6e-05
+Time MP:7.86718
+Time Total:7.87483
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:42.9633
+Length Approaching:22.3633
+Length Total:65.3266
+Execution Time:185.945
+#
+data_name:data_4o
+mode:mp_only_real
+index:0
+Is Success:T
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:3.3e-05
+Time Assign:0
+Time Reloc Plan:0
+Time Task:3.3e-05
+Time MP:0.932156
+Time Total:0.933333
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:42.9633
+Length Approaching:18.0665
+Length Total:61.0298
+Execution Time:174.008
 #
 data_name:data_4o
 mode:mp_only_real
@@ -31,57 +178,78 @@ Time Graph Plan:3.4e-05
 Time Assign:0
 Time Reloc Plan:0
 Time Task:3.4e-05
-Time MP:1.29859
-Time Total:1.29977
+Time MP:0.929374
+Time Total:0.930552
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:30.8218
-Length Total:72.2168
-Execution Time:207.483
+Length Pushing:42.9633
+Length Approaching:24.8983
+Length Total:67.8616
+Execution Time:192.67
 #
 data_name:data_4o
 mode:mp_only_real
 index:0
-Is Success:T
+Is Success:F
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:0
-Time Graph Plan:3.7e-05
+Time Graph Plan:6.4e-05
 Time Assign:0
 Time Reloc Plan:0
-Time Task:3.7e-05
-Time MP:1.30219
-Time Total:1.30336
+Time Task:6.4e-05
+Time MP:0.421306
+Time Total:0.421717
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.0727
-Length Total:66.4678
-Execution Time:191.676
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
 #
 data_name:data_4o
 mode:mp_only_real
 index:0
-Is Success:T
+Is Success:F
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:0
-Time Graph Plan:3.2e-05
+Time Graph Plan:6.8e-05
 Time Assign:0
 Time Reloc Plan:0
-Time Task:3.2e-05
-Time MP:1.32023
-Time Total:1.32155
+Time Task:6.8e-05
+Time MP:0.440673
+Time Total:0.441078
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.0598
-Length Total:66.4548
-Execution Time:191.524
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
+#
+data_name:data_4o
+mode:mp_only_real
+index:0
+Is Success:F
+Number of Relocations:0
+Delivery Sequence:
+Time Graph Const:0
+Time Graph Plan:7.1e-05
+Time Assign:0
+Time Reloc Plan:0
+Time Task:7.1e-05
+Time MP:0.469226
+Time Total:0.469645
+Num Pre-relo:0
+Num Temp-relo:0
+Num Total relo:0
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
 #
 data_name:data_4o
 mode:mp_only_real
@@ -94,57 +262,15 @@ Time Graph Plan:3e-05
 Time Assign:0
 Time Reloc Plan:0
 Time Task:3e-05
-Time MP:1.30067
-Time Total:1.30183
+Time MP:0.939109
+Time Total:0.940452
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.5109
-Length Total:66.906
-Execution Time:192.658
-#
-data_name:data_4o
-mode:mp_only_real
-index:0
-Is Success:T
-Number of Relocations:0
-Delivery Sequence:
-Time Graph Const:0
-Time Graph Plan:3.5e-05
-Time Assign:0
-Time Reloc Plan:0
-Time Task:3.5e-05
-Time MP:1.30796
-Time Total:1.30915
-Num Pre-relo:0
-Num Temp-relo:0
-Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.4468
-Length Total:66.8419
-Execution Time:192.512
-#
-data_name:data_4o
-mode:mp_only_real
-index:0
-Is Success:T
-Number of Relocations:0
-Delivery Sequence:
-Time Graph Const:0
-Time Graph Plan:4.2e-05
-Time Assign:0
-Time Reloc Plan:0
-Time Task:4.2e-05
-Time MP:1.30546
-Time Total:1.30679
-Num Pre-relo:0
-Num Temp-relo:0
-Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.4996
-Length Total:66.8947
-Execution Time:192.602
+Length Pushing:42.9633
+Length Approaching:19.7912
+Length Total:62.7545
+Execution Time:178.512
 #
 data_name:data_4o
 mode:mp_only_real
@@ -157,15 +283,15 @@ Time Graph Plan:3.1e-05
 Time Assign:0
 Time Reloc Plan:0
 Time Task:3.1e-05
-Time MP:1.29452
-Time Total:1.29567
+Time MP:0.933704
+Time Total:0.934996
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.4425
-Length Total:66.8375
-Execution Time:192.442
+Length Pushing:42.9633
+Length Approaching:19.3512
+Length Total:62.3145
+Execution Time:177.212
 #
 data_name:data_4o
 mode:mp_only_real
@@ -174,66 +300,45 @@ Is Success:T
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:0
-Time Graph Plan:2.9e-05
+Time Graph Plan:3.2e-05
 Time Assign:0
 Time Reloc Plan:0
-Time Task:2.9e-05
-Time MP:1.29252
-Time Total:1.29367
+Time Task:3.2e-05
+Time MP:0.936727
+Time Total:0.937887
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.4564
-Length Total:66.8514
-Execution Time:192.569
+Length Pushing:42.9633
+Length Approaching:18.0849
+Length Total:61.0482
+Execution Time:174.095
 #
 data_name:data_4o
 mode:mp_only_real
 index:0
-Is Success:T
+Is Success:F
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:0
-Time Graph Plan:3.1e-05
+Time Graph Plan:3.7e-05
 Time Assign:0
 Time Reloc Plan:0
-Time Task:3.1e-05
-Time MP:1.29738
-Time Total:1.29855
+Time Task:3.7e-05
+Time MP:0.941776
+Time Total:0.943072
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.4634
-Length Total:66.8584
-Execution Time:192.548
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
 #
 data_name:data_4o
 mode:mp_only_real
 index:0
-Is Success:T
-Number of Relocations:0
-Delivery Sequence:
-Time Graph Const:0
-Time Graph Plan:3.3e-05
-Time Assign:0
-Time Reloc Plan:0
-Time Task:3.3e-05
-Time MP:1.31939
-Time Total:1.32062
-Num Pre-relo:0
-Num Temp-relo:0
-Num Total relo:0
-Length Pushing:41.395
-Length Approaching:31.063
-Length Total:72.458
-Execution Time:208.109
-#
-data_name:data_4o
-mode:mp_only_real
-index:0
-Is Success:T
+Is Success:F
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:0
@@ -241,41 +346,41 @@ Time Graph Plan:3.6e-05
 Time Assign:0
 Time Reloc Plan:0
 Time Task:3.6e-05
-Time MP:1.33194
-Time Total:1.33334
+Time MP:0.926128
+Time Total:0.927425
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.0538
-Length Total:66.4488
-Execution Time:191.467
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
 #
 data_name:data_4o
 mode:mp_only_real
 index:0
-Is Success:T
+Is Success:F
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:0
-Time Graph Plan:5.2e-05
+Time Graph Plan:3.7e-05
 Time Assign:0
 Time Reloc Plan:0
-Time Task:5.2e-05
-Time MP:1.34424
-Time Total:1.34545
+Time Task:3.7e-05
+Time MP:0.944122
+Time Total:0.945264
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:30.8732
-Length Total:72.2683
-Execution Time:207.51
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1
 #
 data_name:data_4o
 mode:mp_only_real
 index:0
-Is Success:T
+Is Success:F
 Number of Relocations:0
 Delivery Sequence:
 Time Graph Const:0
@@ -283,33 +388,12 @@ Time Graph Plan:3.1e-05
 Time Assign:0
 Time Reloc Plan:0
 Time Task:3.1e-05
-Time MP:1.32782
-Time Total:1.32903
+Time MP:0.931669
+Time Total:0.932823
 Num Pre-relo:0
 Num Temp-relo:0
 Num Total relo:0
-Length Pushing:41.395
-Length Approaching:25.0431
-Length Total:66.4382
-Execution Time:191.316
-#
-data_name:data_4o
-mode:mp_only_real
-index:0
-Is Success:T
-Number of Relocations:0
-Delivery Sequence:
-Time Graph Const:0
-Time Graph Plan:3.3e-05
-Time Assign:0
-Time Reloc Plan:0
-Time Task:3.3e-05
-Time MP:1.3148
-Time Total:1.31614
-Num Pre-relo:0
-Num Temp-relo:0
-Num Total relo:0
-Length Pushing:41.395
-Length Approaching:30.8513
-Length Total:72.2464
-Execution Time:207.515
+Length Pushing:0
+Length Approaching:0
+Length Total:0
+Execution Time:-1

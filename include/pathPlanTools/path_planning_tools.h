@@ -62,9 +62,9 @@ struct PlanningContext{
 };
 
 namespace Constants {
-  static float steer_limit_push = 0.2; // 0.3
+  static float steer_limit_push = 0.185; // 0.3
   static float steer_limit_nonpush = 0.28; // 0.3
-  static float speed_limit = 0.36f; //0.4
+  static float speed_limit = 0.365f; //0.4 // slightly slower than driving speed
   static float L = 0.29f;
   // [m] --- The minimum turning radius of the vehicle
   static float r_push = L / tanf(fabs(steer_limit_push));
@@ -1014,6 +1014,6 @@ class Environment {
   std::multimap<int, State> dynamic_obs;
 };
 
-PathPlanResultPtr planHybridAstar(State start, State goal_in, Environment& env, int64_t timeout_ms = 0 ,bool print_res = false);
+PathPlanResultPtr planHybridAstar(State start, State goal_in, Environment& env, int64_t timeout_ms = 0 ,bool print_res = false, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius);
 
 #endif

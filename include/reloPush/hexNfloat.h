@@ -47,6 +47,7 @@ namespace jeeho{
 
     std::shared_ptr<std::vector<float>> hexList_to_floatListPtr(std::vector<std::string>& list_in);
 
+    /*
     template<typename T>
     std::string any_to_string(std::any& to_cast, std::string list_delim=",")
     {
@@ -77,6 +78,7 @@ namespace jeeho{
             return "";
         }
     }
+    */
 }
 
 #endif

@@ -182,11 +182,12 @@ private:
         return out_ptr;
     }
 
-    std::pair<std::shared_ptr<nav_msgs::Path>, std::shared_ptr<std::vector<std::string>>> parse_path_str(const std::string &str_in)
+    std::tuple<std::shared_ptr<nav_msgs::Path>, std::shared_ptr<std::vector<std::string>>,std::shared_ptr<std::string>> parse_path_str(const std::string &str_in)
     {
         auto group_sp_str = jeeho::split(str_in, jeeho::group_delim);
         std::string& path_str = group_sp_str[0];
         std::string& mode_str = group_sp_str[1];
+        std::string& timing_str = group_sp_str[2];
 
         // parse path
         auto path_str_vec = jeeho::split(path_str,jeeho::data_delim);
@@ -207,10 +208,10 @@ private:
         // parse mode str
         std::vector<std::string> modeVec = jeeho::split(mode_str,jeeho::data_delim);
 
-        return std::make_pair(parsedPathPtr, std::make_shared<std::vector<std::string>>(modeVec));
+        return std::make_tuple(parsedPathPtr, std::make_shared<std::vector<std::string>>(modeVec),std::make_shared<std::string>(timing_str));
     }
 
-    std::string serializePathMode(const nav_msgs::Path& p_in, const std::vector<std::string>& m_in)
+    std::string serializePathMode(const nav_msgs::Path& p_in, const std::vector<std::string>& m_in, std::shared_ptr<std::string> timing_str_ptr)
     {
         std::string out_str = "";
 
@@ -243,6 +244,7 @@ private:
                 out_str += jeeho::data_delim;
         }
 
+        /*
         // add timing. First pose is 0
         out_str += jeeho::group_delim + jeeho::float2hexstr(0) + jeeho::data_delim;
         float last_t = 0;
@@ -258,10 +260,14 @@ private:
             // delta time
             auto dTime = dist / Constants::speed_limit;
             last_t += dTime;
-            out_str += jeeho::float2hexstr(last_t);
+            out_str += jeeho::float2hexstr(last_t);1
             if (n != p_in.poses.size() - 1)
                 out_str += jeeho::data_delim;
         }
+        */
+
+       // use original timing
+       out_str += jeeho::group_delim + *timing_str_ptr;
 
         // add frame name
         out_str += jeeho::group_delim + "map_mocap";
@@ -273,13 +279,16 @@ private:
     {
         std::cout << "path info in" << std::endl;
         // parse data
-        auto path_info_pair = parse_path_str(msg->data);
+        std::shared_ptr<nav_msgs::Path> path_ptr;
+        std::shared_ptr<ros::V_string> mode_ptr;
+        std::shared_ptr<std::string> timing_str;
+        std::tie(path_ptr,mode_ptr,timing_str)= parse_path_str(msg->data);
 
         // transform
-        auto tfed_path = TransformPath(*path_info_pair.first);
+        auto tfed_path = TransformPath(*path_ptr);
 
         // re-serialize
-        std::string out_str = serializePathMode(*tfed_path,*path_info_pair.second);
+        std::string out_str = serializePathMode(*tfed_path,*mode_ptr,timing_str);
         std_msgs::String out_str_msg;
         out_str_msg.data = out_str;
 
