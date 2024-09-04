@@ -62,7 +62,7 @@ struct PlanningContext{
 };
 
 namespace Constants {
-  static float steer_limit_push = 0.185; // 0.3
+  static float steer_limit_push = 0.2; // 0.3
   static float steer_limit_nonpush = 0.28; // 0.3
   static float speed_limit = 0.365f; //0.4 // slightly slower than driving speed
   static float L = 0.29f;
