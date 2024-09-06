@@ -77,10 +77,13 @@ class preReloPath{
     reloDubinsPath preReloDubins;
     PathPlanResultPtr pathToNextPush; // to next pre-push
     State nextPushState;
+    StatePathPtr manual_path; // if another path is preffered for pre-relo
+    bool use_dubins;
 
     preReloPath()
     {
         preReloDubins = reloDubinsPath(0);
+        use_dubins = true;
     }
     
     preReloPath(State start, State target, reloDubinsPath& dubins_in, PathPlanResultPtr path_to_next_prePush, State& next_push)
@@ -90,7 +93,20 @@ class preReloPath{
         preReloDubins.targetState = target;
         pathToNextPush = path_to_next_prePush; // approach path
         nextPushState = next_push; // push pose to next target
+        manual_path = nullptr;
+        use_dubins = true;
     }
+    preReloPath(State start, State target, StatePathPtr path_in, reloDubinsPath& dubins_in, PathPlanResultPtr path_to_next_prePush, State& next_push) // dubins for start and target info
+    {
+        manual_path = path_in;
+        preReloDubins = dubins_in;
+        preReloDubins.startState = start;
+        preReloDubins.targetState = target;
+        pathToNextPush = path_to_next_prePush; // approach path
+        nextPushState = next_push; // push pose to next target
+        use_dubins = false;
+    }
+
 };
 
 enum pathType 

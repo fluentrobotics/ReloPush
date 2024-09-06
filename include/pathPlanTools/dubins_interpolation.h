@@ -25,29 +25,38 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
         
         //interpolate
 #pragma region interploation_prerelo
-        auto l_pre = dubins_pre.lengthCost(); // unit cost * turning rad
-        auto num_pts_pre = static_cast<size_t>(l_pre/path_resolution);
-        std::vector<State> preReloStateVec(num_pts_pre);
-        State startState = it.preReloDubins.startState;
+        std::vector<State> preReloStateVec(0);
+        if(it.use_dubins) // dubins or manual path
+        {
+            auto l_pre = dubins_pre.lengthCost(); // unit cost * turning rad
+            auto num_pts_pre = static_cast<size_t>(l_pre/path_resolution);
+            preReloStateVec.resize(num_pts_pre);
+            State startState = it.preReloDubins.startState;
 
-        ompl::base::DubinsStateSpace dubinsSpace(turning_rad);
-        OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
-        dubinsStart->setXY(startState.x, startState.y);
-        dubinsStart->setYaw(startState.yaw);
-        OmplState *interState = (OmplState *)dubinsSpace.allocState();
+            ompl::base::DubinsStateSpace dubinsSpace(turning_rad);
+            OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
+            dubinsStart->setXY(startState.x, startState.y);
+            dubinsStart->setYaw(startState.yaw);
+            OmplState *interState = (OmplState *)dubinsSpace.allocState();
 
-        for (size_t np=0; np<num_pts_pre; np++)
-        {            
-            //auto start = std::chrono::steady_clock::now();
-            jeeho_interpolate(dubinsStart, dubins_pre.omplDubins, (double)np / (double)num_pts_pre, interState, &dubinsSpace,
-                            turning_rad);
+            for (size_t np=0; np<num_pts_pre; np++)
+            {            
+                //auto start = std::chrono::steady_clock::now();
+                jeeho_interpolate(dubinsStart, dubins_pre.omplDubins, (double)np / (double)num_pts_pre, interState, &dubinsSpace,
+                                turning_rad);
 
-            State tempState(interState->getX(), interState->getY(),interState->getYaw());
+                State tempState(interState->getX(), interState->getY(),interState->getYaw());
 
-            //single_path.poses[np] = one_pose;
-            //final_path.push_back(tempState);
-            preReloStateVec[np] = tempState;
+                //single_path.poses[np] = one_pose;
+                //final_path.push_back(tempState);
+                preReloStateVec[np] = tempState;
+            }
         }
+        else // use manual path instead
+        {
+            preReloStateVec = *it.manual_path;
+        }
+
 #pragma endregion
 
         // add to path info

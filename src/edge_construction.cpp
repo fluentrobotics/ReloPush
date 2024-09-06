@@ -63,7 +63,8 @@ StateValidity check_validity_by_interpolation(OmplState* dubinsStart, OmplState*
 }
 
 // straight path
-StateValidity check_validity_by_interpolation(State& from, State& to, float resolution, 
+// return validity and interpolated straight path
+std::pair<StateValidity,StatePathPtr> check_validity_by_interpolation(State& from, State& to, float resolution, 
                                                 Environment& env, float max_x, float max_y)
 {
     StateValidity validity = StateValidity::valid;
@@ -83,7 +84,7 @@ StateValidity check_validity_by_interpolation(State& from, State& to, float reso
 
     }
 
-    return validity;
+    return std::make_pair(validity,std::make_shared<StatePath>(interpolated_path));
 }
 
 /*
@@ -200,7 +201,8 @@ StateValidity check_collision_straight(movableObject fromObj, movableObject toOb
     }
 
     // Interpolate dubins path to check for collision on grid map
-    validity = check_validity_by_interpolation(straight_path.first,straight_path.second,Constants::mapResolution,env,max_x,max_y);;
+    StatePathPtr preReloStraightPath;
+    std::tie(validity, preReloStraightPath) = check_validity_by_interpolation(straight_path.first,straight_path.second,Constants::mapResolution,env,max_x,max_y);;
 
     if(validity == StateValidity::valid && params::print_log)
         std::cout << "edge found" << std::endl;         
@@ -212,7 +214,7 @@ StateValidity check_collision_straight(movableObject fromObj, movableObject toOb
     return validity;
 }
 
-StateValidity check_collision_straight(Environment& env, State& from_state, State& to_state, float path_length, float max_x, float max_y ,bool is_delivery = false)
+std::pair<StateValidity,StatePathPtr> check_collision_straight(Environment& env, State& from_state, State& to_state, float path_length, float max_x, float max_y ,bool is_delivery = false)
 {
     size_t num_pts = static_cast<int>(path_length/(0.1*0.5)); //todo: get resolution as a param
 
@@ -231,13 +233,14 @@ StateValidity check_collision_straight(Environment& env, State& from_state, Stat
     }
 
     // Interpolate dubins path to check for collision on grid map
-    validity = check_validity_by_interpolation(from_state,to_state,Constants::mapResolution,env,max_x,max_y);
+    StatePathPtr preReloStraightPath;
+    std::tie(validity, preReloStraightPath) = check_validity_by_interpolation(from_state,to_state,Constants::mapResolution,env,max_x,max_y);
 
     //put back took-out obstacles
     for(auto it : took_out)
         env.add_obs(it);
 
-    return validity;
+    return std::make_pair(validity, preReloStraightPath);
 }
 
 // todo: use better approximation <Pose,distance,uvec_index>
@@ -534,8 +537,8 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
     auto name_target = graphTools::getVertexName(*target_vertex,gPtr);
 
     // for debug only
-    if(name_target == "d3_0")
-        std::string dummy = ""; //conditional break doesn't work somehow 
+    //if(name_target == "d3_0")
+    //    std::string dummy = ""; //conditional break doesn't work somehow 
 
     if(validity == StateValidity::valid) // todo: can it get better with pre-relocation?
     {
@@ -575,15 +578,17 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
             // check if pushing can make if feasible
             for(auto& it : pre_relo_candidates)
             {
-                State pre_relo_state;
-                float pre_relo_dist;
-                int uvec_ind;
+                State pre_relo_state; // pre-relocation candidate
+                float pre_relo_dist;  // distance o push
+                int uvec_ind; // direction of pushing to pre-relo
                 std::tie(pre_relo_state,pre_relo_dist,uvec_ind) = it;
 
                 stopWatch time_ofb2("ofb2", measurement_type::graphConst);
 
                 // check collision of this pre-relocation
-                auto pre_relo_validity = check_collision_straight(env,*pivot_state,pre_relo_state,pre_relo_dist,max_x,max_y,true); // collision check from initial to pre-relo pose
+                StateValidity pre_relo_validity;
+                StatePathPtr pre_relo_straight_path;
+                std::tie(pre_relo_validity, pre_relo_straight_path) = check_collision_straight(env,*pivot_state,pre_relo_state,pre_relo_dist,max_x,max_y,true); // collision check from initial to pre-relo pose
                 time_ofb2.stop();
                 time_watches.push_back(time_ofb2);
 
@@ -664,11 +669,17 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     // find dubins
                     State preRelocStart(pivot_state->x, pivot_state->y, prerelo_arrival.yaw);
                     //State preRelocStart_prepush = find_pre_push(preRelocStart);
+
+                    // this occasionally gives a large curve instead of a straight line
                     auto dubins_pre = findDubins(preRelocStart,prerelo_arrival_post_push,turning_radius);
+
+
+                    // straight path
+                    StatePathPtr straight_relo = std::make_shared<StatePath>(std::initializer_list<State>{preRelocStart,prerelo_arrival_post_push});
 
                     // State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
                     //preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,plan_res);
-                    preReloPath prePath = preReloPath(preRelocStart,prerelo_arrival_post_push,dubins_pre,
+                    preReloPath prePath = preReloPath(preRelocStart,prerelo_arrival_post_push,straight_relo,dubins_pre,
                                                         std::make_shared<PathPlanResult>(PathPlanResult(prerelo_arrival_post_push, prerelo_final_prepush,
                                                                                             *pivot_state, pre_relo_state)),
                                                         prerelo_final_push);

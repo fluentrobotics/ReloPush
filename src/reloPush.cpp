@@ -16,6 +16,7 @@ ros::Publisher* delivery_marker_pub_ptr = nullptr;
 //test
 ros::Publisher* test_path_pub_ptr = nullptr;
 ros::Publisher* text_pub_ptr = nullptr;
+ros::Publisher* rviz_path_pub_ptr;
 
 ros::Publisher* boundary_pub_ptr;
 
@@ -321,7 +322,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    const char* args[] = {"reloPush", "data_6o.txt", "0", "0", "proposed"};
+    const char* args[] = {"reloPush", "data_6o.txt", "0", "1", "proposed"};
     argv = const_cast<char**>(args);
     argc = 5;
 
@@ -476,7 +477,8 @@ int main(int argc, char **argv)
         if(reloResult.is_succ)
         {
             //test_path_pub_ptr->publish(*navPath_ptr); // previous way
-            
+            rviz_path_pub_ptr->publish(*navPath_ptr);
+
             // path and mode
             auto final_nav_path_str = dcol.pathInfoList.serializeAllinStr();
             std_msgs::String strmsg;

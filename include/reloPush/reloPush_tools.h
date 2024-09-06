@@ -40,6 +40,7 @@ extern ros::Publisher* dubins_path_pub_ptr;
 extern ros::Publisher* delivery_marker_pub_ptr;
 //test
 extern ros::Publisher* test_path_pub_ptr;
+extern ros::Publisher* rviz_path_pub_ptr;
 extern ros::Publisher* failed_path_pub_ptr;
 extern ros::Publisher* text_pub_ptr;
 
@@ -147,6 +148,10 @@ void initialize_publishers(ros::NodeHandle& nh, bool use_mocap = false)
         test_path_pub = nh.advertise<nav_msgs::Path>("/mushr2/sim_trajectory", 10);
 
     test_path_pub_ptr = new ros::Publisher(test_path_pub);
+
+    // for rviz
+    ros::Publisher rviz_path_pub = nh.advertise<nav_msgs::Path>("/car/path_rviz", 10);
+    rviz_path_pub_ptr = new ros::Publisher(rviz_path_pub);
 
     ros::Publisher text_pub = nh.advertise<visualization_msgs::MarkerArray>("object_names", 5);
     text_pub_ptr = new ros::Publisher(text_pub);
