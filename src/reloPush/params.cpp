@@ -8,8 +8,8 @@ namespace params
     float map_max_x = 4; // m
     float map_max_y = 5.4; // m
 
-    float pre_push_dist = 0.62f;
-    float pre_relo_pre_push_offset = -0.14f;
+    float pre_push_dist = 0.6f;
+    float pre_relo_pre_push_offset = 0.05f;
 
 
     int post_push_ind = -2; // ind
@@ -18,7 +18,7 @@ namespace params
     // may change multiple times while running
     //bool is_pushing = false;
 
-    const bool use_mocap = false; //todo: parse as a parameter
+    const bool use_mocap = true; //todo: parse as a parameter
     
     const bool reset_robot_pose = true;
 
