@@ -183,7 +183,11 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                         post_push_app = app_path.end()[post_ind_app];
                     //else
                     //    post_push = push_path[0];
-                   //app_path.push_back(post_push_app);
+                    //app_path.push_back(post_push_app);
+
+                    // add arrival offset (controller may not accurately lead the robot to the arrival pose)
+                    State force_arrival_state = find_pre_push(plan_push->nominal_goal_pose, params::pre_push_dist - 0.16);
+                    push_path.push_back(force_arrival_state);
 
                     // add pose-push pose
                     // todo: do it better
@@ -317,9 +321,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    //const char* args[] = {"reloPush", "data_4o.txt", "0", "1", "proposed"};
-    //argv = const_cast<char**>(args);
-    //argc = 5;
+    const char* args[] = {"reloPush", "data_6o.txt", "0", "0", "proposed"};
+    argv = const_cast<char**>(args);
+    argc = 5;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 

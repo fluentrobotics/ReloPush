@@ -355,11 +355,11 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
                     auto goal_pose = target_obj->get_pushing_poses()[col];
 
                     // find arrival pre-push pose
-                    auto goal_pre_push = find_pre_push(*goal_pose, params::pre_push_dist-0.1);
+                    auto goal_pre_push = find_pre_push(*goal_pose, params::pre_push_dist-0.05);
 
                     // temporarily remove from env
                     env.remove_obs(*start_pose);
-                    auto plan_res = planHybridAstar(*start_pose,goal_pre_push,env,0,false,0.2,0.05);
+                    auto plan_res = planHybridAstar(*start_pose,goal_pre_push,env,0,false);
                     // restore starting obj
                     env.add_obs(*start_pose);
 
@@ -372,6 +372,8 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
                         paths[row][col] = {graphTools::getVertex(gPtr,start_name),graphTools::getVertex(gPtr,target_name)};
                         cost_mat(row,col) = (float)plan_res->cost;
                         pathMat[row][col] = plan_res;
+                        // store object pose as nominal goal
+                        plan_res->nominal_goal_pose = *goal_pose;
                     }
                 } // end motion plan only
             }
@@ -1143,6 +1145,7 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
 
         plist.append(interp_pathinfo);
     }    
+
 
     // add pose-push pose
     // todo: do it better

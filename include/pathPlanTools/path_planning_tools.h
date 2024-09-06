@@ -44,7 +44,7 @@ struct PlanningContext{
   bool allow_reverse = true;
   float turning_radius = 1.0f; //r
   float deltat;
-  float speed_limit = 0.36f;
+  float speed_limit = 0.38f;
 
   float xyResolution;
   float yawResolution;
@@ -64,7 +64,7 @@ struct PlanningContext{
 namespace Constants {
   static float steer_limit_push = 0.2; // 0.3
   static float steer_limit_nonpush = 0.28; // 0.3
-  static float speed_limit = 0.365f; //0.4 // slightly slower than driving speed
+  static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
   static float L = 0.29f;
   // [m] --- The minimum turning radius of the vehicle
   static float r_push = L / tanf(fabs(steer_limit_push));
@@ -84,7 +84,7 @@ namespace Constants {
   static const float penaltyReversing = 5.0; //8
   // [#] --- A movement cost penalty for change of direction (changing from
   // primitives < 3 to primitives > 2)
-  static const float penaltyCOD = 2.0;
+  static const float penaltyCOD = 5.0;
 
   //extern bool allow_reverse; // only when not pushing
 
@@ -155,6 +155,7 @@ struct PathPlanResult : PlanResultType
 {
   State start_pose;
   State goal_pose;
+  State nominal_goal_pose; // if planned with pre-push pose, store the original goal pose here
   State obs_rm; // need to remove this obstacle from env before planning
   State obs_add;
   PlanValidity validity;
