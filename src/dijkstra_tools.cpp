@@ -48,7 +48,7 @@ std::pair<std::vector<Vertex>, float> pathFinder::djikstra(
     Vertex destination = getVertexFromString(*graphPtr, destinationName);
 
     const int numVertices = boost::num_vertices(*graphPtr);
-    std::vector<float> distances(numVertices);
+    std::vector<float> distances(numVertices); 
     std::vector<Vertex> pMap(numVertices);
 
     auto distanceMap = boost::predecessor_map(

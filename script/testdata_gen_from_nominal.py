@@ -194,7 +194,7 @@ dataset_five.mo_list = [
 dataset_five.robot = [pose2D(2.35, 2.43, 1.5708)]
 dataset_five.d_list = [
     movableObject(1.47, 4.39,0,"d1",4),
-    movableObject(0.78, 2.91,0,"d2",4),
+    movableObject(0.33, 2.91,0,"d2",4),
     movableObject(1.12, 1.88,0,"d3",4),
     movableObject(0.63, 0.76,0,"d4",4)]
 dataset_five.d_table = {"b1":"d2", "b3":"d1", "b2":"d3", "b4":"d4"}
@@ -224,18 +224,18 @@ dataset_five_obj.d_table = {"b1":"d1", "b2":"d2", "b3":"d3", "b4":"d4", "b5":"d5
 dataset_six_obj = nominal_dataset("data_6o")
 dataset_six_obj.mo_list = [
     movableObject(2.535403340155436, 2.3734257276055715,0,"b1",4),
-    movableObject(2.0667146712201987, 0.8197366685520656,0,"b2",4), 
+    movableObject(2.2667146712201987, 0.9997366685520656,0,"b2",4), 
     movableObject(0.97, 2.56,0,"b3",4), 
     movableObject(2.549343365221235, 3.891071067604316,0,"b4",4), 
     movableObject(1.227864392727091, 3.4392290840385407,0,"b5",4), 
     movableObject(1.4124319235785139, 2.0168052994577845,0,"b6",4)
 ]
 dataset_six_obj.d_list = [
-    movableObject(0.9265007250020825, 0.8014723733004034,0,"d1",4), 
-    movableObject(1.7172613891475708, 4.141671923375169,0,"d2",4), 
-    movableObject(2, 2.56,0,"d3",4), 
+    movableObject(0.6065007250020825, 0.614723733004034,0,"d1",4), 
+    movableObject(3.7172613891475708, 2.541671923375169,0,"d2",4), 
+    movableObject(2.05, 2.56,0,"d3",4), 
     movableObject(3.02991373378123, 3.2185004448812062,0,"d4",4), 
-    movableObject(0.9, 4.3,0,"d5",4), 
+    movableObject(0.9, 4.6,0,"d5",4), 
     movableObject(3.4734931508421695, 0.4606829184492558,0,"d6",4)
 ]
 dataset_six_obj.robot = [pose2D(3.5, 3.5, 3.14)] ## robot
@@ -248,7 +248,7 @@ dataset_six_obj.d_table = {"b1":"d1", "b2":"d2", "b3":"d3", "b4":"d4", "b5":"d5"
 #dataset_three.write_to_file()
 #dataset_four.write_to_file()
 #dataset_five.write_to_file()
-dataset_five_obj.write_to_file()
+#dataset_five_obj.write_to_file()
 dataset_six_obj.write_to_file()
 
 #print(dataset_one.add_randomness().serialize())

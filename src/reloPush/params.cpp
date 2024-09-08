@@ -8,8 +8,8 @@ namespace params
     float map_max_x = 4; // m
     float map_max_y = 5.4; // m
 
-    float pre_push_dist = 0.62f;
-    float pre_relo_pre_push_offset = -0.14f;
+    float pre_push_dist = 0.625f;
+    float pre_relo_pre_push_offset = -0.145f;
 
 
     int post_push_ind = -2; // ind

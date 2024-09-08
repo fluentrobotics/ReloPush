@@ -62,5 +62,4 @@ for filename in os.listdir(folder_path):
 output_folder = folder_path
 create_excel_file(multiple_file_data)
 
-
 print("data handled")

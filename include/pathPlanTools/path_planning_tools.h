@@ -45,6 +45,7 @@ struct PlanningContext{
   float turning_radius = 1.0f; //r
   float deltat;
   float speed_limit = 0.38f;
+  float LF = 0.38;
 
   float xyResolution;
   float yawResolution;
@@ -54,7 +55,7 @@ struct PlanningContext{
 
   PlanningContext();
 
-  PlanningContext(bool use_reverse, float turning_r, float speed_lim = 0.385);
+  PlanningContext(bool use_reverse, float turning_r, float LF_in ,float speed_lim = 0.385);
 
   void update_dx();
   void update_dy();
@@ -62,7 +63,7 @@ struct PlanningContext{
 };
 
 namespace Constants {
-  static float steer_limit_push = 0.2; // 0.3
+  static float steer_limit_push = 0.185; // 0.3
   static float steer_limit_nonpush = 0.28; // 0.3
   static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
   static float L = 0.29f;
@@ -102,13 +103,14 @@ namespace Constants {
   //extern float yawResolution; // non-push as default
 
   // width of car
-  static const float carWidth = 0.3; //0.3
+  static const float carWidth = 0.285;
   // distance from rear to vehicle front end
-  static const float LF = 0.3;  //0.3
+  static const float LF_nonpush = 0.38;  //0.3
+  static const float LF_push = 0.65;
   // distance from rear to vehicle back end
   static const float LB = 0.12;
   // obstacle default radius
-  static const float obsRadius = 0.15;
+  static const float obsRadius = 0.09;
 
   // R = 3, 6.75 DEG
   //extern double dx[];
@@ -236,13 +238,13 @@ class Environment {
   }
   */
   
-  Environment(float maxx, float maxy, std::unordered_set<State> obstacles, float turning_rad_in, bool use_reverse,
+  Environment(float maxx, float maxy, std::unordered_set<State> obstacles, float turning_rad_in, float LF_in, bool use_reverse,
             State goal = State(0,0,0), float speed = 0.385f)
     : m_obstacles(std::move(obstacles)),
       m_goal(goal)  // NOLINT
   {
     // set planning context
-    planCont = PlanningContext(use_reverse, turning_rad_in, speed);
+    planCont = PlanningContext(use_reverse, turning_rad_in, LF_in, speed);
 
     m_dimx = static_cast<int>(maxx / static_cast<float>(Constants::mapResolution));
     m_dimy = static_cast<int>(maxy / static_cast<float>(Constants::mapResolution));
@@ -392,7 +394,7 @@ class Environment {
                          std::hash<State>>& _camefrom) {
     double goal_distance =
         sqrt(pow(state.x - m_goal.x, 2) + pow(state.y - m_goal.y, 2));
-    if (goal_distance > 2 * (Constants::LB + Constants::LF)) return false;
+    if (goal_distance > 2 * (Constants::LB + planCont.LF)) return false;
 
     //ompl::base::ReedsSheppStateSpace reedsSheppSpace(Constants::r);
     ompl::base::ReedsSheppStateSpace reedsSheppSpace(planCont.turning_radius);
@@ -538,7 +540,7 @@ class Environment {
                          std::hash<State>> &_camefrom) {
     double goal_distance =
         sqrt(pow(state.x - getGoal().x, 2) + pow(state.y - getGoal().y, 2));
-    if (goal_distance > 10 * (Constants::LB + Constants::LF)) return false;
+    if (goal_distance > 10 * (Constants::LB + planCont.LF)) return false;
     //ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
     ompl::base::DubinsStateSpace dubinsSpace(planCont.turning_radius);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
@@ -751,7 +753,7 @@ class Environment {
         obs << it->x - s.x, it->y - s.y;
         auto rotated_obs = obs * rot;
         if (rotated_obs(0) > -Constants::LB - Constants::obsRadius &&
-            rotated_obs(0) < Constants::LF + Constants::obsRadius &&
+            rotated_obs(0) < planCont.LF + Constants::obsRadius &&
             rotated_obs(1) > -Constants::carWidth / 2.0 - Constants::obsRadius &&
             rotated_obs(1) < Constants::carWidth / 2.0 + Constants::obsRadius)
         {
@@ -777,16 +779,16 @@ class Environment {
 
 
   StateValiditySet stateValid(const State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
-                                  float LB = Constants::LB, float LF = Constants::LF) {
+                                  float LB = Constants::LB) {
     //dynamic obstacles
     auto it = dynamic_obs.equal_range(s.time);
     for (auto itr = it.first; itr != it.second; ++itr) {
-      if (s.agentCollision(itr->second,Constants::LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);
+      if (s.agentCollision(itr->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);
     }
     auto itlow = dynamic_obs.lower_bound(-s.time);
     auto itup = dynamic_obs.upper_bound(-1);
     for (auto it = itlow; it != itup; ++it)
-      if (s.agentCollision(it->second,Constants::LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
+      if (s.agentCollision(it->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
 
 
     Eigen::Matrix2f rot;
@@ -796,7 +798,7 @@ class Environment {
       obs << it->x - s.x, it->y - s.y;
       auto rotated_obs = obs * rot;
       if (rotated_obs(0) > -LB - obs_rad &&
-          rotated_obs(0) < LF + obs_rad &&
+          rotated_obs(0) < planCont.LF + obs_rad &&
           rotated_obs(1) > -car_width / 2.0 - obs_rad &&
           rotated_obs(1) < car_width / 2.0 + obs_rad)
         {

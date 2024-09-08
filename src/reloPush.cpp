@@ -90,7 +90,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         // reset env
         stopWatch time_init_env("init_env",measurement_type::updateEnv);
-        env = Environment(map_max_x, map_max_y, obs, Constants::r_push, false);
+        env = Environment(map_max_x, map_max_y, obs, Constants::r_push, Constants::LF_push, false);
         time_watches.stop_and_append(time_init_env);
 
         // update graph
@@ -113,6 +113,8 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
         // genearte name matcher
         NameMatcher nameMatcher(mo_list);
+        // clear edge matcher
+        edgeMatcher.reset();
 
         // Baseline: hybrid Astar only
         if(params::use_mp_only)
@@ -157,7 +159,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 auto pre_push_pose = find_pre_push(plan_push->start_pose, params::pre_push_dist);
 
                 stopWatch time_plan_app("plan_app",measurement_type::pathPlan);
-                Environment env_nonpush(params::map_max_x, params::map_max_y,env.get_obs(),Constants::r_nonpush,true);
+                Environment env_nonpush(params::map_max_x, params::map_max_y,env.get_obs(),Constants::r_nonpush, Constants::LF_nonpush,true);
                 auto plan_app = planHybridAstar(robots[0], pre_push_pose, env_nonpush, params::grid_search_timeout, false);
                 time_watches.stop_and_append(time_plan_app);
                 if(!plan_app->success)
@@ -322,9 +324,9 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    const char* args[] = {"reloPush", "data_6o.txt", "0", "1", "proposed"};
-    argv = const_cast<char**>(args);
-    argc = 5;
+    //const char* args[] = {"reloPush", "data_6o.txt", "4", "0", "proposed"};
+    //argv = const_cast<char**>(args);
+    //argc = 5;
 
     std::string data_file=""; int data_ind=0;
     handle_args(argc, argv, data_file, data_ind); 
@@ -361,7 +363,7 @@ int main(int argc, char **argv)
     // initialize grid map
     std::unordered_set<State> obs;
     //State goal(0,0,0); // arbitrary goal
-    Environment env(params::map_max_x, params::map_max_y, obs, Constants::r_push, false);
+    Environment env(params::map_max_x, params::map_max_y, obs, Constants::r_push, Constants::LF_push, false);
 
     if(!params::use_testdata){
         // init objects and add to graph
@@ -469,15 +471,22 @@ int main(int argc, char **argv)
 
     float exec_time_in = -1;
 
+    rviz_path_pub_ptr->publish(*navPath_ptr);
+    ros::spinOnce();
+    ros::Duration(0.01).sleep();
+
     if(!params::leave_log && reloResult.is_succ)
+    {
+        
         vis_loop(initMOList, edgeMatcher, env, failed_paths, delivery_list, navPath_ptr);
+    }
 
     else if(params::measure_exec_time)
     {
         if(reloResult.is_succ)
         {
             //test_path_pub_ptr->publish(*navPath_ptr); // previous way
-            rviz_path_pub_ptr->publish(*navPath_ptr);
+            
 
             // path and mode
             auto final_nav_path_str = dcol.pathInfoList.serializeAllinStr();

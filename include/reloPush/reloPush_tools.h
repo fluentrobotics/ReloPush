@@ -1003,7 +1003,7 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
                 candidates[n].y += delta_y;
 
                 // check if this is a valid position
-                auto validity_check = temp_env.stateValid(candidates[n],Constants::carWidth,0.3,Constants::LB,Constants::LF);
+                auto validity_check = temp_env.stateValid(candidates[n]);
                 if(validity_check == true) //todo: set better values
                 {
                     valid_vec[n] = true;
@@ -1068,7 +1068,7 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
     num_prereloc = 0;
 
     // Env to find non-pushing path
-    Environment env_nonpush(params::map_max_x, params::map_max_y, env.get_obs(), Constants::r_nonpush, true);
+    Environment env_nonpush(params::map_max_x, params::map_max_y, env.get_obs(), Constants::r_nonpush, Constants::LF_nonpush, true);
 
     // augment dubins path
     // don't do multi-processing
@@ -1174,7 +1174,7 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
                                                     State& robot, Environment& env, std::vector<movableObjectPtr>& relo_list)
 {
     std::vector<std::vector<State>> path_segments;
-    Environment env_nonpush(params::map_max_x, params::map_max_y, env.get_obs(), Constants::r_nonpush, true);
+    Environment env_nonpush(params::map_max_x, params::map_max_y, env.get_obs(), Constants::r_nonpush, Constants::LF_nonpush, true);
     // one or more temp relocations
     if(relo_path.size()>0)
     {
@@ -1542,7 +1542,7 @@ void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& e
               std::vector<movableObject>& delivery_list, std::shared_ptr<nav_msgs::Path> navPath_ptr)
 {
     // publish final path once
-    test_path_pub_ptr->publish(*navPath_ptr);
+    //test_path_pub_ptr->publish(*navPath_ptr);
     while(ros::ok())
     {
         // visualize movable obstacles

@@ -37,7 +37,8 @@ StateValidity check_validity_by_interpolation(OmplState* dubinsStart, OmplState*
             std::cout << interState->getX() << " " << interState->getY() << " " << interState->getYaw() << std::endl;
 
 
-        auto val = env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.15,0,0.15,0.15); // todo: change values
+        //auto val = env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw()),0.3,0,0.15,0.15); // todo: change values
+        auto val = env.stateValid(State(interState->getX(),interState->getY(),interState->getYaw())); // todo: change values
         if(!val) //todo: set better values
         {
             if(val.get_validity()==StateValidity::collision){
@@ -261,7 +262,7 @@ std::vector<std::tuple<State,float,int>> find_pre_relo_along_vector(Environment&
         State temp_state = State(pivot_state.x+incre.x(), pivot_state.y+incre.y(), pivot_state.yaw);
         
         //validity
-        auto validity = env.stateValid(temp_state,Constants::obsRadius*2, Constants::obsRadius, Constants::obsRadius, Constants:: obsRadius);
+        auto validity = env.stateValid(temp_state);
         while(validity.get_validity() != StateValidity::out_of_boundary)
         {
             if(validity.get_validity() == StateValidity::valid)
@@ -272,25 +273,20 @@ std::vector<std::tuple<State,float,int>> find_pre_relo_along_vector(Environment&
                 if(d_temp < d_thres)
                 {
                     is_found = true;
-                    break;
+                    //break; find all  possible candidates
+                    found_poses.push_back(std::make_tuple(temp_state, StateDistance(temp_state,pivot_state),n));
                 }
-                else
-                {
-                    temp_state.x += incre.x();
-                    temp_state.y += incre.y();
-                    validity = env.stateValid(temp_state,Constants::obsRadius*2, Constants::obsRadius, Constants::obsRadius, Constants:: obsRadius);
-                }
+
+                
             }
-            else
-            {
-                temp_state.x += incre.x();
-                temp_state.y += incre.y();
-                validity = env.stateValid(temp_state,Constants::obsRadius*2, Constants::obsRadius, Constants::obsRadius, Constants:: obsRadius);
-            }
+
+            temp_state.x += incre.x();
+            temp_state.y += incre.y();
+            validity = env.stateValid(temp_state);            
         }
 
-        if(is_found)
-            found_poses.push_back(std::make_tuple(temp_state, StateDistance(temp_state,pivot_state),n));
+        //if(is_found)
+        //    found_poses.push_back(std::make_tuple(temp_state, StateDistance(temp_state,pivot_state),n));
     }
 
     //sort by pushing distance
@@ -526,15 +522,17 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                                 std::unordered_map<std::string, std::vector<std::pair<StatePtr,reloDubinsPath>>>& failed_paths,
                                 movableObject& pivot_mo, movableObject& target_mo,std::vector<stopWatch>& time_watches, bool is_delivery = false)
 {
+    // for debug only
+    auto name_pivot = graphTools::getVertexName(*pivot_vertex,gPtr);
+    auto name_target = graphTools::getVertexName(*target_vertex,gPtr);
+
     // check collision
     stopWatch time_chk_col("chk_col", measurement_type::pathPlan);
     auto validity = check_collision(fromObj, toObj, pivot_state, pivot_vertex, state_ind, dubins_res, env, max_x, max_y, turning_radius, is_delivery);
     time_chk_col.stop();
     time_watches.push_back(time_chk_col);
 
-    // for debug only
-    auto name_pivot = graphTools::getVertexName(*pivot_vertex,gPtr);
-    auto name_target = graphTools::getVertexName(*target_vertex,gPtr);
+
 
     // for debug only
     //if(name_target == "d3_0")
@@ -549,6 +547,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
         // add to edge-path matcher
         edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,dubins_res.second,preRelocs,pathType::smallLP,e,gPtr));
     }
+    /*
     else if(validity == StateValidity::collision)
     {
         if(params::print_log)
@@ -556,9 +555,13 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
         // store to failed paths
         failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+        // remove edge if it exists
+        boost::remove_edge(*pivot_vertex, *target_vertex,*gPtr);
+
     }
+    */
     //todo: add start/goal invalid
-    else if(validity == StateValidity::out_of_boundary)
+    else if(validity == StateValidity::out_of_boundary || validity == StateValidity::collision)
     {
         
         // check if a long path is possible by relocating the object it
@@ -667,19 +670,20 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     //preRelocs.push_back(std::make_pair(*pivot_mo.get_pushing_poses()[push_ind],state_thres));
 
                     // find dubins
-                    State preRelocStart(pivot_state->x, pivot_state->y, prerelo_arrival.yaw);
+                    State preReloStart(pivot_state->x, pivot_state->y, prerelo_arrival.yaw);
+                    State preReloStart_prepush = find_pre_push(preReloStart);
                     //State preRelocStart_prepush = find_pre_push(preRelocStart);
 
                     // this occasionally gives a large curve instead of a straight line
-                    auto dubins_pre = findDubins(preRelocStart,prerelo_arrival_post_push,turning_radius);
+                    auto dubins_pre = findDubins(preReloStart_prepush,prerelo_arrival_post_push,turning_radius);
 
 
                     // straight path
-                    StatePathPtr straight_relo = std::make_shared<StatePath>(std::initializer_list<State>{preRelocStart,prerelo_arrival_post_push});
+                    StatePathPtr straight_relo = std::make_shared<StatePath>(std::initializer_list<State>{preReloStart_prepush,prerelo_arrival_post_push});
 
                     // State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
                     //preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,plan_res);
-                    preReloPath prePath = preReloPath(preRelocStart,prerelo_arrival_post_push,straight_relo,dubins_pre,
+                    preReloPath prePath = preReloPath(preReloStart_prepush,prerelo_arrival_post_push,straight_relo,dubins_pre,
                                                         std::make_shared<PathPlanResult>(PathPlanResult(prerelo_arrival_post_push, prerelo_final_prepush,
                                                                                             *pivot_state, pre_relo_state)),
                                                         prerelo_final_push);

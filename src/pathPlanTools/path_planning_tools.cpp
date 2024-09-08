@@ -5,11 +5,13 @@
 PlanningContext::PlanningContext()
 {}
 
-PlanningContext::PlanningContext(bool use_reverse, float turning_r, float speed_lim) : allow_reverse(use_reverse), turning_radius(turning_r), speed_limit(speed_lim)
+PlanningContext::PlanningContext(bool use_reverse, float turning_r, float LF_in, float speed_lim) : allow_reverse(use_reverse), turning_radius(turning_r), speed_limit(speed_lim)
 {
     deltat = speed_limit / turning_r / 1.5;
     xyResolution = turning_r * deltat;
     yawResolution = deltat;
+
+    LF = LF_in;
 
     dx.resize(6);
     dy.resize(6);

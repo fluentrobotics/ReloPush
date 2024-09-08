@@ -14,7 +14,7 @@ int main()
     std::unordered_set<State> obs;
 
     // init env
-    Environment env(5,5,obs,0.5, true, goal_pose);
+    Environment env(5,5,obs,0.5,0.3, true, goal_pose);
 
     auto plan_res = planHybridAstar(start_pose, goal_pose, env, params::grid_search_timeout, false);
 
@@ -28,7 +28,7 @@ int main()
         std::cout << std::endl;
     }
 
-    Environment env2(5,5,env.get_obs(),Constants::r_push,false,goal_pose);
+    Environment env2(5,5,env.get_obs(),Constants::r_push,Constants::LF_nonpush,false,goal_pose);
 
     plan_res = planHybridAstar(start_pose, goal_pose, env2, params::grid_search_timeout, false);
 
