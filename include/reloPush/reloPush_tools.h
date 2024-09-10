@@ -277,17 +277,17 @@ nav_msgs::Path transformPath(const nav_msgs::Path& input_path, const tf::Transfo
 int find_post_push_ind(StatePath& s, Environment& env){
 
     int pivot_ind = params::post_push_ind;
-    if(env.stateValid(s.end()[params::post_push_ind]))
+    if(env.stateValid(s.end()[params::post_push_ind])==StateValidity::valid)
         return pivot_ind;
 
     while(abs(pivot_ind) < s.size())
     {
         pivot_ind--;
-        if(env.stateValid(s.end()[pivot_ind]))
+        if(env.stateValid(s.end()[pivot_ind])==StateValidity::valid)
             return pivot_ind;
     }
     // todo: handle all not valid
-    return -3;
+    return -2;
 
 }
 
@@ -926,7 +926,7 @@ std::vector<movableObjectPtr> get_intermediate_objects(std::vector<Vertex>& list
     return out_vec;
 }
 
-void generate_temp_env(Environment& env_in, Environment& temp_env, std::vector<State>& push_path)
+void generate_temp_env(Environment& env_in, Environment& temp_env, std::vector<State>& push_path, State& goalState)
 {
     // copy // todo: do better copy
     Environment out_env = env_in;
@@ -934,13 +934,95 @@ void generate_temp_env(Environment& env_in, Environment& temp_env, std::vector<S
     //std::unordered_set<State> path_obs;
 
     // add path as obstacle
-    for(size_t i=0; i<push_path.size(); i++)
+    for(size_t i=1; i<push_path.size(); i++)
+    {
+        // interpolate
+        auto int_path = interpolateStraightPath(push_path[i-1],push_path[i],Constants::mapResolution);
+
+        for(auto& it : int_path)
+        {
+            // center point in cell coord
+            out_env.add_obs(it);
+        }
+    }
+
+    // end of path to goal pose
+    auto last_portion = interpolateStraightPath(push_path.back(),goalState,Constants::mapResolution);
+    for(auto& it : last_portion)
     {
         // center point in cell coord
-        out_env.add_obs(State(push_path[i].x,push_path[i].y,0));
+        out_env.add_obs(it);
     }
 
     temp_env = out_env;
+}
+
+void sortByDistance(std::vector<State>& goals, const State& start) {
+    std::sort(goals.begin(), goals.end(), [&start](const State& a, const State& b) {
+        return StateDistance(start, a) < StateDistance(start, b);
+    });
+}
+
+/*
+    env has push_path as obs
+*/
+StatePathPtr Find_ObsRelo(movableObjectPtr moPtr, Environment& env, float search_step = 0.1f)
+{
+    auto init_pusing_poses = moPtr->get_pushing_poses();
+
+    std::vector<State> found_candidates(0);
+
+    State objectPos(init_pusing_poses[0]->x,init_pusing_poses[0]->y,init_pusing_poses[0]->yaw);
+    for (const auto& pp : init_pusing_poses) {
+        // Direction is represented as a pair of (dx, dy)
+        double dx = cosf(pp->yaw) * search_step;
+        double dy = sinf(pp->yaw) * search_step; // unit vector
+
+        bool out_of_boundary = false;
+        // Check positions along this direction
+        State obsrelo_candidate = *pp;
+        while(!out_of_boundary)
+        {
+            obsrelo_candidate.x += dx;
+            obsrelo_candidate.y += dy;
+
+            //auto validity = env.stateValid(obsrelo_candidate,Constants::carWidth,2*Constants::obsRadius);
+            StateValidity validity = StateValidity::valid;
+            auto obs = env.get_obs();
+            for(auto& it: obs)
+            {
+                if(StateDistance(it,obsrelo_candidate)<Constants::obsRadius*5)
+                {
+                    validity = StateValidity::collision;
+                    break;
+                }
+                else if(obsrelo_candidate.x < 0 || obsrelo_candidate.x > 4 || obsrelo_candidate.y < 0 || obsrelo_candidate.y > 5.4)
+                {
+                    validity = StateValidity::out_of_boundary;
+                    break;
+                }
+            }
+
+            // out-of-bounday: finish with this vec
+            if(validity == StateValidity::out_of_boundary)
+            {
+                out_of_boundary = true;
+                break;
+            }
+            // obsrelo candidate found
+            else if(validity == StateValidity::valid)
+                break;
+        }
+
+        // not out-of-bounday: found a candidate
+        found_candidates.push_back(obsrelo_candidate);
+    }
+
+    // sort
+    sortByDistance(found_candidates, objectPos);
+
+    // If no valid relocation found, return the original position
+    return std::make_shared<StatePath>(found_candidates);
 }
 
 
@@ -949,16 +1031,21 @@ void generate_temp_env(Environment& env_in, Environment& temp_env, std::vector<S
 // input: pushing path
 //        object to relocate
 //        map with obstacles
-std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list, Environment& env)
+std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list,std::vector<Vertex>& vertex_path, NameMatcher& nameMatcher, Environment& env, GraphPtr gPtr)
 {
     // find where to relocate
     // propagate along pushing directions until find one
     // increment by cell resolution (Constants::mapResolution)
     // n candidates
 
+    //target vertex
+    auto target_vertex = vertex_path.back();
+    auto target_name = graphTools::getVertexName(target_vertex, gPtr);
+    auto target_obj_pair = nameMatcher.getVertexStatePair(target_name);
+
     // generate copied env with path points as obstacles
     Environment temp_env;
-    generate_temp_env(env, temp_env, push_path);
+    generate_temp_env(env, temp_env, push_path, *(target_obj_pair->state));
 
     std::vector<StatePath> out_paths(relo_list.size());
     ReloPathInfoList outInfo;
@@ -975,7 +1062,11 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
         // take out this object from obstacles
         temp_env.remove_obs(State(moPtr->get_x(), moPtr->get_y(), moPtr->get_th()));
 
-        auto init_pusing_poses = moPtr->get_pushing_poses();
+        //auto init_pusing_poses = moPtr->get_pushing_poses();
+
+        auto obsRelo_candidates = Find_ObsRelo(moPtr, temp_env, Constants::mapResolution);
+
+        /*
         std::vector<State> candidates(init_pusing_poses.size());
         // copy
         for(size_t n=0; n<init_pusing_poses.size(); n++)
@@ -1032,20 +1123,31 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
 
         // pick a valid pose if multiple // todo: find a better way to handle multiple candidates
         int valid_ind = findFirstTrueIndex(valid_vec);
+        */
+
 
         // path from init pre-push to target pre-push
-        State start_pre_push = find_pre_push(*init_pusing_poses[valid_ind], params::pre_push_dist);
-        State goal_pre_push = find_pre_push(candidates[valid_ind], params::pre_push_dist);
+        // use first candidate
+        auto obsRelo_state = obsRelo_candidates->at(0);
+        State start_state = State(moPtr->get_x(),moPtr->get_y(),obsRelo_state.yaw);
+        State start_pre_push = find_pre_push(start_state, params::pre_push_dist);
+        State goal_pre_push = find_pre_push(obsRelo_state, params::pre_push_dist);
+
+        //State start_pre_push = find_pre_push(*init_pusing_poses[valid_ind], params::pre_push_dist);
+        //State goal_pre_push = find_pre_push(candidates[valid_ind], params::pre_push_dist);
 
         // angle range to 0 ~2 pi
         start_pre_push.yaw = jeeho::convertEulerRange_to_2pi(start_pre_push.yaw);
         goal_pre_push.yaw = jeeho::convertEulerRange_to_2pi(goal_pre_push.yaw);
         
         //
-        object_relocation.push_back(std::make_pair(relo_list[m]->get_name(), candidates[valid_ind]));
+        //object_relocation.push_back(std::make_pair(relo_list[m]->get_name(), candidates[valid_ind]));
+        object_relocation.push_back(std::make_pair(relo_list[m]->get_name(), obsRelo_state));
+
 
         // add new location as obstacle
-        temp_env.add_obs(candidates[valid_ind]);
+        //temp_env.add_obs(candidates[valid_ind]);
+        temp_env.add_obs(obsRelo_state);
 
         // add this path
         out_paths[m] = std::vector<State>({start_pre_push,goal_pre_push});
@@ -1201,7 +1303,8 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
         auto moPtr = relo_list[0];
         env_nonpush.remove_obs(State(moPtr->get_x(), moPtr->get_y(), moPtr->get_th()));
         // relocated
-        auto relocated_obs = find_post_push(relo_path[0].back());
+        auto relocated_obs = find_post_push(relo_path[0].back(), params::pre_push_dist);
+        //auto relocated_obs = rpath.toPose;
         env_nonpush.add_obs(relocated_obs);
 #pragma endregion
 
@@ -1652,7 +1755,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         ReloPathInfoList relo_pathinfo;
         stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
         // list of state paths for temporary relocation of intermediate objects
-        std::tie(relo_paths, relocPair, relo_pathinfo) = find_relo_path(push_path, reloc_objects, env); // pre-relocation path
+        std::tie(relo_paths, relocPair, relo_pathinfo) = find_relo_path(push_path, reloc_objects, min_list[min_list_ind]->path, nameMatcher, env, gPtr); // pre-relocation path
         time_path_gen_relo_path.stop();
         time_watches.push_back(time_path_gen_relo_path);
 

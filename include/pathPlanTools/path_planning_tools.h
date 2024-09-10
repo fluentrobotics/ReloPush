@@ -262,6 +262,11 @@ class Environment {
     updateCostmap();
   }
 
+  void changeLF(float lf)
+  {
+    planCont.LF = lf;
+  }
+
   struct compare_node {
     bool operator()(const std::pair<State, double>& n1,
                     const std::pair<State, double>& n2) const {

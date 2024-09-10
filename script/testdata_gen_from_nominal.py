@@ -151,7 +151,7 @@ class nominal_dataset:
 dataset_one = nominal_dataset("data_2o1r")
 dataset_one.mo_list = [movableObject(2.2,3.5,0,"b1",4), movableObject(1,3.5,0,"b3",4)] ## objects
 dataset_one.robot = [pose2D(2, 2.5, 1.5708)] ## robot
-dataset_one.d_list = [movableObject(0,0,0,"d1",4), movableObject(3,3.5,0,"d3",4)] ## delivery
+dataset_one.d_list = [movableObject(0.2,0,3,"d1",4), movableObject(3,3.5,0,"d3",4)] ## delivery
 dataset_one.d_table = {"b1":"d1", "b3":"d3"} ## assign
 
 # 2obj 1relo test instance
@@ -243,13 +243,13 @@ dataset_six_obj.d_table = {"b1":"d1", "b2":"d2", "b3":"d3", "b4":"d4", "b5":"d5"
 
 
 
-#dataset_one.write_to_file()
+dataset_one.write_to_file()
 #dataset_two.write_to_file()
 #dataset_three.write_to_file()
 #dataset_four.write_to_file()
 #dataset_five.write_to_file()
 #dataset_five_obj.write_to_file()
-dataset_six_obj.write_to_file()
+#dataset_six_obj.write_to_file()
 
 #print(dataset_one.add_randomness().serialize())
 print('done')
