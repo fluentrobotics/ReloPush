@@ -1167,6 +1167,8 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
     std::vector<State> push_path(0);
     PathInfoList plist;
 
+    State from_state, to_state;
+
     num_prereloc = 0;
 
     // Env to find non-pushing path
@@ -1190,6 +1192,13 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
 
         // corresponding path
         auto partial_path_info = edgeMatcher.getPath(edge);
+
+        if(i == vertex_path.size() - 1)
+            from_state = partial_path_info.sourceState;
+
+        if(i == 1)
+            to_state = partial_path_info.targetState;
+
         // count pre-relocation
         num_prereloc += partial_path_info.pre_relocations.size();
         //auto pivot_state = nameMatcher.getVertexStatePair(min_list[mcol]->sourceVertexName)->state;
@@ -1239,6 +1248,7 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
         auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step, vName);
         auto interp_path = interp_path_pair.first;
         auto interp_pathinfo = interp_path_pair.second;
+    
         
         // omit last steps for arrival
         auto last_pose = interp_path->end();
@@ -1253,6 +1263,10 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
         plist.append(interp_pathinfo);
     }    
 
+    // update obstacles
+    env.remove_obs(from_state);
+    env.add_obs(to_state);
+    env.changeLF(Constants::LF_nonpush);
 
     // add pose-push pose
     // todo: do it better

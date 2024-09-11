@@ -686,7 +686,7 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
                     preReloPath prePath = preReloPath(preReloStart_prepush,prerelo_arrival_post_push,straight_relo,dubins_pre,
                                                         std::make_shared<PathPlanResult>(PathPlanResult(prerelo_arrival_post_push, prerelo_final_prepush,
                                                                                             *pivot_state, pre_relo_state)),
-                                                        prerelo_final_push);
+                                                        prerelo_final_push, *pivot_state, pre_relo_state);
                     preRelocs.push_back(prePath);
 
                     // cost for pre-relocations

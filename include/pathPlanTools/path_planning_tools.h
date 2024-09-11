@@ -82,7 +82,7 @@ namespace Constants {
   static const float penaltyTurning = 50;
   // [#] --- A movement cost penalty for reversing (choosing motion primitives >
   // 2)
-  static const float penaltyReversing = 5.0; //8
+  static const float penaltyReversing = 3.0; //8
   // [#] --- A movement cost penalty for change of direction (changing from
   // primitives < 3 to primitives > 2)
   static const float penaltyCOD = 5.0;
@@ -105,12 +105,12 @@ namespace Constants {
   // width of car
   static const float carWidth = 0.285;
   // distance from rear to vehicle front end
-  static const float LF_nonpush = 0.38;  //0.3
-  static const float LF_push = 0.65;
+  static const float LF_nonpush = 0.3;  //0.38
+  static const float LF_push = 0.4; // 0.65
   // distance from rear to vehicle back end
   static const float LB = 0.12;
   // obstacle default radius
-  static const float obsRadius = 0.09;
+  static const float obsRadius = 0.05;
 
   // R = 3, 6.75 DEG
   //extern double dx[];
