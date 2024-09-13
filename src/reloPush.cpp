@@ -156,6 +156,10 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 auto plan_push = pathMatListPtr->at(min_list_ind)[min_row][min_col];
                 
                 auto push_path = plan_push->getPath(true);
+                // remove last for arrival
+                // omit last steps for arrival
+                push_path.erase(push_path.end() - 2, push_path.end());
+
                 auto pre_push_pose = find_pre_push(plan_push->start_pose, params::pre_push_dist);
 
                 stopWatch time_plan_app("plan_app",measurement_type::pathPlan);
@@ -164,6 +168,8 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 time_watches.stop_and_append(time_plan_app);
                 if(!plan_app->success)
                 {
+                    if(plan_app->validity == PlanValidity::start_inval)
+                        std::cout << "\tStart Invalid" << std::endl;
                     // cross out and replan
                     costMat_vertices_pairs[min_list_ind].first->operator()(min_list[min_list_ind]->min_row, min_list[min_list_ind]->min_col) = std::numeric_limits<float>::infinity();
                     // repeat
@@ -173,7 +179,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                 else // feasible
                 {
                     stopWatch time_interp("interpolation", measurement_type::pathPlan);
-                    env.add_obs(plan_push->goal_pose);
+                    //env.add_obs(plan_push->goal_pose);
 
                     auto app_path = plan_app->getPath(true);
                     // get driving actions
@@ -192,17 +198,20 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
                     State force_arrival_state = find_pre_push(plan_push->nominal_goal_pose, params::pre_push_dist - 0.16);
                     push_path.push_back(force_arrival_state);
 
-                    // add pose-push pose
+                    // add post-push pose
                     // todo: do it better
+                    //env.changeLF(Constants::LF_nonpush);
                     State post_push;
                     int post_push_ind = find_post_push_ind(push_path,env);
                     if(push_path.size()>=std::abs(post_push_ind))
-                        post_push = push_path.end()[post_push_ind];
+                        post_push = push_path.end()[post_push_ind-1];
                     //else
                     //    post_push = push_path[0];
                     push_path.push_back(post_push);
+                    //env.changeLF(Constants::LF_push);
 
                     time_watches.stop_and_append(time_interp);
+
 
                     auto path_app = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::app,plan_app->start_pose,plan_app->goal_pose,app_path,driving_actions);
                     auto path_push = PathInfo(min_list[min_list_ind]->targetVertexName,moveType::final,plan_push->start_pose,plan_push->goal_pose,push_path, std::vector<bool>(push_path.size(),true));
@@ -258,7 +267,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
             if(params::print_graph)
                 print_edges(gPtr);
             
-            relocationPair_list relocPair; // for updating movable objects
+            relocationPairList relocPair; // for updating movable objects
             StatePath push_path;
 
             ReloPathResult reloPush_path = iterate_remaining_deliveries(env, push_path, delivery_table, robots, relocPair, 
@@ -324,7 +333,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    //const char* args[] = {"reloPush", "data_2o1r.txt", "0", "1", "proposed"};
+    //const char* args[] = {"reloPush", "data_2o1r.txt", "1", "0", "proposed"};
     //argv = const_cast<char**>(args);
     //argc = 5;
 

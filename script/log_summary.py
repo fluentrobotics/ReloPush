@@ -102,7 +102,7 @@ print(os.listdir(folder_path))
 # Example usage
 for file in os.listdir(folder_path):
     file_name = folder_path + "/"+ file
-    print("========== " + file + " ==========")
+    print("\n========== " + file + " ==========")
     data_blocks = parse_file(file_name)
     calculate_stats(data_blocks)
 

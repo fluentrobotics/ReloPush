@@ -57,6 +57,23 @@ typedef std::unordered_map<std::string,std::string> strMap;
 typedef std::vector<std::vector<std::vector<Vertex>>> VertexPath;
 typedef std::shared_ptr<VertexPath> VertexPathPtr;
 
+struct ObsReloPlan{
+    StatePathListPtr statePathList;
+    relocationPairList objectRelocations;
+    ReloPathInfoList pathInfoList;
+
+    ObsReloPlan()
+    {
+        statePathList->clear();
+        objectRelocations.clear();
+        pathInfoList = ReloPathInfoList();
+    }
+
+    ObsReloPlan(StatePathListPtr paths_in, relocationPairList reloPair_in, ReloPathInfoList pathinfo_in)
+        : statePathList(paths_in), objectRelocations(reloPair_in), pathInfoList(pathinfo_in)
+    {}
+};
+
 struct reloPlanResult{
     bool is_succ;
     size_t num_of_reloc; //number of temp relocation (of other objects blocking paths)
@@ -277,13 +294,13 @@ nav_msgs::Path transformPath(const nav_msgs::Path& input_path, const tf::Transfo
 int find_post_push_ind(StatePath& s, Environment& env){
 
     int pivot_ind = params::post_push_ind;
-    if(env.stateValid(s.end()[params::post_push_ind])==StateValidity::valid)
+    if(env.stateValid(s.end()[params::post_push_ind]).get_validity()==StateValidity::valid)
         return pivot_ind;
 
     while(abs(pivot_ind) < s.size())
     {
         pivot_ind--;
-        if(env.stateValid(s.end()[pivot_ind])==StateValidity::valid)
+        if(env.stateValid(s.end()[pivot_ind]).get_validity()==StateValidity::valid)
             return pivot_ind;
     }
     // todo: handle all not valid
@@ -360,13 +377,16 @@ std::vector<ObjectCostMat> get_cost_mat_vertices_pair(strMap& delivery_table, Na
                     auto goal_pose = target_obj->get_pushing_poses()[col];
 
                     // find arrival pre-push pose
-                    auto goal_pre_push = find_pre_push(*goal_pose, params::pre_push_dist-0.05);
+                    auto goal_pre_push = find_pre_push(*goal_pose, Constants::LF_push);
 
                     // temporarily remove from env
                     env.remove_obs(*start_pose);
-                    auto plan_res = planHybridAstar(*start_pose,goal_pre_push,env,0,false);
+                    //env.remove_obs(*goal_pose);
+                    //auto plan_res = planHybridAstar(*start_pose,goal_pre_push,env,0,false);
+                    auto plan_res = planHybridAstar(*start_pose,*goal_pose,env,0,false);
                     // restore starting obj
                     env.add_obs(*start_pose);
+                    //env.add_obs(*goal_pose);
 
                     if(!plan_res->success) // plan failed
                     {
@@ -991,7 +1011,7 @@ StatePathPtr Find_ObsRelo(movableObjectPtr moPtr, Environment& env, float search
             auto obs = env.get_obs();
             for(auto& it: obs)
             {
-                if(StateDistance(it,obsrelo_candidate)<Constants::obsRadius*5)
+                if(StateDistance(it,obsrelo_candidate)<Constants::obsRadius*2 + Constants::LF_nonpush + Constants::LB + 0.05)
                 {
                     validity = StateValidity::collision;
                     break;
@@ -1015,7 +1035,8 @@ StatePathPtr Find_ObsRelo(movableObjectPtr moPtr, Environment& env, float search
         }
 
         // not out-of-bounday: found a candidate
-        found_candidates.push_back(obsrelo_candidate);
+        if(!out_of_boundary)
+            found_candidates.push_back(obsrelo_candidate);
     }
 
     // sort
@@ -1031,7 +1052,7 @@ StatePathPtr Find_ObsRelo(movableObjectPtr moPtr, Environment& env, float search
 // input: pushing path
 //        object to relocate
 //        map with obstacles
-std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list,std::vector<Vertex>& vertex_path, NameMatcher& nameMatcher, Environment& env, GraphPtr gPtr)
+ObsReloPlan find_relo_path(std::vector<State>& push_path, std::vector<movableObjectPtr>& relo_list,std::vector<Vertex>& vertex_path, NameMatcher& nameMatcher, Environment& env, GraphPtr gPtr)
 {
     // find where to relocate
     // propagate along pushing directions until find one
@@ -1052,7 +1073,7 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
     outInfo.reloPathInfoList.resize(relo_list.size());
 
     // for movable object update
-    relocationPair_list object_relocation;
+    relocationPairList object_relocation;
 
     // for each movable object
     for(int m = 0; m<relo_list.size(); m++)
@@ -1142,8 +1163,8 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
         
         //
         //object_relocation.push_back(std::make_pair(relo_list[m]->get_name(), candidates[valid_ind]));
-        object_relocation.push_back(std::make_pair(relo_list[m]->get_name(), obsRelo_state));
-
+        //object_relocation.push_back(std::make_pair(relo_list[m]->get_name(), obsRelo_state));
+        object_relocation.push_back(RelocationPair(relo_list[m]->get_name(),start_state,obsRelo_state));
 
         // add new location as obstacle
         //temp_env.add_obs(candidates[valid_ind]);
@@ -1158,7 +1179,8 @@ std::tuple<StatePathsPtr, relocationPair_list, ReloPathInfoList> find_relo_path(
     }
 
     //return std::make_pair(std::make_shared<std::vector<StatePath>>(out_paths), object_relocation);
-    return std::make_tuple(std::make_shared<std::vector<std::vector<State>>>(out_paths), object_relocation, outInfo);
+    // return std::make_tuple(std::make_shared<std::vector<std::vector<State>>>(out_paths), object_relocation, outInfo);
+    return ObsReloPlan(std::make_shared<std::vector<std::vector<State>>>(out_paths), object_relocation, outInfo);
 }
 
 std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_path, 
@@ -1244,28 +1266,45 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
             }
         }
 
-        // get interpolated list (prepath + final path)
-        auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step, vName);
-        auto interp_path = interp_path_pair.first;
-        auto interp_pathinfo = interp_path_pair.second;
-    
+        if(partial_path_info.use_dubins)
+        {
+            // get interpolated list (prepath + final path)
+            auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step, vName);
+            auto interp_path = interp_path_pair.first;
+            auto interp_pathinfo = interp_path_pair.second;
         
-        // omit last steps for arrival
-        auto last_pose = interp_path->end();
-        if(interp_path->size() > 1) // todo: find this better (i.e. slightly change last pose)
-            last_pose = interp_path->end()-1;
+            
+            // omit last steps for arrival
+            auto last_pose = interp_path->end();
+            if(interp_path->size() > 2) // todo: find this better (i.e. slightly change last pose)
+                last_pose = interp_path->end()-2;
 
-        push_path.insert(push_path.end(), interp_path->begin(), last_pose);
-        // todo: find this better
-        interp_pathinfo.paths.back().path.pop_back();       
-        interp_pathinfo.paths.back().is_forward.pop_back();
+            push_path.insert(push_path.end(), interp_path->begin(), last_pose);
+            // todo: find this better
+            interp_pathinfo.paths.back().path.pop_back();       
+            interp_pathinfo.paths.back().is_forward.pop_back();
 
-        plist.append(interp_pathinfo);
+            plist.append(interp_pathinfo);
+        }
+        else // manual path
+        {
+            StatePath m_path = *partial_path_info.manual_path;
+            // omit last steps for arrival
+            auto last_pose = m_path.end();
+            if(m_path.size() > 1) // todo: find this better (i.e. slightly change last pose)
+                last_pose = m_path.end()-2;
+
+            push_path.insert(push_path.end(), m_path.begin(), last_pose);
+
+            // path info
+            PathInfo p(vName,moveType::final,partial_path_info.sourceState,partial_path_info.targetState,m_path,std::vector<bool>(m_path.size(),true)); //vertex name of delivering object
+            plist.push_back(p);
+        }
     }    
 
     // update obstacles
-    env.remove_obs(from_state);
-    env.add_obs(to_state);
+    //env.remove_obs(from_state);
+    //env.add_obs(to_state);
     env.changeLF(Constants::LF_nonpush);
 
     // add pose-push pose
@@ -1279,35 +1318,40 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
     push_path.push_back(post_push);
     plist.paths.back().path.push_back(post_push); // add to path info as well
     plist.paths.back().is_forward.push_back(false);
+    env.changeLF(Constants::LF_push);
     
     //return final_path, pathinfo list;
     return std::make_pair(std::make_shared<StatePath>(push_path),plist);
 }
 
 // path info as input, final list as output
-std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_path, std::vector<std::vector<State>>& relo_path,
-                                                    PathInfoList& push_pathinfo, ReloPathInfoList& relo_pathinfo, PathInfoList& final_pathinfo,
+std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_path,
+                                                    PathInfoList& push_pathinfo, ObsReloPlan& obsReloPlan, PathInfoList& final_pathinfo,
                                                     State& robot, Environment& env, std::vector<movableObjectPtr>& relo_list)
 {
     std::vector<std::vector<State>> path_segments;
     Environment env_nonpush(params::map_max_x, params::map_max_y, env.get_obs(), Constants::r_nonpush, Constants::LF_nonpush, true);
     // one or more temp relocations
-    if(relo_path.size()>0)
+    if(obsReloPlan.statePathList->size()>0)
     {
+        State first_pose = obsReloPlan.statePathList->at(0)[0];
         // plan approach to first temp relocation        
-        auto plan_res =planHybridAstar(robot, relo_path[0][0], env_nonpush, params::grid_search_timeout,false);
+        auto plan_res =planHybridAstar(robot, first_pose, env_nonpush, params::grid_search_timeout,false);
         if(!plan_res->success)
+        {
+            std::cout << "Relocation Approach failed" << std::endl;
             return std::make_pair(std::vector<State>(0),false); // return false
+        }
 
         auto planned_path = plan_res->getPath(true);
         // get driving actions
         std::vector<bool> driving_actions = get_driving_actions(plan_res);
         // start to first relo
         path_segments.push_back(planned_path);
-        path_segments.push_back(relo_path[0]);
+        path_segments.push_back(obsReloPlan.statePathList->at(0)); // obsRelo
         // save to path info
-        auto rpath = relo_pathinfo.reloPathInfoList[0];
-        PathInfo p_first_app(rpath.vertexName,moveType::app,robot,relo_path[0][0],planned_path,driving_actions);
+        auto rpath = obsReloPlan.pathInfoList.reloPathInfoList[0];
+        PathInfo p_first_app(rpath.vertexName,moveType::app,robot,first_pose,planned_path,driving_actions);
         final_pathinfo.push_back(p_first_app);        
         PathInfo p_first_relo(rpath.vertexName, moveType::temp, rpath.fromPose, rpath.toPose, *rpath.statePathPtr, std::vector<bool>(rpath.statePathPtr->size(),true));
         final_pathinfo.push_back(p_first_relo);
@@ -1315,24 +1359,26 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
 #pragma region modify_env_rm
         // remove pushed object
         auto moPtr = relo_list[0];
-        env_nonpush.remove_obs(State(moPtr->get_x(), moPtr->get_y(), moPtr->get_th()));
+        //env_nonpush.remove_obs(State(moPtr->get_x(), moPtr->get_y(), moPtr->get_th()));
+        env_nonpush.remove_obs(obsReloPlan.objectRelocations[0].from_state);
         // relocated
-        auto relocated_obs = find_post_push(relo_path[0].back(), params::pre_push_dist);
+        //auto relocated_obs = find_post_push(obsReloPlan.statePathList->at(0).back(), params::pre_push_dist);
+        auto relocated_obs = obsReloPlan.objectRelocations[0].to_state;
         //auto relocated_obs = rpath.toPose;
         env_nonpush.add_obs(relocated_obs);
 #pragma endregion
 
         // relo
         // do not use multiprocessing
-        for(size_t p=0; p<relo_path.size()-1; p++)
+        for(size_t p=0; p<obsReloPlan.statePathList->size()-1; p++)
         {
             // last of this relo
-            auto lastThisRelo = relo_path[p].back();
+            auto lastThisRelo = obsReloPlan.statePathList->at(p).back();
             // start of next relo
-            auto firstNextRelo = relo_path[p+1].front();
+            auto firstNextRelo = obsReloPlan.statePathList->at(p+1).front();
 
-            auto moPtr_loop = relo_list[p+1];
-            env_nonpush.remove_obs(State(moPtr_loop->get_x(), moPtr_loop->get_y(), moPtr_loop->get_th()));
+            //auto moPtr_loop = relo_list[p+1];
+            env_nonpush.remove_obs(obsReloPlan.objectRelocations[p+1].from_state);
 
             // plan hybrid astar path
             plan_res = planHybridAstar(lastThisRelo, firstNextRelo, env_nonpush, params::grid_search_timeout, false);
@@ -1343,9 +1389,9 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
             //get driving actions
             std::vector<bool> driving_actions = get_driving_actions(plan_res);
             path_segments.push_back(_path);
-            path_segments.push_back(relo_path[p+1]);
+            path_segments.push_back(obsReloPlan.statePathList->at(p+1));
             // save to path info
-            auto rpath = relo_pathinfo.reloPathInfoList[p+1];
+            auto rpath = obsReloPlan.pathInfoList.reloPathInfoList[p+1];
             PathInfo p_app(rpath.vertexName,moveType::app,lastThisRelo, firstNextRelo,_path, driving_actions);
             final_pathinfo.push_back(p_app);        
             PathInfo p_relo(rpath.vertexName, moveType::temp, rpath.fromPose, rpath.toPose, *rpath.statePathPtr, std::vector<bool>(rpath.statePathPtr->size(),true));
@@ -1353,19 +1399,23 @@ std::pair<std::vector<State>,bool> combine_relo_push(std::vector<State>& push_pa
 
 #pragma region modify_env_restore
             // put it back
-            env_nonpush.add_obs(find_post_push(relo_path[p + 1].back()));
+            //env_nonpush.add_obs(find_post_push(obsReloPlan.statePathList->at(p+1).back()));
+            env_nonpush.add_obs(obsReloPlan.objectRelocations[p+1].to_state);
 #pragma endregion
         }
 
         // relo to push
-        auto lastLastRelo = relo_path.back().back();
+        auto lastLastRelo = obsReloPlan.statePathList->back().back();
         // first pre-push
         auto pre_push = find_pre_push(push_path.front(), params::pre_push_dist);
 
         // plan hybrid astar
         plan_res = planHybridAstar(lastLastRelo, pre_push, env_nonpush, params::grid_search_timeout, false);
         if(!plan_res->success)
+        {
+            std::cout << "Final Approach Failed" << std::endl;
             return std::make_pair(std::vector<State>(0),false); // return false
+        }
 
         auto final_app_path = plan_res->getPath(true);
         // get driving actions
@@ -1484,18 +1534,18 @@ std::shared_ptr<nav_msgs::Path> generate_final_path(std::vector<State>& robots, 
     return statePath_to_navPath(final_path);
 }
 
-void update_mo_list(std::vector<movableObject>& mo_list, relocationPair_list& relocPair)
+void update_mo_list(std::vector<movableObject>& mo_list, relocationPairList& relocPair)
 {
     for(size_t n=0; n<relocPair.size(); n++)
     {
-        auto objName = relocPair[n].first;
+        auto objName = relocPair[n].name;
 
         for(auto& it: mo_list)
         {
             if(it.get_name() == objName)
             {
-                it.set_x(relocPair[n].second.x);
-                it.set_y(relocPair[n].second.y);
+                it.set_x(relocPair[n].to_state.x);
+                it.set_y(relocPair[n].to_state.y);
                 it.update_pushing_poses();
                 break;
             }
@@ -1679,7 +1729,7 @@ void vis_loop(std::vector<movableObject>& initMOList, graphTools::EdgeMatcher& e
 
 
 ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_path, strMap& delivery_table,
-                                                                std::vector<State>& robots, relocationPair_list& relocPair, NameMatcher& nameMatcher, 
+                                                                std::vector<State>& robots, relocationPairList& relocPair, NameMatcher& nameMatcher, 
                                                                 graphTools::EdgeMatcher& edgeMatcher, std::vector<stopWatch>& time_watches, GraphPtr gPtr)
 {
     stopWatch time_search("cost_mat", measurement_type::graphPlan);
@@ -1765,15 +1815,17 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         //count_pre_relocs += num_prereloc;
 
         // relocation paths
-        StatePathsPtr relo_paths;
-        ReloPathInfoList relo_pathinfo;
+        //StatePathsPtr relo_paths;
+        //ReloPathInfoList relo_pathinfo;
         stopWatch time_path_gen_relo_path("relocate", measurement_type::relocatePlan);
         // list of state paths for temporary relocation of intermediate objects
-        std::tie(relo_paths, relocPair, relo_pathinfo) = find_relo_path(push_path, reloc_objects, min_list[min_list_ind]->path, nameMatcher, env, gPtr); // pre-relocation path
+        //std::tie(relo_paths, relocPair, relo_pathinfo) = find_relo_path(push_path, reloc_objects, min_list[min_list_ind]->path, nameMatcher, env, gPtr); // pre-relocation path
+        auto obsReloPlan = find_relo_path(push_path, reloc_objects, min_list[min_list_ind]->path, nameMatcher, env, gPtr); // pre-relocation path
+        relocPair = obsReloPlan.objectRelocations;
         time_path_gen_relo_path.stop();
         time_watches.push_back(time_path_gen_relo_path);
 
-        if(relo_paths == nullptr)
+        if(obsReloPlan.statePathList == nullptr)
         {
             // relo path search failed
             Color::println("ReloPath Failed", Color::RED, Color::BG_YELLOW);
@@ -1791,7 +1843,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
 
         PathInfoList tempFinalPathInfo = PathInfoList();
         // combined path for the delivery
-        auto reloPush_path = combine_relo_push(push_path, *relo_paths, push_pathinfo, relo_pathinfo, tempFinalPathInfo, robots[0], env, reloc_objects);
+        auto reloPush_path = combine_relo_push(push_path, push_pathinfo, obsReloPlan, tempFinalPathInfo, robots[0], env, reloc_objects);
         time_path_gen_comb_path.stop();
         time_watches.push_back(time_path_gen_comb_path);
 

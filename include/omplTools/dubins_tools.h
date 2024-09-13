@@ -88,7 +88,7 @@ class preReloPath{
         use_dubins = true;
     }
     
-    preReloPath(State start, State target, reloDubinsPath& dubins_in, PathPlanResultPtr path_to_next_prePush, State& next_push)
+    preReloPath(State start, State target, reloDubinsPath& dubins_in, PathPlanResultPtr path_to_next_prePush, State& next_push, State& prev_state, State& preRelo_state)
     {
         preReloDubins = dubins_in;
         preReloDubins.startState = start;
@@ -97,6 +97,8 @@ class preReloPath{
         nextPushState = next_push; // push pose to next target
         manual_path = nullptr;
         use_dubins = true;
+        originalState = prev_state;
+        preReloState = preRelo_state;
     }
     preReloPath(State start, State target, StatePathPtr path_in, reloDubinsPath& dubins_in, PathPlanResultPtr path_to_next_prePush, State& next_push, State& prev_state, State& preRelo_state) // dubins for start and target info
     {

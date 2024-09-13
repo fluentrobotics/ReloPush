@@ -683,10 +683,12 @@ void proposed_edge_construction(movableObject& fromObj, movableObject& toObj, St
 
                     // State prePath_start = State(pivot_state->x,pivot_state->y,yaw);
                     //preReloPath prePath = preReloPath(preRelocStart,arrivalState,dubins_pre,plan_res);
-                    preReloPath prePath = preReloPath(preReloStart_prepush,prerelo_arrival_post_push,straight_relo,dubins_pre,
+                    //preReloPath prePath = preReloPath(preReloStart_prepush,prerelo_arrival_post_push,straight_relo,dubins_pre,
+                    //                                    std::make_shared<PathPlanResult>(PathPlanResult(prerelo_arrival_post_push, prerelo_final_prepush,
+                    //                                                                        *pivot_state, pre_relo_state)), prerelo_final_push,*pivot_state, pre_relo_state);
+                    preReloPath prePath = preReloPath(preReloStart_prepush,prerelo_arrival_post_push,dubins_pre,
                                                         std::make_shared<PathPlanResult>(PathPlanResult(prerelo_arrival_post_push, prerelo_final_prepush,
-                                                                                            *pivot_state, pre_relo_state)),
-                                                        prerelo_final_push, *pivot_state, pre_relo_state);
+                                                                                            *pivot_state, pre_relo_state)), prerelo_final_push,*pivot_state, pre_relo_state);
                     preRelocs.push_back(prePath);
 
                     // cost for pre-relocations
@@ -823,8 +825,45 @@ void reloPush::construct_edges(std::vector<movableObject>& mo_list, GraphPtr gPt
                                 if(params::print_log)
                                     std::cout << " dubins collision" << std::endl;
 
-                                // store to failed paths
-                                failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+                                // try again with hybrid astar
+                                env.remove_obs(*pivot_state);
+                                env.remove_obs(*target_state);
+
+                                stopWatch time_mp("time_mp", measurement_type::pathPlan);
+                                auto plan_res = planHybridAstar(*pivot_state,*target_state, env);
+                                time_mp.stop();
+                                time_watches.push_back(time_mp);
+
+                                env.add_obs(*pivot_state);
+                                env.add_obs(*target_state);
+
+                                if(!plan_res->success)
+                                {
+                                    // store to failed paths
+                                    failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+                                }
+
+                                else // found a plan
+                                {
+                                    auto planned_path = plan_res->getPath(true);
+
+                                    stopWatch time_edges("time_edges", measurement_type::graphConst);
+                                    auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
+
+                                    Edge e;
+                                    bool succ;
+
+                                    // for debug only
+                                    auto pivot_name = graphTools::getVertexName(*pivot_vertex,gPtr);
+                                    auto target_name = graphTools::getVertexName(*target_vertex,gPtr);
+
+                                    std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, StatePathlength(planned_path), *gPtr);
+                                    // add to edge-path matcher
+                                    edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,
+                                                        dubins_res.second,preRelocs,dubins_res.first,e,gPtr, false, std::make_shared<StatePath>(planned_path)));
+                                    time_edges.stop();
+                                    time_watches.push_back(time_edges);
+                                }
                             }
                             
                         }
@@ -921,7 +960,44 @@ void reloPush::add_deliveries(std::vector<movableObject>& delivery_list, std::ve
                             if(print_log)
                                 std::cout << " dubins collision" << std::endl;
                             
-                            failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+                            // try again with hybrid astar
+                            env.remove_obs(*pivot_state);
+                            //env.remove_obs(*target_state);
+
+                            stopWatch time_mp("time_mp", measurement_type::pathPlan);
+                            auto plan_res = planHybridAstar(*pivot_state,*target_state, env);
+                            time_mp.stop();
+                            time_watches.push_back(time_mp);
+
+                            env.add_obs(*pivot_state);
+                            //env.add_obs(*target_state);
+
+                            if(!plan_res->success)
+                            {
+                                // store to failed paths
+                                failed_paths[graphTools::getVertexName(*pivot_vertex,gPtr)].push_back(std::make_pair(pivot_state,dubins_res.second));
+                            }
+
+                            else // found a plan
+                            {
+                                auto planned_path = plan_res->getPath(true);
+                                stopWatch time_edges("time_edges", measurement_type::graphConst);
+                                //auto target_vertex = mo_list[m].get_vertex_state_list()[state_ind].vertex;
+
+                                Edge e;
+                                bool succ;
+
+                                // for debug only
+                                auto pivot_name = graphTools::getVertexName(*pivot_vertex,gPtr);
+                                auto target_name = graphTools::getVertexName(*target_vertex,gPtr);
+
+                                std::tie(e,succ) = boost::add_edge(*pivot_vertex, *target_vertex, StatePathlength(planned_path), *gPtr);
+                                // add to edge-path matcher
+                                edgeMatcher.insert(e, graphTools::EdgePathInfo(*pivot_vertex,*target_vertex,*pivot_state,*target_state,
+                                                    dubins_res.second,preRelocs,dubins_res.first,e,gPtr, false, std::make_shared<StatePath>(planned_path)));
+                                time_edges.stop();
+                                time_watches.push_back(time_edges);
+                            }
                         }
                     }
 #pragma endregion normal_dubins_path

@@ -63,10 +63,26 @@ static inline float StateDistance(const State& s1, const State& s2)
     return sqrtf(dx * dx + dy * dy);
 }
 
+// duplicate with path_length in reloPush_tools.h
+static inline float StatePathlength(std::vector<State>& path)
+{
+    float totalLength = 0.0;
+
+    for (size_t i = 1; i < path.size(); ++i) {
+        float dx = path[i].x - path[i-1].x;
+        float dy = path[i].y - path[i-1].y;
+        totalLength += std::sqrt(dx * dx + dy * dy);
+    }
+
+    return totalLength;
+}
+
 
 typedef std::shared_ptr<State> StatePtr;
 typedef std::vector<State> StatePath;
 typedef std::shared_ptr<StatePath> StatePathPtr;
+typedef std::vector<StatePath> StatePathList;
+typedef std::shared_ptr<StatePathList> StatePathListPtr;
 
 
 #endif

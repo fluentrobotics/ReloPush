@@ -100,18 +100,24 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
     // Interpolate dubins path to check for collision on grid map
     //nav_msgs::Path single_path;
     //single_path.poses.resize(num_pts);
-    for (size_t np=0; np<num_pts; np++)
-    {            
-        //auto start = std::chrono::steady_clock::now();
-        jeeho_interpolate(dubinsStart, edgePathInfo.path.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
-                        turning_rad);
+    if(num_pts>0){
+        for (size_t np=0; np<num_pts; np++)
+        {            
+            //auto start = std::chrono::steady_clock::now();
+            jeeho_interpolate(dubinsStart, edgePathInfo.path.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
+                            turning_rad);
 
-        State tempState(interState->getX(), interState->getY(),interState->getYaw());
+            State tempState(interState->getX(), interState->getY(),interState->getYaw());
 
-        //single_path.poses[np] = one_pose;
-        //final_path.push_back(tempState);
-        main_push_path[np] = tempState;
+            //single_path.poses[np] = one_pose;
+            //final_path.push_back(tempState);
+            main_push_path[np] = tempState;
+        }
     }
+    else{
+        main_push_path.resize(1);
+        main_push_path[0] = edgePathInfo.path.targetState;
+    } // path is too short there is nothing to interpolate
 #pragma endregion
 
     //combine with pre-relocations

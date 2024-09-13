@@ -7,7 +7,20 @@
 #include <omplTools/State.h>
 #include <reloPush/movableObject.h>
 
-typedef std::vector<std::pair<std::string, State>> relocationPair_list; //index of the mo_list, new state
+struct RelocationPair
+{
+    std::string name;
+    State from_state;
+    State to_state;
+
+    RelocationPair()
+    {}
+
+    RelocationPair(std::string name_in, State& from, State&to) : name(name_in), from_state(from), to_state(to)
+    {}
+};
+
+typedef std::vector<RelocationPair> relocationPairList; //index of the mo_list, new state
 typedef std::shared_ptr<StatePath> StatePathPtr;
 typedef std::shared_ptr<std::vector<StatePath>> StatePathsPtr;
 
@@ -46,7 +59,7 @@ class deliveryContext
         std::vector<movableObject> mo_list;
 
         // relocation pair - mo / new state
-        relocationPair_list relocPairs;
+        relocationPairList relocPairs;
 
         // index of delivering object
         //size_t delivery_obj_ind;
@@ -57,7 +70,7 @@ class deliveryContext
 
         deliveryContext(){}
 
-        deliveryContext(std::vector<movableObject>& mo_list_in, relocationPair_list relocPairs_in, std::string delivery_name, StatePathPtr pathPtr_in)
+        deliveryContext(std::vector<movableObject>& mo_list_in, relocationPairList relocPairs_in, std::string delivery_name, StatePathPtr pathPtr_in)
         {
             mo_list = std::vector<movableObject>(mo_list_in);
             relocPairs = relocPairs_in;

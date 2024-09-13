@@ -120,20 +120,34 @@ namespace graphTools
     EdgePathInfo::EdgePathInfo() {};
 
     EdgePathInfo::EdgePathInfo(Vertex source_v, Vertex target_v, State source_s, State target_s,
-                                reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in,Edge edge_in, GraphPtr gPtr) 
+                                reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in,Edge edge_in, GraphPtr gPtr,
+                                bool is_dubins, StatePathPtr m_path) 
     : path(path_in), path_class(path_class_in), pre_relocations(pre_relocs)
     {
         vertices = vertexPair(source_v,target_v,edge_in,gPtr);
-        cost = path_in.lengthCost();
         sourceState = source_s;
         targetState = target_s;
-        // goal state of the last pre-relocation should be the final pusing pose with starting yaw
-        if(pre_relocations.size() > 0)
-        {
-            finalPushState = pre_relocations.back().nextPushState;
+
+        if(is_dubins)    
+        {    
+            use_dubins = true;
+            cost = path_in.lengthCost();
+
+            // goal state of the last pre-relocation should be the final pusing pose with starting yaw
+            if(pre_relocations.size() > 0)
+            {
+                finalPushState = pre_relocations.back().nextPushState;
+            }
+            else
+                finalPushState = sourceState;
         }
-        else
+        else // non-dubins path
+        {  
+            use_dubins = false;
+            cost = StatePathlength(*m_path);
             finalPushState = sourceState;
+            manual_path = m_path;
+        }
     }
 
     EdgePathInfo::EdgePathInfo(vertexPair pair_in, State source_s, State target_s, reloDubinsPath path_in, preRelocList& pre_relocs, pathType path_class_in) 
@@ -142,6 +156,8 @@ namespace graphTools
         cost = path_in.lengthCost();
         sourceState = source_s;
         targetState = target_s;
+
+        use_dubins = true;
     }
 
     //update with new dubins path keeping vertices, path_class and pre_relocations

@@ -72,9 +72,9 @@ def plot_positions(objects, goals, boundary_size, radius):
     plt.show()
 
 # Parameters
-num_objects = 6
-boundary_size = (4, 5)
-radius = 0.2
+num_objects = 8
+boundary_size = (4, 5.2)
+radius = 0.1
 min_distance = 0.4  # Given separate minimum distance
 
 objects, goals = generate_data(num_objects, boundary_size, radius, min_distance)
