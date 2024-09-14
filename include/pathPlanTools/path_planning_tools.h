@@ -106,11 +106,11 @@ namespace Constants {
   static const float carWidth = 0.285;
   // distance from rear to vehicle front end
   static const float LF_nonpush = 0.3;  //0.38
-  static const float LF_push = 0.45; // 0.65
+  static const float LF_push = 0.6; // 0.65
   // distance from rear to vehicle back end
   static const float LB = 0.12;
   // obstacle default radius
-  static const float obsRadius = 0.075;
+  static const float obsRadius = 0.09;
 
   // R = 3, 6.75 DEG
   //extern double dx[];

@@ -24,11 +24,11 @@ if [[ ! -f "$file" ]]; then
 fi
 
 echo $file
-#lines=$(wc -l < "$file")
+lines=$(wc -l < "$file")
 
 
 
-for j in $( seq 0 30 )
+for j in $( seq 96 $lines )
 	do
 		echo $T
 		rosrun reloPush reloPush $T $j 1 dubins_only

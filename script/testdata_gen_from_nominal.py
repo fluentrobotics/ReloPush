@@ -143,6 +143,13 @@ class nominal_dataset:
         with open(file_path, 'w') as file:
             file.write('\n'.join(dataset_rn_list))
 
+    def extract_positions(self):
+        squares = [(obj.x, obj.y) for obj in self.mo_list]
+        dotted_squares = [(obj.x, obj.y) for obj in self.d_list]
+
+        print("squares =", squares)
+        print("dotted_squares =", dotted_squares)
+
 
         
 
@@ -267,8 +274,8 @@ dataset_six2_obj.d_table = {"b1":"d1", "b2":"d2", "b3":"d3", "b4":"d4", "b5":"d5
 
 dataset_eight_obj = nominal_dataset("data_8o")
 dataset_eight_obj.mo_list = [
-    movableObject(0.8580778941762881, 4.6011233494662735,0,"b1",4),
-    movableObject(1.5349696536795916, 3.749157718974844,0,"b2",4), 
+    movableObject(2.7, 1.35,0,"b1",4),
+    movableObject(2, 3.65,0,"b2",4), 
     movableObject(1.859768060937678, 1.5527463843161248,0,"b3",4), 
     movableObject(2.0955643754298705, 2.3648729443013004,0,"b4",4), 
     movableObject(3.0339532378313083, 3.230031618298209,0,"b5",4), 
@@ -277,26 +284,27 @@ dataset_eight_obj.mo_list = [
     movableObject(2.744867319746987, 0.7558198592370361,0,"b8",4)
 ]
 dataset_eight_obj.d_list = [
-    movableObject(1.132540178242162, 1.00348428435943,0,"d1",4), 
-    movableObject(2.874235750232796, 2.2421060409968216,0,"d2",4), 
-    movableObject(3.5908057251369923, 0.528374019408304,0,"d3",4), 
-    movableObject(0.4588870791308228, 1.8100651020133278,0,"d4",4), 
-    movableObject(3.707842202930188, 3.1947026586830845,0,"d5",4), 
-    movableObject(3.5672894287562165, 4.407210577220452,0,"d6",4),
-    movableObject(1.8957318201305333, 4.498083971743029,0,"d7",4),
-    movableObject(3.2600318728452176, 1.2853346975071132,0,"d8",4)
+    movableObject(3.6, 0.45,0,"d1",4), 
+    movableObject(3.6, 1.55,0,"d2",4), 
+    movableObject(3.6, 2.65,0,"d3",4), 
+    movableObject(3.6, 3.75,0,"d4",4), 
+    movableObject(0.4, 0.45,0,"d5",4), 
+    movableObject(0.4, 1.6,0,"d6",4),
+    movableObject(0.4, 2.8,0,"d7",4),
+    movableObject(0.4, 4,0,"d8",4)
 ]
 dataset_eight_obj.robot = [pose2D(1, 1, 1.5708)] ## robot
 dataset_eight_obj.d_table = {"b1":"d1", "b2":"d2", "b3":"d3", "b4":"d4", "b5":"d5", "b6":"d6", "b7":"d7", "b8":"d8"}
 
 
 #dataset_one.write_to_file()
-dataset_two.write_to_file()
+#dataset_two.write_to_file()
 #dataset_three.write_to_file()
 #dataset_four.write_to_file()
 #dataset_five.write_to_file()
 #dataset_five_obj.write_to_file()
 #dataset_six2_obj.write_to_file()
+dataset_eight_obj.extract_positions()
 #dataset_eight_obj.write_to_file()
 
 #print(dataset_one.add_randomness().serialize())

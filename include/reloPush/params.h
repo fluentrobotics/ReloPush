@@ -22,7 +22,7 @@ namespace params
     // may change multiple times while running
     extern bool is_pushing;
 
-    extern const bool use_mocap; //todo: parse as a parameter
+    extern bool use_mocap; //todo: parse as a parameter
     
     extern const bool reset_robot_pose;
 

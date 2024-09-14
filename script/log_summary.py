@@ -14,7 +14,12 @@ def parse_file(file_name):
     with open(file_name, 'r') as f:
         for line in f:
             line = line.strip()
-            if line == "":  # Skip empty lines
+            #if line == "":  # Skip empty lines
+            #    continue
+            if line.startswith("#"):  # Indicates end of one block
+                if(len(current_block)>0):
+                    data_blocks.append(current_block)
+                    current_block = {}
                 continue
 
             key_value = line.split(":")
@@ -24,16 +29,14 @@ def parse_file(file_name):
                 # Convert numerical values to float
                 try:
                     if key in ["Time Task", "Time MP", "Time Total", "Num Pre-relo", "Num Temp-relo", 
-                               "Num Total relo", "Length Pushing", "Length Total"]:
+                               "Num Total relo", "Length Pushing", "Length Total", "Execution Time", "Lost"]:
                         current_block[key] = float(value)
                     elif key == "Is Success":
                         current_block[key] = value
                 except ValueError:
                     current_block[key] = value
 
-            if line.startswith("Execution Time"):  # Indicates end of one block
-                data_blocks.append(current_block)
-                current_block = {}
+            
 
     return data_blocks
 
@@ -47,6 +50,8 @@ def calculate_stats(data_blocks):
     num_total = []
     length_pushing = []
     length_total = []
+    exec_time = []
+    block_lost = []
 
     # Filter data for 'Is Success' == 'T'
     success_blocks = [block for block in data_blocks if block.get("Is Success") == 'T']
@@ -68,6 +73,10 @@ def calculate_stats(data_blocks):
             length_pushing.append(block["Length Pushing"])
         if "Length Total" in block:
             length_total.append(block["Length Total"])
+        if "Execution Time" in block:
+            exec_time.append(block["Execution Time"])
+        if "Lost" in block:
+            block_lost.append(block["Lost"])
 
     total_entries = len(success_blocks)
 
@@ -83,6 +92,8 @@ def calculate_stats(data_blocks):
     avg_num_total, std_num_total = calc_avg_std(num_total)
     avg_length_pushing, std_length_pushing = calc_avg_std(length_pushing)
     avg_length_total, std_length_total = calc_avg_std(length_total)
+    avg_exec_time, std_exec_time = calc_avg_std(exec_time)
+    avg_block_lost, std_block_lost = calc_avg_std(block_lost)
 
     # Output results
     print(f"Time Task: Avg = {avg_time_task}, Std = {std_time_task}")
@@ -94,6 +105,8 @@ def calculate_stats(data_blocks):
     print(f"Length Pushing: Avg = {avg_length_pushing}, Std = {std_length_pushing}")
     print(f"Length Total: Avg = {avg_length_total}, Std = {std_length_total}")
     print(f"Total Success Entries: {total_entries}")
+    print(f"Execution Time: Avg = {avg_exec_time}, Std = {std_exec_time}")
+    print(f"Lost: Avg = {avg_block_lost}, Std = {std_block_lost}")
 
 
 # Construct the full file path

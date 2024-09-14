@@ -1683,6 +1683,32 @@ void handle_args(int argc, char **argv, std::string& data_file, int& data_ind)
         else if(mode == "mp_only")
             params::use_mp_only = true;
     }
+/*
+    else if(argc == 6)
+    {
+        data_file = std::string(argv[1]);
+        data_ind = std::atoi(argv[2]);        
+        params::leave_log = std::atoi(argv[3]);
+        //params::use_better_path = std::atoi(argv[4]);
+        std::string mode = std::string(argv[4]);
+        params::use_mp_only = false;
+        if(mode == "proposed")
+            params::use_better_path = true;
+
+        else if(mode == "dubins_only")
+            params::use_better_path = false;
+
+        else if(mode == "mp_only")
+            params::use_mp_only = true;
+
+        std::string is_real = std::string(argv[5]);
+        if(is_real == "real")
+            params::use_mocap = true;
+        else
+            params::use_mocap = false;
+
+    }
+    */
 
     else
     {
