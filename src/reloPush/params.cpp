@@ -9,7 +9,7 @@ namespace params
     float map_max_y = 5.4; // m
 
     float pre_push_dist = 0.625f;
-    float pre_relo_pre_push_offset = -0.145f;
+    float pre_relo_pre_push_offset = -0.14f;
 
 
     int post_push_ind = -2; // ind
@@ -35,7 +35,7 @@ namespace params
     bool print_final_path = false;
     bool use_testdata = true; //use file to initialize planning
 
-    bool measure_exec_time = true; //measure execution time for each instance 
+    bool measure_exec_time = false; //measure execution time for each instance 
 
     int64_t grid_search_timeout = 0; //ms (0 for no timeout)
 }

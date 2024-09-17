@@ -1152,7 +1152,7 @@ ObsReloPlan find_relo_path(std::vector<State>& push_path, std::vector<movableObj
         auto obsRelo_state = obsRelo_candidates->at(0);
         State start_state = State(moPtr->get_x(),moPtr->get_y(),obsRelo_state.yaw);
         State start_pre_push = find_pre_push(start_state, params::pre_push_dist);
-        State goal_pre_push = find_pre_push(obsRelo_state, params::pre_push_dist);
+        State goal_pre_push = find_pre_push(obsRelo_state, params::pre_push_dist+params::pre_relo_pre_push_offset);
 
         //State start_pre_push = find_pre_push(*init_pusing_poses[valid_ind], params::pre_push_dist);
         //State goal_pre_push = find_pre_push(candidates[valid_ind], params::pre_push_dist);
@@ -1184,7 +1184,7 @@ ObsReloPlan find_relo_path(std::vector<State>& push_path, std::vector<movableObj
 }
 
 std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_path, 
-                                  graphTools::EdgeMatcher& edgeMatcher, GraphPtr gPtr, size_t& num_prereloc, Environment& env, std::vector<stopWatch>& time_watches)
+                                  graphTools::EdgeMatcher& edgeMatcher, NameMatcher& nameMatcher, GraphPtr gPtr, size_t& num_prereloc, Environment& env, std::vector<stopWatch>& time_watches)
 {
     std::vector<State> push_path(0);
     PathInfoList plist;
@@ -1192,6 +1192,8 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
     State from_state, to_state;
 
     num_prereloc = 0;
+
+    bool first_prerelo = true;
 
     // Env to find non-pushing path
     Environment env_nonpush(params::map_max_x, params::map_max_y, env.get_obs(), Constants::r_nonpush, Constants::LF_nonpush, true);
@@ -1207,7 +1209,7 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
         auto test_ = boost::edge(source, target, *gPtr).second;
 
         // delivering object
-        std::string vName = graphTools::getVertexName(vertex_path[0],gPtr);
+        std::string vName = graphTools::getVertexName(vertex_path.back(),gPtr);
 
         //print vetex names
         //std::cout << graphTools::getVertexName(source, gPtr) << " -> " << graphTools::getVertexName(target,gPtr) << std::endl; 
@@ -1239,6 +1241,31 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
        ///////// Check if Motion is feasible (i.e. is new pose accessible)
         for(auto& it : partial_path_info.pre_relocations) //first: source second: target
         {
+            if(first_prerelo && plist.paths.size()>0)
+            {
+                // mp
+                auto vertName = graphTools::getVertexName(source,gPtr);
+                auto mo = nameMatcher.getObject(vertName);
+                
+                //env_nonpush.remove_obs(State(mo->get_x(),mo->get_y(),0));
+
+                stopWatch time_mp("firstPreReloc", measurement_type::pathPlan);
+                auto to_prerelo_path = planHybridAstar(plist.paths.back().path.end()[-2] ,it.preReloDubins.startState, env_nonpush, params::grid_search_timeout, false);
+                time_mp.stop();
+                time_watches.push_back(time_mp);
+                if(!to_prerelo_path->success)
+                {
+                    // this plan is infeasible
+                    return std::make_pair(nullptr, plist);
+                }
+                auto m_path = to_prerelo_path->getPath(true);
+                PathInfo p(vName,moveType::app, plist.paths.back().path.end()[-2], it.pathToNextPush->start_pose, m_path,std::vector<bool>(m_path.size(), false)); //vertex name of delivering object
+                plist.push_back(p);
+
+                //env_nonpush.add_obs(State(mo->get_x(),mo->get_y(),0));
+
+                first_prerelo = false;
+            }
             if(it.pathToNextPush->states.size() == 0) // todo: this could be set more explicitly on earlier stage
             {
                 auto obs_rm = it.pathToNextPush->obs_rm;
@@ -1269,11 +1296,10 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
         if(partial_path_info.use_dubins)
         {
             // get interpolated list (prepath + final path)
-            auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step, vName);
+            auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step);
             auto interp_path = interp_path_pair.first;
             auto interp_pathinfo = interp_path_pair.second;
         
-            
             // omit last steps for arrival
             auto last_pose = interp_path->end();
             if(interp_path->size() > 2) // todo: find this better (i.e. slightly change last pose)
@@ -1818,7 +1844,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
         // path segments for relocation
         // final pushing
    
-        auto push_path_pair = get_push_path(min_list[min_list_ind]->path, edgeMatcher, gPtr, num_prereloc, env, time_watches);
+        auto push_path_pair = get_push_path(min_list[min_list_ind]->path, edgeMatcher, nameMatcher, gPtr, num_prereloc, env, time_watches);
         if(push_path_pair.first == nullptr)
         {
             // relo path search failed
@@ -1886,7 +1912,7 @@ ReloPathResult iterate_remaining_deliveries(Environment& env, StatePath& push_pa
             // repeat
             Color::println("REPLAN", Color::RED,Color::BG_YELLOW);
             continue;
-        }
+        }\
         
         // all necessary paths are found
         else

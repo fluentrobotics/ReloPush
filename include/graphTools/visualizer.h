@@ -181,9 +181,18 @@ visualization_msgs::MarkerArray draw_obstacles(std::vector<movableObject>& mo_li
         marker.scale.x = size; // Set the scale of the cube as desired
         marker.scale.y = size;
         marker.scale.z = size;
-        marker.color.r = 0.8274509803921568;
-        marker.color.g = 0.7254901960784313;
-        marker.color.b = 0.6235294117647059;
+        //marker.color.r = 0.8274509803921568;
+        //marker.color.g = 0.7254901960784313;
+        //marker.color.b = 0.6235294117647059;
+
+        //marker.color.r = 0.5764705882352941;
+        //marker.color.g = 0.7647058823529411;
+        //marker.color.b = 0.8627450980392157;
+
+        marker.color.r = 0.23137254901960785;
+        marker.color.g = 0.23921568627450981;
+        marker.color.b = 0.32941176470588235;
+
         marker.color.a = 1.0;
         
         marker_array.markers.push_back(marker);
@@ -481,9 +490,14 @@ visualization_msgs::MarkerArray draw_deliveries(std::vector<movableObject>& d_li
         marker.scale.x = size; // Adjust size as needed
         marker.scale.y = size;
         marker.scale.z = size;
-        marker.color.r = 0.439; //0.439, 0.545, 0.459
-        marker.color.g = 0.545;
-        marker.color.b = 0.459;
+        //marker.color.r = 0.439; //0.439, 0.545, 0.459
+        //marker.color.g = 0.545;
+        //marker.color.b = 0.459;
+
+        marker.color.r = 0.2196078431372549; //0.439, 0.545, 0.459
+        marker.color.g = 0.40784313725490196;
+        marker.color.b = 0.4196078431372549;
+
         marker.color.a = 0.67; // Fully opaque
         marker_array.markers.push_back(marker);
     }
@@ -583,9 +597,9 @@ visualization_msgs::Marker visualize_workspace_boundary(float& max_x, float& max
 
         // Define marker properties
         marker.scale.x = 0.02;  // Line width
-        marker.color.r = 1.0;
-        marker.color.g = 1.0;
-        marker.color.b = 1.0;
+        marker.color.r = 0.15294117647058825;
+        marker.color.g = 0.14901960784313725;
+        marker.color.b = 0.16862745098039217;
         marker.color.a = 0.33;
 
         // Publish the marker

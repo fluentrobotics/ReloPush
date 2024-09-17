@@ -333,7 +333,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    //const char* args[] = {"reloPush", "data_2o1r.txt", "1", "0", "proposed"};
+    //const char* args[] = {"reloPush", "data_6o2.txt", "18", "1", "proposed"};
     //argv = const_cast<char**>(args);
     //argc = 5;
 
@@ -484,6 +484,58 @@ int main(int argc, char **argv)
     ros::spinOnce();
     ros::Duration(0.01).sleep();
 
+#pragma region visualize_push_path
+
+    while(ros::ok())
+    {
+
+        // visualize push paths separately
+        std::vector<std::shared_ptr<nav_msgs::Path>> push_paths, non_push_paths;
+        std::vector<ros::Publisher> push_path_publishers, non_push_path_publishers;
+
+        int i=0;
+        int j=0;
+
+        for(auto& pathInfo : dcol.pathInfoList.paths)
+        {
+            if(pathInfo.is_pushing())
+            {
+                // parse to nav_msgs path
+                push_paths.push_back(statePath_to_navPath(pathInfo.path));
+                // make a publisher
+                std::string topic_name = "/car/push_path_" + std::to_string(i);  // Create a unique topic name for each path
+                push_path_publishers.push_back(nh.advertise<nav_msgs::Path>(topic_name, 10));
+                i++;
+            }
+            else
+            {
+                // parse to nav_msgs path
+                non_push_paths.push_back(statePath_to_navPath(pathInfo.path));
+                // make a publisher
+                std::string topic_name = "/car/non_push_path_" + std::to_string(j);  // Create a unique topic name for each path
+                non_push_path_publishers.push_back(nh.advertise<nav_msgs::Path>(topic_name, 10));
+                j++;
+            }
+        }
+        ros::spinOnce();
+        ros::Duration(0.2).sleep();
+        // publish the path
+        for (int i = 0; i < push_paths.size(); ++i) {
+            push_path_publishers[i].publish(*push_paths[i]);
+            ros::spinOnce();
+            ros::Duration(0.1).sleep();
+        }
+        for (int i = 0; i < non_push_paths.size(); ++i) {
+            non_push_path_publishers[i].publish(*non_push_paths[i]);
+            ros::spinOnce();
+            ros::Duration(0.1).sleep();
+        }
+        ros::spinOnce();
+        ros::Duration(0.5).sleep();
+    }
+    #pragma endregion
+    
+
     if(!params::leave_log && reloResult.is_succ)
     {
         
@@ -542,6 +594,11 @@ int main(int argc, char **argv)
 
     else
         ros::Duration(0.01).sleep();
+
+
+
+
+
 
 #pragma endregion
 
