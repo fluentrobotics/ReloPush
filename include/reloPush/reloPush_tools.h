@@ -293,7 +293,8 @@ nav_msgs::Path transformPath(const nav_msgs::Path& input_path, const tf::Transfo
 
 int find_post_push_ind(StatePath& s, Environment& env){
 
-    int pivot_ind = params::post_push_ind;
+    //int pivot_ind = params::post_push_ind;
+    int pivot_ind = -1;
     if(env.stateValid(s.end()[params::post_push_ind]).get_validity()==StateValidity::valid)
         return pivot_ind;
 
@@ -1250,12 +1251,13 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
                 //env_nonpush.remove_obs(State(mo->get_x(),mo->get_y(),0));
 
                 stopWatch time_mp("firstPreReloc", measurement_type::pathPlan);
-                auto to_prerelo_path = planHybridAstar(plist.paths.back().path.end()[-2] ,it.preReloDubins.startState, env_nonpush, params::grid_search_timeout, false);
+                auto to_prerelo_path = planHybridAstar(plist.paths.back().path.end()[-2] ,it.preReloDubins.startState, env_nonpush, params::grid_search_timeout, false); // todo: crashes
                 time_mp.stop();
                 time_watches.push_back(time_mp);
                 if(!to_prerelo_path->success)
                 {
                     // this plan is infeasible
+                    //std::cout << "first prerelo failed" << std::endl;
                     return std::make_pair(nullptr, plist);
                 }
                 auto m_path = to_prerelo_path->getPath(true);
@@ -1279,12 +1281,15 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
                 time_mp.stop();
                 time_watches.push_back(time_mp);
 
+                std::cout << it.pathToNextPush->validity << std::endl;
+
                 // restore env
                 env_nonpush.remove_obs(obs_add);
                 env_nonpush.add_obs(obs_rm);
                 if(!it.pathToNextPush->success)
                 {
                     // this plan is infeasible
+                    //std::cout << "prerelo failed" << std::endl;
                     return std::make_pair(nullptr, plist);
                 }
 
@@ -1299,38 +1304,89 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
             auto interp_path_pair = interpolate_dubins(partial_path_info, params::interpolation_step);
             auto interp_path = interp_path_pair.first;
             auto interp_pathinfo = interp_path_pair.second;
-        
+
+            int take_last_off = 3;
+            State landing_pose = find_pre_push(partial_path_info.targetState, params::pre_push_dist - 0.1);
+            
             // omit last steps for arrival
-            auto last_pose = interp_path->end();
-            if(interp_path->size() > 2) // todo: find this better (i.e. slightly change last pose)
-                last_pose = interp_path->end()-2;
+            auto last_pose = interp_path->end()-1;
+            if(interp_path->size() > take_last_off) // todo: find this better (i.e. slightly change last pose)
+                last_pose = interp_path->end()-take_last_off;
 
             push_path.insert(push_path.end(), interp_path->begin(), last_pose);
+
+            StatePath m_path_arrival(0);
+            if (interp_pathinfo.paths.back().path.size() > take_last_off-1){
+                m_path_arrival.resize(interp_pathinfo.paths.back().path.size() -take_last_off);
+                std::copy(interp_pathinfo.paths.back().path.begin(), interp_pathinfo.paths.back().path.end() - take_last_off, m_path_arrival.begin());
+                m_path_arrival.push_back(landing_pose);
+            }
+            else
+            {
+                //m_path_arrival.resize(interp_pathinfo.paths.back().path.size());
+                //std::copy(interp_pathinfo.paths.back().path.begin(), interp_pathinfo.paths.back().path.end(), m_path_arrival.begin());
+                m_path_arrival.push_back(landing_pose);
+            }
+
+            
+            interp_pathinfo.paths.back().path = m_path_arrival;
+            interp_pathinfo.paths.back().is_forward = std::vector<bool>(m_path_arrival.size(),true);
+
+            // take out from m_path
+            //StatePath m_path_arrival(0);
+            //if (interp_path->size() > take_last_off){
+                //m_path_arrival.resize(interp_path->size() -take_last_off);
+                //std::copy(interp_path->begin(), interp_path->end() - take_last_off, m_path_arrival.begin());
+                //m_path_arrival.push_back(landing_pose);
+            //}
+            //else
+            //    m_path_arrival = *interp_path;
+
             // todo: find this better
-            interp_pathinfo.paths.back().path.pop_back();       
-            interp_pathinfo.paths.back().is_forward.pop_back();
+      
+              //  interp_pathinfo.paths.back().path.pop_back();       
+              //  interp_pathinfo.paths.back().is_forward.pop_back();
+            
+            //interp_pathinfo.paths.back().path.push_back(landing_pose);
+            //interp_pathinfo.paths.back().is_forward.push_back(true);
+            //interp_pathinfo.paths.back().path = m_path_arrival;
+            //interp_pathinfo.paths.back().is_forward = std::vector<bool>(m_path_arrival.size(),true)
+
 
             plist.append(interp_pathinfo);
         }
         else // manual path
         {
             StatePath m_path = *partial_path_info.manual_path;
+            int take_last_off = 4;
+            State landing_pose = find_pre_push(partial_path_info.targetState, params::pre_push_dist - 0.15);
             // omit last steps for arrival
             auto last_pose = m_path.end();
             if(m_path.size() > 1) // todo: find this better (i.e. slightly change last pose)
-                last_pose = m_path.end()-2;
+                last_pose = m_path.end()-take_last_off;
+
+            // take out from m_path
+            StatePath m_path_arrival(0);
+            if (m_path.size() > take_last_off){
+                m_path_arrival.resize(m_path.size() -take_last_off);
+                std::copy(m_path.begin(), m_path.end() - take_last_off, m_path_arrival.begin());
+                m_path_arrival.push_back(landing_pose);
+            }
+            else
+                m_path_arrival = m_path;
 
             push_path.insert(push_path.end(), m_path.begin(), last_pose);
+            push_path.push_back(landing_pose);
 
             // path info
-            PathInfo p(vName,moveType::final,partial_path_info.sourceState,partial_path_info.targetState,m_path,std::vector<bool>(m_path.size(),true)); //vertex name of delivering object
+            PathInfo p(vName,moveType::final,partial_path_info.sourceState,partial_path_info.targetState,m_path_arrival,std::vector<bool>(m_path_arrival.size(),true)); //vertex name of delivering object
             plist.push_back(p);
         }
     }    
 
     // update obstacles
-    //env.remove_obs(from_state);
-    //env.add_obs(to_state);
+    env.remove_obs(from_state);
+    env.add_obs(to_state);
     env.changeLF(Constants::LF_nonpush);
 
     // add pose-push pose
@@ -1341,10 +1397,15 @@ std::pair<StatePathPtr,PathInfoList> get_push_path(std::vector<Vertex>& vertex_p
         post_push = push_path.end()[post_ind];
     //else
     //    post_push = push_path[0];
-    push_path.push_back(post_push);
-    plist.paths.back().path.push_back(post_push); // add to path info as well
-    plist.paths.back().is_forward.push_back(false);
+    if(post_ind != -1)
+    {
+        push_path.push_back(post_push);
+        plist.paths.back().path.push_back(post_push); // add to path info as well
+        plist.paths.back().is_forward.push_back(false);
+    }
     env.changeLF(Constants::LF_push);
+    env.add_obs(from_state);
+    env.remove_obs(to_state);
     
     //return final_path, pathinfo list;
     return std::make_pair(std::make_shared<StatePath>(push_path),plist);

@@ -189,9 +189,15 @@ visualization_msgs::MarkerArray draw_obstacles(std::vector<movableObject>& mo_li
         //marker.color.g = 0.7647058823529411;
         //marker.color.b = 0.8627450980392157;
 
-        marker.color.r = 0.23137254901960785;
-        marker.color.g = 0.23921568627450981;
-        marker.color.b = 0.32941176470588235;
+        // for figure
+        //marker.color.r = 0.23137254901960785;
+        //marker.color.g = 0.23921568627450981;
+        //marker.color.b = 0.32941176470588235;
+
+        // for video
+        marker.color.r = 1;
+        marker.color.g = 0.8196078;
+        marker.color.b = 0.4;
 
         marker.color.a = 1.0;
         
@@ -494,11 +500,17 @@ visualization_msgs::MarkerArray draw_deliveries(std::vector<movableObject>& d_li
         //marker.color.g = 0.545;
         //marker.color.b = 0.459;
 
-        marker.color.r = 0.2196078431372549; //0.439, 0.545, 0.459
-        marker.color.g = 0.40784313725490196;
-        marker.color.b = 0.4196078431372549;
+        // for figure
+        //marker.color.r = 0.2196078431372549; //0.439, 0.545, 0.459
+        //marker.color.g = 0.40784313725490196;
+        //marker.color.b = 0.4196078431372549;
 
-        marker.color.a = 0.67; // Fully opaque
+        // for video
+        marker.color.r = 0.9372549019607843; //0.439, 0.545, 0.459
+        marker.color.g = 0.2784313725490196;
+        marker.color.b = 0.43529411764705883;
+
+        marker.color.a = 0.5; // Fully opaque
         marker_array.markers.push_back(marker);
     }
     pub_ptr->publish(marker_array);
@@ -583,10 +595,10 @@ visualization_msgs::Marker visualize_workspace_boundary(float& max_x, float& max
 
         // Define the rectangle points (assuming it's axis-aligned for simplicity)
         geometry_msgs::Point p1, p2, p3, p4;
-        p1.x = 0.0; p1.y = 0.0; p1.z = 0.0;
-        p2.x = max_x; p2.y = 0.0; p2.z = 0.0;
-        p3.x = max_x; p3.y = max_y; p3.z = 0.0;
-        p4.x = 0.0; p4.y = max_y; p4.z = 0.0;
+        p1.x = -0.1; p1.y = -0.1; p1.z = 0.0;
+        p2.x = max_x+0.1; p2.y = -0.1; p2.z = 0.0;
+        p3.x = max_x+0.1; p3.y = max_y; p3.z = 0.0;
+        p4.x = -0.1; p4.y = max_y; p4.z = 0.0;
 
         // Add the points to the marker
         marker.points.push_back(p1);
@@ -596,10 +608,18 @@ visualization_msgs::Marker visualize_workspace_boundary(float& max_x, float& max
         marker.points.push_back(p1);  // Close the rectangle by returning to the first point
 
         // Define marker properties
+        // for figure
+        //marker.scale.x = 0.02;  // Line width
+        //marker.color.r = 0.15294117647058825;
+        //marker.color.g = 0.14901960784313725;
+        //marker.color.b = 0.16862745098039217;
+        //marker.color.a = 0.33;
+
+        //for video
         marker.scale.x = 0.02;  // Line width
-        marker.color.r = 0.15294117647058825;
-        marker.color.g = 0.14901960784313725;
-        marker.color.b = 0.16862745098039217;
+        marker.color.r = 1;
+        marker.color.g = 0.9882352941176471;
+        marker.color.b = 0.9764705882352941;
         marker.color.a = 0.33;
 
         // Publish the marker

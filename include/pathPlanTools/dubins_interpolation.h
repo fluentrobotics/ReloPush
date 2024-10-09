@@ -30,8 +30,9 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
         {
             auto l_pre = dubins_pre.lengthCost(); // unit cost * turning rad
             auto num_pts_pre = static_cast<size_t>(l_pre/path_resolution);
-            preReloStateVec.resize(num_pts_pre);
+            preReloStateVec.resize(num_pts_pre+1); // fix for not counting pre-relocation distance
             State startState = it.preReloDubins.startState;
+            preReloStateVec[0] = startState;
 
             ompl::base::DubinsStateSpace dubinsSpace(turning_rad);
             OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
@@ -39,7 +40,7 @@ std::pair<std::shared_ptr<std::vector<State>>,PathInfoList> interpolate_dubins(g
             dubinsStart->setYaw(startState.yaw);
             OmplState *interState = (OmplState *)dubinsSpace.allocState();
 
-            for (size_t np=0; np<num_pts_pre; np++)
+            for (size_t np=1; np<num_pts_pre+1; np++)
             {            
                 //auto start = std::chrono::steady_clock::now();
                 jeeho_interpolate(dubinsStart, dubins_pre.omplDubins, (double)np / (double)num_pts_pre, interState, &dubinsSpace,

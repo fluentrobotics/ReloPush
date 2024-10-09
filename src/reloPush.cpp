@@ -333,7 +333,7 @@ reloPlanResult reloLoop(std::unordered_set<State>& obs, std::vector<movableObjec
 
 int main(int argc, char **argv) 
 {
-    //const char* args[] = {"reloPush", "data_6o2.txt", "18", "1", "proposed"};
+    //const char* args[] = {"reloPush", "data_demo.txt", "0", "1", "proposed"};
     //argv = const_cast<char**>(args);
     //argc = 5;
 
@@ -485,7 +485,7 @@ int main(int argc, char **argv)
     ros::Duration(0.01).sleep();
 
 #pragma region visualize_push_path
-
+/*
     while(ros::ok())
     {
 
@@ -517,6 +517,7 @@ int main(int argc, char **argv)
                 j++;
             }
         }
+        std::cout << "n push: " << dcol.pathInfoList.paths[1].pathLength() << std::endl;
         ros::spinOnce();
         ros::Duration(0.2).sleep();
         // publish the path
@@ -533,6 +534,7 @@ int main(int argc, char **argv)
         ros::spinOnce();
         ros::Duration(0.5).sleep();
     }
+    */
     #pragma endregion
     
 
