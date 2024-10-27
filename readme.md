@@ -66,6 +66,3 @@ rosrun reloPush reloPush {test_data_filename} {data_index} {record_log} {method}
   year={2024}
 }
 ```
-
-## License
-This project is under [MIT](https://opensource.org/licenses/MIT) License.
