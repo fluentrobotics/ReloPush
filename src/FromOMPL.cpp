@@ -160,6 +160,7 @@ bool fromOMPL::is_longpath_case(double d, double alpha, double beta)
 }
 
 
+
 DubinsClass getDubinsClass(const double alpha, const double beta)
 {
     int row(0), column(0);

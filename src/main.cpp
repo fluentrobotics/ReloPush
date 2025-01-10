@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     //}
 
     //std::string filename = argv[1];
-    std::string filename = "input.txt";
+    std::string filename = "input2.txt";
 
     // We'll parse the boundary, plus objects & goals
     WorkspaceBoundary boundary;
@@ -112,6 +112,31 @@ int main(int argc, char *argv[])
         chosen.col        = best.col;
         chosen.startPose = State(chosen.object.x,chosen.object.y,chosen.object.getOrientation(chosen.row));
         chosen.goalPose = State(chosen.goal.x, chosen.goal.y, chosen.goal.getOrientation(chosen.col));
+
+        // Look up the actual edge in the graph & read pre-relocation info
+        auto objVerts  = getObjectVertices(g, best.objectName);
+        auto goalVerts = getGoalVertices(g, best.goalName);
+
+        if (best.row < (int)objVerts.size() && best.col < (int)goalVerts.size())
+        {
+            Vertex vObj  = objVerts[best.row];
+            Vertex vGoal = goalVerts[best.col];
+
+            Edge e; bool hasEdge;
+            boost::tie(e, hasEdge) = boost::edge(vObj, vGoal, g);
+            if (hasEdge)
+            {
+                const auto &ed = g[e];
+                if (ed.mode == ConnectionMode::PRE_RELOCATION && ed.preRelo.used)
+                {
+                    chosen.usedPreRelocation = true;
+                    chosen.xRelocated        = ed.preRelo.xRelocated;
+                    chosen.yRelocated        = ed.preRelo.yRelocated;
+                    chosen.preReloCost       = ed.preRelo.extraCost;
+                }
+            }
+        }
+
         finalSequence.push_back(chosen);
 
         // (h) Remove the chosen pair from objGoalPairs
@@ -138,6 +163,24 @@ int main(int argc, char *argv[])
         // Export to txt
         //exportToTxt(4,5,objects,goals,g,"test.txt");
 
+    }
+
+    std::cout << "\nFinal sequence of chosen tasks:\n";
+    for (auto &fa : finalSequence)
+    {
+        std::cout << "Object = " << fa.object.name
+                  << ", Goal = " << fa.goal.name
+                  << ", cost = " << fa.cost
+                  << " (starting yaw = " << fa.startPose.yaw << " rad"
+                  << ", landing yaw = " << fa.goalPose.yaw << " rad)\n";
+
+        if (fa.usedPreRelocation)
+        {
+            std::cout << "   **Used Pre-Relocation**: Moved start from ("
+                      << fa.object.x << ", " << fa.object.y << ") to ("
+                      << fa.xRelocated << ", " << fa.yRelocated << ")"
+                      << " for cost=" << fa.preReloCost << "\n";
+        }
     }
 
     return 0;

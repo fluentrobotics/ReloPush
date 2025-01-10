@@ -259,6 +259,14 @@ float get_current_longpath_d(State& s1, State& s2)
     return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta));
 }
 
+bool is_longpath_case(State& s1, State& s2, double turning_rad)
+{
+    double alpha, beta;
+    find_alpha_beta_ompl(s1,s2,alpha,beta); //todo: investigate if OMPL's alpha and beta is needed
+    double dx = s2.x - s1.x, dy = s2.y - s1.y, d = sqrt(dx * dx + dy * dy) / turning_rad;
+    return fromOMPL::is_longpath_case(d,alpha,beta);
+}
+
 // returns euclidean distance threshold (not normalized by turning radius)
 // float get_longpath_d_thres(State& s1, State& s2, float turning_rad)
 // {

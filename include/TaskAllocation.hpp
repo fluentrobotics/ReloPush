@@ -81,16 +81,22 @@ struct LowestCostInfo
 
 struct FinalAllocation
 {
-    //std::string objectName;
-    //std::string goalName;
-    double cost;
-    int row;
-    int col;
     ObjectInfo object;
     GoalInfo goal;
 
+    double cost;
+    int row;
+    int col;
+
+    // The actual states used
     State startPose;
     State goalPose;
+
+    // Pre-relocation info
+    bool usedPreRelocation = false;
+    double xRelocated      = 0.0;
+    double yRelocated      = 0.0;
+    double preReloCost     = 0.0;
 };
 
 class FinalTaskSequence

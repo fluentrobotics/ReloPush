@@ -224,6 +224,153 @@ StateValidity addEdgeNormalMode(
     }
 }
 
+StateValidity addEdgePrerelocation(
+    Graph &g,
+    Vertex v1,
+    Vertex v2,
+    PlanningContext &ctx)
+{
+    // 1) Info about the start/goal
+    const auto &data1 = g[v1];
+    const auto &data2 = g[v2];
+
+    State startPose(data1.x, data1.y, data1.getActualOrientation());
+    State goalPose(data2.x, data2.y, data2.getActualOrientation());
+
+    int nSides = data1.numberOfSides;
+    int startOriIndex = data1.orientationIndex; // the orientation that failed
+    double mapRes = 0.1; // or ctx.params.mapResolution, etc.
+
+    // Temporarily remove the start and goal from the obstacles list
+    ctx.env.remove_obs(startPose);
+    ctx.env.remove_obs(goalPose);
+
+    // set goal on map for costmap
+    ctx.env.changeGoal(goalPose);
+
+    // 2) We'll attempt to relocate the start position in multiple directions
+    //    derived from the "other" orientation indices of the object.
+    //    e.g., if startOriIndex=0, we skip 0, try i=1..nSides-1
+    //    or you can interpret "the axis" differently.
+    //
+    // For each orientation i != startOriIndex:
+    //   directionAngle = data1.nominalOrientation + (2*pi / nSides) * i
+    //   then we shift the original x,y along directionAngle by increments
+
+    // Because user wants to keep the same "heading" but shift position,
+    // we do *not* change 'startPose.yaw'. We only change 'x,y' along each axis.
+
+    double bestCost = std::numeric_limits<double>::infinity();
+    bool foundAny = false;
+    State bestRelocated; // store best relocation found
+
+    // For each orientation axis
+    for (int i = 0; i < nSides; ++i)
+    {
+        if (i == startOriIndex)
+            continue; // skip the original orientation used in normalMode
+
+        double sideAngle = data1.nominalOrientation + (2.0*M_PI / nSides) * i;
+        sideAngle = fromOMPL::mod2pi(sideAngle);
+
+        // We'll do a simple loop for some fixed # of steps (e.g. up to distance 5?)
+        // or until we find a feasible relocation
+        double maxShiftDist = 5.0;  // you decide
+        int maxSteps = static_cast<int>(maxShiftDist / mapRes);
+
+        for (int step = 1; step <= maxSteps; step++)
+        {
+            double shiftDist = step * mapRes;
+            double xNew = startPose.x + shiftDist * std::cos(sideAngle);
+            double yNew = startPose.y + shiftDist * std::sin(sideAngle);
+
+            // Construct a new start
+            State relocated(xNew, yNew, startPose.yaw);
+
+            // 2a) Quick boundary/collision checks if desired:
+            if (!ctx.env.stateValid(relocated))
+                break; // no reason to keep going further in this direction
+
+            // 2b) Now check if is_longpath_case(...) says it's "good."
+            if (!is_longpath_case(relocated, goalPose, ctx.parameters.turning_rad_pair.push))
+            {
+                // not a good candidate, try next step
+                continue;
+            }
+
+            // 2c) If it's "good," compute total cost:
+            //   relocation cost = distance from (start.x, start.y) to (xNew, yNew)
+            double relocationDist = shiftDist;  // if we interpret shiftDist as Eucl. distance
+            // Then plan a Dubins path from 'relocated' to 'goalPose'
+            //   e.g. auto dubinsRes = PlanDubins(relocated, goalPose, ctx);
+            auto dubinsRes = PlanDubins(relocated, goalPose, ctx);
+            // check validity, etc.
+            if (dubinsRes.first == pathType::SP)
+            {
+                // dubins planner failed, skip
+                continue;
+            }
+            double dubinsCost = dubinsRes.second.lengthCost();
+            double totalCost = relocationDist + dubinsCost;
+
+            // 2d) If totalCost < bestCost, update best
+            if (totalCost < bestCost)
+            {
+                bestCost = totalCost;
+                bestRelocated = relocated;
+                foundAny = true;
+            }
+
+            // If you want to break as soon as you find the *first* feasible:
+            // you can break here. If you want the best among all possible,
+            // keep looping.
+
+        }
+    }
+
+    // restore start and goal as obstacles
+    ctx.env.add_obs(startPose);
+    ctx.env.add_obs(goalPose);
+
+    if (!foundAny)
+    {
+        // we never found a valid pre-relocation
+        return StateValidity::out_of_boundary;
+    }
+    else
+    {
+        // 3) We found some best relocation => create an edge in the graph
+        Edge e;
+        bool inserted;
+        boost::tie(e, inserted) = boost::add_edge(v1, v2, g);
+
+        if (inserted)
+        {
+            g[e].weight = bestCost;
+            g[e].mode   = ConnectionMode::PRE_RELOCATION;
+            g[e].preRelo.used        = true;
+            g[e].preRelo.xRelocated  = bestRelocated.x;
+            g[e].preRelo.yRelocated  = bestRelocated.y;
+            g[e].preRelo.extraCost   = std::hypot(bestRelocated.x - startPose.x,
+                                                bestRelocated.y - startPose.y);
+            // Also store path, if you want:
+            //   The path from (start.x, start.y) -> (bestRelocated.x, bestRelocated.y)
+            //   is just a straight line, or you could store an actual "relocation path".
+            //   Then append the Dubins path from bestRelocated -> goalPose.
+            //   For example: g[e].paths = { relocationPath, dubinsRes.second };
+
+            return StateValidity::valid;
+        }
+    }
+
+
+
+    return StateValidity::out_of_boundary;
+}
+
+
+
+
 bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
 {
     const auto &data1 = g[v1];
@@ -238,6 +385,13 @@ bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
         if(normalEdge != StateValidity::valid)
         {
             // find pre-relocation
+            StateValidity preRelocationEdge = addEdgePrerelocation(g,v1,v2,ctx);
+            if(preRelocationEdge == StateValidity::valid)
+                return true;
+        }
+        else
+        {
+            return true;
         }
     }
     // skip for same object

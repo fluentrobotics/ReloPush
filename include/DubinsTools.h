@@ -164,13 +164,9 @@ enum pathType
   none = -1 //not a path
 };
 
-
-
 StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningContext& ctx);
 
-
 std::vector<State> interpolateStraightPath(const State& start, const State& goal, float resolution);
-
 
 reloDubinsPath findDubins(State &start, State &goal, double turning_radius = 1.0, bool print_type = false);
 
@@ -179,6 +175,7 @@ Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, d
 
 float get_current_longpath_d(State& s1, State& s2);
 float get_longpath_d_thres(State& s1, State& s2, float turning_rad = 1.0f);
+bool is_longpath_case(State& s1, State& s2, double turning_rad);
 //std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad, bool use_pre_push_pose = true);
 
 std::pair<pathType,reloDubinsPath> PlanDubins(State& s1, State& s2, PlanningContext& ctx, bool use_pre_push_pose = true);

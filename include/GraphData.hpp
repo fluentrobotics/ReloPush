@@ -27,6 +27,14 @@ enum class ConnectionMode
     PRE_RELOCATION  // "preRelocation"
 };
 
+struct PreRelocationInfo
+{
+    bool used;              ///< Did we actually do a pre-relocation?
+    double xRelocated;      ///< The relocated X of the start
+    double yRelocated;      ///< The relocated Y of the start
+    double extraCost;       ///< The cost (distance) of this relocation alone
+};
+
 
 /**
  * @brief The data stored at each vertex in the graph.
@@ -93,10 +101,18 @@ struct EdgeData
     // Record which mode was used to create this edge
     ConnectionMode mode;
 
+    // Additional info about pre-relocation
+    PreRelocationInfo preRelo;
+
     EdgeData()
         : weight(0.0),
         mode(ConnectionMode::NONE)
-    {}
+    {
+        preRelo.used        = false;
+        preRelo.xRelocated  = 0.0;
+        preRelo.yRelocated  = 0.0;
+        preRelo.extraCost   = 0.0;
+    }
 };
 
 /**
