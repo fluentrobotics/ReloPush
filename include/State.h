@@ -9,6 +9,8 @@
 
 typedef boost::geometry::model::d2::point_xy<double> Point;
 
+
+
 struct State
 {
 
@@ -83,5 +85,8 @@ typedef std::vector<State> StatePath;
 typedef std::shared_ptr<StatePath> StatePathPtr;
 typedef std::vector<StatePath> StatePathList;
 typedef std::shared_ptr<StatePathList> StatePathListPtr;
+
+
+
 
 #endif

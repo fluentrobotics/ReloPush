@@ -29,10 +29,12 @@ enum class ConnectionMode
 
 struct PreRelocationInfo
 {
-    bool used;              ///< Did we actually do a pre-relocation?
-    double xRelocated;      ///< The relocated X of the start
-    double yRelocated;      ///< The relocated Y of the start
-    double extraCost;       ///< The cost (distance) of this relocation alone
+    bool used;               ///< true if we did pre-relocation
+    double xRelocated;       ///< relocated X
+    double yRelocated;       ///< relocated Y
+    double extraCost;        ///< cost of that relocation alone
+    int relocatingIndex;     ///< which orientation axis we used, e.g. i in [0..nSides-1]
+    // or double relocatingAngle; // if you prefer storing actual angle
 };
 
 
@@ -112,6 +114,7 @@ struct EdgeData
         preRelo.xRelocated  = 0.0;
         preRelo.yRelocated  = 0.0;
         preRelo.extraCost   = 0.0;
+        preRelo.relocatingIndex = -1;
     }
 };
 

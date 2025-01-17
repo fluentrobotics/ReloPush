@@ -156,7 +156,11 @@ double fromOMPL::longpath_thres_dist(double& alpha, double& beta)
 // from OMPL
 bool fromOMPL::is_longpath_case(double d, double alpha, double beta)
 {
-    return (longpath_thres_dist(alpha,beta) - d) < 0;
+    // for debug
+    auto d_th = longpath_thres_dist(alpha,beta);
+    return (d_th - d) < 0;
+
+    //return (longpath_thres_dist(alpha,beta) - d) < 0;
 }
 
 

@@ -263,6 +263,7 @@ StateValidity addEdgePrerelocation(
     double bestCost = std::numeric_limits<double>::infinity();
     bool foundAny = false;
     State bestRelocated; // store best relocation found
+    int bestOrientationIndex = 1;
 
     // For each orientation axis
     for (int i = 0; i < nSides; ++i)
@@ -319,6 +320,7 @@ StateValidity addEdgePrerelocation(
                 bestCost = totalCost;
                 bestRelocated = relocated;
                 foundAny = true;
+                bestOrientationIndex = i;
             }
 
             // If you want to break as soon as you find the *first* feasible:
@@ -353,6 +355,7 @@ StateValidity addEdgePrerelocation(
             g[e].preRelo.yRelocated  = bestRelocated.y;
             g[e].preRelo.extraCost   = std::hypot(bestRelocated.x - startPose.x,
                                                 bestRelocated.y - startPose.y);
+            g[e].preRelo.relocatingIndex= bestOrientationIndex;
             // Also store path, if you want:
             //   The path from (start.x, start.y) -> (bestRelocated.x, bestRelocated.y)
             //   is just a straight line, or you could store an actual "relocation path".

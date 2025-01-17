@@ -194,6 +194,8 @@ ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, d
         std::cout << fabs(dubinsPath.length_[pathidx]) << std::endl;
     }
 
+    std::cout << "Total Length: " << dubinsPath.length() * turning_radius << std::endl;
+
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
     // auto path_g = generateSmoothPath(dubinsPath,0.1);
 
@@ -225,8 +227,12 @@ int main(int /*argc*/, char ** /*argv*/)
 
     //State start(-0.256899,2.79287, 0);
     //State goal(1.3815808296203613,2.2772977352142334, 0);
-    State start(0.906355,2.29097, 0.2562);
-    State goal(1.3815808296203613,2.2772977352142334, 0);
+
+
+    ///State start(0.906355,2.29097, 0.2562);
+    ///State goal(1.3815808296203613,2.2772977352142334, 0);
+
+
     //New X: 1.38189
     //New Y: 2.40132
     //New X: -0.301736
@@ -237,13 +243,16 @@ int main(int /*argc*/, char ** /*argv*/)
     //New Y: 2.50049
     //State start(0.223708,2.50049, 0);
 
-    //New X: 0.387293
-    //New Y: 2.38971
-    //New th2: 0.117008
-    //State start(0.387293,2.38971, 0);
-    //State goal(1.3815808296203613,2.2772977352142334, -0.117008);
+    State start(1, 3.2, 1.5 * M_PI);
+    State goal(1.5, 1.5, 1.5 * M_PI + 0.7);
 
-    findDubins(start, goal,1.43061495);
+    // New X: 0.387293
+    // New Y: 2.38971
+    // New th2: 0.117008
+    // State start(0.387293,2.38971, 0);
+    // State goal(1.3815808296203613,2.2772977352142334, -0.117008);
+
+    findDubins(start, goal, 1.23855733871);
     //  findDubins(start, goal,1);
 
 

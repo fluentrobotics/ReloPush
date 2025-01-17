@@ -133,6 +133,7 @@ int main(int argc, char *argv[])
                     chosen.xRelocated        = ed.preRelo.xRelocated;
                     chosen.yRelocated        = ed.preRelo.yRelocated;
                     chosen.preReloCost       = ed.preRelo.extraCost;
+                    chosen.relocatingIndex   = ed.preRelo.relocatingIndex;
                 }
             }
         }
@@ -170,17 +171,19 @@ int main(int argc, char *argv[])
     {
         std::cout << "Object = " << fa.object.name
                   << ", Goal = " << fa.goal.name
-                  << ", cost = " << fa.cost
-                  << " (starting yaw = " << fa.startPose.yaw << " rad"
-                  << ", landing yaw = " << fa.goalPose.yaw << " rad)\n";
+                  << ", cost = " << fa.cost << "\n"
+                  << "  start yaw = " << fa.startPose.yaw
+                  << ", goal yaw = " << fa.goalPose.yaw << "\n";
 
         if (fa.usedPreRelocation)
         {
-            std::cout << "   **Used Pre-Relocation**: Moved start from ("
+            std::cout << "  **Used pre-relocation**: Moved start from ("
                       << fa.object.x << ", " << fa.object.y << ") to ("
-                      << fa.xRelocated << ", " << fa.yRelocated << ")"
-                      << " for cost=" << fa.preReloCost << "\n";
+                      << fa.xRelocated << ", " << fa.yRelocated << "), cost="
+                      << fa.preReloCost << ", orientation index="
+                      << fa.relocatingIndex << "\n";
         }
+        std::cout << std::endl;
     }
 
     return 0;

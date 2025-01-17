@@ -25,6 +25,8 @@ if(NOT Eigen3_FOUND)
     message(FATAL_ERROR "\n Eigen 3 NOT FOUND \n")
 endif()
 
+find_package(Ceres REQUIRED)
+
 include_directories(include ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS})
 
 ## ODE ##
@@ -55,12 +57,20 @@ target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBR
 add_executable(test_dubins test/test_dubins.cpp)
 target_link_libraries(test_dubins ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
 
+# Pre-relocation Optimization
+add_executable(test_prerelo_opt test/test_prerelo_optimization.cpp)
+target_link_libraries(test_prerelo_opt Ceres::ceres ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
+
 include(GNUInstallDirs)
 install(TARGETS ReloPush
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(TARGETS test_dubins
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS test_prerelo_opt
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

@@ -97,6 +97,7 @@ struct FinalAllocation
     double xRelocated      = 0.0;
     double yRelocated      = 0.0;
     double preReloCost     = 0.0;
+    int relocatingIndex    = -1; // or double relocatingAngle
 };
 
 class FinalTaskSequence
