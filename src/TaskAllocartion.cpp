@@ -15,12 +15,12 @@ void PairCostResult::remove_top(void)
     }
 }
 
-std::vector<State> FinalTaskSequence::to_StateList(void)
+std::vector<ReloPush::State> FinalTaskSequence::to_StateList(void)
 {
-    std::vector<State> out_list(task_sequence.size());
+    std::vector<ReloPush::State> out_list(task_sequence.size());
     
     for(size_t n=0; n<task_sequence.size(); n++)
-        out_list[n] = State(task_sequence[n].goal.x, task_sequence[n].goal.y, task_sequence[n].goal.nominalOrientation);
+        out_list[n] = ReloPush::State(task_sequence[n].goal.x, task_sequence[n].goal.y, task_sequence[n].goal.nominalOrientation);
 
     return out_list;
 }

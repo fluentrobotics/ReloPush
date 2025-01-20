@@ -89,8 +89,8 @@ struct FinalAllocation
     int col;
 
     // The actual states used
-    State startPose;
-    State goalPose;
+    ReloPush::State startPose;
+    ReloPush::State goalPose;
 
     // Pre-relocation info
     bool usedPreRelocation = false;
@@ -105,7 +105,7 @@ class FinalTaskSequence
 public:
     std::vector<FinalAllocation> task_sequence;
 
-    std::vector<State> to_StateList(void);
+    std::vector<ReloPush::State> to_StateList(void);
 };
 
 

@@ -19,6 +19,21 @@ struct ObjectInfo
     int numberOfSides;
     double enclosingRadius;
 
+    ObjectInfo()
+    {
+        x = 0;
+        y = 0;
+        nominalOrientation = 0;
+        numberOfSides = 0;
+        enclosingRadius = 0;
+    }
+
+    ObjectInfo(std::string name_in, double x_in, double y_in, double nominal_yaw, double radius)
+        : name(name_in), x(x_in), y(y_in), nominalOrientation(nominal_yaw), enclosingRadius(radius)
+    {
+        numberOfSides = 4;
+    }
+
     double getOrientation(int orientationIndex) const
     {
         // If numberOfSides <= 0, fallback or just return nominalOrientation

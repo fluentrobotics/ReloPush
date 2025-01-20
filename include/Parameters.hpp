@@ -6,9 +6,16 @@
 struct WorkspaceBoundary
 {
     double xMin = 0.0;
-    double xMax = 0.0;
+    double xMax = 4.0;
     double yMin = 0.0;
-    double yMax = 0.0;
+    double yMax = 5.0;
+
+    WorkspaceBoundary()
+    {}
+
+    WorkspaceBoundary(double xMax_in, double yMax_in) : xMax(xMax_in), yMax(yMax_in)
+    {}
+
 };
 
 struct TurningRadiusPair

@@ -9,7 +9,7 @@
 #include <variant>
 #include <DubinsTools.h>
 
-using EdgePathTypes = std::variant<reloDubinsPath, StatePathPtr>; // for storing in edge
+using EdgePathTypes = std::variant<reloDubinsPath, ReloPush::StatePathPtr>; // for storing in edge
 
 /**
  * @brief Distinguish whether a vertex is for an object or a goal.
@@ -34,6 +34,7 @@ struct PreRelocationInfo
     double yRelocated;       ///< relocated Y
     double extraCost;        ///< cost of that relocation alone
     int relocatingIndex;     ///< which orientation axis we used, e.g. i in [0..nSides-1]
+    StateValidity reason;   ///< reason for prerelocation
     // or double relocatingAngle; // if you prefer storing actual angle
 };
 

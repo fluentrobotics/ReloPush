@@ -66,11 +66,11 @@ void exportToTxt(
 
         for (const auto &pathVariant : edgeData.paths)
         {
-            StatePathPtr statePath;
+            ReloPush::StatePathPtr statePath;
             // Check if the variant holds a StatePathPtr
-            if (std::holds_alternative<StatePathPtr>(pathVariant))
+            if (std::holds_alternative<ReloPush::StatePathPtr>(pathVariant))
             {
-                statePath = std::get<StatePathPtr>(pathVariant);
+                statePath = std::get<ReloPush::StatePathPtr>(pathVariant);
 
             }
             // If needed, handle reloDubinsPath here (currently ignored)
@@ -85,7 +85,7 @@ void exportToTxt(
                 std::string pathLine;
                 for (size_t i = 0; i < statePath->size(); ++i)
                 {
-                    const State &state = (*statePath)[i];
+                    const ReloPush::State &state = (*statePath)[i];
                     pathLine += std::to_string(state.x) + "," + std::to_string(state.y) + "," + std::to_string(state.yaw);
                     if (i != statePath->size() - 1)
                         pathLine += ";";

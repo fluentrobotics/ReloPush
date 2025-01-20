@@ -5,6 +5,7 @@
 //#include "Parameters.hpp"
 #include <PlanningContext.hpp>
 #include <vector>
+#include <PreReloOptimization.hpp>
 
 struct ObjectGoalPair
 {

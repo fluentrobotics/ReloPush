@@ -116,9 +116,12 @@ StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningConte
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
     dubinsStart->setXY(dubins_in.startState.x, dubins_in.startState.y);
     dubinsStart->setYaw(dubins_in.startState.yaw);
+
+
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
 
-    std::vector<State> main_push_path(num_pts);
+
+    std::vector<ReloPush::State> main_push_path(num_pts);
 
     bool failed_flag = false;
     StateValidity out_validity = StateValidity::valid;
@@ -134,11 +137,11 @@ StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningConte
             jeeho_interpolate(dubinsStart, dubins_in.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
                               ctx.parameters.turning_rad_pair.push);
 
-            State tempState(interState->getX(), interState->getY(),interState->getYaw());
+            ReloPush::State tempState(interState->getX(), interState->getY(),interState->getYaw());
             main_push_path[np] = tempState; // failed State at the last
 
             // check boundary
-            auto tempValid = ctx.env.stateValid(tempState, ctx.parameters.car_width, ctx.parameters.obs_rad, ctx.parameters.LB);
+            auto tempValid = ctx.env.stateValid(tempState, ctx.parameters.car_width, ctx.parameters.obs_rad,ctx.parameters.obs_rad, ctx.parameters.LB); // obs as LF
             if(!tempValid)
             {
                 // reason for failure
@@ -156,7 +159,7 @@ StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningConte
         main_push_path[0] = dubins_in.targetState;
     } // path is too short there is nothing to interpolate
 
-    StatePathValidity out_pair(std::make_shared<StatePath>(main_push_path), out_validity);
+    StatePathValidity out_pair(std::make_shared<ReloPush::StatePath>(main_push_path), out_validity);
 
     return out_pair;
 }
@@ -176,21 +179,26 @@ StateValidity addEdgeNormalMode(
     const auto &data1 = g[v1];
     const auto &data2 = g[v2];
 
+    // for debug only
+    int deb = -1;
+    if(data1.name == "box2" && data2.name == "goal2")
+        deb = 1;
+
     // 1) Temporarily remove start from obstacle. If target is also an obstacle, remove it, too.
-    std::vector<State> took_out(0);
-    took_out.push_back(State(data1.x,data1.y,data1.nominalOrientation));
-    ctx.env.remove_obs(State(data1.x,data1.y,data1.nominalOrientation));
+    std::vector<ReloPush::State> took_out(0);
+    took_out.push_back(ReloPush::State(data1.x,data1.y,data1.nominalOrientation));
+    ctx.env.remove_obs(ReloPush::State(data1.x,data1.y,data1.nominalOrientation));
     if(data2.type==VertexType::OBJECT_VERTEX)
     {
-        took_out.push_back(State(data2.x,data2.y,data2.nominalOrientation));
-        ctx.env.remove_obs(State(data2.x,data2.y,data2.nominalOrientation));
+        took_out.push_back(ReloPush::State(data2.x,data2.y,data2.nominalOrientation));
+        ctx.env.remove_obs(ReloPush::State(data2.x,data2.y,data2.nominalOrientation));
     }
 
 
     // Create start/goal states with (x, y, theta)
     // If 'State' is your class from attached references:
-    State start(data1.x, data1.y, data1.getActualOrientation());
-    State goal(data2.x, data2.y, data2.getActualOrientation());
+    ReloPush::State start(data1.x, data1.y, data1.getActualOrientation());
+    ReloPush::State goal(data2.x, data2.y, data2.getActualOrientation());
 
     // 2) Call your Dubins planner.
     auto dubinsResult = PlanDubins(start, goal, ctx);
@@ -228,14 +236,14 @@ StateValidity addEdgePrerelocation(
     Graph &g,
     Vertex v1,
     Vertex v2,
-    PlanningContext &ctx)
+    PlanningContext &ctx, StateValidity& reason_in)
 {
     // 1) Info about the start/goal
     const auto &data1 = g[v1];
     const auto &data2 = g[v2];
 
-    State startPose(data1.x, data1.y, data1.getActualOrientation());
-    State goalPose(data2.x, data2.y, data2.getActualOrientation());
+    ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
+    ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation());
 
     int nSides = data1.numberOfSides;
     int startOriIndex = data1.orientationIndex; // the orientation that failed
@@ -243,7 +251,8 @@ StateValidity addEdgePrerelocation(
 
     // Temporarily remove the start and goal from the obstacles list
     ctx.env.remove_obs(startPose);
-    ctx.env.remove_obs(goalPose);
+    if(data2.type==VertexType::OBJECT_VERTEX)
+        ctx.env.remove_obs(goalPose);
 
     // set goal on map for costmap
     ctx.env.changeGoal(goalPose);
@@ -262,7 +271,7 @@ StateValidity addEdgePrerelocation(
 
     double bestCost = std::numeric_limits<double>::infinity();
     bool foundAny = false;
-    State bestRelocated; // store best relocation found
+    ReloPush::State bestRelocated; // store best relocation found
     int bestOrientationIndex = 1;
 
     // For each orientation axis
@@ -286,7 +295,7 @@ StateValidity addEdgePrerelocation(
             double yNew = startPose.y + shiftDist * std::sin(sideAngle);
 
             // Construct a new start
-            State relocated(xNew, yNew, startPose.yaw);
+            ReloPush::State relocated(xNew, yNew, startPose.yaw);
 
             // 2a) Quick boundary/collision checks if desired:
             if (!ctx.env.stateValid(relocated))
@@ -332,7 +341,8 @@ StateValidity addEdgePrerelocation(
 
     // restore start and goal as obstacles
     ctx.env.add_obs(startPose);
-    ctx.env.add_obs(goalPose);
+    if(data2.type==VertexType::OBJECT_VERTEX)
+        ctx.env.add_obs(goalPose);
 
     if (!foundAny)
     {
@@ -356,6 +366,7 @@ StateValidity addEdgePrerelocation(
             g[e].preRelo.extraCost   = std::hypot(bestRelocated.x - startPose.x,
                                                 bestRelocated.y - startPose.y);
             g[e].preRelo.relocatingIndex= bestOrientationIndex;
+            g[e].preRelo.reason = reason_in;
             // Also store path, if you want:
             //   The path from (start.x, start.y) -> (bestRelocated.x, bestRelocated.y)
             //   is just a straight line, or you could store an actual "relocation path".
@@ -373,6 +384,118 @@ StateValidity addEdgePrerelocation(
 
 
 
+// add edge using optimiztion
+StateValidity addEdgePrerelocation_Optimization(
+    Graph &g,
+    Vertex v1,
+    Vertex v2,
+    PlanningContext &ctx)
+{
+    // 1) Gather start/goal info
+    const auto &data1 = g[v1];
+    const auto &data2 = g[v2];
+
+    ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
+    ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation());
+
+    int nSides = data1.numberOfSides;
+    int startOriIndex = data1.orientationIndex; // the orientation that failed
+    double R = ctx.parameters.turning_rad_pair.push;    // or wherever you store it
+
+    double bestCost = std::numeric_limits<double>::infinity();
+    bool foundAny = false;
+
+    // We'll keep track of the best relocation result
+    OptResult bestOpt(0.0, 0.0, 0.0, bestCost);
+    int bestOrientationIndex = -1;
+
+    // 2) For each orientation axis, we do the optimization approach
+    for (int i = 0; i < nSides; ++i)
+    {
+        // Optionally skip the orientation used by normal mode:
+        //   if (i == startOriIndex) continue;
+
+        // compute the angle for orientation i
+        double sideAngle = data1.nominalOrientation + (2.0 * M_PI / nSides) * i;
+
+        // 2a) Call your function
+        //     param: (x_i, y_i, th_i, x2,y2,th2, sideAngle, R)
+        OptResult optRes = FindPreRelocationOptimization(
+            startPose.x,
+            startPose.y,
+            startPose.yaw,
+            goalPose.x,
+            goalPose.y,
+            goalPose.yaw,
+            sideAngle,  // the pre-relocation push direction
+            R,
+            startPose.x, // initial guess for the optimization
+            startPose.y // initial guess for the optimization
+            );
+
+        double relocationX = optRes.x;   // new X
+        double relocationY = optRes.y;   // new Y
+        double relocationYaw = optRes.yaw;
+        double costOpt = optRes.cost;    // the cost from the solver
+
+        // If the cost is infinite or something, skip
+        if (costOpt >= bestCost)
+            continue;
+
+        // 2b) Optionally do boundary/collision checks on (relocationX, relocationY)
+        // e.g. if (!ctx.env.inBoundary(relocationX, relocationY)) continue;
+        // e.g. do collision checks, etc.
+
+        // 2c) Also plan a Dubins from (relocationX, relocationY, relocationYaw) to goalPose
+        // to get the total cost: costOpt + dubinsDist.
+        // Or if 'optRes.cost' already includes the full cost, you might skip a second planner.
+        // For example, let's assume 'optRes.cost' is ONLY the relocation cost. We must do a separate
+        // check for the path from relocated -> goal.
+        // This depends on how your cost function is set up in CostFunctor.
+        // We'll assume 'costOpt' is JUST the relocation cost, so we do:
+
+        //auto dubinsRes = PlanDubins(ReloPush::State(relocationX, relocationY, relocationYaw),
+        //                            goalPose, ctx);
+        //if (!dubinsRes.first) // failed
+        //    continue;
+
+        //double dubinsDist = dubinsRes.second.lengthCost();
+        //double totalCost = costOpt + dubinsDist;
+        double totalCost = costOpt;
+
+        if (totalCost < bestCost)
+        {
+            bestCost = totalCost;
+            bestOpt = OptResult(relocationX, relocationY, relocationYaw, costOpt);
+            bestOrientationIndex = i;
+            foundAny = true;
+        }
+    }
+
+    if (!foundAny)
+    {
+        // No feasible relocation found
+        return StateValidity::out_of_boundary;
+    }
+
+    // 3) If found, create an edge
+    Edge e; bool inserted;
+    boost::tie(e, inserted) = boost::add_edge(v1, v2, g);
+    if (inserted)
+    {
+        g[e].weight = bestCost;
+        g[e].mode   = ConnectionMode::PRE_RELOCATION;
+        g[e].preRelo.used            = true;
+        g[e].preRelo.xRelocated      = bestOpt.x;
+        g[e].preRelo.yRelocated      = bestOpt.y;
+        g[e].preRelo.extraCost       = bestOpt.cost; // or bestCost - dubinsDist if you want the relocation portion
+        g[e].preRelo.relocatingIndex = bestOrientationIndex;
+    }
+
+    return StateValidity::valid;
+}
+
+
 
 bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
 {
@@ -388,7 +511,7 @@ bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
         if(normalEdge != StateValidity::valid)
         {
             // find pre-relocation
-            StateValidity preRelocationEdge = addEdgePrerelocation(g,v1,v2,ctx);
+            StateValidity preRelocationEdge = addEdgePrerelocation(g,v1,v2,ctx, normalEdge);
             if(preRelocationEdge == StateValidity::valid)
                 return true;
         }
@@ -712,16 +835,16 @@ std::vector<Vertex> getGoalVertices(const Graph &g, const std::string &goalName)
 void buildAllEdges(Graph &g, PlanningContext ctx)
 {
     // 0) Init env with obstacles
-    std::unordered_set<State> obs;
+    std::unordered_set<ReloPush::State> obs;
     for(auto& it : ctx.mo_list)
     {
-        obs.insert(State(it.second.x, it.second.y, it.second.nominalOrientation));
+        obs.insert(ReloPush::State(it.second.x, it.second.y, it.second.nominalOrientation));
         //obs.insert(State(it.get_x(),it.get_y(),0));
     }
 
     for(auto& it : ctx.delivered_list)
     {
-        obs.insert(State(it.second.x, it.second.y, it.second.nominalOrientation));
+        obs.insert(ReloPush::State(it.second.x, it.second.y, it.second.nominalOrientation));
         //obs.insert(State(it.get_x(),it.get_y(),0));
     }
     ctx.updateObs(obs);

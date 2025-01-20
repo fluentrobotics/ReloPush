@@ -25,6 +25,7 @@
 #include <eigen3/Eigen/Dense>
 #include <fstream>
 #include <iostream>
+#include <FromOMPL.h>
 
 typedef ompl::base::SE2StateSpace::StateType OmplState;
 typedef boost::geometry::model::d2::point_xy<double> Point;
@@ -40,6 +41,9 @@ using libMultiRobotPlanning::HybridAStar;
 using libMultiRobotPlanning::Neighbor;
 using libMultiRobotPlanning::PlanResult;
 using namespace libMultiRobotPlanning;
+
+
+//using namespace ReloPush;
 
 // struct PlanningContext{
 //     bool allow_reverse = true;
@@ -83,10 +87,10 @@ namespace Constants {
     static const float penaltyTurning = 50;
     // [#] --- A movement cost penalty for reversing (choosing motion primitives >
     // 2)
-    static const float penaltyReversing = 3.0; //8
+    static const float penaltyReversing = 1.5; //8
     // [#] --- A movement cost penalty for change of direction (changing from
     // primitives < 3 to primitives > 2)
-    static const float penaltyCOD = 5.0;
+    static const float penaltyCOD = 3.0;
 
     //extern bool allow_reverse; // only when not pushing
 
@@ -135,8 +139,8 @@ namespace Constants {
 // #define PRCISE_COLLISION
 namespace std {
 template <>
-struct hash<State> {
-    size_t operator()(const State& s) const {
+struct hash<ReloPush::State> {
+    size_t operator()(const ReloPush::State& s) const {
         size_t seed = 0;
         boost::hash_combine(seed, s.x);
         boost::hash_combine(seed, s.y);
@@ -152,34 +156,34 @@ using Action = int;  // Action < 6
 enum StateValidity {valid, collision, out_of_boundary};
 enum PlanValidity {success, start_inval, goal_inval, no_sol};
 
-typedef PlanResult<State, Action, double> PlanResultType;
+typedef PlanResult<ReloPush::State, Action, double> PlanResultType;
 
 struct PathPlanResult : PlanResultType
 {
-    State start_pose;
-    State goal_pose;
-    State nominal_goal_pose; // if planned with pre-push pose, store the original goal pose here
-    State obs_rm; // need to remove this obstacle from env before planning
-    State obs_add;
+    ReloPush::State start_pose;
+    ReloPush::State goal_pose;
+    ReloPush::State nominal_goal_pose; // if planned with pre-push pose, store the original goal pose here
+    ReloPush::State obs_rm; // need to remove this obstacle from env before planning
+    ReloPush::State obs_add;
     PlanValidity validity;
 
     PathPlanResult()
     {
-        start_pose = State();
-        goal_pose = State();
+        start_pose = ReloPush::State();
+        goal_pose = ReloPush::State();
         success = false;
     }
-    PathPlanResult(State& start_in, State& goal_in)
+    PathPlanResult(ReloPush::State& start_in, ReloPush::State& goal_in)
         : start_pose(start_in), goal_pose(goal_in)
     {
         success = false;
     }
-    PathPlanResult(State& start_in, State& goal_in, PlanValidity val)
+    PathPlanResult(ReloPush::State& start_in, ReloPush::State& goal_in, PlanValidity val)
         : start_pose(start_in), goal_pose(goal_in), validity(val)
     {
         success = false;
     }
-    PathPlanResult(State& start_in, State& goal_in, State& obs_to_rm, State& obs_to_add)
+    PathPlanResult(ReloPush::State& start_in, ReloPush::State& goal_in, ReloPush::State& obs_to_rm, ReloPush::State& obs_to_add)
         : start_pose(start_in), goal_pose(goal_in), obs_rm(obs_to_rm), obs_add(obs_to_add)
     {
         success = false;
@@ -206,10 +210,10 @@ struct StateValiditySet{
 };
 
 struct StatePathValidity{
-    StatePathPtr path_ptr;
+    ReloPush::StatePathPtr path_ptr;
     StateValidity path_validity;
 
-    StatePathValidity(StatePathPtr path_ptr_in, StateValidity validity_in)
+    StatePathValidity(ReloPush::StatePathPtr path_ptr_in, StateValidity validity_in)
         : path_ptr(path_ptr_in), path_validity(validity_in)
     {}
 
@@ -255,8 +259,8 @@ public:
   }
   */
 
-    Environment(float maxx, float maxy, std::unordered_set<State> obstacles, float turning_rad_in, float LF_in, bool use_reverse,
-                State goal = State(0,0,0), float speed = 0.385f)
+    Environment(float maxx, float maxy, std::unordered_set<ReloPush::State> obstacles, float turning_rad_in, float LF_in, bool use_reverse,
+                ReloPush::State goal = ReloPush::State(0,0,0), float speed = 0.385f)
         : m_obstacles(std::move(obstacles)),
         m_goal(goal)  // NOLINT
     {
@@ -269,13 +273,13 @@ public:
         //           << m_obstacles.size() << std::endl;
         holonomic_cost_map = std::vector<std::vector<double>>(
             m_dimx, std::vector<double>(m_dimy, 0));
-        m_goal = State(goal.x, goal.y, Constants::normalizeHeadingRad(goal.yaw));
+        m_goal = ReloPush::State(goal.x, goal.y, Constants::normalizeHeadingRad(goal.yaw));
         updateCostmap();
     }
 
-    void changeGoal(State goal_in)
+    void changeGoal(ReloPush::State goal_in)
     {
-        m_goal = State(goal_in.x, goal_in.y, Constants::normalizeHeadingRad(goal_in.yaw));
+        m_goal = ReloPush::State(goal_in.x, goal_in.y, Constants::normalizeHeadingRad(goal_in.yaw));
         updateCostmap();
     }
 
@@ -285,8 +289,8 @@ public:
     }
 
     struct compare_node {
-        bool operator()(const std::pair<State, double>& n1,
-                        const std::pair<State, double>& n2) const {
+        bool operator()(const std::pair<ReloPush::State, double>& n1,
+                        const std::pair<ReloPush::State, double>& n2) const {
             return (n1.second > n2.second);
         }
     };
@@ -302,7 +306,7 @@ public:
            (uint64_t)(s.x / Constants::xyResolution);
   }
   */
-    uint64_t calcIndex(const State& s) {
+    uint64_t calcIndex(const ReloPush::State& s) {
         return (uint64_t)(Constants::normalizeHeadingRad(s.yaw) /
                            planCont.yawResolution) *
                    (m_dimx * Constants::mapResolution / planCont.xyResolution) *
@@ -351,7 +355,7 @@ public:
   }
   */
 
-    int admissibleHeuristic(const State &s) {
+    int admissibleHeuristic(const ReloPush::State &s) {
         double reedsSheppCost = 0;
         // non-holonomic-without-obstacles heuristic: use a Reeds-Shepp (or Dubins if reversing not allowed)
         std::unique_ptr<ompl::base::SE2StateSpace> path(
@@ -401,9 +405,9 @@ public:
   */
 
     bool isSolution(
-        const State &state, double gscore,
-        std::unordered_map<State, std::tuple<State, Action, double, double>,
-                           std::hash<State>> &_camefrom) {
+        const ReloPush::State &state, double gscore,
+        std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
+                           std::hash<ReloPush::State>> &_camefrom) {
 
         bool isSol = planCont.allow_reverse ? isSolutionWithReverse(state, gscore, _camefrom) : isSolutionWithoutReverse(state, gscore, _camefrom);
 
@@ -411,9 +415,9 @@ public:
     }
 
     bool isSolutionWithReverse(
-        const State& state, double gscore,
-        std::unordered_map<State, std::tuple<State, Action, double, double>,
-                           std::hash<State>>& _camefrom) {
+        const ReloPush::State& state, double gscore,
+        std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
+                           std::hash<ReloPush::State>>& _camefrom) {
         double goal_distance =
             sqrt(pow(state.x - m_goal.x, 2) + pow(state.y - m_goal.y, 2));
         if (goal_distance > 2 * (Constants::LB + planCont.LF)) return false;
@@ -429,9 +433,9 @@ public:
         ompl::base::ReedsSheppStateSpace::ReedsSheppPath reedsShepppath =
             reedsSheppSpace.reedsShepp(rsStart, rsEnd);
 
-        std::vector<State> path;
-        std::unordered_map<State, std::tuple<State, Action, double, double>,
-                           std::hash<State>>
+        std::vector<ReloPush::State> path;
+        std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
+                           std::hash<ReloPush::State>>
             cameFrom;
         cameFrom.clear();
         path.emplace_back(state);
@@ -478,14 +482,14 @@ public:
                 cost = -cost * Constants::penaltyReversing;
                 act = act + 3;
             }
-            State s = path.back();
-            std::vector<std::pair<State, double>> next_path =
+            ReloPush::State s = path.back();
+            std::vector<std::pair<ReloPush::State, double>> next_path =
                 generatePath(s, act, deltat, dx);
             // State next_s(s.x + dx * cos(-s.yaw) - dy * sin(-s.yaw),
             //              s.y + dx * sin(-s.yaw) + dy * cos(-s.yaw),
             //              Constants::normalizeHeadingRad(s.yaw + deltat));
             for (auto iter = next_path.begin(); iter != next_path.end(); iter++) {
-                State next_s = iter->first;
+                ReloPush::State next_s = iter->first;
                 if (!stateValid(next_s))
                     return false;
                 else {
@@ -520,7 +524,7 @@ public:
         return true;
     }
 
-    ompl::base::DubinsStateSpace::DubinsPath findDubins(State& start, State& goal)
+    ompl::base::DubinsStateSpace::DubinsPath findDubins(ReloPush::State& start, ReloPush::State& goal)
     {
         //ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
         ompl::base::DubinsStateSpace dubinsSpace(planCont.turning_radius);
@@ -557,9 +561,9 @@ public:
     }
 
     bool isSolutionWithoutReverse(
-        const State &state, double gscore,
-        std::unordered_map<State, std::tuple<State, Action, double, double>,
-                           std::hash<State>> &_camefrom) {
+        const ReloPush::State &state, double gscore,
+        std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
+                           std::hash<ReloPush::State>> &_camefrom) {
         double goal_distance =
             sqrt(pow(state.x - getGoal().x, 2) + pow(state.y - getGoal().y, 2));
         if (goal_distance > 10 * (Constants::LB + planCont.LF)) return false;
@@ -576,9 +580,9 @@ public:
         dubinsSpace.freeState(dubinsStart);
         dubinsSpace.freeState(dubinsEnd);
 
-        std::vector<State> path;
-        std::unordered_map<State, std::tuple<State, Action, double, double>,
-                           std::hash<State>>
+        std::vector<ReloPush::State> path;
+        std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
+                           std::hash<ReloPush::State>>
             cameFrom;
         cameFrom.clear();
         path.emplace_back(state);
@@ -620,7 +624,7 @@ public:
             }
 
 
-            State s = path.back();
+            ReloPush::State s = path.back();
 
             /*
       std::vector<std::pair<State, double>> next_path;
@@ -641,13 +645,13 @@ public:
       }
       */
 
-            std::vector<std::pair<State, double>> next_path =
+            std::vector<std::pair<ReloPush::State, double>> next_path =
                 generatePath(s, act, deltat, dx);
             // State next_s(s.x + dx * cos(-s.yaw) - dy * sin(-s.yaw),
             //              s.y + dx * sin(-s.yaw) + dy * cos(-s.yaw),
             //              Constants::normalizeHeadingRad(s.yaw + deltat));
             for (auto iter = next_path.begin(); iter != next_path.end(); iter++) {
-                State next_s = iter->first;
+                ReloPush::State next_s = iter->first;
                 if (!stateValid(next_s))
                     return false;
                 else {
@@ -704,12 +708,12 @@ public:
   }
   */
 
-    void getNeighbors(const State& s, Action action,
-                      std::vector<Neighbor<State, Action, double>>& neighbors) {
+    void getNeighbors(const ReloPush::State& s, Action action,
+                      std::vector<Neighbor<ReloPush::State, Action, double>>& neighbors, bool allow_reverse) {
         neighbors.clear();
         double g = planCont.dx[0];
         //for (Action act = 0; act < 6; act++) {  // has 6 directions for Reeds-Shepp
-        for (Action act = 0; act < (planCont.allow_reverse ? 6 : 3); act++) {  // has 6 directions for Reeds-Shepp, 3 for Dubins
+        for (Action act = 0; act < (allow_reverse ? 6 : 3); act++) {  // has 6 directions for Reeds-Shepp, 3 for Dubins
             double xSucc, ySucc, yawSucc;
             double g = planCont.dx[0];
             xSucc = s.x + planCont.dx[act] * cos(-s.yaw) -
@@ -725,48 +729,48 @@ public:
             if (act > 3) {  // backwards
                 g = g * Constants::penaltyReversing;
             }
-            State tempState(xSucc, ySucc, yawSucc, s.time+1);
-            if (stateValid(tempState)) {
+            ReloPush::State tempState(xSucc, ySucc, yawSucc, s.time+1);
+            if (stateValid(tempState)) { // todo: use unifed parameters from planning context
                 neighbors.emplace_back(
-                    Neighbor<State, Action, double>(tempState, act, g));
+                    Neighbor<ReloPush::State, Action, double>(tempState, act, g));
             }
         }
         // wait
         g = planCont.dx[0];
-        State tempState(s.x, s.y, s.yaw, s.time + 1);
+        ReloPush::State tempState(s.x, s.y, s.yaw, s.time + 1);
         if (stateValid(tempState)) {
-            neighbors.emplace_back(Neighbor<State, Action, double>(tempState, 6, g));
+            neighbors.emplace_back(Neighbor<ReloPush::State, Action, double>(tempState, 6, g));
         }
     }
 
-    void onExpandNode(const State& s, int /*fScore*/, int /*gScore*/) {
+    void onExpandNode(const ReloPush::State& s, int /*fScore*/, int /*gScore*/) {
         Ecount++;
         // std::cout << "Expand " << Ecount << " new Node:" << s << std::endl;
     }
 
-    void onDiscover(const State& s, double fScore, double gScore) {
+    void onDiscover(const ReloPush::State& s, double fScore, double gScore) {
         Dcount++;
         // std::cout << "Discover " << Dcount << "  Node:" << s << " f:" << fScore
         //           << " g:" << gScore << std::endl;
     }
 
 public:
-    State getGoal() { return m_goal; }
+    ReloPush::State getGoal() { return m_goal; }
     int Ecount = 0;
     int Dcount = 0;
 
-    void add_obs(State obs_in)
+    void add_obs(ReloPush::State obs_in)
     {
         m_obstacles.insert(obs_in);
         updateCostmap();
     }
 
-    std::vector<State> takeout_start_collision(const State& s)
+    std::vector<ReloPush::State> takeout_start_collision(const ReloPush::State& s)
     {
         double x_ind = s.x / Constants::mapResolution;
         double y_ind = s.y / Constants::mapResolution;
 
-        std::vector<State> took_out(0);
+        std::vector<ReloPush::State> took_out(0);
 
         Eigen::Matrix2f rot;
         rot << cos(-s.yaw), -sin(-s.yaw), sin(-s.yaw), cos(-s.yaw);
@@ -788,7 +792,7 @@ public:
         return took_out;
     }
 
-    void remove_obs(const State& s)
+    void remove_obs(const ReloPush::State& s)
     {
         for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
             if(it->x == s.x && it->y == s.y)
@@ -800,27 +804,28 @@ public:
     }
 
 
-    StateValiditySet stateValid(const State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
-                                float LB = Constants::LB) {
+    StateValiditySet stateValid(const ReloPush::State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
+                                float LF = Constants::LF_push, float LB = Constants::LB) {
         //dynamic obstacles
         auto it = dynamic_obs.equal_range(s.time);
         for (auto itr = it.first; itr != it.second; ++itr) {
-            if (s.agentCollision(itr->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);
+            //if (s.agentCollision(itr->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);
+            if (s.agentCollision(itr->second,LF,car_width)) return StateValiditySet(false, StateValidity::collision);
         }
         auto itlow = dynamic_obs.lower_bound(-s.time);
         auto itup = dynamic_obs.upper_bound(-1);
         for (auto it = itlow; it != itup; ++it)
-            if (s.agentCollision(it->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
-
+            if (s.agentCollision(it->second,LF,car_width)) return StateValiditySet(false, StateValidity::collision);;
+            //if (s.agentCollision(it->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
 
         Eigen::Matrix2f rot;
-        rot << cos(-s.yaw), -sin(-s.yaw), sin(-s.yaw), cos(-s.yaw);
+        rot << cos(s.yaw), sin(s.yaw), -sin(s.yaw), cos(s.yaw);
         for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
-            Eigen::Matrix<float, 1, 2> obs;
+            Eigen::Matrix<float, 2, 1> obs;
             obs << it->x - s.x, it->y - s.y;
-            auto rotated_obs = obs * rot;
+            auto rotated_obs = rot * obs;
             if (rotated_obs(0) > -LB - obs_rad &&
-                rotated_obs(0) < planCont.LF + obs_rad &&
+                rotated_obs(0) < LF + obs_rad &&
                 rotated_obs(1) > -car_width / 2.0 - obs_rad &&
                 rotated_obs(1) < car_width / 2.0 + obs_rad)
             {
@@ -829,6 +834,25 @@ public:
                 return StateValiditySet(false, StateValidity::collision);;
             }
         }
+
+        /* Jeeho: MuSHR's original transformation seems to be wrong
+        Eigen::Matrix2f rot;
+        rot << cos(-s.yaw), -sin(-s.yaw), sin(-s.yaw), cos(-s.yaw);
+        for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
+            Eigen::Matrix<float, 1, 2> obs;
+            obs << it->x - s.x, it->y - s.y;
+            auto rotated_obs = obs * rot;
+            if (rotated_obs(0) > -LB - obs_rad &&
+                rotated_obs(0) < LF + obs_rad &&
+                rotated_obs(1) > -car_width / 2.0 - obs_rad &&
+                rotated_obs(1) < car_width / 2.0 + obs_rad)
+            {
+                //std::cout << "x: " << obs(0) << " y: " << obs(1) << std::endl;
+                //std::cout << "x: " << rotated_obs(0) << " y: " << rotated_obs(1) << std::endl;
+                return StateValiditySet(false, StateValidity::collision);;
+            }
+        }
+        */
 
         // boundary
         double x_ind = s.x / Constants::mapResolution;
@@ -846,7 +870,7 @@ public:
         // std::cout << ro(0) << ro(1) << std::endl;
     }
 
-    std::unordered_set<State> get_obs()
+    std::unordered_set<ReloPush::State> get_obs()
     {
         return m_obstacles;
     }
@@ -875,7 +899,7 @@ private:
     };
 
     void updateCostmap() {
-        boost::heap::fibonacci_heap<std::pair<State, double>,
+        boost::heap::fibonacci_heap<std::pair<ReloPush::State, double>,
                                     boost::heap::compare<compare_node>>
             heap;
         heap.clear();
@@ -889,10 +913,10 @@ private:
 
         int goal_x = static_cast<int>(m_goal.x / Constants::mapResolution);
         int goal_y = static_cast<int>(m_goal.y / Constants::mapResolution);
-        heap.push(std::make_pair(State(goal_x, goal_y, 0), 0));
+        heap.push(std::make_pair(ReloPush::State(goal_x, goal_y, 0), 0));
 
         while (!heap.empty()) {
-            std::pair<State, double> node = heap.top();
+            std::pair<ReloPush::State, double> node = heap.top();
             heap.pop();
 
             int x = node.first.x;
@@ -911,7 +935,7 @@ private:
                             holonomic_cost_map[x][y] +
                             sqrt(pow(dx * Constants::mapResolution, 2) +
                                  pow(dy * Constants::mapResolution, 2));
-                        heap.push(std::make_pair(State(new_x, new_y, 0),
+                        heap.push(std::make_pair(ReloPush::State(new_x, new_y, 0),
                                                  holonomic_cost_map[new_x][new_y]));
                     }
                 }
@@ -988,22 +1012,23 @@ private:
   }
   */
 
-    std::vector<std::pair<State, double>> generatePath(State startState, int act,
+
+    std::vector<std::pair<ReloPush::State, double>> generatePath(ReloPush::State startState, int act,
                                                        double deltaSteer,
                                                        double deltaLength) {
-        std::vector<std::pair<State, double>> result;
+        std::vector<std::pair<ReloPush::State, double>> result;
         double xSucc, ySucc, yawSucc, dx, dy, dyaw, ratio;
         result.emplace_back(std::make_pair<>(startState, 0));
         if (act == 0 || act == 3) {
             for (size_t i = 0; i < (size_t)(deltaLength / planCont.dx[act]); i++) {
-                State s = result.back().first;
+                ReloPush::State s = result.back().first;
                 xSucc = s.x + planCont.dx[act] * cos(-s.yaw) -
                         planCont.dy[act] * sin(-s.yaw);
                 ySucc = s.y + planCont.dx[act] * sin(-s.yaw) +
                         planCont.dy[act] * cos(-s.yaw);
                 yawSucc = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act]);
                 result.emplace_back(
-                    std::make_pair<>(State(xSucc, ySucc, yawSucc,s.time+1), planCont.dx[0]));
+                    std::make_pair<>(ReloPush::State(xSucc, ySucc, yawSucc,s.time+1), planCont.dx[0]));
             }
             ratio =
                 (deltaLength - static_cast<int>(deltaLength / planCont.dx[act]) *
@@ -1014,14 +1039,14 @@ private:
             dy = 0;
         } else {
             for (size_t i = 0; i < (size_t)(deltaSteer / planCont.dyaw[act]); i++) {
-                State s = result.back().first;
+                ReloPush::State s = result.back().first;
                 xSucc = s.x + planCont.dx[act] * cos(-s.yaw) -
                         planCont.dy[act] * sin(-s.yaw);
                 ySucc = s.y + planCont.dx[act] * sin(-s.yaw) +
                         planCont.dy[act] * cos(-s.yaw);
                 yawSucc = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act]);
                 result.emplace_back(
-                    std::make_pair<>(State(xSucc, ySucc, yawSucc,s.time+1),
+                    std::make_pair<>(ReloPush::State(xSucc, ySucc, yawSucc,s.time+1),
                                      planCont.dx[0] * Constants::penaltyTurning));
             }
             ratio =
@@ -1036,11 +1061,11 @@ private:
                 dy = -dy;
             }
         }
-        State s = result.back().first;
+        ReloPush::State s = result.back().first;
         xSucc = s.x + dx * cos(-s.yaw) - dy * sin(-s.yaw);
         ySucc = s.y + dx * sin(-s.yaw) + dy * cos(-s.yaw);
         yawSucc = Constants::normalizeHeadingRad(s.yaw + dyaw);
-        result.emplace_back(std::make_pair<>(State(xSucc, ySucc, yawSucc,s.time+1),
+        result.emplace_back(std::make_pair<>(ReloPush::State(xSucc, ySucc, yawSucc,s.time+1),
                                              ratio * planCont.dx[0]));
         // std::cout << "Have generate " << result.size() << " path segments:\n\t";
         // for (auto iter = result.begin(); iter != result.end(); iter++)
@@ -1052,15 +1077,14 @@ private:
 
     int m_dimx;
     int m_dimy;
-    std::unordered_set<State> m_obstacles;
+    std::unordered_set<ReloPush::State> m_obstacles;
     std::vector<std::vector<double>> holonomic_cost_map;
-    State m_goal;
+    ReloPush::State m_goal;
 
     PlanningContext planCont;
 
-    std::multimap<int, State> dynamic_obs;
+    std::multimap<int, ReloPush::State> dynamic_obs;
 };
 
-PathPlanResultPtr planHybridAstar(State start, State goal_in, Environment& env, int64_t timeout_ms = 0 ,bool print_res = false, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius);
 
 #endif

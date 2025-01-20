@@ -110,8 +110,8 @@ int main(int argc, char *argv[])
         chosen.cost       = best.cost;
         chosen.row        = best.row;
         chosen.col        = best.col;
-        chosen.startPose = State(chosen.object.x,chosen.object.y,chosen.object.getOrientation(chosen.row));
-        chosen.goalPose = State(chosen.goal.x, chosen.goal.y, chosen.goal.getOrientation(chosen.col));
+        chosen.startPose = ReloPush::State(chosen.object.x,chosen.object.y,chosen.object.getOrientation(chosen.row));
+        chosen.goalPose = ReloPush::State(chosen.goal.x, chosen.goal.y, chosen.goal.getOrientation(chosen.col));
 
         // Look up the actual edge in the graph & read pre-relocation info
         auto objVerts  = getObjectVertices(g, best.objectName);

@@ -89,7 +89,7 @@ public:
     ~HybridAStar() {}
 
     bool search(const State& startState,
-                PlanResult<State, Action, Cost>& solution, Cost initialCost = 0, int64_t timeout_ms = 0) {
+                PlanResult<State, Action, Cost>& solution, bool allow_reverse, Cost initialCost = 0, int64_t timeout_ms = 0) {
         solution.states.clear();
         solution.actions.clear();
         solution.cost = 0;
@@ -167,7 +167,7 @@ public:
             closedSet.insert(m_env.calcIndex(current.state));
             // traverse neighbors
             neighbors.clear();
-            m_env.getNeighbors(current.state, current.action, neighbors);
+            m_env.getNeighbors(current.state, current.action, neighbors, allow_reverse);
             for (const Neighbor<State, Action, Cost>& neighbor : neighbors) {
                 if (closedSet.find(m_env.calcIndex(neighbor.state)) ==
                     closedSet.end()) {  // not in closed set

@@ -90,7 +90,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
     space->freeState(s);
 }
 
-StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningContext& ctx)
+ReloPush::StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningContext& ctx)
 {
     auto l = dubins_in.lengthCost(); // unit cost * turning rad
     auto num_pts = static_cast<size_t>(l/ctx.parameters.map_resolution);
@@ -101,7 +101,7 @@ StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningContext& ctx)
     dubinsStart->setYaw(dubins_in.startState.yaw);
     OmplState *interState = (OmplState *)dubinsSpace.allocState();
 
-    std::vector<State> waypoints(num_pts);
+    std::vector<ReloPush::State> waypoints(num_pts);
 
     // interpolate dubins path
     // Interpolate dubins path to check for collision on grid map
@@ -114,7 +114,7 @@ StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningContext& ctx)
             jeeho_interpolate(dubinsStart, dubins_in.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
                               ctx.parameters.turning_rad_pair.push);
 
-            State tempState(interState->getX(), interState->getY(),interState->getYaw());
+            ReloPush::State tempState(interState->getX(), interState->getY(),interState->getYaw());
             waypoints[np] = tempState;
         }
     }
@@ -123,14 +123,14 @@ StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningContext& ctx)
         waypoints.resize(1);
         waypoints[0] = dubins_in.targetState;
     } // path is too short there is nothing to interpolate
-
-
-    return std::make_shared<StatePath>(waypoints);
+    
+    
+    return std::make_shared<ReloPush::StatePath>(waypoints);
 }
 
 
-std::vector<State> interpolateStraightPath(const State& start, const State& goal, float resolution) {
-    std::vector<State> path;
+std::vector<ReloPush::State> interpolateStraightPath(const ReloPush::State& start, const ReloPush::State& goal, float resolution) {
+    std::vector<ReloPush::State> path;
 
     // Calculate distance
     float dx = goal.x - start.x;
@@ -145,7 +145,7 @@ std::vector<State> interpolateStraightPath(const State& start, const State& goal
         float t = static_cast<float>(i) / num_steps;
 
         // Linear interpolation
-        State intermediate;
+        ReloPush::State intermediate;
         intermediate.x = (1 - t) * start.x + t * goal.x;
         intermediate.y = (1 - t) * start.y + t * goal.y;
         intermediate.yaw = (1 - t) * start.yaw + t * goal.yaw;
@@ -158,7 +158,7 @@ std::vector<State> interpolateStraightPath(const State& start, const State& goal
 }
 
 
-reloDubinsPath findDubins(State &start, State &goal, double turning_radius, bool print_type)
+reloDubinsPath findDubins(ReloPush::State &start, ReloPush::State &goal, double turning_radius, bool print_type)
 {
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
@@ -177,7 +177,7 @@ reloDubinsPath findDubins(State &start, State &goal, double turning_radius, bool
     ompl::base::DubinsStateSpace::DubinsPath dPath = dubinsSpace.dubins(dubinsStart, dubinsEnd);
 
     // inherited class
-    reloDubinsPath dubinsPath(dPath,turning_radius);
+    reloDubinsPath dubinsPath(start,goal,dPath,turning_radius);
 
     dubinsStart->setXY(start.x, start.y);
     dubinsStart->setYaw(-start.yaw);
@@ -243,7 +243,7 @@ Eigen::Vector2d worldToRobot(double x, double y, double theta, double robot_x, d
     return rotationMatrix * point;
 }
 
-void find_alpha_beta_ompl(State& s1, State& s2, double& alpha_out, double& beta_out)
+void find_alpha_beta_ompl(ReloPush::State& s1, ReloPush::State& s2, double& alpha_out, double& beta_out)
 {
     double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
     double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
@@ -251,7 +251,7 @@ void find_alpha_beta_ompl(State& s1, State& s2, double& alpha_out, double& beta_
     alpha_out = fromOMPL::mod2pi(th1 - th), beta_out = fromOMPL::mod2pi(th2 - th);
 }
 
-float get_current_longpath_d(State& s1, State& s2)
+float get_current_longpath_d(ReloPush::State& s1, ReloPush::State& s2)
 {
     double alpha, beta;
     find_alpha_beta_ompl(s1,s2,alpha,beta);
@@ -259,7 +259,7 @@ float get_current_longpath_d(State& s1, State& s2)
     return static_cast<float>(fromOMPL::longpath_thres_dist(alpha,beta));
 }
 
-bool is_longpath_case(State& s1, State& s2, double turning_rad)
+bool is_longpath_case(ReloPush::State& s1, ReloPush::State& s2, double turning_rad)
 {
     double alpha, beta;
     find_alpha_beta_ompl(s1,s2,alpha,beta); //todo: investigate if OMPL's alpha and beta is needed
@@ -327,15 +327,35 @@ bool is_longpath_case(State& s1, State& s2, double turning_rad)
 //         return std::make_pair<pathType,reloDubinsPath>(pathType::smallLP,{s1,s2,dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2], turning_rad});
 // }
 
-std::pair<pathType,reloDubinsPath> PlanDubins(State& s1, State& s2, PlanningContext& ctx, bool use_pre_push_pose)
+std::pair<pathType,reloDubinsPath> PlanDubins(ReloPush::State s1, ReloPush::State& s2, PlanningContext& ctx, bool use_pre_push_pose)
 {
     float turning_rad = ctx.parameters.turning_rad_pair.push;
 
-    //double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
-    //double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
-    //double dx = x2 - x1, dy = y2 - y1, d = sqrt(dx * dx + dy * dy) / turning_rad, th = atan2(dy, dx);
-    //double alpha = fromOMPL::mod2pi(th1 - th), beta = fromOMPL::mod2pi(th2 - th);
+    double x1 = s1.x, y1 = s1.y, th1 = s1.yaw;
+    double x2 = s2.x, y2 = s2.y, th2 = s2.yaw;
+    double dx = x2 - x1, dy = y2 - y1, d = sqrt(dx * dx + dy * dy) / turning_rad, th = atan2(dy, dx);
+    double alpha = fromOMPL::mod2pi(th1 - th), beta = fromOMPL::mod2pi(th2 - th);
 
+    bool is_long = fromOMPL::is_longpath_case(d, alpha, beta);
+    pathType out_type;
+    if(is_long)
+        out_type = pathType::LP;
+    else
+        out_type = pathType::SP;
+
+    ompl::base::DubinsStateSpace dubinsSpace(turning_rad);
+    OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
+    OmplState *dubinsEnd = (OmplState *)dubinsSpace.allocState();
+    dubinsStart->setXY(s1.x, s1.y);
+    dubinsStart->setYaw(s1.yaw);
+    dubinsEnd->setXY(s2.x, s2.y);
+    dubinsEnd->setYaw(s2.yaw);
+    ompl::base::DubinsStateSpace::DubinsPath dubinsPath = dubinsSpace.dubins(dubinsStart, dubinsEnd); // todo: duplicated long_path check
+
+    return std::make_pair(out_type, reloDubinsPath(s1,s2, dubinsPath, turning_rad));
+
+
+    /*
     //OMPL uses slightly different alpha and beta, which lead to different results
     //double a=fromOMPL::mod2pi(s1.yaw), b=fromOMPL::mod2pi(s2.yaw);
     // however, use OMPL's method
@@ -379,4 +399,5 @@ std::pair<pathType,reloDubinsPath> PlanDubins(State& s1, State& s2, PlanningCont
         return std::make_pair<pathType,reloDubinsPath>(pathType::largeLP,{s1,s2,dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2], turning_rad});
     else // small-turn long-path
         return std::make_pair<pathType,reloDubinsPath>(pathType::smallLP,{s1,s2,dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2], turning_rad});
+*/
 }

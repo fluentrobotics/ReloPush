@@ -12,15 +12,15 @@ typedef std::vector<GoalInfo> GoalList;
 typedef std::unordered_map<std::string, ObjectInfo> ObjectMap;
 typedef std::unordered_map<std::string, GoalInfo> GoalMap;
 
-State object_to_state(ObjectInfo& obj);
+ReloPush::State object_to_state(ObjectInfo& obj);
 
-State goal_to_state(GoalInfo& goal);
+ReloPush::State goal_to_state(GoalInfo& goal);
 
 // Function to convert ObjectMap to std::vector<State>
-std::vector<State> convert_to_states(ObjectMap &objects);
+std::vector<ReloPush::State> convert_to_states(ObjectMap &objects);
 
 // Function to convert GoalMap to std::vector<State>
-std::vector<State> convert_to_states(GoalMap &goals);
+std::vector<ReloPush::State> convert_to_states(GoalMap &goals);
 
 /**
  * @brief A single struct containing everything needed for planning:
@@ -39,13 +39,17 @@ struct PlanningContext
 
     int sample_N = 25;
 
+    int64_t timeout_ms = 0; // 0: no timeout for hybrid-astar
+    bool print_res = false; // print result for hybrid-astar
+
+
     // Evenly sampled positions for optimizations
-    std::vector<State> sampledPositions;
+    std::vector<ReloPush::State> sampledPositions;
 
     PlanningContext(PlanningParameters params_in, ObjectMap& obs_in) : parameters(params_in), mo_list(obs_in)
     {
         ObjectList static_in = {};
-        std::unordered_set<State> obs;
+        std::unordered_set<ReloPush::State> obs;
         env = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
 
         parameters.turning_rad_pair.push = Constants::r_push;
@@ -64,7 +68,7 @@ struct PlanningContext
     // todo: combine the constructors
     PlanningContext(PlanningParameters params_in, ObjectMap& obs_in, GoalMap& static_in) : parameters(params_in), mo_list(obs_in), delivered_list(static_in)
     {
-        std::unordered_set<State> obs;
+        std::unordered_set<ReloPush::State> obs;
         env = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
 
         parameters.turning_rad_pair.push = Constants::r_push;
@@ -82,7 +86,7 @@ struct PlanningContext
 
     void updateObs()
     {
-        std::unordered_set<State> obs;
+        std::unordered_set<ReloPush::State> obs;
         auto mo_list_states = convert_to_states(mo_list);
         obs.insert(mo_list_states.begin(), mo_list_states.end());
 
@@ -94,7 +98,7 @@ struct PlanningContext
 
     void updateObs(std::unordered_map<std::string, ObjectInfo>& mo_list_in, std::unordered_map<std::string, GoalInfo>& delivered_list_in)
     {
-        std::unordered_set<State> obs;
+        std::unordered_set<ReloPush::State> obs;
         auto mo_list_states = convert_to_states(mo_list_in);
         obs.insert(mo_list_states.begin(), mo_list_states.end());
 
@@ -104,7 +108,7 @@ struct PlanningContext
         env = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.push, parameters.LF, false);
     }
 
-    void updateObs(std::unordered_set<State>& obs_in)
+    void updateObs(std::unordered_set<ReloPush::State>& obs_in)
     {
         env = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs_in, parameters.turning_rad_pair.push, parameters.LF, false);
     }
@@ -148,7 +152,7 @@ struct PlanningContext
                 // Compute the center of the current grid cell
                 double x = min_x + (col + 0.5) * dx;
                 double y = min_y + (row + 0.5) * dy;
-                sampledPositions.emplace_back(State(x, y,0));
+                sampledPositions.emplace_back(ReloPush::State(x, y,0));
             }
         }
 
