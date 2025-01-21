@@ -6,6 +6,7 @@
 #include <PlanningContext.hpp>
 #include <vector>
 #include <PreReloOptimization.hpp>
+#include <PlanHybridAstar.hpp>
 
 struct ObjectGoalPair
 {

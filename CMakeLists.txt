@@ -57,17 +57,20 @@ add_executable(ReloPush src/main.cpp
     src/TaskAllocartion.cpp
     src/PlanningContext.cpp
     src/PreReloOptimization.cpp
-
+    src/PlanHybridAstar.cpp
+    src/Visualization/VisualizationWidget.cpp
+    src/Visualization/QtPathWindow.cpp
+    src/Visualization/QtPathManager.cpp
+    src/Visualization/QtMainControlWindow.cpp
 )
-target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
-
+target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt6::Widgets Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
 
 # Dubins Path Planning
 add_executable(test_dubins test/test_dubins.cpp)
 target_link_libraries(test_dubins ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
 
 # Hybrid Astar Planning
-add_executable(test_hybrid_astar test/test_hybrid_astar.cpp src/PathPlanningTools.cpp src/FromOMPL.cpp src/VisualizationWidget.cpp src/PlanHybridAstar.cpp)
+add_executable(test_hybrid_astar test/test_hybrid_astar.cpp src/PathPlanningTools.cpp src/FromOMPL.cpp src/Visualization/VisualizationWidget.cpp src/PlanHybridAstar.cpp)
 target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt6::Widgets)
 
 # Pre-relocation Optimization

@@ -1,4 +1,4 @@
-#include <VisualizationWidget.h>
+#include <Visualization/VisualizationWidget.h>
 #include <QPainter>
 #include <QMouseEvent>
 #include <QToolTip>
@@ -13,7 +13,8 @@ VisualizationWidget::VisualizationWidget(QWidget *parent,
                                          QColor initialPoseColor,
                                          QColor goalPoseColor,
                                          QColor pathColor_,
-                                         QColor pathArrowColor_)
+                                         QColor pathArrowColor_,
+                                         QColor obstacleColor_)
     : QWidget(parent),
     workspace_width(100.0f),
     workspace_height(100.0f),
@@ -22,10 +23,12 @@ VisualizationWidget::VisualizationWidget(QWidget *parent,
     initial_pose_color(initialPoseColor),
     goal_pose_color(goalPoseColor),
     path_color(pathColor_),
-    path_arrow_color(pathArrowColor_)
+    path_arrow_color(pathArrowColor_),
+    obstacle_color(obstacleColor_)
 {
     setMouseTracking(true); // Enable mouse tracking without pressing buttons
 }
+
 
 void VisualizationWidget::setWorkspace(float width, float height)
 {

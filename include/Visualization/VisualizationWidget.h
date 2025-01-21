@@ -15,7 +15,9 @@ public:
                                  QColor initialPoseColor = Qt::blue,
                                  QColor goalPoseColor = Qt::green,
                                  QColor pathColor = Qt::red,
-                                 QColor pathArrowColor = Qt::darkRed);
+                                 QColor pathArrowColor = Qt::darkRed,
+                                 QColor obstacleColor = Qt::gray);
+
 
     // Set workspace dimensions
     void setWorkspace(float width, float height);

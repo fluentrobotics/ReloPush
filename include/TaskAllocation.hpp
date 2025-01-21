@@ -10,6 +10,7 @@
 #include <ObjectInfo.hpp>
 
 #include <string>
+#include <memory>
 
 struct obj_goal_pair
 {
@@ -44,6 +45,7 @@ struct RowColCost
     double cost;
 };
 
+using EdgePathList = std::vector<EdgePathPtr>;
 struct MatrixResult
 {
     // The full cost matrix (row = object vertex, col = goal vertex).
@@ -51,7 +53,11 @@ struct MatrixResult
 
     // A sorted list of (row, col, cost) in ascending order of cost.
     std::vector<RowColCost> sortedEntries;
+
+    // A 2D array (size = [Nobj x Ngoal]) storing EdgePathPtr
+    std::vector<std::vector<EdgePathList>> pathMat;
 };
+using MatrixResultPtr = std::shared_ptr<MatrixResult>;
 
 class PairCostResult
 {
@@ -64,7 +70,9 @@ public:
     int bestCol;
 
     // The entire MatrixResult, which has costMat + sortedEntries
-    MatrixResult matrixResult;
+    MatrixResultPtr matrixResult;
+
+    EdgePathList getBestPath();
 
     void remove_top(void);
 };
@@ -76,7 +84,7 @@ struct LowestCostInfo
     int row;
     int col;
     double cost;
-    int indexInArray;  // index in the results vector
+    //int indexInArray;  // index in the results vector
 };
 
 struct FinalAllocation
@@ -98,6 +106,10 @@ struct FinalAllocation
     double yRelocated      = 0.0;
     double preReloCost     = 0.0;
     int relocatingIndex    = -1; // or double relocatingAngle
+
+    std::vector<EdgePathPtr> paths;
+
+    ReloPush::StatePathPtr toSinglePathPtr(double interpolation_resolution = 0.1);
 };
 
 class FinalTaskSequence
@@ -128,7 +140,14 @@ MatrixMinEntry findMatrixMin(const Eigen::MatrixXd &mat);
  *         - costMat: the NxM Eigen matrix
  *         - sortedEntries: a list of (row, col, cost) sorted ascending by cost
  */
+/*
 MatrixResult computeCostMatrix(
+    const Graph &g,
+    const std::vector<Vertex> &objectVerts,
+    const std::vector<Vertex> &goalVerts);
+*/
+
+MatrixResult computeCostMatrixWithPaths(
     const Graph &g,
     const std::vector<Vertex> &objectVerts,
     const std::vector<Vertex> &goalVerts);
@@ -175,9 +194,13 @@ void pick_best(std::vector<ObjectGoalPair>& allObjectGoalPairs, Graph& g)
 }
 */
 
+    /*
 std::vector<PairCostResult> computeAndSortAllPairs(
     const Graph &g,
     std::unordered_map<std::string, ObjectGoalPair> &pairs);
+*/
+std::map<std::string, PairCostResult> computeMatrixPairs(
+    const Graph &g, std::unordered_map<std::string, ObjectGoalPair> &pairs);
 
 /**
  * @brief Finds the single lowest cost among all PairCostResult entries,
@@ -187,7 +210,7 @@ std::vector<PairCostResult> computeAndSortAllPairs(
  * @return A LowestCostInfo with the absolute minimal cost found.
  *         If 'results' is empty, fields will be default/invalid.
  */
-LowestCostInfo findAbsoluteLowestCost(const std::vector<PairCostResult> &results);
+LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &results);
 
 
 #endif // TASKALLOCATION_HPP

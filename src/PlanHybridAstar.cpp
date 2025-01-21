@@ -1,7 +1,9 @@
 #include<PlanHybridAstar.hpp>
 
 
-PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal_in, Environment& env, bool allow_reverse, int64_t timeout_ms ,bool print_res,float car_width, float obs_rad)
+PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal_in,
+                                  Environment& env, bool allow_reverse, float turning_radius, float speed, int64_t timeout_ms,
+                                  bool print_res,float car_width, float LF, float obs_rad)
 {
     //auto time_start = std::chrono::high_resolution_clock::now();
     // make sure the angle range is in 0~2pi
@@ -51,6 +53,11 @@ PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal
     // choose
     env.changeGoal(goal_neg);
 
+    if(allow_reverse)
+        env.nonPushMode(turning_radius,speed,LF);
+    else
+        env.pushMode(turning_radius,speed,LF);
+
     HybridAStar<ReloPush::State, Action, double, Environment> hybridAStar(env);
     PathPlanResult solution(start_in, goal_in);
     bool searchSuccess = hybridAStar.search(start_neg, solution, allow_reverse, 0, timeout_ms);
@@ -90,7 +97,20 @@ PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal
 
 PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal_in, PlanningContext& ctx, bool allow_reverse)
 {
-    return planHybridAstar(start_in, goal_in, ctx.env, allow_reverse,ctx.timeout_ms,ctx.print_res,ctx.parameters.car_width,ctx.parameters.obs_rad);
+    float rho, speed;
+    if(allow_reverse)
+    {
+        rho = ctx.parameters.turning_rad_pair.non_push;
+        speed = ctx.parameters.speed_pair.non_push;
+    }
+    else
+    {
+        rho = ctx.parameters.turning_rad_pair.push;
+        speed = ctx.parameters.speed_pair.push;
+    }
+
+
+    return planHybridAstar(start_in, goal_in, ctx.env, allow_reverse, rho, speed, ctx.timeout_ms,ctx.print_res,ctx.parameters.car_width, ctx.parameters.LF,ctx.parameters.obs_rad);
 }
 
 //PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal_in, Environment& env, bool allow_reverse, int64_t timeout_ms ,bool print_res,float car_width, float obs_rad)

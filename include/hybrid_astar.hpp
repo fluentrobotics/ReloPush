@@ -89,7 +89,7 @@ public:
     ~HybridAStar() {}
 
     bool search(const State& startState,
-                PlanResult<State, Action, Cost>& solution, bool allow_reverse, Cost initialCost = 0, int64_t timeout_ms = 0) {
+                PlanResult<State, Action, Cost>& solution, bool allow_reverse, double turning_radius, Cost initialCost = 0, int64_t timeout_ms = 0) {
         solution.states.clear();
         solution.actions.clear();
         solution.cost = 0;

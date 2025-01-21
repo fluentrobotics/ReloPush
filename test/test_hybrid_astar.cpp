@@ -3,7 +3,7 @@
 
 #include <QApplication>
 #include <QMainWindow>
-#include <VisualizationWidget.h>
+#include <Visualization/VisualizationWidget.h>
 
 
 
@@ -40,9 +40,9 @@ int main(int argc, char *argv[])
 
 
     // init robot pose
-    ReloPush::State start(3,3,4.2);
+    ReloPush::State start(1,1,1.5708);
     // init goal
-    ReloPush::State goal(2,2,3.14);
+    ReloPush::State goal(1.5,1.5,3.84159);
 
     // plan
     auto res = planHybridAstar(start,goal,planCtx,true);

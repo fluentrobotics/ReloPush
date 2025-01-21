@@ -165,10 +165,10 @@ reloDubinsPath findDubins(ReloPush::State &start, ReloPush::State &goal, double 
     OmplState *dubinsEnd = (OmplState *)dubinsSpace.allocState();
     dubinsStart->setXY(start.x, start.y);
     //dubinsStart->setYaw(-start.yaw);
-    dubinsStart->setYaw(jeeho::convertEulerRange_to_2pi(start.yaw));
+    dubinsStart->setYaw(fromOMPL::mod2pi(start.yaw));
     dubinsEnd->setXY(goal.x, goal.y);
     //dubinsEnd->setYaw(-goal.yaw);
-    dubinsEnd->setYaw(jeeho::convertEulerRange_to_2pi(goal.yaw));
+    dubinsEnd->setYaw(fromOMPL::mod2pi(goal.yaw));
 
     //for debug
     auto xx = dubinsEnd->getX();

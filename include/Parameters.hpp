@@ -24,11 +24,18 @@ struct TurningRadiusPair
     float non_push;
 };
 
+struct SpeedPair
+{
+    float push = 0.36;
+    float non_push = 0.5;
+};
+
 struct PlanningParameters
 {
     // The rectangular workspace
     WorkspaceBoundary boundary;
     TurningRadiusPair turning_rad_pair;
+    SpeedPair speed_pair;
     float map_resolution;
     float car_width;
     float obs_rad;

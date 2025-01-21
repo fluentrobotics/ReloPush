@@ -7,6 +7,8 @@
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 
+#include <FromOMPL.h>
+
 typedef boost::geometry::model::d2::point_xy<double> Point;
 
 
@@ -47,6 +49,20 @@ namespace ReloPush
         friend std::ostream &operator<<(std::ostream &os, const State &s)
         {
             return os << "(" << s.x << "," << s.y << "," << s.yaw << ")";
+        }
+
+        State get_prePush(double push_angle, double pre_push_distance)
+        {
+            State outState = State(x,y,push_angle);
+
+            // Calculate the new x and y coordinates
+            outState.x -= pre_push_distance * cos(outState.yaw);
+            outState.y -= pre_push_distance * sin(outState.yaw);
+
+            // change angle range
+            outState.yaw = fromOMPL::mod2pi(outState.yaw);
+
+            return outState;
         }
 
         double x;

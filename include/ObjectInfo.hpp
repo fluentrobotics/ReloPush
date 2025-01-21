@@ -2,6 +2,7 @@
 #define OBJECTINFO_HPP
 #include <string>
 #include <cmath>
+#include <State.h>
 
 /**
  * @brief A simple struct to hold "object-level" info:
@@ -42,6 +43,21 @@ struct ObjectInfo
 
         double stepAngle = (2.0 * M_PI) / static_cast<double>(numberOfSides);
         return nominalOrientation + (orientationIndex * stepAngle);
+    }
+
+    void applyRotation(double angleChange)
+    {
+        nominalOrientation = fromOMPL::mod2pi(nominalOrientation + angleChange);
+    }
+
+    ReloPush::State getNominalPose()
+    {
+        return ReloPush::State(x,y,nominalOrientation);
+    }
+
+    ReloPush::State getPushingPose(int pushing_index)
+    {
+        return ReloPush::State(x,y, getOrientation(pushing_index));
     }
 };
 

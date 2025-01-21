@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 #include <boost/graph/adjacency_list.hpp>
 //#include <cmath>
 #include <State.h>
@@ -10,6 +11,20 @@
 #include <DubinsTools.h>
 
 using EdgePathTypes = std::variant<reloDubinsPath, ReloPush::StatePathPtr>; // for storing in edge
+
+struct EdgePath
+{
+    bool is_pushing;
+    EdgePathTypes path;
+
+    EdgePath()
+    {}
+
+    EdgePath(bool is_pushing_in, EdgePathTypes path_in) : is_pushing(is_pushing_in), path(path_in)
+    {}
+};
+
+using EdgePathPtr = std::shared_ptr<EdgePath>;
 
 /**
  * @brief Distinguish whether a vertex is for an object or a goal.
@@ -99,7 +114,7 @@ struct EdgeData
 {
     double weight;
     //PathData paths;
-    std::vector<EdgePathTypes> paths; // Dubins or Waypoints
+    std::vector<EdgePath> paths; // Dubins or Waypoints
 
     // Record which mode was used to create this edge
     ConnectionMode mode;

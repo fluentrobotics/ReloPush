@@ -1,19 +1,54 @@
 #include<TaskAllocation.hpp>
 
+EdgePathList PairCostResult::getBestPath()
+{
+    return matrixResult->pathMat[bestRow][bestCol];
+}
+
 void PairCostResult::remove_top(void)
 {
     // remove from cost matrix
-    matrixResult.costMat(bestRow,bestCol) = std::numeric_limits<double>::infinity();
+    matrixResult->costMat(bestRow,bestCol) = std::numeric_limits<double>::infinity();
     // if any left
-    if (!matrixResult.sortedEntries.empty()) {
+    if (!matrixResult->sortedEntries.empty()) {
         // remove from sortedEntries
-        matrixResult.sortedEntries.erase(matrixResult.sortedEntries.begin());
+        matrixResult->sortedEntries.erase(matrixResult->sortedEntries.begin());
         // update next best
-        bestCost = matrixResult.sortedEntries[0].cost;
-        bestRow = matrixResult.sortedEntries[0].row;
-        bestCol = matrixResult.sortedEntries[0].col;
+        bestCost = matrixResult->sortedEntries[0].cost;
+        bestRow = matrixResult->sortedEntries[0].row;
+        bestCol = matrixResult->sortedEntries[0].col;
     }
 }
+
+ReloPush::StatePathPtr FinalAllocation::toSinglePathPtr(double interpolation_resolution)
+{
+    ReloPush::StatePath out_path(0);
+    for(auto& it : paths)
+    {
+        ReloPush::StatePathPtr statePath;
+        // Check if the variant holds a StatePathPtr
+        if (std::holds_alternative<ReloPush::StatePathPtr>(it->path))
+        {
+            statePath = std::get<ReloPush::StatePathPtr>(it->path);
+
+        }
+        // If needed, handle reloDubinsPath here (currently ignored)
+        else if(std::holds_alternative<reloDubinsPath>(it->path))
+        {
+            auto dubinsPath = std::get<reloDubinsPath>(it->path);
+            statePath = dubinsPath.interpolate(interpolation_resolution); // todo: parse map resolution
+        }
+
+        // fill out_path
+        for(auto& p : *statePath)
+        {
+            out_path.push_back(p);
+        }
+    }
+
+    return std::make_shared<ReloPush::StatePath>(out_path);
+}
+
 
 std::vector<ReloPush::State> FinalTaskSequence::to_StateList(void)
 {
@@ -67,6 +102,7 @@ MatrixMinEntry findMatrixMin(const Eigen::MatrixXd &mat)
  *         - costMat: the NxM Eigen matrix
  *         - sortedEntries: a list of (row, col, cost) sorted ascending by cost
  */
+/*
 MatrixResult computeCostMatrix(
     const Graph &g,
     const std::vector<Vertex> &objectVerts,
@@ -144,6 +180,111 @@ MatrixResult computeCostMatrix(
 
     return result;
 }
+*/
+
+
+MatrixResult computeCostMatrixWithPaths(
+    const Graph &g,
+    const std::vector<Vertex> &objectVerts,
+    const std::vector<Vertex> &goalVerts)
+{
+    // 1) Setup matrix dimension
+    size_t Nobj  = objectVerts.size();
+    size_t Ngoal = goalVerts.size();
+
+    // 2) Initialize cost matrix
+    Eigen::MatrixXd costMatrix(Nobj, Ngoal);
+    costMatrix.setConstant(std::numeric_limits<double>::infinity());
+
+    // 3) Dijkstra: fill costMatrix exactly as before
+    for (size_t i = 0; i < Nobj; ++i)
+    {
+        Vertex src = objectVerts[i];
+
+        // Distances to all vertices
+        std::vector<double> distMap(boost::num_vertices(g), std::numeric_limits<double>::infinity());
+        auto indexMap = get(boost::vertex_index, g);
+
+        boost::dijkstra_shortest_paths(
+            g,
+            src,
+            boost::distance_map(boost::make_iterator_property_map(distMap.begin(), indexMap))
+                .weight_map(get(&EdgeData::weight, g)));
+
+        for (size_t j = 0; j < Ngoal; ++j)
+        {
+            Vertex goalV = goalVerts[j];
+            double d = distMap[goalV];
+            costMatrix(i, j) = d;
+        }
+    }
+
+    // 4) Prepare the MatrixResult
+    MatrixResult result;
+    result.costMat = costMatrix;
+
+    // 5) Initialize pathMat (Nobj x Ngoal), each cell is an empty EdgePathList
+    result.pathMat.resize(Nobj);
+    for (size_t i = 0; i < Nobj; ++i)
+    {
+        result.pathMat[i].resize(Ngoal);
+        // Each pathMat[i][j] is *by default* an empty EdgePathList
+    }
+
+    // 6) We'll build sortedEntries from the cost matrix
+    std::vector<RowColCost> rowColList;
+
+    for (int i = 0; i < costMatrix.rows(); ++i)
+    {
+        for (int j = 0; j < costMatrix.cols(); ++j)
+        {
+            double c = costMatrix(i, j);
+            // We'll consider c < 1e9 as a "finite" cost
+            if (c < 1e9)
+            {
+                // 6a) Insert into rowColList
+                RowColCost rcc { i, j, c };
+                rowColList.push_back(rcc);
+
+                // 6b) Find the edge in the graph
+                Vertex vObj  = objectVerts[i];
+                Vertex vGoal = goalVerts[j];
+
+                Edge e;
+                bool hasEdge;
+                boost::tie(e, hasEdge) = boost::edge(vObj, vGoal, g);
+                if (hasEdge)
+                {
+                    // If g[e].paths is a vector<EdgePath>,
+                    // we store a *copy* of each path in pathMat[i][j].
+                    const auto &edgePaths = g[e].paths;
+                    result.pathMat[i][j].clear();
+                    for (auto &ep : edgePaths)
+                    {
+                        // Make a shared_ptr
+                        auto epPtr = std::make_shared<EdgePath>(ep);
+                        result.pathMat[i][j].push_back(epPtr);
+                    }
+                }
+            }
+        }
+    }
+
+    // 7) Sort ascending by cost
+    std::sort(rowColList.begin(), rowColList.end(),
+              [](const RowColCost &a, const RowColCost &b)
+              {
+                  return a.cost < b.cost;
+              });
+
+    // Fill in the final sorted list
+    result.sortedEntries = rowColList;
+
+    return result;
+}
+
+
+
 
 /*
 void pick_best(std::vector<ObjectGoalPair>& allObjectGoalPairs, Graph& g)
@@ -187,6 +328,7 @@ void pick_best(std::vector<ObjectGoalPair>& allObjectGoalPairs, Graph& g)
 }
 */
 
+/*
 std::vector<PairCostResult> computeAndSortAllPairs(
     const Graph &g,
     std::unordered_map<std::string, ObjectGoalPair> &pairs)
@@ -201,7 +343,8 @@ std::vector<PairCostResult> computeAndSortAllPairs(
         std::vector<Vertex> goalVerts = getGoalVertices(g, p.second.goalName);
 
         // 2) Build the cost matrix (which also produces sorted entries)
-        MatrixResult matrixRes = computeCostMatrix(g, objVerts, goalVerts);
+        //MatrixResult matrixRes = computeCostMatrix(g, objVerts, goalVerts);
+        MatrixResult matrixRes = computeCostMatrixWithPaths(g, objVerts, goalVerts);
 
         // 3) The minimal cost entry is sortedEntries[0], unless the matrix is empty
         double bestCost  = std::numeric_limits<double>::infinity();
@@ -224,7 +367,7 @@ std::vector<PairCostResult> computeAndSortAllPairs(
         pcr.bestCost    = bestCost;
         pcr.bestRow     = bestRow;
         pcr.bestCol     = bestCol;
-        pcr.matrixResult= matrixRes;
+        pcr.matrixResult= std::make_shared<MatrixResult>(matrixRes);
 
         results.push_back(pcr);
     }
@@ -241,6 +384,59 @@ std::vector<PairCostResult> computeAndSortAllPairs(
 
     return results;
 }
+*/
+
+std::map<std::string, PairCostResult> computeMatrixPairs(
+    const Graph &g, std::unordered_map<std::string, ObjectGoalPair> &pairs)
+{
+    std::map<std::string, PairCostResult> resultMap;
+
+    // We iterate over the 'pairs' map, which is keyed by objectName.
+    // Each value is an ObjectGoalPair that has (objectName, goalName).
+    for (auto &p : pairs)
+    {
+        // e.g. p.first is the objectName as a key in the unordered_map
+        //      p.second is the ObjectGoalPair with objectName, goalName
+        const auto &objName = p.second.objectName;
+        const auto &goalName = p.second.goalName;
+
+        // 1) Get object vertices, goal vertices
+        std::vector<Vertex> objVerts  = getObjectVertices(g, objName);
+        std::vector<Vertex> goalVerts = getGoalVertices(g, goalName);
+
+        // 2) Build the cost matrix (which also produces sorted entries + pathMat)
+        MatrixResult matrixRes = computeCostMatrixWithPaths(g, objVerts, goalVerts);
+
+        // 3) The minimal cost entry is sortedEntries[0], unless the matrix is empty
+        double bestCost  = std::numeric_limits<double>::infinity();
+        int bestRow      = -1;
+        int bestCol      = -1;
+
+        if (!matrixRes.sortedEntries.empty())
+        {
+            const auto &top = matrixRes.sortedEntries[0];
+            bestCost = top.cost;
+            bestRow  = top.row;
+            bestCol  = top.col;
+        }
+
+        // 4) Create a PairCostResult
+        PairCostResult pcr;
+        pcr.objectName   = objName;
+        pcr.goalName     = goalName;
+        pcr.bestCost     = bestCost;
+        pcr.bestRow      = bestRow;
+        pcr.bestCol      = bestCol;
+        // store the entire MatrixResult in a shared_ptr
+        pcr.matrixResult = std::make_shared<MatrixResult>(matrixRes);
+
+        // 5) Insert into the map with objectName as key
+        resultMap[objName] = pcr;
+    }
+
+    return resultMap;
+}
+
 
 /**
  * @brief Finds the single lowest cost among all PairCostResult entries,
@@ -250,32 +446,31 @@ std::vector<PairCostResult> computeAndSortAllPairs(
  * @return A LowestCostInfo with the absolute minimal cost found.
  *         If 'results' is empty, fields will be default/invalid.
  */
-LowestCostInfo findAbsoluteLowestCost(const std::vector<PairCostResult> &results)
+LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &resultsMap)
 {
     LowestCostInfo best;
-    best.cost = std::numeric_limits<double>::infinity();
-    best.indexInArray = -1;
-    best.row = -1;
-    best.col = -1;
+    best.cost          = std::numeric_limits<double>::infinity();
+    //best.indexInArray  = -1;  // or remove if not needed
+    best.row           = -1;
+    best.col           = -1;
 
-    for (size_t i = 0; i < results.size(); ++i)
+    // Iterate over the map: key is std::string (object name), value is PairCostResult
+    for (const auto &kv : resultsMap)
     {
-        const auto &p = results[i];
+        // kv.first  is the object name
+        // kv.second is the PairCostResult
+        const auto &p = kv.second;
         double c = p.bestCost;
-
         if (c < best.cost)
         {
-            best.cost         = c;
-            best.indexInArray = static_cast<int>(i);
-            best.objectName   = p.objectName;
-            best.goalName     = p.goalName;
-            best.row          = p.bestRow;
-            best.col          = p.bestCol;
+            best.cost       = c;
+            // Instead of best.indexInArray, we just store -1 or omit
+            best.objectName = p.objectName;
+            best.goalName   = p.goalName;
+            best.row        = p.bestRow;
+            best.col        = p.bestCol;
         }
     }
 
     return best;
 }
-
-
-

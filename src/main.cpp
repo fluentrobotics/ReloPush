@@ -6,8 +6,24 @@
 #include <FileWriter.hpp>
 #include <TaskAllocation.hpp>
 
+#include <QApplication>
+#include <QMainWindow>
+#include <Visualization/VisualizationWidget.h>
+#include <Visualization/QtMainControlWindow.h>
+
+
+
+
+
+
+
+
 int main(int argc, char *argv[])
 {
+    QApplication app(argc, argv);
+
+
+
     //if (argc < 2)
    // {
    //     std::cerr << "Usage: " << argv[0] << " <input_file>\n";
@@ -83,14 +99,15 @@ int main(int argc, char *argv[])
         // (d) Build all edges
         buildAllEdges(g, planCtx);
 
+        // todo: make replan loop here
         // (e) Compute cost matrices for all *remaining* pairs
-        auto pairResults = computeAndSortAllPairs(g, objGoalPairs);
+        auto pairResults = computeMatrixPairs(g, objGoalPairs); // list of matrices
 
         // (f) Find the absolute lowest cost among them
-        auto best = findAbsoluteLowestCost(pairResults);
+        LowestCostInfo best = findAbsoluteLowestCost(pairResults);
 
         // Check if we found any feasible solution
-        if (best.indexInArray < 0 || best.cost == std::numeric_limits<double>::infinity())
+        if (best.cost == std::numeric_limits<double>::infinity())
         {
             std::cout << "No feasible pair found (or no pairs left)!\n";
             break; // You can break or continue, depending on desired behavior
@@ -112,6 +129,8 @@ int main(int argc, char *argv[])
         chosen.col        = best.col;
         chosen.startPose = ReloPush::State(chosen.object.x,chosen.object.y,chosen.object.getOrientation(chosen.row));
         chosen.goalPose = ReloPush::State(chosen.goal.x, chosen.goal.y, chosen.goal.getOrientation(chosen.col));
+        chosen.paths = pairResults[best.objectName].getBestPath();
+
 
         // Look up the actual edge in the graph & read pre-relocation info
         auto objVerts  = getObjectVertices(g, best.objectName);
@@ -185,6 +204,84 @@ int main(int argc, char *argv[])
         }
         std::cout << std::endl;
     }
+
+
+    #pragma region visualization
+
+    // Create main window
+    QMainWindow window1, window2;
+    window1.setWindowTitle("Path Planner Visualization 1");
+    window2.setWindowTitle("Path Planner Visualization 2");
+
+    // Define custom colors (optional)
+    QColor customInitialColor = QColor(70, 130, 180); // Steel Blue
+    QColor customGoalColor = QColor(34, 139, 34);     // Forest Green
+    QColor customPathColor = QColor(220, 20, 60);     // Crimson
+    QColor customPathArrowColor = QColor(178, 34, 34); // Firebrick
+
+    // test path vis
+    auto vis_path0 = finalSequence[0].toSinglePathPtr();
+    auto vis_path = finalSequence[1].toSinglePathPtr();
+
+    // Create visualization widget with custom colors
+    VisualizationWidget *viz1 = new VisualizationWidget(nullptr,
+                                                       customInitialColor,
+                                                       customGoalColor,
+                                                       customPathColor,
+                                                       customPathArrowColor);
+
+    VisualizationWidget *viz2 = new VisualizationWidget(nullptr,
+                                                       customInitialColor,
+                                                       customGoalColor,
+                                                       customPathColor,
+                                                       customPathArrowColor);
+
+    // Alternatively, use default colors by omitting color parameters
+    // VisualizationWidget *viz = new VisualizationWidget();
+
+    // Define workspace size
+    float workspace_width = 4.0f;
+    float workspace_height = 5.0f;
+    viz1->setWorkspace(workspace_width, workspace_height);
+    viz1->setInitialPose(vis_path0->at(0));
+    viz1->setGoalPose(vis_path0->back());
+    viz1->setPath(*vis_path0);
+
+    viz2->setWorkspace(workspace_width, workspace_height);
+    viz2->setInitialPose(vis_path->at(0));
+    viz2->setGoalPose(vis_path->back());
+    viz2->setPath(*vis_path);
+
+
+    // Create obstacles
+    std::vector<ReloPush::State> obstacles;
+    obstacles.emplace_back(3.0f, 3.0f, 0.0f);
+    obstacles.emplace_back(1.0f, 0.4f, 0.4f);
+    viz1->setObstacles(obstacles);
+
+    // Set the widget as central widget
+    window1.setCentralWidget(viz1);
+    window1.resize(workspace_width*100, workspace_height*100);
+    window1.show();
+
+    window2.setCentralWidget(viz2);
+    window2.resize(workspace_width*100, workspace_height*100);
+    window2.show();
+
+    ReloPush::StatePath obs;
+
+    std::vector<std::pair<std::vector<ReloPush::State>, std::vector<ReloPush::State>>> initialPaths;
+    initialPaths.emplace_back(std::make_pair(*vis_path0,obs));
+    initialPaths.emplace_back(std::make_pair(*vis_path,obs));
+
+    // Create and show the Main Control Window
+    MainControlWindow controlWindow;
+    controlWindow.show();
+
+
+    return app.exec();
+    #pragma engregion visualization
+
 
     return 0;
 }

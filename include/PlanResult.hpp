@@ -13,6 +13,8 @@
  */
 
 #include <vector>
+#include <memory.h>
+#include <State.h>
 
 namespace libMultiRobotPlanning {
 
@@ -52,6 +54,11 @@ struct PlanResult {
         }
 
         return out_vec;
+    }
+
+    ReloPush::StatePathPtr getPathPtr(bool negateYaw)
+    {
+        return std::make_shared<ReloPush::StatePath>(getPath(negateYaw));
     }
 };
 

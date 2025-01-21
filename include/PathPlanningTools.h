@@ -68,7 +68,7 @@ using namespace libMultiRobotPlanning;
 // };
 
 namespace Constants {
-    static float steer_limit_push = 0.23; // 0.185
+    static float steer_limit_push = 0.15; // 0.185
     static float steer_limit_nonpush = 0.26; // 0.28
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
@@ -153,7 +153,7 @@ struct hash<ReloPush::State> {
 using Action = int;  // Action < 6
 
 // for checking state validity of a path
-enum StateValidity {valid, collision, out_of_boundary};
+enum StateValidity {valid, collision, out_of_boundary, no_approach};
 enum PlanValidity {success, start_inval, goal_inval, no_sol};
 
 typedef PlanResult<ReloPush::State, Action, double> PlanResultType;
@@ -873,6 +873,17 @@ public:
     std::unordered_set<ReloPush::State> get_obs()
     {
         return m_obstacles;
+    }
+
+
+    void pushMode(float turning_radius, float speed, float LF)
+    {
+        planCont = PlanningContext(false, turning_radius, LF, speed);
+    }
+
+    void nonPushMode(float turning_radius, float speed, float LF)
+    {
+        planCont = PlanningContext(true, turning_radius, LF, speed);
     }
 
 private:
