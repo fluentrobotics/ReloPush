@@ -14,10 +14,6 @@
 
 
 
-
-
-
-
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -31,7 +27,7 @@ int main(int argc, char *argv[])
     //}
 
     //std::string filename = argv[1];
-    std::string filename = "input2.txt";
+    std::string filename = "input3.txt";
 
     // We'll parse the boundary, plus objects & goals
     WorkspaceBoundary boundary;
@@ -255,8 +251,8 @@ int main(int argc, char *argv[])
 
     // Create obstacles
     std::vector<ReloPush::State> obstacles;
-    obstacles.emplace_back(3.0f, 3.0f, 0.0f);
-    obstacles.emplace_back(1.0f, 0.4f, 0.4f);
+    //obstacles.emplace_back(3.0f, 3.0f, 0.0f);
+    //obstacles.emplace_back(1.0f, 0.4f, 0.4f);
     viz1->setObstacles(obstacles);
 
     // Set the widget as central widget

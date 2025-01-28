@@ -762,7 +762,7 @@ DubinsPathCeres::Path<T> dubins_exhaustive(T d, T alpha, T beta, T rho)
 
     DubinsPathCeres::Path<T> path = dubinsLSL<T>(d, alpha, beta, rho);
     DubinsPathCeres::Path<T> tmp = dubinsRSR<T>(d, alpha, beta, rho);
-    T len, minLength = path.p + path.q; // Assuming length is p + q
+    T len, minLength = path.t + path.p + path.q; // Assuming length is t+p + q
 
     if ((len = tmp.p + tmp.q) < minLength)
     {
@@ -879,6 +879,13 @@ OrientationResult<T> computeLocalOrientation(const T& x1c, const T& y1c, const T
     T h;
     T arc_length;
 
+    // todo: handle points in the back
+    if(x1c < T(0.0))
+    {
+        // backword shouldn't be considered
+        result.path_length = T(100);
+    }
+
     if (y1c > T(0.0)) {
         // 3) y1c > 0
         rad = T(2.0) * R * y1c - y1c * y1c;
@@ -945,8 +952,11 @@ T Dubins_length_ceres(T start_x, T start_y, T start_yaw,
         path_length = fromOMPLCeres::dubins_classification(d_ceres, alpha_ceres, beta_ceres, turning_radius).lengthCost();
 
     else
-        path_length = fromOMPLCeres::dubins_exhaustive(d_ceres, alpha_ceres, beta_ceres, turning_radius).lengthCost();
-
+    {
+        //for debug
+        auto dpath = fromOMPLCeres::dubins_exhaustive(d_ceres, alpha_ceres, beta_ceres, turning_radius);
+        path_length = dpath.lengthCost();
+    }
     return path_length;
 }
 

@@ -36,12 +36,10 @@ struct PlanningContext
 
     ObjectMap mo_list;
     GoalMap delivered_list;
-
     int sample_N = 25;
-
     int64_t timeout_ms = 0; // 0: no timeout for hybrid-astar
     bool print_res = false; // print result for hybrid-astar
-
+    bool use_prelo_optimization = true;
 
     // Evenly sampled positions for optimizations
     std::vector<ReloPush::State> sampledPositions;

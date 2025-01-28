@@ -158,7 +158,7 @@ std::vector<ReloPush::State> interpolateStraightPath(const ReloPush::State& star
 }
 
 
-reloDubinsPath findDubins(ReloPush::State &start, ReloPush::State &goal, double turning_radius, bool print_type)
+reloDubinsPath findDubins(ReloPush::State start, ReloPush::State goal, double turning_radius, bool print_type)
 {
     ompl::base::DubinsStateSpace dubinsSpace(turning_radius);
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();

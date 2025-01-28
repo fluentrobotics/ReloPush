@@ -189,9 +189,11 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ObjectI
     // apply angle change
     object.applyRotation(angleChange);
 
+    // remove object from initial pose
+    ctx.env.remove_obs(movingObject.getNominalPose());
 
     // add to obstacles
-    ctx.env.add_obs(object.getNominalPose());
+    ctx.env.add_obs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
 
     // departing pose
     auto from_center_pose = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex));
@@ -207,7 +209,10 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ObjectI
     auto res = planHybridAstar(from_pre_push, to_pre_push, ctx, true);
 
     // remove obs
-    ctx.env.remove_obs(object.getNominalPose());
+    ctx.env.remove_obs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
+
+    // restore object
+    ctx.env.add_obs(movingObject.getNominalPose());
 
     // return result
     return res;
@@ -290,6 +295,11 @@ StateValidity addEdgePrerelocation(
     // 1) Info about the start/goal
     const auto &data1 = g[v1];
     const auto &data2 = g[v2];
+
+    // for debug
+    bool deb = false;
+    if(data1.name == "box2" && data2.name == "goal2" && data1.orientationIndex == 3 && data2.orientationIndex==3)
+        deb = true;
 
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
     ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation());
@@ -388,7 +398,7 @@ StateValidity addEdgePrerelocation(
                 bestRelocated = relocated;
                 foundAny = true;
                 bestOrientationIndex = i;
-                final_push_path = dubinsRes.second;
+                final_push_path = dubinsRes.second; // todo: break?
             }
 
             // If you want to break as soon as you find the *first* feasible:
@@ -478,111 +488,221 @@ StateValidity addEdgePrerelocation_Optimization(
     Graph &g,
     Vertex v1,
     Vertex v2,
-    PlanningContext &ctx, StateValidity& reason_in)
+    PlanningContext &ctx,
+    StateValidity &reason_in)
 {
     // 1) Gather start/goal info
     const auto &data1 = g[v1];
     const auto &data2 = g[v2];
 
+    // for debug
+    bool deb = false;
+    if(data1.name=="box2" && data2.name=="goal2" && data1.orientationIndex==3 && data2.orientationIndex == 3)
+        deb = true;
+
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
     ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation());
 
+    ObjectInfo movingObject = ctx.mo_list[data1.name];
+    auto final_push_index = data1.orientationIndex;
+
     int nSides = data1.numberOfSides;
-    int startOriIndex = data1.orientationIndex; // the orientation that failed
-    double R = ctx.parameters.turning_rad_pair.push;    // or wherever you store it
+    int startOriIndex = data1.orientationIndex; // orientation that failed normal mode
+    double R = ctx.parameters.turning_rad_pair.push;
 
     double bestCost = std::numeric_limits<double>::infinity();
     bool foundAny = false;
 
     // We'll keep track of the best relocation result
-    OptResult bestOpt(0.0, 0.0, 0.0, bestCost);
+    ReloPush::OptResult bestOpt(0.0, 0.0, 0.0, bestCost,0);
     int bestOrientationIndex = -1;
+    reloDubinsPath bestDubins_prerelo, bestDubins_final;
 
-    // 2) For each orientation axis, we do the optimization approach
+    // 2) For each orientation axis
     for (int i = 0; i < nSides; ++i)
     {
-        // Optionally skip the orientation used by normal mode:
-        //   if (i == startOriIndex) continue;
+        // Optionally skip the orientation used by normal mode, if desired:
+        // if (i == startOriIndex) continue;
 
         // compute the angle for orientation i
         double sideAngle = data1.nominalOrientation + (2.0 * M_PI / nSides) * i;
 
-        // 2a) Call your function
-        //     param: (x_i, y_i, th_i, x2,y2,th2, sideAngle, R)
-        OptResult optRes = FindPreRelocationOptimization(
+        // 2a) Try all initial guesses from ctx.sampledPositions
+        /*
+        for (const auto &initPos : ctx.sampledPositions)
+        {
+            double x_init_guess = initPos.x;
+            double y_init_guess = initPos.y;
+
+            // Call your function:
+            // (x_i, y_i, th_i, x2, y2, th2, sideAngle, R, x_init_guess, y_init_guess)
+            OptResult optRes = FindPreRelocationOptimization(
+                startPose.x,
+                startPose.y,
+                startPose.yaw,
+                goalPose.x,
+                goalPose.y,
+                goalPose.yaw,
+                sideAngle,
+                R,
+                x_init_guess,
+                y_init_guess,
+                ctx
+                );
+
+            double relocationX   = optRes.x;
+            double relocationY   = optRes.y;
+            double relocationYaw = optRes.landing_yaw;
+            double costOpt       = optRes.cost; // cost from the solver
+            double delta_yaw    = optRes.change_in_yaw;
+
+            // If the cost is infinite or >= bestCost, skip
+            if (costOpt >= bestCost)
+                continue;
+
+            // 2b) (Optional) boundary or collision checks:
+            // if (!ctx.env.inBoundary(relocationX, relocationY)) continue;
+            // if (someCollisionCheck(relocationX, relocationY)) continue;
+
+            // 2c) If your cost function doesn't already include final path cost,
+            //     plan a path from (relocationX,relocationY,relocationYaw) to goalPose.
+            // double dubinsDist = ...
+            // double totalCost = costOpt + dubinsDist;
+            double totalCost = costOpt;
+
+            // 2d) Keep the best
+            if (totalCost < bestCost)
+            {
+                bestCost = totalCost;
+                bestOpt  = OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
+                bestOrientationIndex = i;
+
+                bestDubins_prerelo = findDubins(ReloPush::State(startPose.x,startPose.y,sideAngle), ReloPush::State(relocationX,relocationY,sideAngle + bestOpt.change_in_yaw), ctx.parameters.turning_rad_pair.push);
+                bestDubins_final = findDubins(ReloPush::State(relocationX,relocationY,relocationYaw), goalPose, ctx.parameters.turning_rad_pair.push);
+
+                if(bestCost < 50) //todo: handle nan
+                    foundAny = true;
+            }
+        } // end for sampledPositions
+        */
+
+        auto init_guess_xy = ReloPush::find_init_guess_intersection(goalPose.x,goalPose.y,goalPose.yaw,
+                                                                    startPose.x,startPose.y,sideAngle,
+                                                                    ctx.parameters.turning_rad_pair.push,sideAngle-startPose.yaw);
+
+
+        // check NaN (parallel directions)
+        if (std::isnan(init_guess_xy.first) || std::isnan(init_guess_xy.second))
+        {
+            // handle exception (ignore this option)
+            continue;
+        }
+
+        double x_init_guess = init_guess_xy.first;
+        double y_init_guess = init_guess_xy.second;
+
+        // Call your function:
+        // (x_i, y_i, th_i, x2, y2, th2, sideAngle, R, x_init_guess, y_init_guess)
+        ReloPush::OptResult optRes = ReloPush::FindPreRelocationOptimization(
             startPose.x,
             startPose.y,
             startPose.yaw,
             goalPose.x,
             goalPose.y,
             goalPose.yaw,
-            sideAngle,  // the pre-relocation push direction
+            sideAngle,
             R,
-            startPose.x, // initial guess for the optimization
-            startPose.y // initial guess for the optimization
+            x_init_guess,
+            y_init_guess,
+            ctx
             );
 
-        double relocationX = optRes.x;   // new X
-        double relocationY = optRes.y;   // new Y
-        double relocationYaw = optRes.yaw;
-        double costOpt = optRes.cost;    // the cost from the solver
+        double relocationX   = optRes.x;
+        double relocationY   = optRes.y;
+        double relocationYaw = optRes.landing_yaw;
+        double costOpt       = optRes.cost; // cost from the solver
+        double delta_yaw    = optRes.change_in_yaw;
 
-        // If the cost is infinite or something, skip
+        // If the cost is infinite or >= bestCost, skip
         if (costOpt >= bestCost)
             continue;
 
-        // 2b) Optionally do boundary/collision checks on (relocationX, relocationY)
-        // e.g. if (!ctx.env.inBoundary(relocationX, relocationY)) continue;
-        // e.g. do collision checks, etc.
+        // 2b) (Optional) boundary or collision checks:
+        // if (!ctx.env.inBoundary(relocationX, relocationY)) continue;
+        // if (someCollisionCheck(relocationX, relocationY)) continue;
 
-        // 2c) Also plan a Dubins from (relocationX, relocationY, relocationYaw) to goalPose
-        // to get the total cost: costOpt + dubinsDist.
-        // Or if 'optRes.cost' already includes the full cost, you might skip a second planner.
-        // For example, let's assume 'optRes.cost' is ONLY the relocation cost. We must do a separate
-        // check for the path from relocated -> goal.
-        // This depends on how your cost function is set up in CostFunctor.
-        // We'll assume 'costOpt' is JUST the relocation cost, so we do:
-
-        //auto dubinsRes = PlanDubins(ReloPush::State(relocationX, relocationY, relocationYaw),
-        //                            goalPose, ctx);
-        //if (!dubinsRes.first) // failed
-        //    continue;
-
-        //double dubinsDist = dubinsRes.second.lengthCost();
-        //double totalCost = costOpt + dubinsDist;
+        // 2c) If your cost function doesn't already include final path cost,
+        //     plan a path from (relocationX,relocationY,relocationYaw) to goalPose.
+        // double dubinsDist = ...
+        // double totalCost = costOpt + dubinsDist;
         double totalCost = costOpt;
 
+        // 2d) Keep the best
         if (totalCost < bestCost)
         {
             bestCost = totalCost;
-            bestOpt = OptResult(relocationX, relocationY, relocationYaw, costOpt);
+            bestOpt  = ReloPush::OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
             bestOrientationIndex = i;
-            foundAny = true;
-        }
-    }
 
+            bestDubins_prerelo = findDubins(ReloPush::State(startPose.x,startPose.y,sideAngle), ReloPush::State(relocationX,relocationY,sideAngle + bestOpt.change_in_yaw), ctx.parameters.turning_rad_pair.push);
+            bestDubins_final = findDubins(ReloPush::State(relocationX,relocationY,relocationYaw), goalPose, ctx.parameters.turning_rad_pair.push);
+
+            if(bestCost < 50) //todo: handle nan
+                foundAny = true;
+        }
+
+    } // end for each orientation axis
+
+
+    StateValidity out_validity = StateValidity::out_of_boundary;
+
+    // 3) Check if we found any feasible relocation
     if (!foundAny)
     {
         // No feasible relocation found
-        return StateValidity::out_of_boundary;
+        out_validity = StateValidity::out_of_boundary; // or another reason
     }
 
-    // 3) If found, create an edge
-    Edge e; bool inserted;
-    boost::tie(e, inserted) = boost::add_edge(v1, v2, g);
-    if (inserted)
+    else
     {
-        g[e].weight = bestCost;
-        g[e].mode   = ConnectionMode::PRE_RELOCATION;
-        g[e].preRelo.used            = true;
-        g[e].preRelo.xRelocated      = bestOpt.x;
-        g[e].preRelo.yRelocated      = bestOpt.y;
-        g[e].preRelo.extraCost       = bestOpt.cost; // or bestCost - dubinsDist if you want the relocation portion
-        g[e].preRelo.relocatingIndex = bestOrientationIndex;
+        auto planApproach = check_approach_validity(bestDubins_prerelo.targetState, movingObject, bestOrientationIndex, final_push_index, bestOpt.change_in_yaw, 0.6, ctx);
+
+        if(planApproach->validity == PlanValidity::success)
+        {
+            // 4) If found, create an edge in the graph
+            Edge e;
+            bool inserted;
+            boost::tie(e, inserted) = boost::add_edge(v1, v2, g);
+            if (inserted)
+            {
+                g[e].weight = bestCost;
+                g[e].mode   = ConnectionMode::PRE_RELOCATION;
+
+                g[e].preRelo.used            = true;
+                g[e].preRelo.xRelocated      = bestOpt.x;
+                g[e].preRelo.yRelocated      = bestOpt.y;
+                g[e].preRelo.extraCost       = bestOpt.cost; // or bestCost if that is the final total
+                g[e].preRelo.relocatingIndex = bestOrientationIndex;
+                g[e].preRelo.relocatingIndex= bestOrientationIndex;
+                g[e].preRelo.reason = reason_in;
+
+                EdgePath preReloPath(true, bestDubins_prerelo);
+                EdgePath appPath(false, planApproach->getPathPtr(true));
+                EdgePath finalPushPah(true, bestDubins_final);
+                g[e].paths = {preReloPath, appPath, finalPushPah};
+
+                // Possibly store the reason in 'reason_in' or g[e].preRelo.reason
+                // g[e].preRelo.reason = reason_in;
+                out_validity = StateValidity::valid;
+            }
+
+
+        }
     }
 
-    return StateValidity::valid;
+    return out_validity;
 }
+
 
 
 
@@ -590,9 +710,6 @@ bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
 {
     const auto &data1 = g[v1];
     const auto &data2 = g[v2];
-
-    // test
-    bool use_optimization = true;
 
     if(data1.name != data2.name)
     {
@@ -605,7 +722,7 @@ bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
             // find pre-relocation
             StateValidity preRelocationEdge = StateValidity::out_of_boundary;
 
-            if(!use_optimization)
+            if(!ctx.use_prelo_optimization)
                 preRelocationEdge = addEdgePrerelocation(g,v1,v2,ctx, normalEdge);
             else
                 preRelocationEdge = addEdgePrerelocation_Optimization(g,v1,v2,ctx, normalEdge);
