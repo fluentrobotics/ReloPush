@@ -169,7 +169,7 @@ StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningConte
         }
     }
     else{
-        std::cout << "Path too short to interpolate" << std::endl;
+        //std::cout << "Path too short to interpolate" << std::endl;
         main_push_path.resize(1);
         main_push_path[0] = dubins_in.targetState;
     } // path is too short there is nothing to interpolate
@@ -181,7 +181,7 @@ StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningConte
 
 PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ObjectInfo movingObject,
                             int landingOrientationIndex, int finalOrientationIndex, double angleChange,
-                             double prePush_distance, PlanningContext& ctx)
+                             PlanningContext& ctx)
 {
 
     // object to move
@@ -198,12 +198,12 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ObjectI
     // departing pose
     auto from_center_pose = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex));
     // pre-push
-    auto from_pre_push = find_pre_push(from_center_pose, prePush_distance);
+    auto from_pre_push = find_pre_push(from_center_pose, ctx.parameters.PrePush_dist);
 
     // final landing pose
     auto to_center_pose = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(finalOrientationIndex));
     // pre-push
-    auto to_pre_push = find_pre_push(to_center_pose, prePush_distance);
+    auto to_pre_push = find_pre_push(to_center_pose, ctx.parameters.PrePush_dist);
 
     // plan hybrid astar
     auto res = planHybridAstar(from_pre_push, to_pre_push, ctx, true);
@@ -277,6 +277,8 @@ StateValidity addEdgeNormalMode(
             g[e].weight = dubinsResult.second.lengthCost();           // path length from planner
             g[e].mode   = ConnectionMode::NORMAL_MODE;
             g[e].paths = {EdgePath(true,dubinsResult.second)};    // store entire path for reference
+            g[e].srcVertexData = g[v1];
+            g[e].sinkVertexData = g[v2];
         }
         return StateValidity::valid;
     }
@@ -418,7 +420,8 @@ StateValidity addEdgePrerelocation(
     else
     {
         // check if approach to final push is feasible
-        auto planApproach = check_approach_validity(bestRelocated, movingObject, bestOrientationIndex, final_push_index, landingAngleChange, 0.6, ctx);
+        auto planApproach = check_approach_validity(bestRelocated, movingObject, bestOrientationIndex,
+                                                    final_push_index, landingAngleChange, ctx);
 
         if(planApproach->validity == PlanValidity::success)
         {
@@ -436,9 +439,10 @@ StateValidity addEdgePrerelocation(
                 g[e].preRelo.yRelocated  = bestRelocated.y;
                 g[e].preRelo.extraCost   = std::hypot(bestRelocated.x - startPose.x,
                                                     bestRelocated.y - startPose.y);
-                g[e].preRelo.relocatingIndex= bestOrientationIndex;
+                g[e].preRelo.relocatingIndex = bestOrientationIndex;
                 g[e].preRelo.reason = reason_in;
-
+                g[e].srcVertexData = g[v1];
+                g[e].sinkVertexData = g[v2];
 
                 // pre-relocation path
                 double preRelo_orientation = movingObject.getOrientation(bestOrientationIndex);
@@ -665,7 +669,7 @@ StateValidity addEdgePrerelocation_Optimization(
 
     else
     {
-        auto planApproach = check_approach_validity(bestDubins_prerelo.targetState, movingObject, bestOrientationIndex, final_push_index, bestOpt.change_in_yaw, 0.6, ctx);
+        auto planApproach = check_approach_validity(bestDubins_prerelo.targetState, movingObject, bestOrientationIndex, final_push_index, bestOpt.change_in_yaw, ctx);
 
         if(planApproach->validity == PlanValidity::success)
         {
@@ -690,6 +694,8 @@ StateValidity addEdgePrerelocation_Optimization(
                 EdgePath appPath(false, planApproach->getPathPtr(true));
                 EdgePath finalPushPah(true, bestDubins_final);
                 g[e].paths = {preReloPath, appPath, finalPushPah};
+                g[e].srcVertexData = g[v1];
+                g[e].sinkVertexData = g[v2];
 
                 // Possibly store the reason in 'reason_in' or g[e].preRelo.reason
                 // g[e].preRelo.reason = reason_in;

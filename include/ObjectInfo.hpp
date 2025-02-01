@@ -59,6 +59,16 @@ struct ObjectInfo
     {
         return ReloPush::State(x,y, getOrientation(pushing_index));
     }
+
+    std::vector<ReloPush::State> getPushingPoses()
+    {
+        std::vector<ReloPush::State> out_poses(numberOfSides);
+
+        for(size_t n=0; n<numberOfSides; n++)
+            out_poses[n] = getPushingPose(n);
+
+        return out_poses;
+    }
 };
 
 /**

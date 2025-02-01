@@ -97,7 +97,7 @@ public:
             }
         }
         else{
-            std::cout << "Path too short to interpolate" << std::endl;
+            //std::cout << "Path too short to interpolate" << std::endl;
             waypoints.resize(1);
             waypoints[0] = targetState;
         } // path is too short there is nothing to interpolate

@@ -41,6 +41,7 @@ struct PlanningParameters
     float obs_rad;
     float LF;
     float LB;
+    double PrePush_dist = 0.6;
 
     // Possibly other fields:
     // double normalModeThreshold;

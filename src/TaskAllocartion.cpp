@@ -1,8 +1,8 @@
 #include<TaskAllocation.hpp>
 
-EdgePathList PairCostResult::getBestPath()
+EdgeMatrixEntry PairCostResult::getBestPath()
 {
-    return matrixResult->pathMat[bestRow][bestCol];
+    return matrixResult->pathMat->at(bestRow)[bestCol];
 }
 
 void PairCostResult::remove_top(void)
@@ -20,23 +20,51 @@ void PairCostResult::remove_top(void)
     }
 }
 
-ReloPush::StatePathPtr FinalAllocation::toSinglePathPtr(double interpolation_resolution)
+void PathsToSinglePath(std::vector<EdgeDataPathPair>& paths, ReloPush::StatePath& out_path, double interpolation_resolution)
 {
-    ReloPush::StatePath out_path(0);
     for(auto& it : paths)
+    {
+        for(auto it2 : *it.edgePathList)
+        {
+            ReloPush::StatePathPtr statePath;
+            // Check if the variant holds a StatePathPtr
+            if (std::holds_alternative<ReloPush::StatePathPtr>(it2.path))
+            {
+                statePath = std::get<ReloPush::StatePathPtr>(it2.path);
+
+            }
+            // If needed, handle reloDubinsPath here (currently ignored)
+            else if(std::holds_alternative<reloDubinsPath>(it2.path))
+            {
+                auto dubinsPath = std::get<reloDubinsPath>(it2.path);
+                statePath = dubinsPath.interpolate(interpolation_resolution); // todo: parse map resolution
+            }
+
+            // fill out_path
+            for(auto& p : *statePath)
+            {
+                out_path.push_back(p);
+            }
+        }
+    }
+}
+
+ReloPush::StatePathPtr EdgePathListToSinglePath(EdgePathList paths, double resolution)
+{
+    ReloPush::StatePath out_path;
+    for(auto& it : *paths)
     {
         ReloPush::StatePathPtr statePath;
         // Check if the variant holds a StatePathPtr
-        if (std::holds_alternative<ReloPush::StatePathPtr>(it->path))
+        if (std::holds_alternative<ReloPush::StatePathPtr>(it.path))
         {
-            statePath = std::get<ReloPush::StatePathPtr>(it->path);
-
+            statePath = std::get<ReloPush::StatePathPtr>(it.path);
         }
         // If needed, handle reloDubinsPath here (currently ignored)
-        else if(std::holds_alternative<reloDubinsPath>(it->path))
+        else if(std::holds_alternative<reloDubinsPath>(it.path))
         {
-            auto dubinsPath = std::get<reloDubinsPath>(it->path);
-            statePath = dubinsPath.interpolate(interpolation_resolution); // todo: parse map resolution
+            auto dubinsPath = std::get<reloDubinsPath>(it.path);
+            statePath = dubinsPath.interpolate(resolution); // todo: parse map resolution
         }
 
         // fill out_path
@@ -47,6 +75,32 @@ ReloPush::StatePathPtr FinalAllocation::toSinglePathPtr(double interpolation_res
     }
 
     return std::make_shared<ReloPush::StatePath>(out_path);
+}
+
+
+ReloPush::StatePathPtr FinalAllocation::toSinglePathPtr(double interpolation_resolution)
+{
+    ReloPush::StatePath obs_path(0);
+    ReloPush::StatePath out_path(0);
+
+    // add ObsRelo
+    //for(size_t n=0; n<obsReloPaths->size(); n++)
+    //{
+        auto pathPtr = EdgePathListToSinglePath(obsReloPaths,0.2);
+        obs_path.insert(obs_path.end(), pathPtr->begin(), pathPtr->end());
+    //}
+
+    PathsToSinglePath(paths,out_path, interpolation_resolution);
+
+    ReloPush::StatePath combined;
+    // Reserve space for performance (optional).
+    combined.reserve(obs_path.size() + out_path.size());
+
+    // Insert all elements from vec1 and then vec2.
+    combined.insert(combined.end(), obs_path.begin(), obs_path.end());
+    combined.insert(combined.end(), out_path.begin(), out_path.end());
+
+    return std::make_shared<ReloPush::StatePath>(combined);
 }
 
 
@@ -182,7 +236,85 @@ MatrixResult computeCostMatrix(
 }
 */
 
+void sortByDistance(std::vector<ReloPush::State>& goals, const ReloPush::State& start) {
+    std::sort(goals.begin(), goals.end(), [&start](const ReloPush::State& a, const ReloPush::State& b) {
+        return StateDistance(start, a) < StateDistance(start, b);
+    });
+}
 
+ReloPush::StatePathPtr Find_ObsRelo(ObjectInfo& mo, PlanningContext& ctx, std::vector<EdgeDataPathPair>& edgesInfo)
+{
+    auto init_pusing_poses = mo.getPushingPoses();
+
+    std::vector<ReloPush::State> found_candidates(0);
+
+    ReloPush::State objectPos(init_pusing_poses[0].x,init_pusing_poses[0].y,init_pusing_poses[0].yaw);
+    for (const auto& pp : init_pusing_poses) {
+        // Direction is represented as a pair of (dx, dy)
+        double dx = cosf(pp.yaw) * ctx.parameters.map_resolution;
+        double dy = sinf(pp.yaw) * ctx.parameters.map_resolution; // unit vector
+
+        bool out_of_boundary = false;
+        // Check positions along this direction
+        ReloPush::State obsrelo_candidate = pp;
+        while(!out_of_boundary)
+        {
+            obsrelo_candidate.x += dx;
+            obsrelo_candidate.y += dy;
+
+            //auto validity = env.stateValid(obsrelo_candidate,Constants::carWidth,2*Constants::obsRadius);
+            StateValidity validity = StateValidity::valid;
+
+
+            auto obs = ctx.env.get_obs();
+            // add path points as obstacles
+            std::vector<ReloPush::State> pathObs;
+            PathsToSinglePath(edgesInfo,pathObs,ctx.parameters.obs_rad*2);
+            obs.insert(pathObs.begin(), pathObs.end());
+
+
+            for(auto& it: obs)
+            {
+                if(StateDistance(it,obsrelo_candidate)<Constants::obsRadius*2 + Constants::LF_nonpush + Constants::LB + 0.05)
+                {
+                    validity = StateValidity::collision;
+                    break;
+                }
+                else if(obsrelo_candidate.x < ctx.parameters.boundary.xMin
+                           || obsrelo_candidate.x > ctx.parameters.boundary.xMax
+                           || obsrelo_candidate.y < ctx.parameters.boundary.yMin
+                           || obsrelo_candidate.y > ctx.parameters.boundary.yMax)
+                {
+                    validity = StateValidity::out_of_boundary;
+                    break;
+                }
+            }
+
+            // out-of-bounday: finish with this vec
+            if(validity == StateValidity::out_of_boundary)
+            {
+                out_of_boundary = true;
+                break;
+            }
+            // obsrelo candidate found
+            else if(validity == StateValidity::valid)
+                break;
+        }
+
+        // not out-of-bounday: found a candidate
+        if(!out_of_boundary)
+            found_candidates.push_back(obsrelo_candidate);
+    }
+
+    // sort
+    sortByDistance(found_candidates, objectPos);
+
+    // If no valid relocation found, return the original position
+    return std::make_shared<ReloPush::StatePath>(found_candidates);
+}
+
+
+/*
 MatrixResult computeCostMatrixWithPaths(
     const Graph &g,
     const std::vector<Vertex> &objectVerts,
@@ -282,8 +414,178 @@ MatrixResult computeCostMatrixWithPaths(
 
     return result;
 }
+*/ //previous version
 
+MatrixResultPtr computeCostMatrixWithPaths(
+    const Graph &g,
+    const std::vector<Vertex> &objectVerts,
+    const std::vector<Vertex> &goalVerts,
+    PlanningContext& ctx)
+{
+    // 1) Dimensions
+    size_t Nobj  = objectVerts.size();
+    size_t Ngoal = goalVerts.size();
 
+    // 2) Initialize cost matrix
+    Eigen::MatrixXd costMatrix(Nobj, Ngoal);
+    costMatrix.setConstant(std::numeric_limits<double>::infinity());
+
+    // We'll store final data in this 'MatrixResult'
+    auto result = std::make_shared<MatrixResult>();
+    result->costMat = costMatrix;
+
+    // 3) Prepare the NxM pathMat
+    auto pathMatPtr = std::make_shared<EdgeDataPathMatrix>();
+    pathMatPtr->resize(Nobj);
+    for (size_t i = 0; i < Nobj; ++i)
+    {
+        (*pathMatPtr)[i].resize(Ngoal);
+        // each cell is an EdgeMatrixEntry with edgesInfo = {}
+    }
+
+    // We'll fill sortedEntries at the end
+    SortedEntryList rowColList;
+
+    auto indexMap = get(boost::vertex_index, g);
+    size_t numV   = boost::num_vertices(g);
+
+    // 4) For each object vertex i, run Dijkstra
+    for (size_t i = 0; i < Nobj; ++i)
+    {
+        Vertex src = objectVerts[i];
+
+        // Distances & predecessors
+        std::vector<double> distMap(numV, std::numeric_limits<double>::infinity());
+        std::vector<Vertex> predMap(numV, Graph::null_vertex());
+
+        boost::dijkstra_shortest_paths(
+            g, src,
+            boost::distance_map(boost::make_iterator_property_map(distMap.begin(), indexMap))
+                .predecessor_map(boost::make_iterator_property_map(predMap.begin(), indexMap))
+                .weight_map(get(&EdgeData::weight, g))); // todo: skip unnecessary search
+
+        // 4b) For each goal vertex j, reconstruct the path if finite
+        for (size_t j = 0; j < Ngoal; ++j)
+        {
+            Vertex goalV = goalVerts[j];
+            double d = distMap[indexMap[goalV]];
+
+            result->costMat(i, j) = d;
+            if (d < 1e9)  // finite
+            {
+                // Build RowColCost
+                RowColCost rcc;
+                rcc.row  = static_cast<int>(i);
+                rcc.col  = static_cast<int>(j);
+                rcc.cost = d;
+                rowColList.push_back(rcc);
+
+                // Reconstruct path from (src -> goalV)
+                // We'll gather a list of EdgeDataPathPair
+                EdgeMatrixEntry edgesInfo;
+
+                Vertex cur = goalV;
+                while (cur != src && cur != Graph::null_vertex())
+                {
+                    Vertex p = predMap[indexMap[cur]];
+                    if (p == Graph::null_vertex() || p == cur)
+                    {
+                        edgesInfo.edgesInfo.clear();
+                        break;
+                    }
+
+                    // The edge is p->cur
+                    Edge e; bool hasEdge;
+                    boost::tie(e, hasEdge) = boost::edge(p, cur, g);
+                    if (hasEdge)
+                    {
+                        EdgeDataPathPair pair;
+                        // copy the entire EdgeData
+                        pair.edgeData = g[e];
+                        // Now copy all EdgePaths from g[e].paths
+                        std::vector<EdgePath> temp_list;
+                        for (auto &ep : g[e].paths)
+                        {
+                            //auto epPtr = std::make_shared<EdgePath>(ep);
+                            temp_list.push_back(ep);
+                        }
+                        pair.edgePathList = std::make_shared<std::vector<EdgePath>>(temp_list);
+                        edgesInfo.edgesInfo.push_back(std::move(pair));
+                    }
+                    cur = p;
+                }
+
+                // The 'edgesInfo' is reversed (goal->...->src).
+                // If you want them in forward order (src->...->goal), reverse:
+                std::reverse(edgesInfo.edgesInfo.begin(), edgesInfo.edgesInfo.end());
+
+                (*pathMatPtr)[i][j].obsReloList.clear();
+                // handle multiple edges
+                if(edgesInfo.edgesInfo.size()>1)
+                {
+                    for(size_t n=1; n<edgesInfo.edgesInfo.size(); n++)
+                    {
+                        // pivot object
+                        auto pivotObj = ctx.mo_list[edgesInfo.edgesInfo[n].edgeData.srcVertexData.name];
+                        // for each object
+                        auto obsRelo_candidates = Find_ObsRelo(pivotObj, ctx, edgesInfo.edgesInfo);
+
+                        // handle failure in finding ObsRelo
+                        if(obsRelo_candidates->size()==0)
+                        {
+                            edgesInfo.edgesInfo.clear();
+                            result->costMat(i, j) = std::numeric_limits<double>::infinity();
+                            break;
+                        }
+
+                        // use first candidate
+                        auto obsRelo_state = obsRelo_candidates->at(0);
+                        ReloPush::State start_state = ReloPush::State(pivotObj.x,pivotObj.y,obsRelo_state.yaw);
+
+                        double obs_push_d = ReloPush::StateDistance(start_state,obsRelo_state);
+                        result->costMat(i, j) += obs_push_d;
+
+                        //ReloPush::State start_pre_push = find_pre_push(start_state, params::pre_push_dist);
+                        //ReloPush::State goal_pre_push = find_pre_push(obsRelo_state, params::pre_push_dist+params::pre_relo_pre_push_offset);
+
+                        //(*pathMatPtr)[i][j].obsReloList.push_back(std::make_pair(start_pre_push, goal_pre_push));
+                        edgesInfo.obsReloList.push_back(std::make_pair(start_state, obsRelo_state));
+                    }
+
+                }
+
+                // Build vertexChain
+                std::vector<VertexData> chain;
+                if (!edgesInfo.edgesInfo.empty())
+                {
+                    chain.reserve(edgesInfo.edgesInfo.size() + 1); // optional performance
+                    chain.push_back(edgesInfo.edgesInfo[0].edgeData.srcVertexData);
+                    for (auto &pair : edgesInfo.edgesInfo)
+                    {
+                        chain.push_back(pair.edgeData.sinkVertexData);
+                    }
+                }
+
+                // 4c) Store in pathMat: i.e. the entire path of edges from i->j
+                (*pathMatPtr)[i][j] = std::move(edgesInfo);
+                (*pathMatPtr)[i][j].vertexChain = std::move(chain);
+            }
+        } // end for j
+    } // end for i
+
+    // 5) Sort rowColList by cost
+    std::sort(rowColList.begin(), rowColList.end(),
+              [](const RowColCost &a, const RowColCost &b)
+              {
+                  return a.cost < b.cost;
+              });
+
+    // 6) Fill in the final sorted list & pathMat
+    result->sortedEntries = std::move(rowColList);
+    result->pathMat       = pathMatPtr;
+
+    return result;
+}
 
 
 /*
@@ -387,7 +689,7 @@ std::vector<PairCostResult> computeAndSortAllPairs(
 */
 
 std::map<std::string, PairCostResult> computeMatrixPairs(
-    const Graph &g, std::unordered_map<std::string, ObjectGoalPair> &pairs)
+    const Graph &g, std::unordered_map<std::string, ObjectGoalPair> &pairs, PlanningContext& ctx)
 {
     std::map<std::string, PairCostResult> resultMap;
 
@@ -405,16 +707,16 @@ std::map<std::string, PairCostResult> computeMatrixPairs(
         std::vector<Vertex> goalVerts = getGoalVertices(g, goalName);
 
         // 2) Build the cost matrix (which also produces sorted entries + pathMat)
-        MatrixResult matrixRes = computeCostMatrixWithPaths(g, objVerts, goalVerts);
+        MatrixResultPtr matrixRes = computeCostMatrixWithPaths(g, objVerts, goalVerts, ctx);
 
         // 3) The minimal cost entry is sortedEntries[0], unless the matrix is empty
         double bestCost  = std::numeric_limits<double>::infinity();
         int bestRow      = -1;
         int bestCol      = -1;
 
-        if (!matrixRes.sortedEntries.empty())
+        if (!matrixRes->sortedEntries.empty())
         {
-            const auto &top = matrixRes.sortedEntries[0];
+            const auto &top = matrixRes->sortedEntries[0];
             bestCost = top.cost;
             bestRow  = top.row;
             bestCol  = top.col;
@@ -428,7 +730,7 @@ std::map<std::string, PairCostResult> computeMatrixPairs(
         pcr.bestRow      = bestRow;
         pcr.bestCol      = bestCol;
         // store the entire MatrixResult in a shared_ptr
-        pcr.matrixResult = std::make_shared<MatrixResult>(matrixRes);
+        pcr.matrixResult = matrixRes;
 
         // 5) Insert into the map with objectName as key
         resultMap[objName] = pcr;
@@ -446,9 +748,49 @@ std::map<std::string, PairCostResult> computeMatrixPairs(
  * @return A LowestCostInfo with the absolute minimal cost found.
  *         If 'results' is empty, fields will be default/invalid.
  */
+
 LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &resultsMap)
 {
     LowestCostInfo best;
+    best.cost = std::numeric_limits<double>::infinity();
+    best.row  = -1;
+    best.col  = -1;
+
+    // For each pair in the map (key=object name, value=PairCostResult)
+    for (auto &kv : resultsMap)
+    {
+        const auto &pcr = kv.second;  // pcr is a PairCostResult
+        auto mResPtr = pcr.matrixResult; // the MatrixResultPtr
+
+        if (!mResPtr) // no matrix result? skip
+            continue;
+
+        // 1) Check all RowColCost in sortedEntries
+        //    Each entry is (row, col, cost), sorted ascending, but we must
+        //    look at them all because a "second best" in one pair might still
+        //    be lower than the "best" in another pair.
+        for (auto &rcc : mResPtr->sortedEntries)
+        {
+            if (rcc.cost < best.cost)
+            {
+                best.cost       = rcc.cost;
+                best.row        = rcc.row;
+                best.col        = rcc.col;
+                best.objectName = pcr.objectName;
+                best.goalName   = pcr.goalName;
+            }
+        }
+    }
+
+    return best;
+}
+
+
+/* Exhaustive search on matrices
+LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &resultsMap)
+{
+    LowestCostInfo best;
+    PairCostResult res;
     best.cost          = std::numeric_limits<double>::infinity();
     //best.indexInArray  = -1;  // or remove if not needed
     best.row           = -1;
@@ -469,8 +811,11 @@ LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &res
             best.goalName   = p.goalName;
             best.row        = p.bestRow;
             best.col        = p.bestCol;
+
+            res = kv.second;
         }
     }
 
     return best;
 }
+*/

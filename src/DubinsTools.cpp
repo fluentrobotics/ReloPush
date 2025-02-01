@@ -90,6 +90,7 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
     space->freeState(s);
 }
 
+// todo: combine duplicate
 ReloPush::StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningContext& ctx)
 {
     auto l = dubins_in.lengthCost(); // unit cost * turning rad
@@ -119,7 +120,7 @@ ReloPush::StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningCont
         }
     }
     else{
-        std::cout << "Path too short to interpolate" << std::endl;
+        //std::cout << "Path too short to interpolate" << std::endl;
         waypoints.resize(1);
         waypoints[0] = dubins_in.targetState;
     } // path is too short there is nothing to interpolate

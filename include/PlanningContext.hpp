@@ -41,6 +41,7 @@ struct PlanningContext
     bool print_res = false; // print result for hybrid-astar
     bool use_prelo_optimization = true;
 
+
     // Evenly sampled positions for optimizations
     std::vector<ReloPush::State> sampledPositions;
 
@@ -59,6 +60,7 @@ struct PlanningContext
         parameters.LF = Constants::LF_push;
         parameters.LB = Constants::LB;
 
+        updateObs(mo_list, delivered_list);
         uniformSampleMap(sample_N);
     }
 

@@ -68,7 +68,7 @@ struct VertexData
     std::string name;           ///< Object name or Goal label
 
     int orientationIndex;       ///< The discrete orientation index (0..n-1)
-    double nominalOrientation;  ///< The "base" orientation
+    double nominalOrientation;  ///< The "offset" orientation
     double x;                   ///< Position X
     double y;                   ///< Position Y
     int numberOfSides;          ///< e.g., 4 for a box with 4 discrete sides
@@ -112,15 +112,19 @@ struct VertexData
 
 struct EdgeData
 {
-    double weight;
-    //PathData paths;
-    std::vector<EdgePath> paths; // Dubins or Waypoints
+    double weight; // weight of the edge
 
-    // Record which mode was used to create this edge
+    VertexData srcVertexData; // source vertex
+    VertexData sinkVertexData; // sink vertex
+
+    // Record which mode was used to create this edge (normal or prerelocation)
     ConnectionMode mode;
 
-    // Additional info about pre-relocation
+    // Additional info about pre-relocation (if used)
     PreRelocationInfo preRelo;
+
+    //PathData paths;
+    std::vector<EdgePath> paths; // Dubins or Waypoints
 
     EdgeData()
         : weight(0.0),

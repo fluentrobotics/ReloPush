@@ -70,7 +70,12 @@ add_executable(test_dubins test/test_dubins.cpp)
 target_link_libraries(test_dubins ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
 
 # Hybrid Astar Planning
-add_executable(test_hybrid_astar test/test_hybrid_astar.cpp src/PathPlanningTools.cpp src/FromOMPL.cpp src/Visualization/VisualizationWidget.cpp src/PlanHybridAstar.cpp)
+add_executable(test_hybrid_astar test/test_hybrid_astar.cpp
+    src/PathPlanningTools.cpp
+    src/FromOMPL.cpp
+    src/Visualization/VisualizationWidget.cpp
+    src/PlanHybridAstar.cpp
+    src/PlanningContext.cpp)
 target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt6::Widgets)
 
 # Pre-relocation Optimization

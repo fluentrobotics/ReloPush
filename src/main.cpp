@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
     //}
 
     //std::string filename = argv[1];
-    std::string filename = "input3.txt";
+    std::string filename = "input4.txt";
 
     // We'll parse the boundary, plus objects & goals
     WorkspaceBoundary boundary;
@@ -48,32 +48,6 @@ int main(int argc, char *argv[])
 
     // The final sequence of chosen allocations
     std::vector<FinalAllocation> finalSequence;
-
-    /*
-    // Create graph
-    Graph g;
-    // Init graph
-    initGraph(g, objects, goals);
-
-    // set up the parameters
-    PlanningParameters params;
-    params.boundary = boundary; // todo: parse in a separate method
-
-    // Initialize Planning Context
-    PlanningContext PlanCtx(params, objects);
-
-
-    // Build edges, taking into account boundary or radius in your feasibility checks
-    buildAllEdges(g, PlanCtx);
-
-    // pick a task
-    // pick_best(objGoalPairs,g);
-    auto result = computeAndSortAllPairs(g, objGoalPairs);
-
-
-    auto task_candidate = findAbsoluteLowestCost(result);
-    */
-
 
     // 2) While we still have pairs left to allocate
     while (!objGoalPairs.empty())
@@ -97,18 +71,152 @@ int main(int argc, char *argv[])
 
         // todo: make replan loop here
         // (e) Compute cost matrices for all *remaining* pairs
-        auto pairResults = computeMatrixPairs(g, objGoalPairs); // list of matrices
+        auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx); // list of matrices
 
-        // (f) Find the absolute lowest cost among them
-        LowestCostInfo best = findAbsoluteLowestCost(pairResults);
 
-        // Check if we found any feasible solution
-        if (best.cost == std::numeric_limits<double>::infinity())
+        LowestCostInfo best = LowestCostInfo();
+        std::vector<EdgePath> ObsReloPathList;
+
+        std::unordered_map<std::string,ReloPush::State> ToUpdate;
+
+        while(1)
         {
-            std::cout << "No feasible pair found (or no pairs left)!\n";
-            break; // You can break or continue, depending on desired behavior
+            auto best_pick = findAbsoluteLowestCost(pairResults); // failed to find if row=-1
+            if(best_pick.row == -1 || best_pick.col == -1)
+                break; // failed to find any
+            // (f) Find the absolute lowest cost among them
+
+            // Check if we found any feasible solution
+            if (best_pick.cost == std::numeric_limits<double>::infinity())
+            {
+                std::cout << "No feasible pair found (or no pairs left)!\n";
+                break;
+            }
+
+            // get matrixResult for the object
+            auto best_pair = pairResults[best_pick.objectName];
+
+            // find approach for ObsRelo to next approach (next ObsRelo or Final push)
+            auto temp = best_pair.matrixResult->getBestPathMatEntry();
+            for(size_t obs=1; obs<temp.obsReloList.size(); obs++) // if multiple Obs Relo
+            {
+                // object
+                auto pivotObj = temp.vertexChain[obs];
+                auto prev_pair = temp.obsReloList[obs-1];
+                auto next_pair = temp.obsReloList[obs];
+
+                auto fromState = prev_pair.second;
+                auto toState = next_pair.first;
+
+                auto fromState_prepush = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
+                auto toState_prepush = find_pre_push(toState, planCtx.parameters.PrePush_dist);
+
+                // update obs
+                planCtx.env.remove_obs(prev_pair.first);
+                planCtx.env.add_obs(prev_pair.second);
+                auto res = planHybridAstar(fromState_prepush, toState_prepush, planCtx, true);
+
+                if(!res->success)
+                {
+                    // approach failed. replan
+                    // remove first pick
+                    pairResults[best_pick.objectName].matrixResult->sortedEntries.erase(pairResults[best_pick.objectName].matrixResult->sortedEntries.begin());
+                    // mark inf on  mat
+                    pairResults[best_pick.objectName].matrixResult->costMat(best_pick.row, best_pick.col) = std::numeric_limits<double>::infinity();
+
+                    // put obs back
+                    planCtx.env.add_obs(prev_pair.first);
+                    planCtx.env.remove_obs(prev_pair.second);
+                    continue;
+                }
+
+                // successful approach plan
+                ReloPush::StatePath pre_pair_path = {find_pre_push(prev_pair.first,planCtx.parameters.PrePush_dist),fromState_prepush};
+                ObsReloPathList.push_back(EdgePath(true,  std::make_shared<ReloPush::StatePath>(pre_pair_path))); // two-points path
+                ObsReloPathList.push_back(EdgePath(false,res->getPathPtr(true)));
+                // queue on object update
+                ToUpdate[pivotObj.name] = fromState;
+            }
+            best = best_pick; // todo: is it better to be somewhere else?
+
+            // Last ObsRelo to Final push
+            if(temp.obsReloList.size()>0)
+            {
+                auto lastObsObj = temp.vertexChain[temp.vertexChain.size()-2]; //second last
+                auto last_pair = temp.obsReloList.back();
+                auto fromState_prepush = find_pre_push(last_pair.second, planCtx.parameters.PrePush_dist);
+                auto best_obj = objects[best.objectName];
+                auto final_approach = ReloPush::State(best_obj.x,best_obj.y,best_obj.getOrientation(best.row));
+                auto toState_prepush = find_pre_push(final_approach, planCtx.parameters.PrePush_dist);
+                // Try planning final approach
+                // update obs
+                planCtx.env.remove_obs(last_pair.first);
+                planCtx.env.add_obs(last_pair.second);
+
+                auto res = planHybridAstar(fromState_prepush, toState_prepush,planCtx, true);
+                if(!res->success)
+                {
+                    // approach failed. replan
+                    // remove first pick
+                    pairResults[best_pick.objectName].matrixResult->sortedEntries.erase(pairResults[best_pick.objectName].matrixResult->sortedEntries.begin());
+                    // mark inf on  mat
+                    pairResults[best_pick.objectName].matrixResult->costMat(best_pick.row, best_pick.col) = std::numeric_limits<double>::infinity();
+
+                    // put obs back
+                    planCtx.env.remove_obs(last_pair.first);
+                    planCtx.env.add_obs(last_pair.second);
+                    continue;
+                }
+                ReloPush::StatePath last_pair_path = {find_pre_push(last_pair.first,planCtx.parameters.PrePush_dist),fromState_prepush};
+                ObsReloPathList.push_back(EdgePath(true,  std::make_shared<ReloPush::StatePath>(last_pair_path))); // two-points path
+                ObsReloPathList.push_back(EdgePath(false,res->getPathPtr(true)));
+                // queue on object update
+                ToUpdate[lastObsObj.name] = last_pair.second;
+
+            }
+
+            // update ObsRelo positions
+            for (const auto& pair : ToUpdate) {
+                std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+                objects[pair.first].x = pair.second.x;
+                objects[pair.first].y = pair.second.y;
+                // todo: also consider orientation if needed
+            }
+            break;
+
+
+
+
+
+            /*
+            // Obstacle relocation
+            if(best_pair.matrixResult->getBestPathMatEntry().edgesInfo.size()>1) // multiple edges
+            {
+                // obstacle to relocate
+                auto edges = best_pair.matrixResult->getBestPathMatEntry();
+
+                for(size_t e = 0; e < edges.edgesInfo.size()-1; e++) // exclude last
+                {
+                    //
+
+
+                }
+            }
+            */
+
+            // todo: handle replan here
         }
 
+        if(best.row==-1 || best.cost == std::numeric_limits<double>::infinity())
+        {
+            // handle failure
+        }
+
+
+
+
+
+        //}
         // (g) Print or store the best
         std::cout << "BEST PAIR => " << best.objectName
                   << " -> " << best.goalName
@@ -125,13 +233,14 @@ int main(int argc, char *argv[])
         chosen.col        = best.col;
         chosen.startPose = ReloPush::State(chosen.object.x,chosen.object.y,chosen.object.getOrientation(chosen.row));
         chosen.goalPose = ReloPush::State(chosen.goal.x, chosen.goal.y, chosen.goal.getOrientation(chosen.col));
-        chosen.paths = pairResults[best.objectName].getBestPath();
-
+        chosen.paths = pairResults[best.objectName].getBestPath().edgesInfo;
+        chosen.obsReloPaths = std::make_shared<std::vector<EdgePath>>(ObsReloPathList);
 
         // Look up the actual edge in the graph & read pre-relocation info
         auto objVerts  = getObjectVertices(g, best.objectName);
         auto goalVerts = getGoalVertices(g, best.goalName);
 
+        /*
         if (best.row < (int)objVerts.size() && best.col < (int)goalVerts.size())
         {
             Vertex vObj  = objVerts[best.row];
@@ -152,6 +261,7 @@ int main(int argc, char *argv[])
                 }
             }
         }
+*/
 
         finalSequence.push_back(chosen);
 
@@ -188,8 +298,16 @@ int main(int argc, char *argv[])
                   << ", Goal = " << fa.goal.name
                   << ", cost = " << fa.cost << "\n"
                   << "  start yaw = " << fa.startPose.yaw
-                  << ", goal yaw = " << fa.goalPose.yaw << "\n";
+                  << ", goal yaw = " << fa.goalPose.yaw;
 
+        if(fa.obsReloPaths->size()>0)
+        {
+            std::cout << "ObsRelo: " << fa.obsReloPaths->size() << std::endl;
+        }
+        else
+            std::cout << std::endl;
+
+        /*
         if (fa.usedPreRelocation)
         {
             std::cout << "  **Used pre-relocation**: Moved start from ("
@@ -199,6 +317,7 @@ int main(int argc, char *argv[])
                       << fa.relocatingIndex << "\n";
         }
         std::cout << std::endl;
+        */
     }
 
 
@@ -218,6 +337,13 @@ int main(int argc, char *argv[])
     // test path vis
     auto vis_path0 = finalSequence[0].toSinglePathPtr();
     auto vis_path = finalSequence[1].toSinglePathPtr();
+
+
+    //print path
+    for(auto& it : *vis_path0)
+    {
+        std::cout << it.x << "," << it.y << "," << it.yaw << std::endl;
+    }
 
     // Create visualization widget with custom colors
     VisualizationWidget *viz1 = new VisualizationWidget(nullptr,

@@ -12,6 +12,10 @@
 #include <string>
 #include <memory>
 
+const auto ReloPushInf = std::numeric_limits<double>::infinity();
+
+
+
 struct obj_goal_pair
 {
     std::string objectName;
@@ -43,19 +47,59 @@ struct RowColCost
     int row;
     int col;
     double cost;
+    // A list of EdgeData for each edge on the shortest path.
+    //std::vector<EdgeData> pathEdges;
+
+    RowColCost()
+    {
+        row=-1;
+        col=-1;
+        cost=-1;
+    }
 };
 
-using EdgePathList = std::vector<EdgePathPtr>;
+using EdgePathList = std::shared_ptr<std::vector<EdgePath>>;
+
+struct EdgeDataPathPair
+{
+    EdgeData edgeData;
+    EdgePathList edgePathList;
+};
+
+ReloPush::StatePathPtr EdgePathListToSinglePath(EdgePathList paths, double resolution);
+
+void PathsToSinglePath(std::vector<EdgeDataPathPair>& paths, ReloPush::StatePath& out_path, double interpolation_resolution);
+
+using ObsReloPair = std::vector<std::pair<ReloPush::State,ReloPush::State>>;
+struct EdgeMatrixEntry
+{
+    // A list of EdgeDataPathPair => each is (EdgeData + EdgePathList).
+    std::vector<EdgeDataPathPair> edgesInfo;
+
+    // Now we add a chain of VertexData if we want the entire route's vertices.
+    std::vector<VertexData> vertexChain;
+
+    std::vector<std::pair<ReloPush::State,ReloPush::State>> obsReloList; // pair of start and goal for each obs relo
+
+    EdgeMatrixEntry(){}
+    EdgeMatrixEntry(std::vector<EdgeDataPathPair> edgeData_in) : edgesInfo(edgeData_in)
+    {}
+};
+
+using EdgeDataPathMatrix = std::vector<std::vector<EdgeMatrixEntry>>;
+using EdgeDataPathMatrixPtr = std::shared_ptr<EdgeDataPathMatrix>;
+using SortedEntryList = std::vector<RowColCost>;
+
 struct MatrixResult
 {
-    // The full cost matrix (row = object vertex, col = goal vertex).
-    Eigen::MatrixXd costMat;
+    Eigen::MatrixXd costMat; // The full cost matrix (row = object vertex, col = goal vertex).
+    EdgeDataPathMatrixPtr pathMat; // A 2D array (size = [Nobj x Ngoal]) storing EdgePathPtr
+    SortedEntryList sortedEntries; // A sorted list of (row, col, cost) in ascending order of cost.
 
-    // A sorted list of (row, col, cost) in ascending order of cost.
-    std::vector<RowColCost> sortedEntries;
-
-    // A 2D array (size = [Nobj x Ngoal]) storing EdgePathPtr
-    std::vector<std::vector<EdgePathList>> pathMat;
+    EdgeMatrixEntry getBestPathMatEntry()
+    {
+        return pathMat->at(sortedEntries[0].row)[sortedEntries[0].col];
+    }
 };
 using MatrixResultPtr = std::shared_ptr<MatrixResult>;
 
@@ -72,19 +116,25 @@ public:
     // The entire MatrixResult, which has costMat + sortedEntries
     MatrixResultPtr matrixResult;
 
-    EdgePathList getBestPath();
+    EdgeMatrixEntry getBestPath();
 
     void remove_top(void);
 };
 
-struct LowestCostInfo
+struct LowestCostInfo : RowColCost
 {
     std::string objectName;
     std::string goalName;
-    int row;
-    int col;
-    double cost;
+    //int row;
+    //int col;
+    //double cost;
     //int indexInArray;  // index in the results vector
+
+    LowestCostInfo()
+    {
+        objectName="";
+        goalName="";
+    }
 };
 
 struct FinalAllocation
@@ -100,14 +150,18 @@ struct FinalAllocation
     ReloPush::State startPose;
     ReloPush::State goalPose;
 
+    /*
     // Pre-relocation info
     bool usedPreRelocation = false;
     double xRelocated      = 0.0;
     double yRelocated      = 0.0;
     double preReloCost     = 0.0;
     int relocatingIndex    = -1; // or double relocatingAngle
+    */
 
-    std::vector<EdgePathPtr> paths;
+    std::vector<EdgeDataPathPair> paths; // contains edge information inc. mode
+
+    EdgePathList obsReloPaths;
 
     ReloPush::StatePathPtr toSinglePathPtr(double interpolation_resolution = 0.1);
 };
@@ -147,10 +201,11 @@ MatrixResult computeCostMatrix(
     const std::vector<Vertex> &goalVerts);
 */
 
-MatrixResult computeCostMatrixWithPaths(
+MatrixResultPtr computeCostMatrixWithPaths(
     const Graph &g,
     const std::vector<Vertex> &objectVerts,
-    const std::vector<Vertex> &goalVerts);
+    const std::vector<Vertex> &goalVerts,
+    PlanningContext& ctx);
 
 /*
 void pick_best(std::vector<ObjectGoalPair>& allObjectGoalPairs, Graph& g)
@@ -200,14 +255,14 @@ std::vector<PairCostResult> computeAndSortAllPairs(
     std::unordered_map<std::string, ObjectGoalPair> &pairs);
 */
 std::map<std::string, PairCostResult> computeMatrixPairs(
-    const Graph &g, std::unordered_map<std::string, ObjectGoalPair> &pairs);
+    const Graph &g, std::unordered_map<std::string, ObjectGoalPair> &pairs, PlanningContext& ctx);
 
 /**
  * @brief Finds the single lowest cost among all PairCostResult entries,
  *        returning its details (object, goal, row, col, cost, and index).
  *
  * @param results The vector of PairCostResult from computeAndSortAllPairs().
- * @return A LowestCostInfo with the absolute minimal cost found.
+ * @return A std::pair<LowestCostInfo, PairCostResult> with the absolute minimal cost found.
  *         If 'results' is empty, fields will be default/invalid.
  */
 LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &results);
