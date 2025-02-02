@@ -139,20 +139,6 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
         return QPointF(widget_x, widget_y);
     };
 
-    // Draw obstacles first (so they appear below the path and arrows)
-    if (!obstacles.empty())
-    {
-        QBrush obstacle_brush(obstacle_color);
-        QPen obstacle_pen(Qt::black, 1);
-        painter.setBrush(obstacle_brush);
-        painter.setPen(obstacle_pen);
-        for (const auto &obs : obstacles)
-        {
-            QPointF pos = mapCoord(obs.x, obs.y);
-            drawObstacle(painter, pos, obstacle_color);
-        }
-    }
-
     // Draw path next
     if (path.size() >= 2)
     {
@@ -191,6 +177,20 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
 
     // Draw goal pose as an oriented arrow
     drawOrientedArrow(painter, mapCoord(goal_pose.x, goal_pose.y), goal_pose.yaw, goal_pose_color, false);
+
+    // Draw obstacles first (so they appear below the path and arrows)
+    if (!obstacles.empty())
+    {
+        QBrush obstacle_brush(obstacle_color);
+        QPen obstacle_pen(Qt::black, 1);
+        painter.setBrush(obstacle_brush);
+        painter.setPen(obstacle_pen);
+        for (const auto &obs : obstacles)
+        {
+            QPointF pos = mapCoord(obs.x, obs.y);
+            drawObstacle(painter, pos, obstacle_color);
+        }
+    }
 }
 
 void VisualizationWidget::mouseMoveEvent(QMouseEvent *event)

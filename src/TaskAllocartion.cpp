@@ -819,3 +819,262 @@ LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &res
     return best;
 }
 */
+
+// ---------------------------------------------------------------------------
+// Helper Function 2: Attempt a single relocation plan segment
+//
+// This function handles the repeated logic:
+//   1) Remove old obstacle
+//   2) Add new obstacle
+//   3) Attempt path planning
+//   4) If fail, mark cost ∞ and revert environment changes
+//   5) If success, record the path and update 'obsReloPathList'
+// ---------------------------------------------------------------------------
+bool attemptObsRelocation(PlanningContext &planCtx,
+                          const ReloPush::State &fromState_prepush,
+                          const ReloPush::State &toState_prepush,
+                          ReloPush::State &fromObs,         // obstacle to remove
+                          ReloPush::State &toObs,           // obstacle to add
+                          PairResultsMap &pairResults,
+                          const LowestCostInfo &bestPick,
+                          std::vector<EdgePath> &ObsReloPathList,
+                          std::unordered_map<std::string, ReloPush::State> &ToUpdate,
+                          const std::string &pivotObjName,
+                          const ReloPush::State &objNewState)
+{
+    // 1) Environment updates
+    planCtx.env.remove_obs(fromObs);
+    planCtx.env.add_obs(toObs);
+
+    // 2) Attempt path planning
+    auto res = planHybridAstar(fromState_prepush, toState_prepush, planCtx, true);
+    if (!res->success)
+    {
+        // approach failed. Adjust cost matrix for re-planning.
+        pairResults[bestPick.objectName].matrixResult->sortedEntries.erase(
+            pairResults[bestPick.objectName].matrixResult->sortedEntries.begin());
+        pairResults[bestPick.objectName].matrixResult->costMat(bestPick.row, bestPick.col)
+            = std::numeric_limits<double>::infinity();
+
+        // revert environment changes
+        planCtx.env.add_obs(fromObs);
+        planCtx.env.remove_obs(toObs);
+
+        return false;
+    }
+
+    // 3) If success, record the path
+    ReloPush::StatePath pre_pair_path = {
+        find_pre_push(fromObs, planCtx.parameters.PrePush_dist),
+        fromState_prepush
+    };
+    // The first EdgePath is a trivial “push” from some pre-push position
+    ObsReloPathList.push_back(EdgePath(/*isPrePush=*/true, std::make_shared<ReloPush::StatePath>(pre_pair_path)));
+    // The second EdgePath is the actual planned path
+    ObsReloPathList.push_back(EdgePath(/*isPrePush=*/false, res->getPathPtr(true)));
+
+    // 4) Update the object’s new location
+    ToUpdate[pivotObjName] = objNewState;
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Helper Function 3: One iteration of picking the best pair and planning
+// ---------------------------------------------------------------------------
+bool findFeasibleAllocation(PairResultsMap &pairResults,
+                            const std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
+                            PlanningContext &planCtx,
+                            std::vector<EdgePath> &ObsReloPathList,
+                            LowestCostInfo &bestPick,
+                            std::unordered_map<std::string, ReloPush::State> &ToUpdate,
+                            std::string &failedObjectName, ObjectMap objects)
+{
+    // Attempt to find the absolute lowest cost
+    bestPick = findAbsoluteLowestCost(pairResults);
+
+    if (bestPick.row == -1 || bestPick.col == -1)
+    {
+        std::cout << "No feasible pair found (or no pairs left)!\n";
+        return false;
+    }
+
+    if (bestPick.cost == std::numeric_limits<double>::infinity())
+    {
+        std::cout << "No feasible pair found (cost=∞)!\n";
+        failedObjectName = bestPick.objectName;  // Let caller handle
+        return false;
+    }
+
+    // retrieve matrixResult for this specific object
+    auto &bestPairEntry = pairResults[bestPick.objectName];
+
+    // The path chain, including any intermediate obstacle relocations
+    auto pathEntry = bestPairEntry.matrixResult->getBestPathMatEntry();
+
+    // 1) Plan the intermediate obs-relocations, if any
+    for (size_t obs = 1; obs < pathEntry.obsReloList.size(); obs++)
+    {
+        auto pivotObj = pathEntry.vertexChain[obs];
+        auto prev_pair = pathEntry.obsReloList[obs - 1];
+        auto next_pair = pathEntry.obsReloList[obs];
+
+        auto fromState     = prev_pair.second;
+        auto toState       = next_pair.first;
+        auto fromState_pre = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
+        auto toState_pre   = find_pre_push(toState, planCtx.parameters.PrePush_dist);
+
+        // Attempt relocation
+        bool success = attemptObsRelocation(planCtx,
+                                            fromState_pre, toState_pre,
+                                            prev_pair.first,  // obs to remove
+                                            prev_pair.second, // obs to add
+                                            pairResults, bestPick,
+                                            ObsReloPathList,
+                                            ToUpdate,
+                                            pivotObj.name,
+                                            fromState);
+        if (!success)
+        {
+            // If we fail, the cost is set to ∞ for that pair, so we return false
+            failedObjectName = bestPick.objectName;
+            return false;
+        }
+    }
+
+    // 2) Plan from the last relocated obstacle to the final push
+    if (!pathEntry.obsReloList.empty())
+    {
+        // last relocation pair
+        auto last_pair  = pathEntry.obsReloList.back();
+        auto fromState  = last_pair.second;
+        auto best_obj   = objects[bestPick.objectName];
+        // final approach
+        auto final_approach = ReloPush::State(best_obj.x,
+                                              best_obj.y,
+                                              best_obj.getOrientation(bestPick.row));
+        auto fromState_pre = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
+        auto toState_pre   = find_pre_push(final_approach, planCtx.parameters.PrePush_dist);
+
+        bool success = attemptObsRelocation(planCtx,
+                                            fromState_pre, toState_pre,
+                                            last_pair.first,
+                                            last_pair.second,
+                                            pairResults, bestPick,
+                                            ObsReloPathList,
+                                            ToUpdate,
+                                            pathEntry.vertexChain[pathEntry.vertexChain.size() - 2].name,
+                                            fromState);
+        if (!success)
+        {
+            failedObjectName = bestPick.objectName;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Helper Function 4: The main planning/allocation loop
+// ---------------------------------------------------------------------------
+void performAllocations(const WorkspaceBoundary &boundary,
+                        std::unordered_map<std::string, ObjectInfo> &objects,
+                        std::unordered_map<std::string, GoalInfo> &goals,
+                        std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
+                        std::vector<FinalAllocation> &finalSequence)
+{
+    GoalMap delivered_objs;
+
+    while (!objGoalPairs.empty())
+    {
+        std::cout << "\n============================\n"
+                  << "Remaining pairs: " << objGoalPairs.size() << "\n";
+
+        // (a) Build the graph from scratch
+        Graph g;
+        initGraph(g, objects, goals);
+
+        // (b) Setup PlanningParameters and context
+        PlanningParameters params;
+        params.boundary = boundary;
+        PlanningContext planCtx(params, objects, delivered_objs);
+
+        // (d) Build edges
+        buildAllEdges(g, planCtx);
+
+        // (e) Compute cost matrices for all remaining pairs
+        auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
+
+        // We'll store info about the best pick
+        LowestCostInfo bestPick;
+        std::vector<EdgePath> ObsReloPathList;
+        std::unordered_map<std::string, ReloPush::State> ToUpdate;
+
+        // Take a snapshot of the planning context (for FinalAllocation)
+        PlanningContext ctxSnapshot(planCtx);
+
+        // Start searching for a feasible solution
+        while (!findFeasibleAllocation(pairResults, objGoalPairs,
+                                       planCtx, ObsReloPathList,
+                                       bestPick, ToUpdate, /*out*/bestPick.objectName, objects))
+        {
+            // If no feasible solution, break or handle failure
+            if (bestPick.row == -1 || bestPick.cost == std::numeric_limits<double>::infinity())
+            {
+                std::cerr << "Failure: no feasible solution found for any pair.\n";
+                return;
+            }
+            else
+            {
+                continue; // try other options
+            }
+        }
+
+        // If we found a valid bestPick, commit it:
+        //  Update object positions that got relocated
+        for (const auto &pair : ToUpdate)
+        {
+            std::cout << "Relocated: " << pair.first
+                      << " => " << pair.second << std::endl;
+
+            objects[pair.first].x = pair.second.x;
+            objects[pair.first].y = pair.second.y;
+            // orientation if needed ...
+        }
+
+        // Mark the chosen object as delivered
+        delivered_objs[bestPick.objectName] = goals[bestPick.goalName];
+
+        // Print the best pair
+        std::cout << "BEST PAIR => " << bestPick.objectName
+                  << " -> " << bestPick.goalName
+                  << ", cost=" << bestPick.cost
+                  << ", row=" << bestPick.row
+                  << ", col=" << bestPick.col << "\n";
+
+        // Build the FinalAllocation entry
+        FinalAllocation chosen;
+        chosen.object = objects[bestPick.objectName];
+        chosen.goal   = goals[bestPick.goalName];
+        chosen.cost   = bestPick.cost;
+        chosen.row    = bestPick.row;
+        chosen.col    = bestPick.col;
+
+        chosen.startPose = ReloPush::State(chosen.object.x, chosen.object.y,
+                                           chosen.object.getOrientation(chosen.row));
+        chosen.goalPose  = ReloPush::State(chosen.goal.x, chosen.goal.y,
+                                          chosen.goal.getOrientation(chosen.col));
+
+        chosen.paths = pairResults[bestPick.objectName].getBestPath().edgesInfo;
+        chosen.obsReloPaths = std::make_shared<std::vector<EdgePath>>(ObsReloPathList);
+        chosen.snapshot     = ctxSnapshot;
+
+        finalSequence.push_back(chosen);
+
+        // (h) Remove the chosen pair so we don’t pick it again
+        objGoalPairs.erase(bestPick.objectName);
+        objects.erase(bestPick.objectName);
+        goals.erase(bestPick.goalName);
+    }
+}

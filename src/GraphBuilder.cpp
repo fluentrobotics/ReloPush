@@ -254,8 +254,12 @@ StateValidity addEdgeNormalMode(
     ReloPush::State start(data1.x, data1.y, data1.getActualOrientation());
     ReloPush::State goal(data2.x, data2.y, data2.getActualOrientation());
 
+    //use prepush dist
+    ReloPush::State start_prepush = find_pre_push(start,ctx.parameters.PrePush_dist);
+    ReloPush::State goal_prepush = find_pre_push(goal,ctx.parameters.PrePush_dist);
+
     // 2) Call your Dubins planner.
-    auto dubinsResult = PlanDubins(start, goal, ctx);
+    auto dubinsResult = PlanDubins(start_prepush, goal_prepush, ctx);
 
     // 3) Check if the path is valid (within boundary & collision-free)
     auto isPathValid = check_dubins_validity(dubinsResult.second, ctx);

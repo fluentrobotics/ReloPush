@@ -45,6 +45,11 @@ struct PlanningContext
     // Evenly sampled positions for optimizations
     std::vector<ReloPush::State> sampledPositions;
 
+    PlanningContext()
+    {
+
+    }
+
     PlanningContext(PlanningParameters params_in, ObjectMap& obs_in) : parameters(params_in), mo_list(obs_in)
     {
         ObjectList static_in = {};

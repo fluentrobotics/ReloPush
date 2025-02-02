@@ -150,6 +150,9 @@ struct FinalAllocation
     ReloPush::State startPose;
     ReloPush::State goalPose;
 
+    // planning context snapshot
+    PlanningContext snapshot;
+
     /*
     // Pre-relocation info
     bool usedPreRelocation = false;
@@ -267,5 +270,47 @@ std::map<std::string, PairCostResult> computeMatrixPairs(
  */
 LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &results);
 
+typedef std::map<std::string, PairCostResult> PairResultsMap;
 
+// ---------------------------------------------------------------------------
+// Helper Function 2: Attempt a single relocation plan segment
+//
+// This function handles the repeated logic:
+//   1) Remove old obstacle
+//   2) Add new obstacle
+//   3) Attempt path planning
+//   4) If fail, mark cost ∞ and revert environment changes
+//   5) If success, record the path and update 'obsReloPathList'
+// ---------------------------------------------------------------------------
+bool attemptObsRelocation(PlanningContext &planCtx,
+                          const ReloPush::State &fromState_prepush,
+                          const ReloPush::State &toState_prepush,
+                          ReloPush::State &fromObs,         // obstacle to remove
+                          ReloPush::State &toObs,           // obstacle to add
+                          PairResultsMap &pairResults,
+                          const LowestCostInfo &bestPick,
+                          std::vector<EdgePath> &ObsReloPathList,
+                          std::unordered_map<std::string, ReloPush::State> &ToUpdate,
+                          const std::string &pivotObjName,
+                          const ReloPush::State &objNewState);
+
+// ---------------------------------------------------------------------------
+// Helper Function 3: One iteration of picking the best pair and planning
+// ---------------------------------------------------------------------------
+bool findFeasibleAllocation(PairResultsMap &pairResults,
+                            const std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
+                            PlanningContext &planCtx,
+                            std::vector<EdgePath> &ObsReloPathList,
+                            LowestCostInfo &bestPick,
+                            std::unordered_map<std::string, ReloPush::State> &ToUpdate,
+                            std::string &failedObjectName, ObjectMap objects);
+
+// ---------------------------------------------------------------------------
+// Helper Function 4: The main planning/allocation loop
+// ---------------------------------------------------------------------------
+void performAllocations(const WorkspaceBoundary &boundary,
+                        std::unordered_map<std::string, ObjectInfo> &objects,
+                        std::unordered_map<std::string, GoalInfo> &goals,
+                        std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
+                        std::vector<FinalAllocation> &finalSequence);
 #endif // TASKALLOCATION_HPP
