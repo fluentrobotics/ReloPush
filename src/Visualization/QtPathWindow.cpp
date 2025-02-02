@@ -10,7 +10,8 @@ PathWindow::PathWindow(const std::vector<ReloPush::State>& path,
                        QColor goalPoseColor,
                        QColor pathColor,
                        QColor pathArrowColor,
-                       QColor obstacleColor)
+                       QColor obstacleColor,
+                       QColor goalsColor)
     : QMainWindow(parent)
 {
     setWindowTitle(windowTitle);

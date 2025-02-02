@@ -155,4 +155,10 @@ using Graph = boost::adjacency_list<
 using Vertex = boost::graph_traits<Graph>::vertex_descriptor;
 using Edge   = boost::graph_traits<Graph>::edge_descriptor;
 
+struct ObjectGoalPair
+{
+    std::string objectName;
+    std::string goalName;
+};
+
 #endif // GRAPHDATA_HPP

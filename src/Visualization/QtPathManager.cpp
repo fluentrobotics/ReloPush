@@ -20,12 +20,13 @@ void PathManager::addPath(const std::vector<ReloPush::State>& path,
                           QColor goalPoseColor,
                           QColor pathColor,
                           QColor pathArrowColor,
-                          QColor obstacleColor)
+                          QColor obstacleColor,
+                          QColor goalsColor)
 {
     PathWindow *window = new PathWindow(path, obstacles, nullptr, windowTitle,
                                         initialPoseColor, goalPoseColor,
                                         pathColor, pathArrowColor,
-                                        obstacleColor);
+                                        obstacleColor, goalsColor);
     pathWindows.push_back(window);
     window->show();
 }

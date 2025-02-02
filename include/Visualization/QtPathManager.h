@@ -21,7 +21,8 @@ public:
                  QColor goalPoseColor = Qt::green,
                  QColor pathColor = Qt::red,
                  QColor pathArrowColor = Qt::darkRed,
-                 QColor obstacleColor = Qt::gray);
+                 QColor obstacleColor = Qt::gray,
+                 QColor goalsColor = Qt::red);
 
     void removePath(PathWindow *window);
 

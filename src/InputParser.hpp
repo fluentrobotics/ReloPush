@@ -25,4 +25,13 @@ bool parseInputFile(
     std::unordered_map<std::string, GoalInfo> &goals,
     std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs);
 
+// ---------------------------------------------------------------------------
+// Helper Function 1: Parse and Initialize
+// ---------------------------------------------------------------------------
+bool parseAndInitialize(const std::string &filename,
+                        WorkspaceBoundary &boundary,
+                        std::unordered_map<std::string, ObjectInfo> &objects,
+                        std::unordered_map<std::string, GoalInfo> &goals,
+                        std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs);
+
 #endif // INPUTPARSER_HPP

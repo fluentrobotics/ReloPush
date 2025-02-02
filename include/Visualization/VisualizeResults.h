@@ -14,72 +14,95 @@
 void visualizeResults(std::vector<FinalAllocation> &finalSequence,
                       QApplication &app)
 {
-    // Create main windows
-    QMainWindow window1, window2;
-    window1.setWindowTitle("Path Planner Visualization 1");
-    window2.setWindowTitle("Path Planner Visualization 2");
+    // If no final allocations, nothing to show.
+    if (finalSequence.empty())
+    {
+        std::cerr << "No allocations to visualize!\n";
+        return;
+    }
 
-    // Custom colors
+    // get goals
+    GoalMap goals;
+    for(auto& it : finalSequence)
+    {
+        goals[it.goal.name] = it.goal;
+    }
+
+    // Custom colors (example)
     QColor customInitialColor   = QColor(70, 130, 180);   // Steel Blue
     QColor customGoalColor      = QColor(34, 139, 34);    // Forest Green
     QColor customPathColor      = QColor(220, 20, 60);    // Crimson
     QColor customPathArrowColor = QColor(178, 34, 34);    // Firebrick
 
-    // Just show the first two allocations for demo:
-    // (Make sure finalSequence has at least 2 elements in your real code)
-    auto vis_path0 = finalSequence[0].toSinglePathPtr();
-    auto vis_path1 = finalSequence[1].toSinglePathPtr();
-
-    // Create Visualization widgets
-    VisualizationWidget *viz1 = new VisualizationWidget(nullptr,
-                                                        customInitialColor,
-                                                        customGoalColor,
-                                                        customPathColor,
-                                                        customPathArrowColor);
-    VisualizationWidget *viz2 = new VisualizationWidget(nullptr,
-                                                        customInitialColor,
-                                                        customGoalColor,
-                                                        customPathColor,
-                                                        customPathArrowColor);
-
-    // Define workspace size
+    // Define workspace size (example)
     float workspace_width  = 4.0f;
     float workspace_height = 5.0f;
 
-    // Setup viz1
-    viz1->setWorkspace(workspace_width, workspace_height);
-    viz1->setInitialPose(vis_path0->at(0));
-    viz1->setGoalPose(vis_path0->back());
-    viz1->setPath(*vis_path0);
+    // We store windows in a vector so they won't go out of scope
+    // before the Qt event loop (`app.exec()`) finishes.
+    std::vector<std::unique_ptr<QMainWindow>> windows;
+    windows.reserve(finalSequence.size());
 
-    // Setup viz2
-    viz2->setWorkspace(workspace_width, workspace_height);
-    viz2->setInitialPose(vis_path1->at(0));
-    viz2->setGoalPose(vis_path1->back());
-    viz2->setPath(*vis_path1);
+    // Create one window per FinalAllocation
+    for (size_t i = 0; i < finalSequence.size(); ++i)
+    {
+        // 1) Create and configure a new QMainWindow
+        auto window = std::make_unique<QMainWindow>();
+        window->setWindowTitle(
+            QString("Path Planner Visualization %1").arg(i + 1)
+            );
 
-    // Retrieve obstacles from snapshots
-    auto obstaclesSet1 = finalSequence[0].snapshot.env.get_obs();
-    std::vector<ReloPush::State> obstacles1(obstaclesSet1.begin(), obstaclesSet1.end());
-    auto obstaclesSet2 = finalSequence[1].snapshot.env.get_obs();
-    std::vector<ReloPush::State> obstacles2(obstaclesSet2.begin(), obstaclesSet2.end());
+        // 2) Create a new VisualizationWidget for this final allocation
+        auto viz = new VisualizationWidget(nullptr,
+                                           customInitialColor,
+                                           customGoalColor,
+                                           customPathColor,
+                                           customPathArrowColor);
 
-    viz1->setObstacles(obstacles1);
-    viz2->setObstacles(obstacles2);
+        // 3) Define the path to visualize
+        //    (Here we assume toSinglePathPtr() gives you the entire path as a vector.)
+        auto pathPtr = finalSequence[i].toSinglePathPtr();
+        if (!pathPtr->empty())
+        {
+            viz->setWorkspace(workspace_width, workspace_height);
 
-    // Connect them to windows
-    window1.setCentralWidget(viz1);
-    window2.setCentralWidget(viz2);
-    window1.resize(workspace_width*100, workspace_height*100);
-    window2.resize(workspace_width*100, workspace_height*100);
+            // The first and last states in the path define the initial/goal poses
+            viz->setInitialPose(pathPtr->front());
+            viz->setGoalPose(pathPtr->back());
+            viz->setPath(*pathPtr);
+        }
+        else
+        {
+            // No path? Optionally handle that scenario
+            std::cerr << "Warning: FinalAllocation[" << i << "] has empty path.\n";
+        }
 
-    window1.show();
-    window2.show();
+        // 4) Retrieve obstacles from snapshot
+        auto obstaclesSet = finalSequence[i].snapshot.env.get_obs();
+        std::vector<ReloPush::State> obstacles(
+            obstaclesSet.begin(), obstaclesSet.end()
+            );
+        viz->setObstacles(obstacles);
 
-    // Show Main Control Window
+        // goals
+        viz->setGoals(goals);
+
+        // 5) Attach the VisualizationWidget to the QMainWindow
+        window->setCentralWidget(viz);
+
+        // 6) Resize and show
+        window->resize(workspace_width * 100, workspace_height * 100);
+        window->show();
+
+        // 7) Keep the window in our vector so it stays alive
+        windows.push_back(std::move(window));
+    }
+
+    // Optionally show any additional UI, like your MainControlWindow
     MainControlWindow controlWindow;
     controlWindow.show();
 
+    // 8) Start the Qt event loop. This call blocks until the user exits.
     app.exec();
 }
 

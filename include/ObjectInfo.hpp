@@ -2,6 +2,7 @@
 #define OBJECTINFO_HPP
 #include <string>
 #include <cmath>
+#include <unordered_map>
 #include <State.h>
 
 /**
@@ -94,5 +95,8 @@ struct GoalInfo
         return nominalOrientation + (orientationIndex * stepAngle);
     }
 };
+
+typedef std::unordered_map<std::string, ObjectInfo> ObjectMap;
+typedef std::unordered_map<std::string, GoalInfo> GoalMap;
 
 #endif // OBJECTINFO_HPP

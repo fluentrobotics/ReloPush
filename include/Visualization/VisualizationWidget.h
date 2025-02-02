@@ -5,6 +5,7 @@
 #include <vector>
 #include <QColor>
 #include <State.h>
+#include <GraphData.hpp>
 
 class VisualizationWidget : public QWidget
 {
@@ -16,7 +17,8 @@ public:
                                  QColor goalPoseColor = Qt::green,
                                  QColor pathColor = Qt::red,
                                  QColor pathArrowColor = Qt::darkRed,
-                                 QColor obstacleColor = Qt::gray);
+                                 QColor obstacleColor = Qt::gray,
+                                 QColor goalsColor = Qt::red);
 
 
     // Set workspace dimensions
@@ -32,12 +34,16 @@ public:
     // Set obstacles
     void setObstacles(const std::vector<ReloPush::State> &obstacles);
 
+    // Set goals
+    void setGoals(const GoalMap &goals);
+
     // Set colors
     void setInitialPoseColor(const QColor& color);
     void setGoalPoseColor(const QColor& color);
     void setPathColor(const QColor& color);
     void setPathArrowColor(const QColor& color);
     void setObstacleColor(const QColor &color);
+    void setGoalsColor(const QColor &color);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -52,6 +58,7 @@ private:
     ReloPush::State goal_pose;
     std::vector<ReloPush::State> path;
     std::vector<ReloPush::State> obstacles;
+    GoalMap goals;
 
     QString mouse_coord_text;
 
@@ -61,6 +68,7 @@ private:
     QColor path_color;
     QColor path_arrow_color;
     QColor obstacle_color;
+    QColor goals_color;
 
     // Obstacle parameters
     const float obstacle_radius = 0.075f;
@@ -70,7 +78,8 @@ private:
 
     // Utility functions to draw oriented arrows
     void drawOrientedArrow(QPainter& painter, const QPointF& position, float yaw, QColor color, bool isPath = false) const;
-    void drawObstacle(QPainter &painter, const QPointF &position, QColor color) const;
+    void drawObstacle(QPainter &painter, const QPointF &position, const float yaw, QColor color) const;
+    void drawGoals(QPainter &painter, const QPointF &position, const float yaw, QColor color) const;
 
     // Utility function to normalize yaw
     float normalizeYaw(float yaw) const;

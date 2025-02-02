@@ -652,8 +652,10 @@ StateValidity addEdgePrerelocation_Optimization(
             bestOpt  = ReloPush::OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
             bestOrientationIndex = i;
 
-            bestDubins_prerelo = findDubins(ReloPush::State(startPose.x,startPose.y,sideAngle), ReloPush::State(relocationX,relocationY,sideAngle + bestOpt.change_in_yaw), ctx.parameters.turning_rad_pair.push);
-            bestDubins_final = findDubins(ReloPush::State(relocationX,relocationY,relocationYaw), goalPose, ctx.parameters.turning_rad_pair.push);
+            auto start_pivot = ReloPush::State(startPose.x,startPose.y,sideAngle);
+            auto prerelo_pivot = ReloPush::State(relocationX,relocationY,relocationYaw);
+            bestDubins_prerelo = findDubins(find_pre_push(start_pivot,ctx.parameters.PrePush_dist), ReloPush::State(relocationX,relocationY,sideAngle + bestOpt.change_in_yaw), ctx.parameters.turning_rad_pair.push);
+            bestDubins_final = findDubins(find_pre_push(prerelo_pivot,0), find_pre_push(goalPose,0), ctx.parameters.turning_rad_pair.push);
 
             if(bestCost < 50) //todo: handle nan
                 foundAny = true;

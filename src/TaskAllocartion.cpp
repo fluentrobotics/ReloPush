@@ -830,7 +830,7 @@ LowestCostInfo findAbsoluteLowestCost(std::map<std::string, PairCostResult> &res
 //   4) If fail, mark cost ∞ and revert environment changes
 //   5) If success, record the path and update 'obsReloPathList'
 // ---------------------------------------------------------------------------
-bool attemptObsRelocation(PlanningContext &planCtx,
+PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
                           const ReloPush::State &fromState_prepush,
                           const ReloPush::State &toState_prepush,
                           ReloPush::State &fromObs,         // obstacle to remove
@@ -860,7 +860,7 @@ bool attemptObsRelocation(PlanningContext &planCtx,
         planCtx.env.add_obs(fromObs);
         planCtx.env.remove_obs(toObs);
 
-        return false;
+        return res;
     }
 
     // 3) If success, record the path
@@ -876,7 +876,7 @@ bool attemptObsRelocation(PlanningContext &planCtx,
     // 4) Update the object’s new location
     ToUpdate[pivotObjName] = objNewState;
 
-    return true;
+    return res;
 }
 
 // ---------------------------------------------------------------------------
@@ -925,7 +925,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
         auto toState_pre   = find_pre_push(toState, planCtx.parameters.PrePush_dist);
 
         // Attempt relocation
-        bool success = attemptObsRelocation(planCtx,
+        auto res = attemptObsRelocation(planCtx,
                                             fromState_pre, toState_pre,
                                             prev_pair.first,  // obs to remove
                                             prev_pair.second, // obs to add
@@ -934,7 +934,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
                                             ToUpdate,
                                             pivotObj.name,
                                             fromState);
-        if (!success)
+        if (!res->success)
         {
             // If we fail, the cost is set to ∞ for that pair, so we return false
             failedObjectName = bestPick.objectName;
@@ -956,7 +956,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
         auto fromState_pre = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
         auto toState_pre   = find_pre_push(final_approach, planCtx.parameters.PrePush_dist);
 
-        bool success = attemptObsRelocation(planCtx,
+        auto res = attemptObsRelocation(planCtx,
                                             fromState_pre, toState_pre,
                                             last_pair.first,
                                             last_pair.second,
@@ -965,7 +965,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
                                             ToUpdate,
                                             pathEntry.vertexChain[pathEntry.vertexChain.size() - 2].name,
                                             fromState);
-        if (!success)
+        if (!res->success)
         {
             failedObjectName = bestPick.objectName;
             return false;
@@ -1076,5 +1076,30 @@ void performAllocations(const WorkspaceBoundary &boundary,
         objGoalPairs.erase(bestPick.objectName);
         objects.erase(bestPick.objectName);
         goals.erase(bestPick.goalName);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helper Function 5: Print the final sequence
+// ---------------------------------------------------------------------------
+void printFinalSequence(const std::vector<FinalAllocation> &finalSequence)
+{
+    std::cout << "\nFinal sequence of chosen tasks:\n";
+    for (auto &fa : finalSequence)
+    {
+        std::cout << "Object = " << fa.object.name
+                  << ", Goal = " << fa.goal.name
+                  << ", cost = " << fa.cost << "\n"
+                  << "  start yaw = " << fa.startPose.yaw
+                  << ", goal yaw = " << fa.goalPose.yaw;
+
+        if (fa.obsReloPaths->size() > 0)
+        {
+            std::cout << ", ObsRelo steps: " << fa.obsReloPaths->size() << "\n";
+        }
+        else
+        {
+            std::cout << std::endl;
+        }
     }
 }

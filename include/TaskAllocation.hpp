@@ -282,7 +282,7 @@ typedef std::map<std::string, PairCostResult> PairResultsMap;
 //   4) If fail, mark cost ∞ and revert environment changes
 //   5) If success, record the path and update 'obsReloPathList'
 // ---------------------------------------------------------------------------
-bool attemptObsRelocation(PlanningContext &planCtx,
+PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
                           const ReloPush::State &fromState_prepush,
                           const ReloPush::State &toState_prepush,
                           ReloPush::State &fromObs,         // obstacle to remove
@@ -313,4 +313,10 @@ void performAllocations(const WorkspaceBoundary &boundary,
                         std::unordered_map<std::string, GoalInfo> &goals,
                         std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
                         std::vector<FinalAllocation> &finalSequence);
+
+// ---------------------------------------------------------------------------
+// Helper Function 5: Print the final sequence
+// ---------------------------------------------------------------------------
+void printFinalSequence(const std::vector<FinalAllocation> &finalSequence);
+
 #endif // TASKALLOCATION_HPP

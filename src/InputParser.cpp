@@ -228,3 +228,19 @@ bool parseInputFile(
     return true;
 }
 */
+// ---------------------------------------------------------------------------
+// Helper Function 1: Parse and Initialize
+// ---------------------------------------------------------------------------
+bool parseAndInitialize(const std::string &filename,
+                        WorkspaceBoundary &boundary,
+                        std::unordered_map<std::string, ObjectInfo> &objects,
+                        std::unordered_map<std::string, GoalInfo> &goals,
+                        std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs)
+{
+    if (!parseInputFile(filename, boundary, objects, goals, objGoalPairs))
+    {
+        std::cerr << "Parse failed.\n";
+        return false;
+    }
+    return true;
+}

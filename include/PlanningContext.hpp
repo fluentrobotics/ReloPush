@@ -9,9 +9,6 @@
 typedef std::vector<ObjectInfo> ObjectList;
 typedef std::vector<GoalInfo> GoalList;
 
-typedef std::unordered_map<std::string, ObjectInfo> ObjectMap;
-typedef std::unordered_map<std::string, GoalInfo> GoalMap;
-
 ReloPush::State object_to_state(ObjectInfo& obj);
 
 ReloPush::State goal_to_state(GoalInfo& goal);

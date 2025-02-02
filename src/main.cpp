@@ -1,4 +1,4 @@
-#include "GraphBuilder.hpp"
+#include <GraphBuilder.hpp>
 #include "InputParser.hpp"
 #include <iostream>
 #include <vector>
@@ -6,53 +6,6 @@
 #include <FileWriter.hpp>
 #include <TaskAllocation.hpp>
 #include <Visualization/VisualizeResults.h>
-
-// #include <QApplication>
-// #include <QMainWindow>
-// #include <Visualization/VisualizationWidget.h>
-// #include <Visualization/QtMainControlWindow.h>
-
-// ---------------------------------------------------------------------------
-// Helper Function 1: Parse and Initialize
-// ---------------------------------------------------------------------------
-bool parseAndInitialize(const std::string &filename,
-                        WorkspaceBoundary &boundary,
-                        std::unordered_map<std::string, ObjectInfo> &objects,
-                        std::unordered_map<std::string, GoalInfo> &goals,
-                        std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs)
-{
-    if (!parseInputFile(filename, boundary, objects, goals, objGoalPairs))
-    {
-        std::cerr << "Parse failed.\n";
-        return false;
-    }
-    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Helper Function 5: Print the final sequence
-// ---------------------------------------------------------------------------
-void printFinalSequence(const std::vector<FinalAllocation> &finalSequence)
-{
-    std::cout << "\nFinal sequence of chosen tasks:\n";
-    for (auto &fa : finalSequence)
-    {
-        std::cout << "Object = " << fa.object.name
-                  << ", Goal = " << fa.goal.name
-                  << ", cost = " << fa.cost << "\n"
-                  << "  start yaw = " << fa.startPose.yaw
-                  << ", goal yaw = " << fa.goalPose.yaw;
-
-        if (fa.obsReloPaths->size() > 0)
-        {
-            std::cout << ", ObsRelo steps: " << fa.obsReloPaths->size() << "\n";
-        }
-        else
-        {
-            std::cout << std::endl;
-        }
-    }
-}
 
 
 // ---------------------------------------------------------------------------
@@ -68,7 +21,7 @@ int main(int argc, char *argv[])
     //     return 1;
     // }
     // std::string filename = argv[1];
-    std::string filename = "input4.txt";
+    std::string filename = "input5.txt";
 
     // Data structures
     WorkspaceBoundary boundary;

@@ -8,11 +8,7 @@
 #include <PreReloOptimization.hpp>
 #include <PlanHybridAstar.hpp>
 
-struct ObjectGoalPair
-{
-    std::string objectName;
-    std::string goalName;
-};
+
 
 
 /**

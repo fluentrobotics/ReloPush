@@ -14,7 +14,8 @@ VisualizationWidget::VisualizationWidget(QWidget *parent,
                                          QColor goalPoseColor,
                                          QColor pathColor_,
                                          QColor pathArrowColor_,
-                                         QColor obstacleColor_)
+                                         QColor obstacleColor_,
+                                         QColor goalsColor_)
     : QWidget(parent),
     workspace_width(100.0f),
     workspace_height(100.0f),
@@ -24,7 +25,8 @@ VisualizationWidget::VisualizationWidget(QWidget *parent,
     goal_pose_color(goalPoseColor),
     path_color(pathColor_),
     path_arrow_color(pathArrowColor_),
-    obstacle_color(obstacleColor_)
+    obstacle_color(obstacleColor_),
+    goals_color(goalsColor_)
 {
     setMouseTracking(true); // Enable mouse tracking without pressing buttons
 }
@@ -72,6 +74,12 @@ void VisualizationWidget::setObstacles(const std::vector<ReloPush::State> &obsta
     update();
 }
 
+void VisualizationWidget::setGoals(const GoalMap &goals_)
+{
+    goals = goals_;
+    update();
+}
+
 // Setter methods for colors
 void VisualizationWidget::setInitialPoseColor(const QColor& color)
 {
@@ -100,6 +108,12 @@ void VisualizationWidget::setPathArrowColor(const QColor& color)
 void VisualizationWidget::setObstacleColor(const QColor &color)
 {
     obstacle_color = color;
+    update();
+}
+
+void VisualizationWidget::setGoalsColor(const QColor &color)
+{
+    goals_color = color;
     update();
 }
 
@@ -178,6 +192,19 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
     // Draw goal pose as an oriented arrow
     drawOrientedArrow(painter, mapCoord(goal_pose.x, goal_pose.y), goal_pose.yaw, goal_pose_color, false);
 
+    if (!goals.empty())
+    {
+        QBrush obstacle_brush(goals_color);
+        QPen obstacle_pen(Qt::black, 1);
+        painter.setBrush(obstacle_brush);
+        painter.setPen(obstacle_pen);
+        for (const auto &obs : goals)
+        {
+            QPointF pos = mapCoord(obs.second.x, obs.second.y);
+            drawGoals(painter, pos, obs.second.nominalOrientation, goals_color);
+        }
+    }
+
     // Draw obstacles first (so they appear below the path and arrows)
     if (!obstacles.empty())
     {
@@ -188,7 +215,7 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
         for (const auto &obs : obstacles)
         {
             QPointF pos = mapCoord(obs.x, obs.y);
-            drawObstacle(painter, pos, obstacle_color);
+            drawObstacle(painter, pos, obs.yaw, obstacle_color);
         }
     }
 }
@@ -256,15 +283,61 @@ void VisualizationWidget::drawOrientedArrow(QPainter& painter, const QPointF& po
     painter.drawPolygon(transformed_arrow);
 }
 
-void VisualizationWidget::drawObstacle(QPainter &painter, const QPointF &position, QColor color) const
+void VisualizationWidget::drawObstacle(QPainter &painter, const QPointF &position, const float yaw, QColor color) const
 {
     // Calculate the diameter based on the fixed radius and scaling
     // Assuming uniform scaling (scale_x == scale_y)
     float scale = std::min(width(), height()) / (workspace_width > workspace_height ? workspace_width : workspace_height);
     float diameter = obstacle_radius * 2 * scale;
+    float radius = obstacle_radius * scale;
 
-    // Draw the obstacle as a circle
-    painter.drawEllipse(position, diameter / 2, diameter / 2);
+    float offset = diameter/2;
+
+    // Define the unrotated corners (relative to center)
+    QVector<QPointF> corners;
+    corners << QPointF(-radius, -radius)
+            << QPointF(radius, -radius)
+            << QPointF(radius, radius)
+            << QPointF(-radius, radius);
+
+    // Rotate and translate each corner
+    QPolygonF polygon;
+    for (const QPointF &pt : corners) {
+        double rotatedX = pt.x() * std::cos(-yaw) - pt.y() * std::sin(-yaw);
+        double rotatedY = pt.x() * std::sin(-yaw) + pt.y() * std::cos(-yaw);
+        polygon << QPointF(rotatedX + position.x(), rotatedY + position.y());
+    }
+
+    painter.drawPolygon(polygon);
+}
+
+void VisualizationWidget::drawGoals(QPainter &painter, const QPointF &position, const float yaw, QColor color) const
+{
+    // Calculate the diameter based on the fixed radius and scaling
+    // Assuming uniform scaling (scale_x == scale_y)
+    float scale = std::min(width(), height()) / (workspace_width > workspace_height ? workspace_width : workspace_height);
+    float diameter = obstacle_radius * 2 * scale;
+    float radius = obstacle_radius * scale;
+
+    float offset = diameter/2;
+
+    float outer_margin = 1.2; // to make it visible when overlapped with obstacle
+    // Define the unrotated corners (relative to center)
+    QVector<QPointF> corners;
+    corners << QPointF(-radius*outer_margin, -radius*outer_margin)
+            << QPointF(radius*outer_margin, -radius*outer_margin)
+            << QPointF(radius*outer_margin, radius*outer_margin)
+            << QPointF(-radius*outer_margin, radius*outer_margin);
+
+    // Rotate and translate each corner
+    QPolygonF polygon;
+    for (const QPointF &pt : corners) {
+        double rotatedX = pt.x() * std::cos(-yaw) - pt.y() * std::sin(-yaw);
+        double rotatedY = pt.x() * std::sin(-yaw) + pt.y() * std::cos(-yaw);
+        polygon << QPointF(rotatedX + position.x(), rotatedY + position.y());
+    }
+
+    painter.drawPolygon(polygon);
 }
 
 float VisualizationWidget::normalizeYaw(float yaw) const
