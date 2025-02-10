@@ -79,7 +79,7 @@ add_executable(test_hybrid_astar test/test_hybrid_astar.cpp
 target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt6::Widgets)
 
 # Pre-relocation Optimization
-add_executable(test_prerelo_opt test/test_prerelo_optimization.cpp src/PreReloOptimization.cpp)
+add_executable(test_prerelo_opt test/test_prerelo_optimization.cpp src/PreReloOptimization.cpp src/FromOMPL.cpp)
 target_link_libraries(test_prerelo_opt Ceres::ceres ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
 
 include(GNUInstallDirs)

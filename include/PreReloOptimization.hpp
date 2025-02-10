@@ -14,6 +14,7 @@
 
 #include <ompl/geometric/planners/rrt/RRT.h>
 
+#include <FromOMPL.h>
 #include <FromOMPL_Ceres.hpp>
 #include <GraphData.hpp>
 
@@ -30,6 +31,11 @@ typedef ompl::base::SE2StateSpace::StateType OmplState;
 
 namespace ReloPush{
 
+
+    // Object from pre-push
+    ReloPush::State revert_pre_push(ReloPush::State& prePushState, float distance);
+
+
     struct OptResult
     {
         double x;
@@ -44,6 +50,9 @@ namespace ReloPush{
     };
 
 
+
+
+
     /**
      * The cost functor.  We'll store all "constants" from your code
      * as data members.  The parameter block is param[0..1] = (x1, y1).
@@ -54,18 +63,39 @@ namespace ReloPush{
 
         CostFunctor(double x_i, double y_i, double th_i,
                     double x2,  double y2,  double th2,
-                    double th_ip, double turning_radius,
+                    double th_ip, double turning_radius, double pre_push_distance,
                     WorkspaceBoundary ws_in)
             : x_i_(x_i), y_i_(y_i), th_i_(th_i),
             x2_(x2),   y2_(y2),   th2_(th2),
-            th_ip_(th_ip), R_(turning_radius), ws(ws_in)
+            th_ip_(th_ip), R_(turning_radius), ws(ws_in), pre_push_dist(pre_push_distance)
         {
+
+
+            // Starting pre-push
+            x_i_pre_ = x_i_ - pre_push_dist * cos(th_ip);
+            y_i_pre_ = y_i_ - pre_push_dist * sin(th_ip);
+
             // Precompute the left/right circle centers.
             // We'll store them as doubles, but they get cast to T automatically inside Evaluate().
-            cx_left_  = x_i_ + R_ * std::cos(th_ip_ + M_PI/2.0);
-            cy_left_  = y_i_ + R_ * std::sin(th_ip_ + M_PI/2.0);
-            cx_right_ = x_i_ + R_ * std::cos(th_ip_ - M_PI/2.0);
-            cy_right_ = y_i_ + R_ * std::sin(th_ip_ - M_PI/2.0);
+            cx_left_  = x_i_pre_ + R_ * std::cos(th_ip_ + M_PI/2.0);
+            cy_left_  = y_i_pre_ + R_ * std::sin(th_ip_ + M_PI/2.0);
+            cx_right_ = x_i_pre_ + R_ * std::cos(th_ip_ - M_PI/2.0);
+            cy_right_ = y_i_pre_ + R_ * std::sin(th_ip_ - M_PI/2.0);
+
+            // Goal pre-push
+            goal_x_pre_ = x2 - pre_push_dist * cos(th2);
+            goal_y_pre_ = y2 - pre_push_dist * sin(th2);
+        }
+
+        template <typename T>
+        bool isInBoundary(const T& x, const T& y) const
+        {
+            if(x < T(ws.xMin) || x > T(ws.xMax) || y < T(ws.yMin) || y > T(ws.yMax))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         template <typename T>
@@ -75,10 +105,16 @@ namespace ReloPush{
             T y1w = param[1];
 
             // limit optimization range (soft constraint)
-            if(x1w < T(ws.xMin) || x1w > T(ws.xMax) || y1w < T(ws.yMin) || y1w > T(ws.yMax))
+            //if(x1w < T(ws.xMin) || x1w > T(ws.xMax) || y1w < T(ws.yMin) || y1w > T(ws.yMax))
+            //{
+            //    residual[0] = T(200.0);
+                //return false;
+            //    return true;
+            //}
+
+            if(this->isInBoundary<T>(x1w, y1w)==false)
             {
                 residual[0] = T(200.0);
-                //return false;
                 return true;
             }
 
@@ -87,7 +123,8 @@ namespace ReloPush{
             //     using (x_i_, y_i_, th_ip_)
             //---------------------------------------------------------
             T xc, yc;
-            worldToLocal(x1w, y1w, T(x_i_), T(y_i_), T(th_ip_), &xc, &yc);
+            //worldToLocal(x1w, y1w, T(x_i_), T(y_i_), T(th_ip_), &xc, &yc);
+            worldToLocal(x1w, y1w, T(x_i_pre_), T(y_i_pre_), T(th_ip_), &xc, &yc);
 
             //---------------------------------------------------------
             // (2) Compute local landing orientation th1pc
@@ -109,6 +146,16 @@ namespace ReloPush{
             //     (which is effectively th_i + th1pc)
             //---------------------------------------------------------
             T th1p = mod2pi<T>(T(th_ip_) + th1pc);
+            T obj_pre_relo_x = x1w + T(pre_push_dist) * ceres::cos(th1p);
+            T obj_pre_relo_y = y1w + T(pre_push_dist) * ceres::sin(th1p);
+
+            if(this->isInBoundary(obj_pre_relo_x,obj_pre_relo_y)==false)
+            {
+                // Pre-relocation is out-of-boundary
+                residual[0] = T(200.0);
+                return true;
+            }
+
             T th1  = mod2pi<T>((th1p - T(th_ip_)) + T(th_i_));
 
             //---------------------------------------------------------
@@ -119,13 +166,25 @@ namespace ReloPush{
             //T d_thres = longpath_thres_dist(alpha, beta);
 
             // d = Euclidean((x2,y2),(x1w,y1w)) / turning_radius
-            T dx = (T(x2_) - x1w);
-            T dy = (T(y2_) - y1w);
-            T dist_xy = ceres::sqrt(dx*dx + dy*dy);
-            T d = dist_xy / T(R_);
+            //T dx = (T(x2_) - x1w);
+            //T dy = (T(y2_) - y1w);
+           // T dist_xy = ceres::sqrt(dx*dx + dy*dy);
+            //T d = dist_xy / T(R_);
 
-            T path_length = Dubins_length_ceres<T>(x1w, y1w, th1, T(x2_), T(y2_), T(th2_), T(R_));
+            // final pre_push before goal
+            T final_prepush_x = obj_pre_relo_x - T(pre_push_dist) * ceres::cos(th1);
+            T final_prepush_y = obj_pre_relo_y - T(pre_push_dist) * ceres::sin(th1);
 
+            if(this->isInBoundary(final_prepush_x,final_prepush_y)==false)
+            {
+                // final prepush is out-of-boundary
+                residual[0] = T(200.0);
+                return true;
+            }
+
+            //T path_length = Dubins_length_ceres<T>(x1w, y1w, th1, T(x2_), T(y2_), T(th2_), T(R_));
+            T path_length = Dubins_length_ceres<T>(final_prepush_x, final_prepush_y, th1,
+                                                   T(goal_x_pre_), T(goal_y_pre_), T(th2_), T(R_));
 
             T delta_d = path_length + straight_arc_length;
             //if (d_thres > d) {
@@ -198,6 +257,13 @@ namespace ReloPush{
         // Precomputed circle centers (in world coords):
         double cx_left_,  cy_left_;
         double cx_right_, cy_right_;
+
+        // For finding pre-push
+        double pre_push_dist;
+        double x_i_pre_, y_i_pre_; // pre-push for pre-relo start pose
+
+        // Goal pre-push
+        double goal_x_pre_, goal_y_pre_;
     };
 
 

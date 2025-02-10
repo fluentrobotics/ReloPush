@@ -88,35 +88,6 @@ ReloPush::State find_pre_push(ReloPush::State& goalState, float distance)
 }
 
 
-// // -----------------------------------------------------------------
-// // Add an edge from v1->v2 if feasible
-// // -----------------------------------------------------------------
-// void addEdgeIfFeasible(Graph &g, Vertex v1, Vertex v2)
-// {
-//     const auto &data1 = g[v1];
-//     const auto &data2 = g[v2];
-
-//     if (!canConnect(data1, data2))
-//         return;  // Not feasible
-
-//     // Compute a simple weight as the Euclidean distance
-//     double dx = data2.x - data1.x;
-//     double dy = data2.y - data1.y;
-//     double dist = std::sqrt(dx*dx + dy*dy);
-
-//     // Minimal path data (just start & end)
-//     //PathData pathData;
-//     //pathData.waypoints.push_back({data1.x, data1.y});
-//     //pathData.waypoints.push_back({data2.x, data2.y});
-
-//     auto [e, inserted] = boost::add_edge(v1, v2, g);
-//     if (inserted)
-//     {
-//         g[e].weight = dist;
-//         //g[e].path   = pathData;
-//     }
-// }
-
 // Check Dubins Validity
 StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningContext& ctx)
 {
@@ -179,6 +150,7 @@ StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningConte
     return out_pair;
 }
 
+// For last ReloPush planning
 PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ObjectInfo movingObject,
                             int landingOrientationIndex, int finalOrientationIndex, double angleChange,
                              PlanningContext& ctx)
@@ -217,6 +189,59 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ObjectI
     // return result
     return res;
 }
+
+// For optimization-based planning
+PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ReloPush::State approachingPose,
+                                          ObjectInfo movingObject, int landingOrientationIndex,
+                                          int finalOrientationIndex, double angleChange, PlanningContext& ctx)
+{
+    if(preRelocation.isSamePose(approachingPose))
+    {
+        // start and goal are identical. return empty path
+        PathPlanResult res_empty;
+        res_empty.start_pose = preRelocation;
+        res_empty.goal_pose = approachingPose;
+        res_empty.cost = 0;
+        res_empty.success = true;
+        res_empty.validity = PlanValidity::success;
+        return std::make_shared<PathPlanResult>(res_empty);
+    }
+
+    // object to move
+    ObjectInfo object = movingObject;
+    // apply angle change
+    object.applyRotation(angleChange);
+
+    // remove object from initial pose
+    ctx.env.remove_obs(movingObject.getNominalPose());
+
+    auto obj_prerelo = ReloPush::revert_pre_push(preRelocation,ctx.parameters.PrePush_dist);
+    // add to obstacles
+    ctx.env.add_obs(obj_prerelo);
+
+    // departing pose
+    //auto from_center_pose = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex));
+    // pre-push
+    //auto from_pre_push = find_pre_push(from_center_pose, ctx.parameters.PrePush_dist);
+
+    // final landing pose
+    //auto to_center_pose = ReloPush::State(obj_prerelo.x,obj_prerelo.y, object.getOrientation(finalOrientationIndex)+angleChange);
+    // pre-push
+    //auto to_pre_push = find_pre_push(to_center_pose, ctx.parameters.PrePush_dist);
+
+    // plan hybrid astar
+    auto res = planHybridAstar(preRelocation, approachingPose, ctx, true); // start pose is already the car pose
+
+    // remove obs
+    ctx.env.remove_obs(obj_prerelo);
+
+    // restore object
+    ctx.env.add_obs(movingObject.getNominalPose());
+
+    // return result
+    return res;
+}
+
 
 //
 // Normal Edge Connection (No Prerelocation)
@@ -304,7 +329,7 @@ StateValidity addEdgePrerelocation(
 
     // for debug
     bool deb = false;
-    if(data1.name == "box2" && data2.name == "goal2" && data1.orientationIndex == 3 && data2.orientationIndex==3)
+    if(data1.name == "box3" && data2.name == "goal3" && data1.orientationIndex == 3 && data2.orientationIndex==3)
         deb = true;
 
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
@@ -505,11 +530,14 @@ StateValidity addEdgePrerelocation_Optimization(
 
     // for debug
     bool deb = false;
-    if(data1.name=="box2" && data2.name=="goal2" && data1.orientationIndex==3 && data2.orientationIndex == 3)
+    if(data1.name=="box3" && data2.name=="goal3" && data1.orientationIndex==3 && data2.orientationIndex == 3)
         deb = true;
 
-    ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
-    ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation());
+    ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation()); // object
+    ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation()); // goal
+
+
+    auto goalPose_prepush = find_pre_push(goalPose, ctx.parameters.PrePush_dist);
 
     ObjectInfo movingObject = ctx.mo_list[data1.name];
     auto final_push_index = data1.orientationIndex;
@@ -534,6 +562,9 @@ StateValidity addEdgePrerelocation_Optimization(
 
         // compute the angle for orientation i
         double sideAngle = data1.nominalOrientation + (2.0 * M_PI / nSides) * i;
+        auto pushingPose = ReloPush::State(startPose.x,startPose.y,sideAngle);
+
+        auto startPose_prepush = find_pre_push(pushingPose, ctx.parameters.PrePush_dist);
 
         // 2a) Try all initial guesses from ctx.sampledPositions
         /*
@@ -595,7 +626,7 @@ StateValidity addEdgePrerelocation_Optimization(
         */
 
         auto init_guess_xy = ReloPush::find_init_guess_intersection(goalPose.x,goalPose.y,goalPose.yaw,
-                                                                    startPose.x,startPose.y,sideAngle,
+                                                                    startPose_prepush.x,startPose_prepush.y,sideAngle,
                                                                     ctx.parameters.turning_rad_pair.push,sideAngle-startPose.yaw);
 
 
@@ -606,8 +637,20 @@ StateValidity addEdgePrerelocation_Optimization(
             continue;
         }
 
-        double x_init_guess = init_guess_xy.first;
-        double y_init_guess = init_guess_xy.second;
+        double xc, yc;
+        worldToLocal<double>(init_guess_xy.first, init_guess_xy.second, startPose_prepush.x, startPose_prepush.y, sideAngle, &xc, &yc);
+
+        auto orientation_length = computeLocalOrientation<double>(xc, yc, ctx.parameters.turning_rad_pair.push);
+        double th1pc = orientation_length.th1pc;
+
+        // use prepush for initial guess
+        auto init_guess = ReloPush::State(init_guess_xy.first, init_guess_xy.second, sideAngle + th1pc);
+        auto init_guess_prepush = find_pre_push(init_guess,ctx.parameters.PrePush_dist);
+
+        //double x_init_guess = init_guess_xy.first;
+        //double y_init_guess = init_guess_xy.second;
+        double x_init_guess = init_guess_prepush.x;
+        double y_init_guess = init_guess_prepush.y;
 
         // Call your function:
         // (x_i, y_i, th_i, x2, y2, th2, sideAngle, R, x_init_guess, y_init_guess)
@@ -631,6 +674,12 @@ StateValidity addEdgePrerelocation_Optimization(
         double costOpt       = optRes.cost; // cost from the solver
         double delta_yaw    = optRes.change_in_yaw;
 
+        if (std::isnan(relocationYaw))
+        {
+            // failed to find yaw. todo: handle far points
+            continue;
+        }
+
         // If the cost is infinite or >= bestCost, skip
         if (costOpt >= bestCost)
             continue;
@@ -652,10 +701,18 @@ StateValidity addEdgePrerelocation_Optimization(
             bestOpt  = ReloPush::OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
             bestOrientationIndex = i;
 
-            auto start_pivot = ReloPush::State(startPose.x,startPose.y,sideAngle);
-            auto prerelo_pivot = ReloPush::State(relocationX,relocationY,relocationYaw);
-            bestDubins_prerelo = findDubins(find_pre_push(start_pivot,ctx.parameters.PrePush_dist), ReloPush::State(relocationX,relocationY,sideAngle + bestOpt.change_in_yaw), ctx.parameters.turning_rad_pair.push);
-            bestDubins_final = findDubins(find_pre_push(prerelo_pivot,0), find_pre_push(goalPose,0), ctx.parameters.turning_rad_pair.push);
+            //auto start_pivot = ReloPush::State(startPose.x,startPose.y,sideAngle);
+            //auto startPrepush = find_pre_push(start_pivot,ctx.parameters.PrePush_dist);
+            auto robot_prerelo = ReloPush::State(relocationX,relocationY,relocationYaw);
+            bestDubins_prerelo = findDubins(startPose_prepush, robot_prerelo, ctx.parameters.turning_rad_pair.push*0.99);
+
+            // object PreRelo
+            auto obj_prerelo = ReloPush::revert_pre_push(robot_prerelo,ctx.parameters.PrePush_dist);
+
+            double final_push_orientation = startPose.yaw + bestOpt.change_in_yaw;
+            auto final_push_pose = ReloPush::State(obj_prerelo.x,obj_prerelo.y,final_push_orientation);
+
+            bestDubins_final = findDubins(find_pre_push(final_push_pose,ctx.parameters.PrePush_dist), find_pre_push(goalPose,ctx.parameters.PrePush_dist), ctx.parameters.turning_rad_pair.push);
 
             if(bestCost < 50) //todo: handle nan
                 foundAny = true;
@@ -675,7 +732,7 @@ StateValidity addEdgePrerelocation_Optimization(
 
     else
     {
-        auto planApproach = check_approach_validity(bestDubins_prerelo.targetState, movingObject, bestOrientationIndex, final_push_index, bestOpt.change_in_yaw, ctx);
+        auto planApproach = check_approach_validity(bestDubins_prerelo.targetState, bestDubins_final.startState, movingObject, bestOrientationIndex, final_push_index, bestOpt.change_in_yaw, ctx);
 
         if(planApproach->validity == PlanValidity::success)
         {

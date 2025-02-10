@@ -20,7 +20,8 @@ void PairCostResult::remove_top(void)
     }
 }
 
-void PathsToSinglePath(std::vector<EdgeDataPathPair>& paths, ReloPush::StatePath& out_path, double interpolation_resolution)
+void PathsToSinglePath(std::vector<EdgeDataPathPair>& paths, std::vector<size_t>& path_sizes,
+                       ReloPush::StatePath& out_path, double interpolation_resolution)
 {
     for(auto& it : paths)
     {
@@ -45,6 +46,8 @@ void PathsToSinglePath(std::vector<EdgeDataPathPair>& paths, ReloPush::StatePath
             {
                 out_path.push_back(p);
             }
+            // count size
+            path_sizes.push_back(statePath->size());
         }
     }
 }
@@ -78,10 +81,12 @@ ReloPush::StatePathPtr EdgePathListToSinglePath(EdgePathList paths, double resol
 }
 
 
-ReloPush::StatePathPtr FinalAllocation::toSinglePathPtr(double interpolation_resolution)
+std::pair<ReloPush::StatePathPtr,std::vector<size_t>> FinalAllocation::toSinglePathPtr(double interpolation_resolution)
 {
     ReloPush::StatePath obs_path(0);
     ReloPush::StatePath out_path(0);
+
+
 
     // add ObsRelo
     //for(size_t n=0; n<obsReloPaths->size(); n++)
@@ -90,7 +95,8 @@ ReloPush::StatePathPtr FinalAllocation::toSinglePathPtr(double interpolation_res
         obs_path.insert(obs_path.end(), pathPtr->begin(), pathPtr->end());
     //}
 
-    PathsToSinglePath(paths,out_path, interpolation_resolution);
+    std::vector<size_t> path_sizes ={obs_path.size()};
+    PathsToSinglePath(paths, path_sizes,out_path, interpolation_resolution);
 
     ReloPush::StatePath combined;
     // Reserve space for performance (optional).
@@ -100,7 +106,9 @@ ReloPush::StatePathPtr FinalAllocation::toSinglePathPtr(double interpolation_res
     combined.insert(combined.end(), obs_path.begin(), obs_path.end());
     combined.insert(combined.end(), out_path.begin(), out_path.end());
 
-    return std::make_shared<ReloPush::StatePath>(combined);
+
+
+    return std::make_pair(std::make_shared<ReloPush::StatePath>(combined), path_sizes);
 }
 
 
@@ -269,7 +277,8 @@ ReloPush::StatePathPtr Find_ObsRelo(ObjectInfo& mo, PlanningContext& ctx, std::v
             auto obs = ctx.env.get_obs();
             // add path points as obstacles
             std::vector<ReloPush::State> pathObs;
-            PathsToSinglePath(edgesInfo,pathObs,ctx.parameters.obs_rad*2);
+            std::vector<size_t> path_sizes; // dummy
+            PathsToSinglePath(edgesInfo,path_sizes,pathObs,ctx.parameters.obs_rad*2);
             obs.insert(pathObs.begin(), pathObs.end());
 
 

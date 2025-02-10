@@ -166,7 +166,7 @@ struct FinalAllocation
 
     EdgePathList obsReloPaths;
 
-    ReloPush::StatePathPtr toSinglePathPtr(double interpolation_resolution = 0.1);
+    std::pair<ReloPush::StatePathPtr,std::vector<size_t>> toSinglePathPtr(double interpolation_resolution = 0.1);
 };
 
 class FinalTaskSequence

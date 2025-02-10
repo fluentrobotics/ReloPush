@@ -964,10 +964,12 @@ T Dubins_length_ceres(T start_x, T start_y, T start_yaw,
 // x_i, y_i, th_i: starting pose
 // x1w, y1w: landing position
 // th_ip: relocation push direction
+// todo: handle far points
 
 template <typename T>
-T findLandingYaw(T x_i, T y_i, T th_i, T x1w, T y1w, T th_ip, T R)
+T findLandingYaw(T x_r, T y_r, T th_i, T x_g, T y_g, T th_ip, T R)
 {
+    /*
     T xc, yc;
     worldToLocal<T>(x1w, y1w, x_i, y_i, th_ip, &xc, &yc);
     auto orientation_length = computeLocalOrientation(xc, yc, R);
@@ -978,6 +980,44 @@ T findLandingYaw(T x_i, T y_i, T th_i, T x1w, T y1w, T th_ip, T R)
     T th1  = mod2pi<T>((th1p - th_ip) + th_i);
 
     return th1;
+    */
+
+    // transform to robot frame
+    T dx = x_g - x_r;
+    T dy = y_g - y_r;
+    // Robot-frame coordinates of the goal:
+    T x_g_r =  ceres::cos(th_ip)*dx + ceres::sin(th_ip)*dy;
+    T y_g_r = -ceres::sin(th_ip)*dx + ceres::cos(th_ip)*dy;
+
+    auto orientation_length = computeLocalOrientation(x_g_r, y_g_r, R);
+    T th1pc = orientation_length.th1pc;
+    return th1pc + th_ip;
+
+    /*
+    T local_landing_yaw;
+
+    if(y_g_r ==0)
+    {
+        // handle straight line
+        local_landing_yaw = 0;
+    }
+    else
+    {
+        if(y_g_r>0)
+        {
+            // handle left circle
+            local_landing_yaw = ceres::acos((R-dy)/R);
+        }
+        else
+        {
+            // handle right circle
+            local_landing_yaw = -1*ceres::acos((dy+R)/R);
+        }
+    }
+
+    // transform back to world
+    return local_landing_yaw + th_ip;
+    */
 }
 
 

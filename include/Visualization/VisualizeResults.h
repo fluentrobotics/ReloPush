@@ -61,15 +61,15 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
 
         // 3) Define the path to visualize
         //    (Here we assume toSinglePathPtr() gives you the entire path as a vector.)
-        auto pathPtr = finalSequence[i].toSinglePathPtr();
-        if (!pathPtr->empty())
+        auto pathPtr_pair = finalSequence[i].toSinglePathPtr();
+        if (!pathPtr_pair.first->empty())
         {
             viz->setWorkspace(workspace_width, workspace_height);
 
             // The first and last states in the path define the initial/goal poses
-            viz->setInitialPose(pathPtr->front());
-            viz->setGoalPose(pathPtr->back());
-            viz->setPath(*pathPtr);
+            viz->setInitialPose(pathPtr_pair.first->front());
+            viz->setGoalPose(pathPtr_pair.first->back());
+            viz->setPath(*pathPtr_pair.first, pathPtr_pair.second);
         }
         else
         {

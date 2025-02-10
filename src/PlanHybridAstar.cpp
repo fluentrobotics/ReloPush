@@ -97,6 +97,7 @@ PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal
 
 PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal_in, PlanningContext& ctx, bool allow_reverse)
 {
+
     float rho, speed;
     if(allow_reverse)
     {

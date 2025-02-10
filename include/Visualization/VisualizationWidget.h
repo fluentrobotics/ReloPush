@@ -30,6 +30,7 @@ public:
 
     // Set path
     void setPath(const std::vector<ReloPush::State>& path);
+    void setPath(const std::vector<ReloPush::State>& path_, const std::vector<size_t>& path_segment_lengths_);
 
     // Set obstacles
     void setObstacles(const std::vector<ReloPush::State> &obstacles);
@@ -58,6 +59,7 @@ private:
     ReloPush::State goal_pose;
     std::vector<ReloPush::State> path;
     std::vector<ReloPush::State> obstacles;
+    std::vector<size_t> path_segment_lengths;
     GoalMap goals;
 
     QString mouse_coord_text;

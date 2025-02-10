@@ -33,6 +33,14 @@ namespace ReloPush
             return std::tie(time, x, y, yaw) == std::tie(s.time, s.x, s.y, s.yaw);
         }
 
+        bool isSamePose(const State &s) const
+        {
+            if(abs(x-s.x)<0.000001 && abs(y-s.y) < 0.000001 && abs(fromOMPL::mod2pi(yaw)-fromOMPL::mod2pi(s.yaw)) < 0.000001)
+                return true;
+
+            return false;
+        }
+
         bool agentCollision(const State &other, float LF, float carWidth) const
         {
             if (pow(this->x - other.x, 2) + pow(this->y - other.y, 2) <

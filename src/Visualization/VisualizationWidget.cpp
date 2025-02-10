@@ -68,6 +68,17 @@ void VisualizationWidget::setPath(const std::vector<ReloPush::State>& path_)
     update();
 }
 
+void VisualizationWidget::setPath(const std::vector<ReloPush::State>& path_, const std::vector<size_t>& path_segment_lengths_)
+{
+    path = path_;
+    path_segment_lengths = path_segment_lengths_;
+    // Normalize yaw for all states
+    for(auto &state : path){
+        state.yaw = normalizeYaw(state.yaw);
+    }
+    update();
+}
+
 void VisualizationWidget::setObstacles(const std::vector<ReloPush::State> &obstacles_)
 {
     obstacles = obstacles_;
@@ -154,6 +165,7 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
     };
 
     // Draw path next
+    /*
     if (path.size() >= 2)
     {
         QPen path_pen(path_color, 2);
@@ -185,6 +197,58 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
             drawOrientedArrow(painter, pos, yaw, path_arrow_color, true);
         }
     }
+    */
+
+    if (path.size() >= 2) {
+        size_t total = std::accumulate(path_segment_lengths.begin(), path_segment_lengths.end(), size_t(0));
+        if (!path_segment_lengths.empty() && total == path.size()) {
+            size_t index = 0;
+            // Define a list of colors for segments (feel free to customize)
+            std::vector<QColor> segmentColors = { QColor("#FCD0A1"), QColor("#E07A5F"), QColor("#798086"), QColor("#81B29A"), Qt::darkCyan };
+            for (size_t seg = 0; seg < path_segment_lengths.size(); seg++) {
+                size_t segLength = path_segment_lengths[seg];
+                QColor segColor = segmentColors[seg % segmentColors.size()];
+                QPen segPen(segColor, 2);
+                painter.setPen(segPen);
+                for (size_t i = index + 1; i < index + segLength; i++) {
+                    QPointF p1 = mapCoord(path[i-1].x, path[i-1].y);
+                    QPointF p2 = mapCoord(path[i].x, path[i].y);
+                    painter.drawLine(p1, p2);
+                }
+                // Optionally, draw an arrow in the middle of the segment if segment length >= 2
+                if (segLength >= 2) {
+                    size_t arrow_index = index + segLength / 2;
+                    QPointF arrowPos = mapCoord(path[arrow_index].x, path[arrow_index].y);
+                    float yaw = path[arrow_index].yaw;
+                    drawOrientedArrow(painter, arrowPos, yaw, segColor, true);
+                }
+                index += segLength;
+            }
+        } else {
+            // Fallback: draw entire path in global path_color as before
+            QPen path_pen(path_color, 2);
+            painter.setPen(path_pen);
+            for (size_t i = 1; i < path.size(); ++i) {
+                QPointF p1 = mapCoord(path[i-1].x, path[i-1].y);
+                QPointF p2 = mapCoord(path[i].x, path[i].y);
+                painter.drawLine(p1, p2);
+            }
+            // Draw global path arrows
+            const size_t max_arrows = 20;
+            size_t arrow_interval = path.size() > max_arrows ? path.size() / max_arrows : 1;
+            for (size_t i = 0; i < path.size(); i += arrow_interval) {
+                QPointF pos = mapCoord(path[i].x, path[i].y);
+                float yaw = path[i].yaw;
+                drawOrientedArrow(painter, pos, yaw, path_arrow_color, true);
+            }
+            if ((path.size() - 1) % arrow_interval != 0) {
+                QPointF pos = mapCoord(path.back().x, path.back().y);
+                float yaw = path.back().yaw;
+                drawOrientedArrow(painter, pos, yaw, path_arrow_color, true);
+            }
+        }
+    }
+
 
     // Draw initial pose as an oriented arrow
     drawOrientedArrow(painter, mapCoord(initial_pose.x, initial_pose.y), initial_pose.yaw, initial_pose_color, false);
