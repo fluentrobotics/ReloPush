@@ -29,8 +29,8 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
     }
 
     // Custom colors (example)
-    QColor customInitialColor   = QColor(70, 130, 180);   // Steel Blue
-    QColor customGoalColor      = QColor(34, 139, 34);    // Forest Green
+    QColor customInitialColor   = QColor(70, 130, 180,127);   // Steel Blue
+    QColor customGoalColor      = QColor(34, 139, 34,127);    // Forest Green
     QColor customPathColor      = QColor(220, 20, 60);    // Crimson
     QColor customPathArrowColor = QColor(178, 34, 34);    // Firebrick
 

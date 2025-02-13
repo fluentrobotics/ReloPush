@@ -329,7 +329,7 @@ StateValidity addEdgePrerelocation(
 
     // for debug
     bool deb = false;
-    if(data1.name == "box3" && data2.name == "goal3" && data1.orientationIndex == 3 && data2.orientationIndex==3)
+    if(data1.name == "box2" && data2.name == "goal3" && data1.orientationIndex == 3 && data2.orientationIndex==3)
         deb = true;
 
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
@@ -530,7 +530,7 @@ StateValidity addEdgePrerelocation_Optimization(
 
     // for debug
     bool deb = false;
-    if(data1.name=="box3" && data2.name=="goal3" && data1.orientationIndex==3 && data2.orientationIndex == 3)
+    if(data1.name=="box2" && data2.name=="goal3" && data1.orientationIndex==0 && data2.orientationIndex == 0)
         deb = true;
 
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation()); // object
@@ -640,6 +640,10 @@ StateValidity addEdgePrerelocation_Optimization(
         double xc, yc;
         worldToLocal<double>(init_guess_xy.first, init_guess_xy.second, startPose_prepush.x, startPose_prepush.y, sideAngle, &xc, &yc);
 
+        // skip if it is not in the forwad direction
+        if(xc <0)
+            continue;
+
         auto orientation_length = computeLocalOrientation<double>(xc, yc, ctx.parameters.turning_rad_pair.push);
         double th1pc = orientation_length.th1pc;
 
@@ -651,6 +655,8 @@ StateValidity addEdgePrerelocation_Optimization(
         //double y_init_guess = init_guess_xy.second;
         double x_init_guess = init_guess_prepush.x;
         double y_init_guess = init_guess_prepush.y;
+
+
 
         // Call your function:
         // (x_i, y_i, th_i, x2, y2, th2, sideAngle, R, x_init_guess, y_init_guess)
@@ -673,6 +679,10 @@ StateValidity addEdgePrerelocation_Optimization(
         double relocationYaw = optRes.landing_yaw;
         double costOpt       = optRes.cost; // cost from the solver
         double delta_yaw    = optRes.change_in_yaw;
+
+
+        // for debug only
+        //std::cout << "start: " << startPose.x << ", " << startPose.y << ", " << startPose.yaw << " Goal: " << goalPose.x << ", " << goalPose.y << ", " << goalPose.yaw << " th_ip: " << sideAngle << " cost: " << optRes.cost << std::endl;
 
         if (std::isnan(relocationYaw))
         {

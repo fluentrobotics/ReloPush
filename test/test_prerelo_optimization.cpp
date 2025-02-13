@@ -15,6 +15,8 @@
 #include <FromOMPL_Ceres.hpp>
 #include <PreReloOptimization.hpp>
 
+#include <chrono>
+
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
 namespace po = boost::program_options;
@@ -27,20 +29,20 @@ typedef ompl::base::SE2StateSpace::StateType OmplState;
 ////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
-    google::InitGoogleLogging(argv[0]);
+    //google::InitGoogleLogging(argv[0]);
 
     // 1) Our "constants" from your example:
 
-/*
-    double x_i   = 1.0;       // Starting x
-    double y_i   = 1.0;       // Starting y
-    double th_i  = 4.7123;    // Starting orientation
-    double th_ip = M_PI/2.0;  // Secondary heading
-    double x2    = 1.5;       // Goal x
+
+    double x_i   = 1.2;       // Starting x
+    double y_i   = 3.1;       // Starting y
+    double th_i  = 0;    // Starting orientation
+    double th_ip = 1.5*M_PI;  // Secondary heading
+    double x2    = 3.6;       // Goal x
     double y2    = 1.5;       // Goal y
-    double th2   = 5.4124;   // Goal orientation
+    double th2   = 0;   // Goal orientation
     double R     = 1.9188; // turning radius
-*/
+
 
     /*
     double x_i   = 2.5;       // Starting x
@@ -53,16 +55,27 @@ int main(int argc, char** argv) {
     double R     = 1.9188; // turning radius
     */
 
-
-    double x_i = 1;
-    double y_i = 1;
-    double th_i = M_PI;
-    double th_ip = 0;
-    double x2  = 1.5;
+    /*
+    double x_i = 1.2;
+    double y_i = 3.1;
+    double th_i = 0;
+    double th_ip = 1.5*M_PI;
+    double x2  = 3.6;
     double y2  = 1.5;
-    double th2 = 2.270796;
+    double th2 = 0;
     double R     = 1.9188; // turning radius
+    */
 
+    /*
+    double x_i = 1.4;
+    double y_i = 3.3;
+    double th_i = 0;
+    double th_ip = 4.71239;
+    double x2  = 3.6;
+    double y2  = 1.5;
+    double th2 = 1.57;
+    double R     = 1.9188; // turning radius
+    */
 
     WorkspaceBoundary ws(4,5.2); // workspace boundary (x_max, y_max)
 
@@ -104,8 +117,8 @@ int main(int argc, char** argv) {
     param[1] = intersection.second - pre_push_dist * sin(th_ip + locOriRes.th1pc);
 
 
-    //param[0] = 0.7;
-    //param[1] = 1.72;
+    //param[0] = 1.16;
+    //param[1] = 3.17;
 
     // 3) Build the problem
     ceres::Problem problem;
@@ -123,6 +136,9 @@ int main(int argc, char** argv) {
     // 4) Configure the solver
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::DENSE_QR;
+    options.function_tolerance = 1e-4;  // Ensure convergence
+    options.gradient_tolerance = 1e-4;
+    options.parameter_tolerance = 1e-4;
     options.minimizer_progress_to_stdout = true;
     options.use_nonmonotonic_steps = true;
 
@@ -131,7 +147,8 @@ int main(int argc, char** argv) {
     //options.max_num_iterations = 100;
     //options.use_inner_iterations = true;
     //options.min_trust_region_radius = 1e-8;
-    //options.max_trust_region_radius = 1e8;
+    //options.initial_trust_region_radius = 0.001;
+    //options.max_trust_region_radius = 1e24;
 
 
 
@@ -160,8 +177,17 @@ int main(int argc, char** argv) {
     std::cout << "Final cost = " << cost_eval[0] << "\n";
 
     options.minimizer_type = ceres::LINE_SEARCH;
+    options.max_num_line_search_step_size_iterations = 5;
+    options.line_search_direction_type = ceres::BFGS;
+    //options.min_line_search_step_size = 1e-8;
+    //options.line_search_sufficient_function_decrease = 1e-4;
+    //options.line_search_sufficient_curvature_decrease = 0.9;
 
+    auto start = std::chrono::high_resolution_clock::now();
     ceres::Solve(options, &problem, &summary);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Elapsed time: " << duration.count() << " ms" << std::endl;
 
     // 6) Print results
     std::cout << summary.BriefReport() << "\n";

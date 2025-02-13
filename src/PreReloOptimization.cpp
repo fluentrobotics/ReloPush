@@ -271,7 +271,9 @@ namespace ReloPush
         // 4) Configure the solver
         ceres::Solver::Options options;
         options.linear_solver_type = ceres::DENSE_QR;
-        //options.minimizer_progress_to_stdout = true;
+        options.function_tolerance = 1e-4;  // Rough convergence for the next optimization
+        options.gradient_tolerance = 1e-4;
+        options.parameter_tolerance = 1e-4;
         options.use_nonmonotonic_steps = true;
         //options.minimizer_type = ceres::LINE_SEARCH;
         /*
@@ -301,7 +303,10 @@ namespace ReloPush
 
         // second optimization: line search
         options.minimizer_type = ceres::LINE_SEARCH;
+        options.max_num_line_search_step_size_iterations = 5;
+        options.line_search_direction_type = ceres::LBFGS;
         ceres::Solve(options, &problem, &summary);
+        //std::cout << summary.BriefReport() << "\n";
         parameters = &param[0];
         cost_function->Evaluate(&parameters, cost_eval, nullptr);
 

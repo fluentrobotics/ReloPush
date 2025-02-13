@@ -146,6 +146,11 @@ namespace ReloPush{
             //     (which is effectively th_i + th1pc)
             //---------------------------------------------------------
             T th1p = mod2pi<T>(T(th_ip_) + th1pc);
+
+            // Find the shortest path using Dubins
+            T path_a_length = Dubins_length_ceres<T>(T(x_i_pre_), T(y_i_pre_), T(th_ip_),
+                                                   x1w, y1w, th1p, T(R_));
+
             T obj_pre_relo_x = x1w + T(pre_push_dist) * ceres::cos(th1p);
             T obj_pre_relo_y = y1w + T(pre_push_dist) * ceres::sin(th1p);
 
@@ -186,7 +191,8 @@ namespace ReloPush{
             T path_length = Dubins_length_ceres<T>(final_prepush_x, final_prepush_y, th1,
                                                    T(goal_x_pre_), T(goal_y_pre_), T(th2_), T(R_));
 
-            T delta_d = path_length + straight_arc_length;
+            //T delta_d = path_length + straight_arc_length;
+            T delta_d = path_length + path_a_length;
             //if (d_thres > d) {
             //    delta_d = T(10.0);
             //} else {
