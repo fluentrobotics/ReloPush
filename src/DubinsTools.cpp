@@ -129,6 +129,38 @@ ReloPush::StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningCont
     return std::make_shared<ReloPush::StatePath>(waypoints);
 }
 
+StateValidity isDubinsValid(reloDubinsPath& dubins_in, PlanningContext& ctx)
+{
+    auto l = dubins_in.lengthCost(); // unit cost * turning rad
+    auto num_pts = static_cast<size_t>(l/ctx.parameters.map_resolution);
+
+    ompl::base::DubinsStateSpace dubinsSpace(ctx.parameters.turning_rad_pair.push);
+    OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
+    dubinsStart->setXY(dubins_in.startState.x, dubins_in.startState.y);
+    dubinsStart->setYaw(dubins_in.startState.yaw);
+    OmplState *interState = (OmplState *)dubinsSpace.allocState();
+
+    // interpolate dubins path
+    // Interpolate dubins path to check for collision on grid map
+    //nav_msgs::Path single_path;
+    //single_path.poses.resize(num_pts);
+    if(num_pts>0){
+        for (size_t np=0; np<num_pts; np++)
+        {
+            //auto start = std::chrono::steady_clock::now();
+            jeeho_interpolate(dubinsStart, dubins_in.omplDubins, (double)np / (double)num_pts, interState, &dubinsSpace,
+                              ctx.parameters.turning_rad_pair.push);
+
+            ReloPush::State tempState(interState->getX(), interState->getY(),interState->getYaw());
+            auto mid_validity = ctx.env.stateValid(tempState);
+            if(!mid_validity)
+                return mid_validity.get_validity();
+        }
+    }
+
+    return StateValidity::valid;
+}
+
 
 std::vector<ReloPush::State> interpolateStraightPath(const ReloPush::State& start, const ReloPush::State& goal, float resolution) {
     std::vector<ReloPush::State> path;

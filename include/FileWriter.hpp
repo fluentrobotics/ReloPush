@@ -68,15 +68,15 @@ void exportToTxt(
         {
             ReloPush::StatePathPtr statePath;
             // Check if the variant holds a StatePathPtr
-            if (std::holds_alternative<ReloPush::StatePathPtr>(pathVariant.path))
+            if (std::holds_alternative<ReloPush::StatePathPtr>(pathVariant->path))
             {
-                statePath = std::get<ReloPush::StatePathPtr>(pathVariant.path);
+                statePath = std::get<ReloPush::StatePathPtr>(pathVariant->path);
 
             }
             // If needed, handle reloDubinsPath here (currently ignored)
-            else if(std::holds_alternative<reloDubinsPath>(pathVariant.path))
+            else if(std::holds_alternative<reloDubinsPath>(pathVariant->path))
             {
-                auto dubinsPath = std::get<reloDubinsPath>(pathVariant.path);
+                auto dubinsPath = std::get<reloDubinsPath>(pathVariant->path);
                 statePath = dubinsPath.interpolate(0.1); // todo: parse map resolution
             }
 

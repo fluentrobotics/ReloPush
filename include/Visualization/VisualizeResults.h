@@ -87,6 +87,18 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
         // goals
         viz->setGoals(goals);
 
+        // prerelocation if any
+        std::vector<ReloPush::State> prerelocs;
+        for(auto& it : finalSequence[i].paths)
+        {
+            if(it.preRelo.used)
+            {
+                prerelocs.push_back(ReloPush::State(it.preRelo.xRelocated_object,it.preRelo.yRelocated_object,it.preRelo.yawRelocated_object));
+            }
+        }
+        viz->setPreRelocations(prerelocs);
+
+
         // 5) Attach the VisualizationWidget to the QMainWindow
         window->setCentralWidget(viz);
 

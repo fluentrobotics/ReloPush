@@ -85,6 +85,12 @@ void VisualizationWidget::setObstacles(const std::vector<ReloPush::State> &obsta
     update();
 }
 
+void VisualizationWidget::setPreRelocations(const std::vector<ReloPush::State>& prerelocs_)
+{
+    prerelocations = prerelocs_;
+    update();
+}
+
 void VisualizationWidget::setGoals(const GoalMap &goals_)
 {
     goals = goals_;
@@ -136,75 +142,72 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
     // Fill background
     painter.fillRect(rect(), Qt::white);
 
-    // Determine the square drawing area
+    // Determine available drawing area with padding
     int widget_width = width();
     int widget_height = height();
-    int side = qMin(widget_width, widget_height) - 20; // Subtract padding (10px on each side)
-    if (side <= 0)
-        side = qMin(widget_width, widget_height); // Prevent negative size
+    int padding = 10;  // 10px padding on each side
+    float availableWidth = widget_width - 2 * padding;
+    float availableHeight = widget_height - 2 * padding;
 
-    // Calculate top-left corner to center the square
-    int left = (widget_width - side) / 2;
-    int top = (widget_height - side) / 2;
+    // Compute a drawing rectangle (draw_rect) that has the specified aspect ratio (aspect_ratio)
+    // aspect_ratio is defined as (width / height) and is a member variable.
+    float aspect_ratio = workspace_width/workspace_height;
+    float availableRatio = availableWidth / availableHeight;
+    QRectF draw_rect;
+    if (availableRatio > aspect_ratio)
+    {
+        // The available area is wider than desired;
+        // use full available height and compute width from aspect_ratio.
+        float draw_height = availableHeight;
+        float draw_width = aspect_ratio * draw_height;
+        float left = (widget_width - draw_width) / 2.0f;
+        draw_rect = QRectF(left, padding, draw_width, draw_height);
+    }
+    else
+    {
+        // The available area is taller than desired;
+        // use full available width and compute height from aspect_ratio.
+        float draw_width = availableWidth;
+        float draw_height = draw_width / aspect_ratio;
+        float top = (widget_height - draw_height) / 2.0f;
+        draw_rect = QRectF(padding, top, draw_width, draw_height);
+    }
 
-    QRectF draw_rect = QRectF(left, top, side, side);
+    // Compute uniform scale factor so that scale_x == scale_y.
+    float uniformScale = std::min(draw_rect.width() / workspace_width,
+                                  draw_rect.height() / workspace_height);
+
+    // Determine the actual drawn boundary dimensions using uniform scaling.
+    float drawnWidth = workspace_width * uniformScale;
+    float drawnHeight = workspace_height * uniformScale;
+
+    // Center the drawn boundary within draw_rect.
+    float offsetX = draw_rect.left() + (draw_rect.width() - drawnWidth) / 2.0f;
+    float offsetY = draw_rect.top() + (draw_rect.height() - drawnHeight) / 2.0f;
+
+    QRectF boundaryRect(offsetX, offsetY, drawnWidth, drawnHeight);
     painter.setPen(Qt::black);
-    painter.drawRect(draw_rect);
+    painter.drawRect(boundaryRect);
 
-    // Scaling factors
-    float scale_x = draw_rect.width() / workspace_width;
-    float scale_y = draw_rect.height() / workspace_height;
-
-    // Lambda to map workspace coordinates to widget coordinates
+    // Lambda to map workspace coordinates to widget coordinates using the uniform scale.
     auto mapCoord = [&](float x, float y) -> QPointF
     {
-        float widget_x = draw_rect.left() + x * scale_x;
-        // Invert y-axis to match traditional Cartesian coordinates
-        float widget_y = draw_rect.bottom() - y * scale_y;
+        float widget_x = offsetX + x * uniformScale;
+        // Invert y-axis so that larger y is higher (Cartesian coordinates)
+        float widget_y = offsetY + drawnHeight - y * uniformScale;
         return QPointF(widget_x, widget_y);
     };
 
-    // Draw path next
-    /*
-    if (path.size() >= 2)
-    {
-        QPen path_pen(path_color, 2);
-        painter.setPen(path_pen);
-        for (size_t i = 1; i < path.size(); ++i)
-        {
-            QPointF p1 = mapCoord(path[i - 1].x, path[i - 1].y);
-            QPointF p2 = mapCoord(path[i].x, path[i].y);
-            painter.drawLine(p1, p2);
-        }
-
-        // Draw path arrows
-        // Define interval for arrows (e.g., every N states)
-        const size_t max_arrows = 20;
-        size_t arrow_interval = path.size() > max_arrows ? path.size() / max_arrows : 1;
-
-        for (size_t i = 0; i < path.size(); i += arrow_interval)
-        {
-            QPointF pos = mapCoord(path[i].x, path[i].y);
-            float yaw = path[i].yaw;
-            drawOrientedArrow(painter, pos, yaw, path_arrow_color, true);
-        }
-
-        // Ensure the last state has an arrow if not already drawn
-        if ((path.size() - 1) % arrow_interval != 0)
-        {
-            QPointF pos = mapCoord(path.back().x, path.back().y);
-            float yaw = path.back().yaw;
-            drawOrientedArrow(painter, pos, yaw, path_arrow_color, true);
-        }
-    }
-    */
+    // --- Your drawing code for paths, segments, goals, obstacles, etc. remains below ---
+    // (For example, your code for drawing the segmented path goes here.)
 
     if (path.size() >= 2) {
         size_t total = std::accumulate(path_segment_lengths.begin(), path_segment_lengths.end(), size_t(0));
         if (!path_segment_lengths.empty() && total == path.size()) {
             size_t index = 0;
-            // Define a list of colors for segments (feel free to customize)
-            std::vector<QColor> segmentColors = { QColor("#FCD0A1"), QColor("#E07A5F"), QColor("#798086"), QColor("#81B29A"), Qt::darkCyan };
+            // Predefined list of segment colors (customize as needed)
+            std::vector<QColor> segmentColors = { QColor("#FCD0A1"), QColor("#E07A5F"),
+                                                 QColor("#798086"), QColor("#81B29A"), Qt::darkCyan };
             for (size_t seg = 0; seg < path_segment_lengths.size(); seg++) {
                 size_t segLength = path_segment_lengths[seg];
                 QColor segColor = segmentColors[seg % segmentColors.size()];
@@ -215,7 +218,7 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
                     QPointF p2 = mapCoord(path[i].x, path[i].y);
                     painter.drawLine(p1, p2);
                 }
-                // Optionally, draw an arrow in the middle of the segment if segment length >= 2
+                // Optionally, draw an arrow in the middle of the segment if segment length >= 2.
                 if (segLength >= 2) {
                     size_t arrow_index = index + segLength / 2;
                     QPointF arrowPos = mapCoord(path[arrow_index].x, path[arrow_index].y);
@@ -225,7 +228,7 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
                 index += segLength;
             }
         } else {
-            // Fallback: draw entire path in global path_color as before
+            // Fallback: draw entire path in global path_color as before.
             QPen path_pen(path_color, 2);
             painter.setPen(path_pen);
             for (size_t i = 1; i < path.size(); ++i) {
@@ -233,7 +236,7 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
                 QPointF p2 = mapCoord(path[i].x, path[i].y);
                 painter.drawLine(p1, p2);
             }
-            // Draw global path arrows
+            // Draw global path arrows.
             const size_t max_arrows = 20;
             size_t arrow_interval = path.size() > max_arrows ? path.size() / max_arrows : 1;
             for (size_t i = 0; i < path.size(); i += arrow_interval) {
@@ -249,37 +252,51 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
         }
     }
 
-
-    // Draw initial pose as an oriented arrow
+    // Draw initial and goal poses.
     drawOrientedArrow(painter, mapCoord(initial_pose.x, initial_pose.y), initial_pose.yaw, initial_pose_color, false);
-
-    // Draw goal pose as an oriented arrow
     drawOrientedArrow(painter, mapCoord(goal_pose.x, goal_pose.y), goal_pose.yaw, goal_pose_color, false);
 
+    // Draw additional elements (goals, obstacles, prerelocations) as needed...
+    // For example, if you have goals stored in a container:
     if (!goals.empty())
     {
-        QBrush obstacle_brush(goals_color);
-        QPen obstacle_pen(Qt::black, 1);
-        painter.setBrush(obstacle_brush);
-        painter.setPen(obstacle_pen);
-        for (const auto &obs : goals)
+        QBrush goalBrush(goals_color);
+        QPen goalPen(Qt::black, 1);
+        painter.setBrush(goalBrush);
+        painter.setPen(goalPen);
+        for (const auto &g : goals)
         {
-            QPointF pos = mapCoord(obs.second.x, obs.second.y);
-            drawGoals(painter, pos, obs.second.nominalOrientation, goals_color);
+            QPointF pos = mapCoord(g.second.x, g.second.y);
+            drawGoals(painter, pos, g.second.nominalOrientation, goals_color);
         }
     }
 
-    // Draw obstacles first (so they appear below the path and arrows)
+    // Draw obstacles (if any) after the path.
     if (!obstacles.empty())
     {
-        QBrush obstacle_brush(obstacle_color);
-        QPen obstacle_pen(Qt::black, 1);
-        painter.setBrush(obstacle_brush);
-        painter.setPen(obstacle_pen);
+        QBrush obsBrush(obstacle_color);
+        QPen obsPen(Qt::black, 1);
+        painter.setBrush(obsBrush);
+        painter.setPen(obsPen);
         for (const auto &obs : obstacles)
         {
             QPointF pos = mapCoord(obs.x, obs.y);
+            // Assuming drawObstacle accepts (painter, position, color)
             drawObstacle(painter, pos, obs.yaw, obstacle_color);
+        }
+    }
+
+    if (!prerelocations.empty())
+    {
+        QPen dottedPen(QColor(255, 165, 0));
+        dottedPen.setStyle(Qt::DashLine);
+        dottedPen.setWidth(2);
+        painter.setPen(dottedPen);
+        painter.setBrush(Qt::NoBrush);
+        for (const auto &pre : prerelocations)
+        {
+            QPointF pos = mapCoord(pre.x,pre.y);
+            drawPreRelocations(painter, pos, pre.yaw, QColor(255, 165, 0));
         }
     }
 }
@@ -401,6 +418,41 @@ void VisualizationWidget::drawGoals(QPainter &painter, const QPointF &position, 
         polygon << QPointF(rotatedX + position.x(), rotatedY + position.y());
     }
 
+    painter.drawPolygon(polygon);
+}
+
+void VisualizationWidget::drawPreRelocations(QPainter &painter, const QPointF &position, const float yaw, QColor color) const
+{
+    // Calculate the scaling factor based on the widget size and workspace dimensions
+    float scale = std::min(width(), height()) / (workspace_width > workspace_height ? workspace_width : workspace_height);
+    float diameter = obstacle_radius * 2 * scale;
+    float radius = obstacle_radius * scale;
+
+    float offset = diameter/2;
+
+    // Define the unrotated corners (relative to center)
+    QVector<QPointF> corners;
+    corners << QPointF(-radius, -radius)
+            << QPointF(radius, -radius)
+            << QPointF(radius, radius)
+            << QPointF(-radius, radius);
+
+    // Rotate and translate each corner
+    QPolygonF polygon;
+    for (const QPointF &pt : corners) {
+        double rotatedX = pt.x() * std::cos(-yaw) - pt.y() * std::sin(-yaw);
+        double rotatedY = pt.x() * std::sin(-yaw) + pt.y() * std::cos(-yaw);
+        polygon << QPointF(rotatedX + position.x(), rotatedY + position.y());
+    }
+
+    // Set up a dotted pen and no brush
+    QPen pen(color);
+    pen.setStyle(Qt::DashLine);
+    pen.setWidth(1);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    // Draw the dotted box
     painter.drawPolygon(polygon);
 }
 

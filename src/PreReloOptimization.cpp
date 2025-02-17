@@ -275,6 +275,7 @@ namespace ReloPush
         options.gradient_tolerance = 1e-4;
         options.parameter_tolerance = 1e-4;
         options.use_nonmonotonic_steps = true;
+        //options.num_threads = 4;
         //options.minimizer_type = ceres::LINE_SEARCH;
         /*
         options.linear_solver_type = ceres::DENSE_QR;

@@ -22,7 +22,8 @@ int main(int argc, char *argv[])
     //     return 1;
     // }
     // std::string filename = argv[1];
-    std::string filename = "obj3.txt";
+    std::string filename = "clear_to_corners.txt";
+    filename = "fix_this_nonopt.txt";
 
     // Data structures
     WorkspaceBoundary boundary;
@@ -40,9 +41,16 @@ int main(int argc, char *argv[])
 
     // 2) Perform the main planning/allocation loop
     std::vector<FinalAllocation> finalSequence;
-    performAllocations(boundary, objects, goals, objGoalPairs, finalSequence);
+    bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence);
 
     auto end = std::chrono::high_resolution_clock::now();
+
+    if(!ok)
+    {
+        // plan failed
+        std::cout << "Failed to find a solution" << std::endl;
+        return -1;
+    }
 
     // Calculate the elapsed time in milliseconds
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

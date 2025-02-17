@@ -169,6 +169,8 @@ enum pathType
 
 ReloPush::StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningContext& ctx);
 
+StateValidity isDubinsValid(reloDubinsPath& dubins_in, PlanningContext& ctx);
+
 std::vector<ReloPush::State> interpolateStraightPath(const ReloPush::State& start, const ReloPush::State& goal, float resolution);
 
 reloDubinsPath findDubins(ReloPush::State start, ReloPush::State goal, double turning_radius = 1.0, bool print_type = false);

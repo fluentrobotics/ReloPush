@@ -151,6 +151,7 @@ StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningConte
 }
 
 // For last ReloPush planning
+/*
 PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ObjectInfo movingObject,
                             int landingOrientationIndex, int finalOrientationIndex, double angleChange,
                              PlanningContext& ctx)
@@ -173,12 +174,44 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ObjectI
     auto from_pre_push = find_pre_push(from_center_pose, ctx.parameters.PrePush_dist);
 
     // final landing pose
-    auto to_center_pose = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(finalOrientationIndex));
+    //auto to_center_pose = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(finalOrientationIndex));
     // pre-push
-    auto to_pre_push = find_pre_push(to_center_pose, ctx.parameters.PrePush_dist);
+    auto to_pre_push = find_pre_push(preRelocation, ctx.parameters.PrePush_dist);
 
     // plan hybrid astar
     auto res = planHybridAstar(from_pre_push, to_pre_push, ctx, true);
+
+    // remove obs
+    ctx.env.remove_obs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
+
+    // restore object
+    ctx.env.add_obs(movingObject.getNominalPose());
+
+    // return result
+    return res;
+}
+*/
+
+// For last ReloPush planning
+PathPlanResultPtr check_approach_validity(ReloPush::State relocated_robot, ReloPush::State final_prepush, ReloPush::State preRelocation,
+                                          ObjectInfo movingObject,
+                                          int landingOrientationIndex, int finalOrientationIndex, double angleChange,
+                                          PlanningContext& ctx)
+{
+
+    // object to move
+    ObjectInfo object = movingObject;
+    // apply angle change
+    object.applyRotation(angleChange);
+
+    // remove object from initial pose
+    ctx.env.remove_obs(movingObject.getNominalPose());
+
+    // add to obstacles
+    ctx.env.add_obs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
+
+    // plan hybrid astar
+    auto res = planHybridAstar(relocated_robot, final_prepush, ctx, true);
 
     // remove obs
     ctx.env.remove_obs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
@@ -275,7 +308,6 @@ StateValidity addEdgeNormalMode(
 
 
     // Create start/goal states with (x, y, theta)
-    // If 'State' is your class from attached references:
     ReloPush::State start(data1.x, data1.y, data1.getActualOrientation());
     ReloPush::State goal(data2.x, data2.y, data2.getActualOrientation());
 
@@ -305,7 +337,7 @@ StateValidity addEdgeNormalMode(
         {
             g[e].weight = dubinsResult.second.lengthCost();           // path length from planner
             g[e].mode   = ConnectionMode::NORMAL_MODE;
-            g[e].paths = {EdgePath(true,dubinsResult.second)};    // store entire path for reference
+            g[e].paths = {std::make_shared<EdgePath>(EdgePath(true,dubinsResult.second))};    // store entire path for reference
             g[e].srcVertexData = g[v1];
             g[e].sinkVertexData = g[v2];
         }
@@ -329,15 +361,18 @@ StateValidity addEdgePrerelocation(
 
     // for debug
     bool deb = false;
-    if(data1.name == "box2" && data2.name == "goal3" && data1.orientationIndex == 3 && data2.orientationIndex==3)
+    if(data1.name == "box2" && data2.name == "goal2" && data1.orientationIndex == 0 && data2.orientationIndex==0)
         deb = true;
 
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
     ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation());
 
+
+    ReloPush::State goalPose_prepush = find_pre_push(goalPose, ctx.parameters.PrePush_dist);
+
     int nSides = data1.numberOfSides;
     //int startOriIndex = data1.orientationIndex; // the orientation that failed
-    double mapRes = 0.1; // or ctx.params.mapResolution, etc.
+    //double mapRes = 0.1; // or ctx.params.mapResolution, etc.
 
     // retrieve object info
     ObjectInfo movingObject = ctx.mo_list[data1.name];
@@ -366,8 +401,13 @@ StateValidity addEdgePrerelocation(
     double bestCost = std::numeric_limits<double>::infinity();
     bool foundAny = false;
     ReloPush::State bestRelocated; // store best relocation found
+    ReloPush::State bestRelocated_robot;
+    ReloPush::State bestPreRelocation_object;
+    ReloPush::State bestFinalPrepush;
+    ReloPush::State bestStart_prepush;
     int bestOrientationIndex = -1;
     reloDubinsPath final_push_path;
+    double bestPreRelo_orientation;
 
     double landingAngleChange = 0; // no change in landing orientation for this prerelocation
 
@@ -385,23 +425,39 @@ StateValidity addEdgePrerelocation(
         // We'll do a simple loop for some fixed # of steps (e.g. up to distance 5?)
         // or until we find a feasible relocation
         double maxShiftDist = 5.0;  // you decide
-        int maxSteps = static_cast<int>(maxShiftDist / mapRes);
+        int maxSteps = static_cast<int>(maxShiftDist / ctx.parameters.map_resolution);
 
         for (int step = 1; step <= maxSteps; step++)
         {
-            double shiftDist = step * mapRes;
-            double xNew = startPose.x + shiftDist * std::cos(sideAngle);
-            double yNew = startPose.y + shiftDist * std::sin(sideAngle);
+            double shiftDist = step * ctx.parameters.map_resolution;
+            //double xNew = startPose.x + shiftDist * std::cos(sideAngle);
+            //double yNew = startPose.y + shiftDist * std::sin(sideAngle);
+            // robot-centered path
+            ReloPush::State preStartPose = ReloPush::State(startPose.x,startPose.y,sideAngle); // prepush for this prerelocation
+            ReloPush::State startPose_prepush = find_pre_push(preStartPose, ctx.parameters.PrePush_dist);
+            double xNew = startPose_prepush.x + shiftDist * std::cos(sideAngle);
+            double yNew = startPose_prepush.y + shiftDist * std::sin(sideAngle);
 
             // Construct a new start
-            ReloPush::State relocated(xNew, yNew, startPose.yaw);
+            ReloPush::State relocated_robot(xNew, yNew, sideAngle); //landing at prerelocation
+            auto relocated_object = ReloPush::revert_pre_push(relocated_robot,ctx.parameters.PrePush_dist); // landing object at prerelocation
 
             // 2a) Quick boundary/collision checks if desired:
-            if (!ctx.env.stateValid(relocated))
+            if (!ctx.env.stateValid(relocated_object))
                 break; // no reason to keep going further in this direction
 
+            if (!ctx.env.stateValid(relocated_robot)) //todo: might by okay to skip this?
+                break;
+
+            ReloPush::State PreRelocation_object = ReloPush::State(relocated_object.x,relocated_object.y,startPose.yaw);
+
+            // check if final appraoch is valid
+            auto final_prepush = find_pre_push(PreRelocation_object, ctx.parameters.PrePush_dist);
+            if(!ctx.env.stateValid(final_prepush))
+                continue; // there may be other valid ones further toward this direction
+
             // 2b) Now check if is_longpath_case(...) says it's "good."
-            if (!is_longpath_case(relocated, goalPose, ctx.parameters.turning_rad_pair.push))
+            if (!is_longpath_case(final_prepush, goalPose_prepush, ctx.parameters.turning_rad_pair.push))
             {
                 // not a good candidate, try next step
                 continue;
@@ -412,13 +468,18 @@ StateValidity addEdgePrerelocation(
             double relocationDist = shiftDist;  // if we interpret shiftDist as Eucl. distance
             // Then plan a Dubins path from 'relocated' to 'goalPose'
             //   e.g. auto dubinsRes = PlanDubins(relocated, goalPose, ctx);
-            auto dubinsRes = PlanDubins(relocated, goalPose, ctx);
+            auto dubinsRes = PlanDubins(final_prepush, goalPose_prepush, ctx);
             // check validity, etc.
             if (dubinsRes.first == pathType::SP) // todo: duplicate path planning
             {
                 // dubins planner failed, skip
                 continue;
             }
+
+            // check if out-of-boundary
+            if(isDubinsValid(dubinsRes.second,ctx)!=StateValidity::valid)
+                continue;
+
             double dubinsCost = dubinsRes.second.lengthCost();
             double totalCost = relocationDist + dubinsCost;
 
@@ -426,7 +487,12 @@ StateValidity addEdgePrerelocation(
             if (totalCost < bestCost)
             {
                 bestCost = totalCost;
-                bestRelocated = relocated;
+                bestRelocated = relocated_object; //todo: Do we need both object and robot?
+                bestRelocated_robot = relocated_robot;
+                bestPreRelo_orientation = movingObject.getNominalPose().yaw; // no change in orientation in this method
+                bestPreRelocation_object = PreRelocation_object;
+                bestStart_prepush = startPose_prepush;
+                bestFinalPrepush = final_prepush;
                 foundAny = true;
                 bestOrientationIndex = i;
                 final_push_path = dubinsRes.second; // todo: break?
@@ -449,8 +515,8 @@ StateValidity addEdgePrerelocation(
     else
     {
         // check if approach to final push is feasible
-        auto planApproach = check_approach_validity(bestRelocated, movingObject, bestOrientationIndex,
-                                                    final_push_index, landingAngleChange, ctx);
+        auto planApproach = check_approach_validity(bestRelocated_robot, bestFinalPrepush, bestPreRelocation_object, movingObject,
+                                                    bestOrientationIndex, final_push_index, landingAngleChange, ctx);
 
         if(planApproach->validity == PlanValidity::success)
         {
@@ -464,8 +530,12 @@ StateValidity addEdgePrerelocation(
                 g[e].weight = bestCost;
                 g[e].mode   = ConnectionMode::PRE_RELOCATION;
                 g[e].preRelo.used        = true;
-                g[e].preRelo.xRelocated  = bestRelocated.x;
-                g[e].preRelo.yRelocated  = bestRelocated.y;
+                g[e].preRelo.xRelocated_robot  = bestRelocated.x;
+                g[e].preRelo.yRelocated_robot  = bestRelocated.y;
+                g[e].preRelo.yawReloacted_robot = bestPreRelo_orientation; // no orientation change for this method
+                g[e].preRelo.xRelocated_object = bestPreRelocation_object.x;
+                g[e].preRelo.yRelocated_object = bestPreRelocation_object.y;
+                g[e].preRelo.yawRelocated_object = bestPreRelocation_object.yaw;
                 g[e].preRelo.extraCost   = std::hypot(bestRelocated.x - startPose.x,
                                                     bestRelocated.y - startPose.y);
                 g[e].preRelo.relocatingIndex = bestOrientationIndex;
@@ -475,9 +545,9 @@ StateValidity addEdgePrerelocation(
 
                 // pre-relocation path
                 double preRelo_orientation = movingObject.getOrientation(bestOrientationIndex);
-                ReloPush::State preReloPose_from(startPose.x, startPose.y, preRelo_orientation);
-                ReloPush::State preReloPose_arrival(bestRelocated.x, bestRelocated.y, preRelo_orientation);
-                auto preReloDubins = findDubins(preReloPose_from, preReloPose_arrival);
+                //ReloPush::State preReloPose_from(bestStart_prepush.x, startPose_prepush.y, preRelo_orientation);
+                //ReloPush::State preReloPose_arrival(bestRelocated.x, bestRelocated.y, preRelo_orientation);
+                auto preReloDubins = findDubins(bestStart_prepush, bestRelocated_robot, ctx.parameters.turning_rad_pair.push);
                 EdgePath preReloPath(true, preReloDubins);
 
                 // approach path
@@ -486,14 +556,7 @@ StateValidity addEdgePrerelocation(
                 // final push path
                 EdgePath finalPushPath(true, final_push_path);
 
-                g[e].paths = {preReloPath, appPath, finalPushPath};
-
-
-                // Also store path, if you want:
-                //   The path from (start.x, start.y) -> (bestRelocated.x, bestRelocated.y)
-                //   is just a straight line, or you could store an actual "relocation path".
-                //   Then append the Dubins path from bestRelocated -> goalPose.
-                //   For example: g[e].paths = { relocationPath, dubinsRes.second };
+                g[e].paths = {std::make_shared<EdgePath>(preReloPath), std::make_shared<EdgePath>(appPath), std::make_shared<EdgePath>(finalPushPath)};
 
                 out_validity = StateValidity::valid;
             }
@@ -551,8 +614,10 @@ StateValidity addEdgePrerelocation_Optimization(
 
     // We'll keep track of the best relocation result
     ReloPush::OptResult bestOpt(0.0, 0.0, 0.0, bestCost,0);
+    double bestPreRelo_orientation = 0;
     int bestOrientationIndex = -1;
     reloDubinsPath bestDubins_prerelo, bestDubins_final;
+    ReloPush::State bestPreRelo_object;
 
     // 2) For each orientation axis
     for (int i = 0; i < nSides; ++i)
@@ -714,12 +779,14 @@ StateValidity addEdgePrerelocation_Optimization(
             //auto start_pivot = ReloPush::State(startPose.x,startPose.y,sideAngle);
             //auto startPrepush = find_pre_push(start_pivot,ctx.parameters.PrePush_dist);
             auto robot_prerelo = ReloPush::State(relocationX,relocationY,relocationYaw);
-            bestDubins_prerelo = findDubins(startPose_prepush, robot_prerelo, ctx.parameters.turning_rad_pair.push*0.99);
+            bestDubins_prerelo = findDubins(startPose_prepush, robot_prerelo, ctx.parameters.turning_rad_pair.push);
 
             // object PreRelo
             auto obj_prerelo = ReloPush::revert_pre_push(robot_prerelo,ctx.parameters.PrePush_dist);
+            bestPreRelo_object = obj_prerelo;
 
             double final_push_orientation = startPose.yaw + bestOpt.change_in_yaw;
+            bestPreRelo_orientation = movingObject.getNominalPose().yaw + bestOpt.change_in_yaw;
             auto final_push_pose = ReloPush::State(obj_prerelo.x,obj_prerelo.y,final_push_orientation);
 
             bestDubins_final = findDubins(find_pre_push(final_push_pose,ctx.parameters.PrePush_dist), find_pre_push(goalPose,ctx.parameters.PrePush_dist), ctx.parameters.turning_rad_pair.push);
@@ -756,8 +823,12 @@ StateValidity addEdgePrerelocation_Optimization(
                 g[e].mode   = ConnectionMode::PRE_RELOCATION;
 
                 g[e].preRelo.used            = true;
-                g[e].preRelo.xRelocated      = bestOpt.x;
-                g[e].preRelo.yRelocated      = bestOpt.y;
+                g[e].preRelo.xRelocated_robot      = bestOpt.x;
+                g[e].preRelo.yRelocated_robot      = bestOpt.y;
+                g[e].preRelo.yawReloacted_robot = bestPreRelo_orientation;
+                g[e].preRelo.xRelocated_object = bestPreRelo_object.x;
+                g[e].preRelo.yRelocated_object = bestPreRelo_object.y;
+                g[e].preRelo.yawRelocated_object = bestPreRelo_object.yaw;
                 g[e].preRelo.extraCost       = bestOpt.cost; // or bestCost if that is the final total
                 g[e].preRelo.relocatingIndex = bestOrientationIndex;
                 g[e].preRelo.relocatingIndex= bestOrientationIndex;
@@ -765,8 +836,8 @@ StateValidity addEdgePrerelocation_Optimization(
 
                 EdgePath preReloPath(true, bestDubins_prerelo);
                 EdgePath appPath(false, planApproach->getPathPtr(true));
-                EdgePath finalPushPah(true, bestDubins_final);
-                g[e].paths = {preReloPath, appPath, finalPushPah};
+                EdgePath finalPushPath(true, bestDubins_final);
+                g[e].paths = {std::make_shared<EdgePath>(preReloPath), std::make_shared<EdgePath>(appPath), std::make_shared<EdgePath>(finalPushPath)};;
                 g[e].srcVertexData = g[v1];
                 g[e].sinkVertexData = g[v2];
 
@@ -789,6 +860,11 @@ bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
 {
     const auto &data1 = g[v1];
     const auto &data2 = g[v2];
+
+    //for debug only
+    bool deb = false;
+    if(data1.name=="box2" && data2.name=="goal2")
+        deb = true;
 
     if(data1.name != data2.name)
     {

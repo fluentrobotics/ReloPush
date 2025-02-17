@@ -22,6 +22,52 @@ struct EdgePath
 
     EdgePath(bool is_pushing_in, EdgePathTypes path_in) : is_pushing(is_pushing_in), path(path_in)
     {}
+
+    ReloPush::StatePathPtr toStatePath(double resolution = 0.1) const
+    {
+        ReloPush::StatePathPtr statePath;
+        // Check if the variant holds a StatePathPtr
+        if (std::holds_alternative<ReloPush::StatePathPtr>(path))
+        {
+            statePath = std::get<ReloPush::StatePathPtr>(path);
+        }
+        // If needed, handle reloDubinsPath here (currently ignored)
+        else if(std::holds_alternative<reloDubinsPath>(path))
+        {
+            auto dubinsPath = std::get<reloDubinsPath>(path);
+            statePath = dubinsPath.interpolate(resolution); // todo: parse map resolution
+        }
+
+        return statePath;
+    }
+
+    void print(bool add_lines = true) const
+    {
+        auto path_to_print = toStatePath();
+        for(auto it : *path_to_print)
+        {
+            it.print(add_lines);
+        }
+    }
+
+    ReloPush::State getFirstWaypoint()
+    {
+        ReloPush::State out;
+
+        if (std::holds_alternative<ReloPush::StatePathPtr>(path))
+        {
+            auto tmp_path = std::get<ReloPush::StatePathPtr>(path);
+            out = tmp_path->at(0);
+        }
+        // If needed, handle reloDubinsPath here (currently ignored)
+        else if(std::holds_alternative<reloDubinsPath>(path))
+        {
+            auto tmp_path = std::get<reloDubinsPath>(path);
+            out = tmp_path.startState;
+        }
+
+        return out;
+    }
 };
 
 using EdgePathPtr = std::shared_ptr<EdgePath>;
@@ -45,8 +91,13 @@ enum class ConnectionMode
 struct PreRelocationInfo
 {
     bool used;               ///< true if we did pre-relocation
-    double xRelocated;       ///< relocated X
-    double yRelocated;       ///< relocated Y
+    double xRelocated_robot;       ///< relocated X
+    double yRelocated_robot;       ///< relocated Y
+    double yawReloacted_robot;
+    double xRelocated_object;
+    double yRelocated_object;
+    double yawRelocated_object;
+
     double extraCost;        ///< cost of that relocation alone
     int relocatingIndex;     ///< which orientation axis we used, e.g. i in [0..nSides-1]
     StateValidity reason;   ///< reason for prerelocation
@@ -124,17 +175,29 @@ struct EdgeData
     PreRelocationInfo preRelo;
 
     //PathData paths;
-    std::vector<EdgePath> paths; // Dubins or Waypoints
+    std::vector<EdgePathPtr> paths; // Dubins or Waypoints Segments
 
     EdgeData()
         : weight(0.0),
         mode(ConnectionMode::NONE)
     {
         preRelo.used        = false;
-        preRelo.xRelocated  = 0.0;
-        preRelo.yRelocated  = 0.0;
+        preRelo.xRelocated_robot  = 0.0;
+        preRelo.yRelocated_robot  = 0.0;
+        preRelo.yawReloacted_robot = 0.0;
+        preRelo.xRelocated_object = 0.0;
+        preRelo.yRelocated_object = 0.0;
+        preRelo.yawRelocated_object = 0.0;
         preRelo.extraCost   = 0.0;
         preRelo.relocatingIndex = -1;
+    }
+
+    void printPath(bool add_lines = true) const
+    {
+        for(auto& it : paths)
+        {
+            it->print(add_lines);
+        }
     }
 };
 

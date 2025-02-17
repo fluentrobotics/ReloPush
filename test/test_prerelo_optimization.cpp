@@ -141,6 +141,7 @@ int main(int argc, char** argv) {
     options.parameter_tolerance = 1e-4;
     options.minimizer_progress_to_stdout = true;
     options.use_nonmonotonic_steps = true;
+    options.num_threads = 4;
 
     //options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
     //options.trust_region_strategy_type = ceres::DOGLEG;

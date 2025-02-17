@@ -38,6 +38,8 @@ public:
     // Set goals
     void setGoals(const GoalMap &goals);
 
+    void setPreRelocations(const std::vector<ReloPush::State>& prerelocs);
+
     // Set colors
     void setInitialPoseColor(const QColor& color);
     void setGoalPoseColor(const QColor& color);
@@ -59,6 +61,7 @@ private:
     ReloPush::State goal_pose;
     std::vector<ReloPush::State> path;
     std::vector<ReloPush::State> obstacles;
+    std::vector<ReloPush::State> prerelocations;
     std::vector<size_t> path_segment_lengths;
     GoalMap goals;
 
@@ -74,6 +77,8 @@ private:
 
     // Obstacle parameters
     const float obstacle_radius = 0.075f;
+    const float prereloc_line_size = 0.2;
+
 
     // Coordinate mapping functions
     QPointF workspaceToWidget(float x, float y) const;
@@ -82,6 +87,7 @@ private:
     void drawOrientedArrow(QPainter& painter, const QPointF& position, float yaw, QColor color, bool isPath = false) const;
     void drawObstacle(QPainter &painter, const QPointF &position, const float yaw, QColor color) const;
     void drawGoals(QPainter &painter, const QPointF &position, const float yaw, QColor color) const;
+    void drawPreRelocations(QPainter &painter, const QPointF &position, const float yaw, QColor color) const;
 
     // Utility function to normalize yaw
     float normalizeYaw(float yaw) const;

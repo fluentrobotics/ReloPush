@@ -73,6 +73,15 @@ namespace ReloPush
             return outState;
         }
 
+        void print(bool add_line = true)
+        {
+            std::cout << "[" << x << ", " << y << ", " << yaw << "]";
+            if(add_line)
+                std::cout << "," << std::endl;
+            else
+                std::cout << ";";
+        }
+
         double x;
         double y;
         double yaw;

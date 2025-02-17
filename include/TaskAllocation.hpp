@@ -60,21 +60,23 @@ struct RowColCost
 
 using EdgePathList = std::shared_ptr<std::vector<EdgePath>>;
 
+/*
 struct EdgeDataPathPair
 {
-    EdgeData edgeData;
-    EdgePathList edgePathList;
+    EdgeData edgeData; // info on each edge
+    //EdgePathList edgePathList; // trajectory todo: this seems to be a dubplicate of edgeData.paths;
 };
+*/
 
 ReloPush::StatePathPtr EdgePathListToSinglePath(EdgePathList paths, double resolution);
 
-void PathsToSinglePath(std::vector<EdgeDataPathPair>& paths, ReloPush::StatePath& out_path, double interpolation_resolution);
+void PathsToSinglePath(std::vector<EdgeData>& paths, ReloPush::StatePath& out_path, double interpolation_resolution);
 
 using ObsReloPair = std::vector<std::pair<ReloPush::State,ReloPush::State>>;
 struct EdgeMatrixEntry
 {
     // A list of EdgeDataPathPair => each is (EdgeData + EdgePathList).
-    std::vector<EdgeDataPathPair> edgesInfo;
+    std::vector<EdgeData> edgesInfo;
 
     // Now we add a chain of VertexData if we want the entire route's vertices.
     std::vector<VertexData> vertexChain;
@@ -82,7 +84,7 @@ struct EdgeMatrixEntry
     std::vector<std::pair<ReloPush::State,ReloPush::State>> obsReloList; // pair of start and goal for each obs relo
 
     EdgeMatrixEntry(){}
-    EdgeMatrixEntry(std::vector<EdgeDataPathPair> edgeData_in) : edgesInfo(edgeData_in)
+    EdgeMatrixEntry(std::vector<EdgeData> edgeData_in) : edgesInfo(edgeData_in)
     {}
 };
 
@@ -109,9 +111,9 @@ public:
     std::string objectName;
     std::string goalName;
 
-    double bestCost;
-    int bestRow;
-    int bestCol;
+    //double bestCost;
+    //int bestRow;
+    //int bestCol;
 
     // The entire MatrixResult, which has costMat + sortedEntries
     MatrixResultPtr matrixResult;
@@ -145,6 +147,7 @@ struct FinalAllocation
     double cost;
     int row;
     int col;
+    std::vector<VertexData> vertexChain;
 
     // The actual states used
     ReloPush::State startPose;
@@ -162,7 +165,7 @@ struct FinalAllocation
     int relocatingIndex    = -1; // or double relocatingAngle
     */
 
-    std::vector<EdgeDataPathPair> paths; // contains edge information inc. mode
+    std::vector<EdgeData> paths; // contains edge information inc. mode
 
     EdgePathList obsReloPaths;
 
@@ -308,7 +311,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
 // ---------------------------------------------------------------------------
 // Helper Function 4: The main planning/allocation loop
 // ---------------------------------------------------------------------------
-void performAllocations(const WorkspaceBoundary &boundary,
+bool performAllocations(const WorkspaceBoundary &boundary,
                         std::unordered_map<std::string, ObjectInfo> &objects,
                         std::unordered_map<std::string, GoalInfo> &goals,
                         std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,

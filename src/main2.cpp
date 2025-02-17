@@ -263,6 +263,10 @@ void printFinalSequence(const std::vector<FinalAllocation>& finalSequence)
                   << ", cost = " << fa.cost << "\n"
                   << "  start yaw = " << fa.startPose.yaw
                   << ", goal yaw = " << fa.goalPose.yaw;
+
+        if(fa.paths.size()>1)
+            std::cout << " *PreRelo-used " << std::endl;
+
         if (fa.obsReloPaths->size() > 0)
             std::cout << "  ObsRelo steps: " << fa.obsReloPaths->size() << "\n";
         else
