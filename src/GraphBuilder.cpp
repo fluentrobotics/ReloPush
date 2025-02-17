@@ -593,7 +593,7 @@ StateValidity addEdgePrerelocation_Optimization(
 
     // for debug
     bool deb = false;
-    if(data1.name=="box2" && data2.name=="goal3" && data1.orientationIndex==0 && data2.orientationIndex == 0)
+    if(data1.name=="box1" && data2.name=="goal1" && data1.orientationIndex==3 && data2.orientationIndex == 3)
         deb = true;
 
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation()); // object
@@ -720,8 +720,6 @@ StateValidity addEdgePrerelocation_Optimization(
         //double y_init_guess = init_guess_xy.second;
         double x_init_guess = init_guess_prepush.x;
         double y_init_guess = init_guess_prepush.y;
-
-
 
         // Call your function:
         // (x_i, y_i, th_i, x2, y2, th2, sideAngle, R, x_init_guess, y_init_guess)

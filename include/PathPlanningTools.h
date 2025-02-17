@@ -721,6 +721,7 @@ public:
             ySucc = s.y + planCont.dx[act] * sin(-s.yaw) +
                     planCont.dy[act] * cos(-s.yaw);
             yawSucc = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act]);
+            double yawSucc_neg = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act] + M_PI); // need to negate for collision checking
             if (act != action) {  // penalize turning
                 g = g * Constants::penaltyTurning;
                 if (act >= 3)  // penalize change of direction
@@ -730,7 +731,8 @@ public:
                 g = g * Constants::penaltyReversing;
             }
             ReloPush::State tempState(xSucc, ySucc, yawSucc, s.time+1);
-            if (stateValid(tempState)) { // todo: use unifed parameters from planning context
+            ReloPush::State tempState_neg(xSucc, ySucc, yawSucc_neg, s.time+1);
+            if (stateValid(tempState_neg)) { // todo: use unifed parameters from planning context
                 neighbors.emplace_back(
                     Neighbor<ReloPush::State, Action, double>(tempState, act, g));
             }
@@ -824,6 +826,8 @@ public:
             Eigen::Matrix<float, 2, 1> obs;
             obs << it->x - s.x, it->y - s.y;
             auto rotated_obs = rot * obs;
+
+            /*
             if (rotated_obs(0) > -LB - obs_rad &&
                 rotated_obs(0) < LF + obs_rad &&
                 rotated_obs(1) > -car_width / 2.0 - obs_rad &&
@@ -831,7 +835,25 @@ public:
             {
                 //std::cout << "x: " << obs(0) << " y: " << obs(1) << std::endl;
                 //std::cout << "x: " << rotated_obs(0) << " y: " << rotated_obs(1) << std::endl;
-                return StateValiditySet(false, StateValidity::collision);;
+                return StateValiditySet(false, StateValidity::collision);
+            }
+            */
+            float dx = 0.0f;
+            if (rotated_obs(0) < -LB)
+                dx = -LB - rotated_obs(0);
+            else if (rotated_obs(0) > LF)
+                dx = rotated_obs(0) - LF;
+
+            // Compute differences for y:
+            float dy = 0.0f;
+            if (rotated_obs(1) < -car_width / 2.0)
+                dy = -car_width / 2.0 - rotated_obs(1);
+            else if (rotated_obs(1) > car_width / 2.0)
+                dy = rotated_obs(1) - car_width / 2.0;
+
+            // Collision if the distance is less than the obstacle's radius.
+            if (dx*dx + dy*dy <= obs_rad * obs_rad) {
+                return StateValiditySet(false, StateValidity::collision);
             }
         }
 
@@ -858,7 +880,7 @@ public:
         double x_ind = s.x / Constants::mapResolution;
         double y_ind = s.y / Constants::mapResolution;
         if (x_ind < 0 || x_ind >= m_dimx || y_ind < 0 || y_ind >= m_dimy)
-            return StateValiditySet(false, StateValidity::out_of_boundary);;
+            return StateValiditySet(false, StateValidity::out_of_boundary);
 
         return StateValiditySet(true, StateValidity::valid);
         // Eigen::Matrix2f rot;

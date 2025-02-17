@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
     // }
     // std::string filename = argv[1];
     std::string filename = "clear_to_corners.txt";
-    filename = "fix_this_nonopt.txt";
+    filename = "input3.txt";
 
     // Data structures
     WorkspaceBoundary boundary;

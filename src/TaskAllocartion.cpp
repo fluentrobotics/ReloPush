@@ -1133,7 +1133,7 @@ void printFinalSequence(const std::vector<FinalAllocation> &finalSequence)
             std::cout << std::endl;
         }
 
-        bool print_trajectory = false;
+        bool print_trajectory = true;
         if(print_trajectory)
         {
             if(fa.obsReloPaths->size() >0)
