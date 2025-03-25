@@ -68,6 +68,41 @@ struct EdgePath
 
         return out;
     }
+
+    ReloPush::State getLastWaypoint()
+    {
+        ReloPush::State out;
+
+        if (std::holds_alternative<ReloPush::StatePathPtr>(path))
+        {
+            auto tmp_path = std::get<ReloPush::StatePathPtr>(path);
+            out = tmp_path->back();
+        }
+        // If needed, handle reloDubinsPath here (currently ignored)
+        else if(std::holds_alternative<reloDubinsPath>(path))
+        {
+            auto tmp_path = std::get<reloDubinsPath>(path);
+            out = tmp_path.targetState;
+        }
+
+        return out;
+    }
+
+    double getLength(void)
+    {
+        double out_length;
+        if (std::holds_alternative<ReloPush::StatePathPtr>(path))
+        {
+            auto statePath = std::get<ReloPush::StatePathPtr>(path);
+            out_length = ReloPush::StatePathlength(*statePath);
+        }
+        else if(std::holds_alternative<reloDubinsPath>(path))
+        {
+            auto dubinsPath = std::get<reloDubinsPath>(path);
+            out_length = dubinsPath.lengthCost();
+        }
+        return out_length;
+    }
 };
 
 using EdgePathPtr = std::shared_ptr<EdgePath>;
@@ -222,6 +257,13 @@ struct ObjectGoalPair
 {
     std::string objectName;
     std::string goalName;
+
+    ObjectGoalPair()
+    {}
+
+    ObjectGoalPair(std::string obj, std::string goal)
+        : objectName(obj), goalName(goal)
+    {}
 };
 
 #endif // GRAPHDATA_HPP

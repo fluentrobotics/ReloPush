@@ -30,7 +30,12 @@ namespace ReloPush
 
         bool operator==(const State &s) const
         {
-            return std::tie(time, x, y, yaw) == std::tie(s.time, s.x, s.y, s.yaw);
+            //return std::tie(time, x, y, yaw) == std::tie(s.time, s.x, s.y, s.yaw);
+
+            if(abs(x - s.x) < 0.00000001 && abs(y - s.y) < 0.00000001)
+                return true;
+
+            return false;
         }
 
         bool isSamePose(const State &s) const
@@ -119,6 +124,7 @@ namespace ReloPush
     typedef std::shared_ptr<StatePath> StatePathPtr;
     typedef std::vector<StatePath> StatePathList;
     typedef std::shared_ptr<StatePathList> StatePathListPtr;
+    typedef std::vector<StatePathPtr> StatePathPtrList;
 }
 
 

@@ -237,6 +237,101 @@ namespace ReloPush
     }
 
 
+    // Tolerance for floating-point comparisons.
+    const double tol = 1e-6;
+
+    // Wrap an angle (in radians) to the interval [-pi, pi].
+    double wrapToPi(double angle) {
+        while (angle > M_PI) {
+            angle -= 2.0 * M_PI;
+        }
+        while (angle <= -M_PI) {
+            angle += 2.0 * M_PI;
+        }
+        return angle;
+    }
+
+    /*! planTurnAndOffsetBumper_R_givenBumperTheta computes the final bumper position
+    and the robot's final position given the car's turning maneuver constraints.
+    Inputs:
+    \tparam carPose      : Eigen::Vector3d {x, y, theta} representing the car's initial pose.
+    \tparam goalPose     : Eigen::Vector3d {x, y, theta} representing the goal pose.
+    \tparam bumperOffset : Distance from the turning finish point to the bumper (along the bumper's direction).
+    \tparam R            : The minimum turning radius of the car.
+    \tparam bumperTheta  : The given orientation (in radians) of the bumper.
+
+    Returns a std::pair where:
+    \tparam first  : pBumper_final (Eigen::Vector2d) is the final bumper position.
+    \tparam second : robot_final (Eigen::Vector2d) is the final robot (car) position.
+    */
+    std::pair<Eigen::Vector2d, Eigen::Vector2d>
+    FindInitialGuess(const Eigen::Vector3d& carPose,
+                                               const Eigen::Vector3d& goalPose,
+                                               double bumperOffset,
+                                               double R,
+                                               double bumperTheta)
+    {
+        // Extract initial position and orientation.
+        Eigen::Vector2d P0(carPose[0], carPose[1]);
+        double theta0 = carPose[2];
+
+        // Extract goal position and orientation.
+        Eigen::Vector2d P_goal(goalPose[0], goalPose[1]);
+        double theta_goal = goalPose[2];
+
+        // Compute the required change in orientation.
+        double deltaTheta = wrapToPi(theta_goal - bumperTheta);
+
+        // Arriving orientation of the robot after the turn.
+        double O_robot = theta0 + deltaTheta;
+
+        // Compute the turning finish point.
+        Eigen::Vector2d P_turn;
+        if (std::fabs(deltaTheta) < tol) {
+            // No turning maneuver needed.
+            P_turn = P0;
+        } else {
+            Eigen::Vector2d center;
+            if (deltaTheta > 0) {
+                // Left turn: center = P0 + R * [-sin(theta0), cos(theta0)]
+                center = P0 + R * Eigen::Vector2d(-std::sin(theta0), std::cos(theta0));
+            } else {
+                // Right turn: center = P0 + R * [ sin(theta0), -cos(theta0)]
+                center = P0 + R * Eigen::Vector2d(std::sin(theta0), -std::cos(theta0));
+            }
+            // Compute the starting angle from the turning center to the initial position.
+            double startAngle = std::atan2(P0[1] - center[1], P0[0] - center[0]);
+            // Compute the finish angle after turning by deltaTheta.
+            double finishAngle = startAngle + deltaTheta;
+            // The turning finish point on the circle.
+            P_turn = center + R * Eigen::Vector2d(std::cos(finishAngle), std::sin(finishAngle));
+        }
+
+        // Compute the bumper's starting position using the arriving robot orientation.
+        Eigen::Vector2d pBumper_start = P_turn + bumperOffset * Eigen::Vector2d(std::cos(O_robot), std::sin(O_robot));
+
+        // Determine the additional offset (along the car's original forward direction)
+        // so that the bumper becomes colinear with the goal line.
+        // The goal line is defined as: L(s) = P_goal + s * [cos(theta_goal), sin(theta_goal)].
+        Eigen::Vector2d d = P_goal - pBumper_start;
+        double t;
+        if (std::fabs(std::sin(theta_goal - theta0)) < tol) {
+            // If directions are nearly parallel, project d onto [cos(theta0), sin(theta0)].
+            t = d.dot(Eigen::Vector2d(std::cos(theta0), std::sin(theta0)));
+        } else {
+            t = ( std::sin(theta_goal) * d[0] - std::cos(theta_goal) * d[1] ) / std::sin(theta_goal - theta0);
+        }
+        double offset = t;
+
+        // Compute the final bumper position.
+        Eigen::Vector2d pBumper_final = pBumper_start + offset * Eigen::Vector2d(std::cos(theta0), std::sin(theta0));
+
+        // Compute the robot's final position by subtracting the bumper offset along the arriving orientation.
+        Eigen::Vector2d robot_final = pBumper_final - bumperOffset * Eigen::Vector2d(std::cos(O_robot), std::sin(O_robot));
+
+        return std::make_pair(pBumper_final, robot_final);
+    }
+
 
     /*! \brief Find a Pre-Relocation by Optimization
         returns a OptResult
@@ -250,10 +345,12 @@ namespace ReloPush
                                             double x2, double y2, double th2,
                                             double th_ip, double R, double x_init_guess, double y_init_guess, PlanningContext& ctx)
     {
+        /*  For unique orientation
         double param[2];
         // Suppose we start at an initial guess:
         param[0] = x_init_guess;  // x1 init
         param[1] = y_init_guess;  // y1 init
+
 
         // 3) Build the problem
         ceres::Problem problem;
@@ -267,6 +364,19 @@ namespace ReloPush
 
         // Add residual block
         problem.AddResidualBlock(cost_function, nullptr, param);
+        */
+
+        double param[3];
+        param[0] = x_init_guess;
+        param[1] = y_init_guess;
+        param[2] = th2 + (th_ip - th_i); //colinear
+
+        ceres::Problem problem;
+        ceres::CostFunction* cost_function =
+            new ceres::AutoDiffCostFunction<CostFunctorSE2, 1, 2>(
+                new CostFunctorSE2(x_i, y_i, th_i, x2, y2, th2, th_ip, R,ctx.parameters.PrePush_dist, ctx.parameters.boundary));
+        problem.AddResidualBlock(cost_function, nullptr, param);
+
 
         // 4) Configure the solver
         ceres::Solver::Options options;
@@ -306,6 +416,9 @@ namespace ReloPush
         options.minimizer_type = ceres::LINE_SEARCH;
         options.max_num_line_search_step_size_iterations = 5;
         options.line_search_direction_type = ceres::LBFGS;
+        options.function_tolerance = 1e-8;  // Rough convergence for the next optimization
+        options.gradient_tolerance = 1e-8;
+        options.parameter_tolerance = 1e-8;
         ceres::Solve(options, &problem, &summary);
         //std::cout << summary.BriefReport() << "\n";
         parameters = &param[0];

@@ -1,5 +1,6 @@
 #include <GraphBuilder.hpp>
 #include "InputParser.hpp"
+#include <batchInstanceParcer.hpp>
 #include <iostream>
 #include <vector>
 #include <PlanningContext.hpp>
@@ -7,6 +8,7 @@
 #include <TaskAllocation.hpp>
 #include <Visualization/VisualizeResults.h>
 #include <chrono>
+
 
 // ---------------------------------------------------------------------------
 // Main Function
@@ -16,39 +18,50 @@ int main(int argc, char *argv[])
     google::InitGoogleLogging(argv[0]);
     QApplication app(argc, argv);
 
-    // Example: You could allow a command-line argument or use a fixed filename
-    // if (argc < 2) {
-    //     std::cerr << "Usage: " << argv[0] << " <input_file>\n";
-    //     return 1;
-    // }
-    // std::string filename = argv[1];
-    std::string filename = "clear_to_corners.txt";
-    filename = "input3.txt";
+    std::string filename = "iros_obj10.txt";
+    int instance_ind = 2;
+    bool use_opt = true;
 
-    // Data structures
-    WorkspaceBoundary boundary;
+    // Data to parse
+    WorkspaceBoundary boundary(4,5.2); // todo: parse from file
     std::unordered_map<std::string, ObjectInfo> objects;
     std::unordered_map<std::string, GoalInfo>   goals;
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs;
+    std::vector<ReloPush::State> robots;
 
+
+    if(argc > 3) // parse from arg
+    {
+        handle_args(argc, argv, filename, instance_ind, use_opt);
+    }
+
+    Color::println("\n=== " + filename + " ind: " + std::to_string(instance_ind) + " ===",Color::GREEN);
+    Color::println("Use Optimized PreRelocation? " + std::to_string(use_opt),Color::YELLOW);
+
+    parse_instance_from_file(filename, instance_ind, objects, goals, robots, objGoalPairs);
+
+
+    /*
     // 1) Parse and initialize
     if (!parseAndInitialize(filename, boundary, objects, goals, objGoalPairs))
     {
         return 1;
     }
+    */
+
 
     auto start = std::chrono::high_resolution_clock::now();
 
     // 2) Perform the main planning/allocation loop
     std::vector<FinalAllocation> finalSequence;
-    bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence);
+    bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence, use_opt);
 
     auto end = std::chrono::high_resolution_clock::now();
 
     if(!ok)
     {
         // plan failed
-        std::cout << "Failed to find a solution" << std::endl;
+        Color::println("Failed to find a solution",Color::YELLOW,Color::BG_RED);
         return -1;
     }
 
@@ -56,13 +69,17 @@ int main(int argc, char *argv[])
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "Elapsed time: " << duration.count() << " ms" << std::endl;
 
+
     // 3) Print the final sequence
     printFinalSequence(finalSequence);
 
     // 4) Visualization
     if (!finalSequence.empty())
     {
-        visualizeResults(finalSequence, app);
+       //visualizeResults(finalSequence, app);
     }
+
+    writeFinalSequenceSummary(filename, instance_ind,
+                              static_cast<double>(duration.count()), finalSequence, use_opt);
 
 }

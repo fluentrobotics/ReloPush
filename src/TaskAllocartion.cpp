@@ -85,6 +85,29 @@ ReloPush::StatePathPtr EdgePathListToSinglePath(EdgePathList paths, double resol
     return std::make_shared<ReloPush::StatePath>(out_path);
 }
 
+double FinalAllocation::getPushingLength(void) const
+{
+    double obsPush = 0;
+    double taskPush = 0;
+
+    // sum obs push
+    for(auto& it : *obsReloPaths)
+    {
+        if(it.is_pushing)
+            obsPush += it.getLength();
+    }
+
+    for(auto& it : paths) // for each edge
+    {
+        for(auto& it2 : it.paths) // for each path
+        {
+            if(it2->is_pushing)
+                taskPush += it2->getLength();
+        }
+    }
+
+    return obsPush + taskPush;
+}
 
 std::pair<ReloPush::StatePathPtr,std::vector<size_t>> FinalAllocation::toSinglePathPtr(double interpolation_resolution)
 {
@@ -279,7 +302,7 @@ ReloPush::StatePathPtr Find_ObsRelo(ObjectInfo& mo, PlanningContext& ctx, std::v
             StateValidity validity = StateValidity::valid;
 
 
-            auto obs = ctx.env.get_obs();
+            auto obs = ctx.env_push.get_obs();
             // add path points as obstacles
             std::vector<ReloPush::State> pathObs;
             std::vector<size_t> path_sizes; // dummy
@@ -487,12 +510,6 @@ MatrixResultPtr computeCostMatrixWithPaths(
             result->costMat(i, j) = d;
             if (d < 1e9)  // finite
             {
-                // Build RowColCost
-                RowColCost rcc;
-                rcc.row  = static_cast<int>(i);
-                rcc.col  = static_cast<int>(j);
-                rcc.cost = d;
-                rowColList.push_back(rcc);
 
                 // Reconstruct path from (src -> goalV)
                 // We'll gather a list of EdgeDataPathPair
@@ -579,6 +596,13 @@ MatrixResultPtr computeCostMatrixWithPaths(
                         chain.push_back(ed.sinkVertexData);
                     }
                 }
+
+                // Build RowColCost
+                RowColCost rcc;
+                rcc.row  = static_cast<int>(i);
+                rcc.col  = static_cast<int>(j);
+                rcc.cost = result->costMat(i, j);
+                rowColList.push_back(rcc);
 
                 // 4c) Store in pathMat: i.e. the entire path of edges from i->j
                 (*pathMatPtr)[i][j] = std::move(edgesInfo);
@@ -857,16 +881,16 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
                           const ReloPush::State &objNewState)
 {
     // 1) Environment updates
-    planCtx.env.remove_obs(fromObs);
-    planCtx.env.add_obs(toObs);
+    planCtx.removeObs(fromObs);
+    planCtx.addObs(toObs);
 
     // 2) Attempt path planning (after obs relo)
     auto res = planHybridAstar(fromState_prepush, toState_prepush, planCtx, true);
     if (!res->success)
     {
         // revert environment changes
-        planCtx.env.add_obs(fromObs);
-        planCtx.env.remove_obs(toObs);
+        planCtx.addObs(fromObs);
+        planCtx.removeObs(toObs);
 
         return res;
     }
@@ -896,7 +920,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
                             std::vector<EdgePath> &ObsReloPathList,
                             LowestCostInfo &bestPick,
                             std::unordered_map<std::string, ReloPush::State> &ToUpdate,
-                            std::string &failedObjectName, ObjectMap objects, EdgeMatrixEntry& bestMatEntry)
+                            std::string &failedObjectName, ObjectMap objects, EdgeMatrixEntry& bestMatEntry, ReloPush::StatePathPtrList& transitPaths)
 {
     // Attempt to find the absolute lowest cost
     bestPick = findAbsoluteLowestCost(pairResults);
@@ -932,6 +956,11 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
         auto fromState_pre = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
         auto toState_pre   = find_pre_push(toState, planCtx.parameters.PrePush_dist);
 
+        // check start valid
+        auto sv = planCtx.env_push.stateValid(fromState_pre);
+        if(!sv)
+            return false;
+
         // Attempt relocation
         auto res = attemptObsRelocation(planCtx,
                                             fromState_pre, toState_pre,
@@ -964,7 +993,10 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
         auto fromState_pre = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
         //auto toState_pre   = find_pre_push(final_approach_obs, planCtx.parameters.PrePush_dist);
         auto toState_pre = bestPairEntry.matrixResult->getBestPathMatEntry().edgesInfo[0].paths[0]->getFirstWaypoint(); // picked by sorted entries
-
+        // check start valid
+        auto sv = planCtx.env_push.stateValid(fromState_pre);
+        if(sv.get_validity()==StateValidity::out_of_boundary)
+            return false;
 
         auto res = attemptObsRelocation(planCtx,
                                             fromState_pre, toState_pre,
@@ -982,6 +1014,29 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
         }
     }
 
+    // For multiple edges, check and plan transit between the two
+    if(bestMatEntry.edgesInfo.size()>1)
+    {
+        transitPaths.clear();
+        for(size_t n=1; n<bestMatEntry.edgesInfo.size(); n++)
+        {
+            auto last_goal = bestMatEntry.edgesInfo[n-1].paths.back()->getLastWaypoint();
+            auto this_start = bestMatEntry.edgesInfo[n].paths.front()->getFirstWaypoint();
+
+            auto res = planHybridAstar(last_goal,this_start,planCtx,true);
+
+            if(!res->success)
+            {
+                return false;
+            }
+            else
+            {
+                // add transit path
+                transitPaths.push_back(res->getPathPtr(true));
+            }
+        }
+    }
+
     return true;
 }
 
@@ -992,7 +1047,8 @@ bool performAllocations(const WorkspaceBoundary &boundary,
                         std::unordered_map<std::string, ObjectInfo> &objects,
                         std::unordered_map<std::string, GoalInfo> &goals,
                         std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
-                        std::vector<FinalAllocation> &finalSequence)
+                        std::vector<FinalAllocation> &finalSequence,
+                        bool& use_opt)
 {
     GoalMap delivered_objs;
 
@@ -1008,7 +1064,7 @@ bool performAllocations(const WorkspaceBoundary &boundary,
         // (b) Setup PlanningParameters and context
         PlanningParameters params;
         params.boundary = boundary;
-        PlanningContext planCtx(params, objects, delivered_objs);
+        PlanningContext planCtx(params, objects, delivered_objs, use_opt);
 
         // (d) Build edges
         buildAllEdges(g, planCtx);
@@ -1021,6 +1077,7 @@ bool performAllocations(const WorkspaceBoundary &boundary,
         std::vector<EdgePath> ObsReloPathList;
         std::unordered_map<std::string, ReloPush::State> ToUpdate;
         EdgeMatrixEntry bestMatEntry;
+        ReloPush::StatePathPtrList transitPaths;
 
         // Take a snapshot of the planning context (for FinalAllocation)
         PlanningContext ctxSnapshot(planCtx);
@@ -1031,7 +1088,7 @@ bool performAllocations(const WorkspaceBoundary &boundary,
         {
             isFeasible =  findFeasibleAllocation(pairResults, objGoalPairs,
                                                      planCtx, ObsReloPathList,
-                                                         bestPick, ToUpdate, /*out*/bestPick.objectName, objects, bestMatEntry);
+                                                         bestPick, ToUpdate, /*out*/bestPick.objectName, objects, bestMatEntry, transitPaths);
             if(isFeasible)
                 break;
 
@@ -1081,6 +1138,7 @@ bool performAllocations(const WorkspaceBoundary &boundary,
         chosen.row    = bestPick.row;
         chosen.col    = bestPick.col;
         chosen.vertexChain = bestMatEntry.vertexChain;
+        chosen.transitPaths = transitPaths;
 
         chosen.startPose = ReloPush::State(chosen.object.x, chosen.object.y,
                                            chosen.object.getOrientation(chosen.row));
@@ -1133,7 +1191,7 @@ void printFinalSequence(const std::vector<FinalAllocation> &finalSequence)
             std::cout << std::endl;
         }
 
-        bool print_trajectory = true;
+        bool print_trajectory = false;
         if(print_trajectory)
         {
             if(fa.obsReloPaths->size() >0)
@@ -1142,14 +1200,24 @@ void printFinalSequence(const std::vector<FinalAllocation> &finalSequence)
                 it.print();
 
             std::cout << "Path" << std::endl;
-            for(auto& it : fa.paths)
+            for(size_t n=0; n<fa.paths.size(); n++)
             {
-                it.printPath();
+                if(n!=0)
+                {
+                    std::cout << "transit " << fa.transitPaths[n-1]->size() << std::endl;
+                }
+
+                fa.paths[n].printPath();
                 std::cout << std::endl;
             }
-
-
-
         }
     }
+
+    // calculate total cost
+    double cost_sum = 0;
+    for(auto& it : finalSequence)
+        cost_sum += it.cost;
+
+    std::cout << "Total Cost: " << cost_sum << std::endl;
+
 }

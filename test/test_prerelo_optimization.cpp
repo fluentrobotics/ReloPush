@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
 
     // 1) Our "constants" from your example:
 
-
+    /*
     double x_i   = 1.2;       // Starting x
     double y_i   = 3.1;       // Starting y
     double th_i  = 0;    // Starting orientation
@@ -41,6 +41,17 @@ int main(int argc, char** argv) {
     double x2    = 3.6;       // Goal x
     double y2    = 1.5;       // Goal y
     double th2   = 0;   // Goal orientation
+    double R     = 1.9188; // turning radius
+    */
+
+
+    double x_i   = 1.2;       // Starting x
+    double y_i   = 1;       // Starting y
+    double th_i  = 4.7123;    // Starting orientation
+    double th_ip = M_PI/2;  // Secondary heading
+    double x2    = 1.7;       // Goal x
+    double y2    = 1.5;       // Goal y
+    double th2   = 5.4124;   // Goal orientation
     double R     = 1.9188; // turning radius
 
 
@@ -89,7 +100,7 @@ int main(int argc, char** argv) {
     // Find a good initial guess for this optimization
     // try intersection
 
-    double pre_push_dist = 0.54;
+    double pre_push_dist = 0.38+0.075;
     // Get pre-push
     auto pushPose = ReloPush::State(x_i,y_i,th_ip);
     //auto Start_prepush = find_pre_push(pushPose, pre_push_dist);
@@ -97,25 +108,39 @@ int main(int argc, char** argv) {
     // Pre-push
     double start_prepush_x = pushPose.x - pre_push_dist * cos(pushPose.yaw);
     double start_prepush_y = pushPose.y - pre_push_dist * sin(pushPose.yaw);
-
+    std::cout << "Start Prepush: " << start_prepush_x << ", " << start_prepush_y << std::endl;
 
     // Calculate the initial guess for the intersection
+
     std::pair<double, double> intersection = ReloPush::find_init_guess_intersection(
         x2, y2, th2,
         start_prepush_x, start_prepush_y, th_ip,
         R, (th_ip-th_i)
         );
 
+
+    auto init_guess = ReloPush::FindInitialGuess(Eigen::Vector3d(start_prepush_x,start_prepush_y,th_ip),Eigen::Vector3d(x2,y2,th2),pre_push_dist,R,th_i);
+
+
     // Find intersection prepush (to be discussed further)
-    double x1c,y1c;
-    worldToLocal<double>(intersection.first, intersection.second, start_prepush_x, start_prepush_y, th_ip, &x1c, &y1c);
-    auto locOriRes = computeLocalOrientation<double>(x1c, y1c, R);
+    //double x1c,y1c;
+    //worldToLocal<double>(intersection.first, intersection.second, start_prepush_x, start_prepush_y, th_ip, &x1c, &y1c);
+    //auto locOriRes = computeLocalOrientation<double>(x1c, y1c, R);
 
     //auto init_guess_prepush = find_pre_push(ReloPush::State(intersection.first, intersection.second,th_ip + locOriRes.th1pc), pre_push_dist);
 
-    param[0] = intersection.first - pre_push_dist * cos(th_ip + locOriRes.th1pc);
-    param[1] = intersection.second - pre_push_dist * sin(th_ip + locOriRes.th1pc);
+    //double init_x = intersection.first - pre_push_dist * cos(th_ip + locOriRes.th1pc);
+    //double init_y = intersection.second - pre_push_dist * sin(th_ip + locOriRes.th1pc);
+    double init_x = init_guess.second.x();
+    double init_y = init_guess.second.y();
 
+    std::cout << "Initial Guess: " << init_x << ", " << init_y << std::endl;
+
+    double goal_prepush_x = x2 - pre_push_dist * cos(th2);
+    double goal_prepush_y = y2 - pre_push_dist * sin(th2);
+
+    param[0] = init_x;
+    param[1] = init_y;
 
     //param[0] = 1.16;
     //param[1] = 3.17;
@@ -190,13 +215,6 @@ int main(int argc, char** argv) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "Elapsed time: " << duration.count() << " ms" << std::endl;
 
-    // 6) Print results
-    std::cout << summary.BriefReport() << "\n";
-    std::cout << "Final x1,y1 (Robot): " << param[0] << ", " << param[1] << "\n";
-    parameters = &param[0];
-    cost_function->Evaluate(&parameters, cost_eval, nullptr);
-    std::cout << "Final cost = " << cost_eval[0] << "\n";
-
     // Start Prepush
     double x_i_prepush = x_i - pre_push_dist * cos(th_ip);
     double y_i_prepush = y_i - pre_push_dist * sin(th_ip);
@@ -205,9 +223,67 @@ int main(int argc, char** argv) {
     // Optimized robot relo
     ReloPush::State robotRelo(param[0],param[1],yaw_l);
 
+    // 6) Print results
+    std::cout << summary.BriefReport() << "\n";
+    std::cout << "Final x1,y1 (Robot): " << param[0] << ", " << param[1] << ", landing_yaw: " << yaw_l << "\n";
+    parameters = &param[0];
+    cost_function->Evaluate(&parameters, cost_eval, nullptr);
+    std::cout << "Final cost = " << cost_eval[0] << "\n\n";
+
+
+    double init_guess_th = th2 + (th_ip-th_i);
+    std::cout << "=== SE2 Optimization ===" << std::endl;
+    // run SE2 optimization
+    double paramSE2[3] = {init_x,init_y,init_guess_th}; // init from guess
+    //double paramSE2[3] = {goal_prepush_x,goal_prepush_y,th2}; // init from goal
+    //double paramSE2[3] = {start_prepush_x,start_prepush_y,th_ip}; // init from start
+    //double paramSE2[3] = {param[0],param[1],yaw_l};
+
+    ceres::Solver::Summary summarySE2;
+    ceres::Problem problemSE2;
+    ceres::CostFunction* cost_function_se2 =
+        new ceres::AutoDiffCostFunction<ReloPush::CostFunctorSE2, 1,3>(
+        new ReloPush::CostFunctorSE2(x_i,y_i,th_i,x2,y2,th2,th_ip,R,pre_push_dist,ws));
+
+    problemSE2.AddResidualBlock(cost_function_se2, nullptr, paramSE2);
+    ceres::Solver::Options optionsSE2;
+    optionsSE2.linear_solver_type = ceres::DENSE_QR;
+    optionsSE2.function_tolerance = 1e-4;  // Ensure convergence
+    optionsSE2.gradient_tolerance = 1e-4;
+    optionsSE2.parameter_tolerance = 1e-4;
+    optionsSE2.minimizer_progress_to_stdout = true;
+    optionsSE2.use_nonmonotonic_steps = true;
+    optionsSE2.num_threads = 4;
+    optionsSE2.initial_trust_region_radius = 1;
+
+    ceres::Solve(optionsSE2, &problemSE2, &summarySE2);
+
+    optionsSE2.minimizer_type = ceres::LINE_SEARCH;
+    optionsSE2.max_num_line_search_step_size_iterations = 5;
+    optionsSE2.line_search_direction_type = ceres::BFGS;
+    optionsSE2.function_tolerance = 1e-8;  // Ensure convergence
+    optionsSE2.gradient_tolerance = 1e-8;
+    optionsSE2.parameter_tolerance = 1e-8;
+
+    ceres::Solve(optionsSE2, &problemSE2, &summarySE2);
+
+
+    std::cout << summary.FullReport() << "\n";
+    std::cout << "Final SE2 x1,y1,th1 (Robot): " << paramSE2[0] << ", " << paramSE2[1] << ", " << paramSE2[2] << "\n";
+    double cost_eval_se2[1];
+    double* parametersSE2 = &paramSE2[0];
+    cost_function_se2->Evaluate(&parametersSE2, cost_eval_se2, nullptr);
+    std::cout << "Final cost SE2 = " << cost_eval_se2[0] << "\n";
 
 
 
+    // object prerelo
+    double obj_prerelo_x = paramSE2[0] + pre_push_dist * cos(paramSE2[2]);
+    double obj_prerelo_y = paramSE2[1] + pre_push_dist * sin(paramSE2[2]);
+    // final prepush
+    double final_push_th = th_i + (paramSE2[2]-th_ip);
+    double final_prepush_x = obj_prerelo_x - pre_push_dist * cos(final_push_th);
+    double final_prepush_y = obj_prerelo_y - pre_push_dist * sin(final_push_th);
 
     return 0;
 }

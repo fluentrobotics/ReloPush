@@ -36,6 +36,11 @@ struct ObjectInfo
         numberOfSides = 4;
     }
 
+    ObjectInfo(std::string name_in, double x_in, double y_in, double nominal_yaw, int nSide, double radius)
+        : name(name_in), x(x_in), y(y_in), nominalOrientation(nominal_yaw), numberOfSides(nSide),enclosingRadius(radius)
+    {
+    }
+
     double getOrientation(int orientationIndex) const
     {
         // If numberOfSides <= 0, fallback or just return nominalOrientation
@@ -84,6 +89,15 @@ struct GoalInfo
     double nominalOrientation;
     int numberOfSides;
     double enclosingRadius;
+
+    GoalInfo()
+    {
+    }
+
+    GoalInfo(std::string name_in, double x_in, double y_in, double nominal_yaw, int nSide, double radius)
+    : name(name_in), x(x_in), y(y_in), nominalOrientation(nominal_yaw), numberOfSides(nSide),enclosingRadius(radius)
+    {
+    }
 
     double getOrientation(int orientationIndex) const
     {

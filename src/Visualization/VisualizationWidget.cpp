@@ -207,7 +207,7 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
             size_t index = 0;
             // Predefined list of segment colors (customize as needed)
             std::vector<QColor> segmentColors = { QColor("#FCD0A1"), QColor("#E07A5F"),
-                                                 QColor("#798086"), QColor("#81B29A"), Qt::darkCyan };
+                                                 QColor("#798086"), QColor("#81B29A"), Qt::darkCyan ,Qt::black, Qt::darkGreen};
             for (size_t seg = 0; seg < path_segment_lengths.size(); seg++) {
                 size_t segLength = path_segment_lengths[seg];
                 QColor segColor = segmentColors[seg % segmentColors.size()];
@@ -253,8 +253,8 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
     }
 
     // Draw initial and goal poses.
-    drawOrientedArrow(painter, mapCoord(initial_pose.x, initial_pose.y), initial_pose.yaw, initial_pose_color, false);
-    drawOrientedArrow(painter, mapCoord(goal_pose.x, goal_pose.y), goal_pose.yaw, goal_pose_color, false);
+    //drawOrientedArrow(painter, mapCoord(initial_pose.x, initial_pose.y), initial_pose.yaw, initial_pose_color, false);
+    //drawOrientedArrow(painter, mapCoord(goal_pose.x, goal_pose.y), goal_pose.yaw, goal_pose_color, false);
 
     // Draw additional elements (goals, obstacles, prerelocations) as needed...
     // For example, if you have goals stored in a container:

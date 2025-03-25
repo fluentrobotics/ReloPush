@@ -152,7 +152,7 @@ StateValidity isDubinsValid(reloDubinsPath& dubins_in, PlanningContext& ctx)
                               ctx.parameters.turning_rad_pair.push);
 
             ReloPush::State tempState(interState->getX(), interState->getY(),interState->getYaw());
-            auto mid_validity = ctx.env.stateValid(tempState);
+            auto mid_validity = ctx.env_push.stateValid(tempState);
             if(!mid_validity)
                 return mid_validity.get_validity();
         }

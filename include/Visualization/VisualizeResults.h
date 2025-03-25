@@ -36,7 +36,7 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
 
     // Define workspace size (example)
     float workspace_width  = 4.0f;
-    float workspace_height = 5.0f;
+    float workspace_height = 5.2f;
 
     // We store windows in a vector so they won't go out of scope
     // before the Qt event loop (`app.exec()`) finishes.
@@ -78,7 +78,7 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
         }
 
         // 4) Retrieve obstacles from snapshot
-        auto obstaclesSet = finalSequence[i].snapshot.env.get_obs();
+        auto obstaclesSet = finalSequence[i].snapshot.env_push.get_obs();
         std::vector<ReloPush::State> obstacles(
             obstaclesSet.begin(), obstaclesSet.end()
             );

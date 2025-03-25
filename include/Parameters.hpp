@@ -39,9 +39,10 @@ struct PlanningParameters
     float map_resolution;
     float car_width;
     float obs_rad;
-    float LF;
+    float LF_push;
+    float LF_nonpush;
     float LB;
-    double PrePush_dist = 0.54;
+    double PrePush_dist = 0.54; //0.54
 
     // Possibly other fields:
     // double normalModeThreshold;

@@ -127,7 +127,7 @@ StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningConte
             main_push_path[np] = tempState; // failed State at the last
 
             // check boundary
-            auto tempValid = ctx.env.stateValid(tempState, ctx.parameters.car_width, ctx.parameters.obs_rad,ctx.parameters.obs_rad, ctx.parameters.LB); // obs as LF
+            auto tempValid = ctx.env_push.stateValid(tempState, ctx.parameters.car_width, ctx.parameters.obs_rad,ctx.parameters.LF_push, ctx.parameters.LB); // obs as LF
             if(!tempValid)
             {
                 // reason for failure
@@ -201,23 +201,24 @@ PathPlanResultPtr check_approach_validity(ReloPush::State relocated_robot, ReloP
 
     // object to move
     ObjectInfo object = movingObject;
+    // obstacle temporary removal
+    //auto temp_obs = movingObject.getNominalPose();
+    // remove object from initial pose
+    //ctx.env.remove_obs(temp_obs);
     // apply angle change
     object.applyRotation(angleChange);
 
-    // remove object from initial pose
-    ctx.env.remove_obs(movingObject.getNominalPose());
-
     // add to obstacles
-    ctx.env.add_obs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
+    ctx.addObs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
 
     // plan hybrid astar
     auto res = planHybridAstar(relocated_robot, final_prepush, ctx, true);
 
     // remove obs
-    ctx.env.remove_obs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
+    ctx.removeObs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
 
     // restore object
-    ctx.env.add_obs(movingObject.getNominalPose());
+    //ctx.env.add_obs(temp_obs);
 
     // return result
     return res;
@@ -246,11 +247,11 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ReloPus
     object.applyRotation(angleChange);
 
     // remove object from initial pose
-    ctx.env.remove_obs(movingObject.getNominalPose());
+    //ctx.env.remove_obs(movingObject.getNominalPose());
 
     auto obj_prerelo = ReloPush::revert_pre_push(preRelocation,ctx.parameters.PrePush_dist);
     // add to obstacles
-    ctx.env.add_obs(obj_prerelo);
+    ctx.addObs(obj_prerelo);
 
     // departing pose
     //auto from_center_pose = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex));
@@ -266,10 +267,10 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ReloPus
     auto res = planHybridAstar(preRelocation, approachingPose, ctx, true); // start pose is already the car pose
 
     // remove obs
-    ctx.env.remove_obs(obj_prerelo);
+    ctx.removeObs(obj_prerelo);
 
     // restore object
-    ctx.env.add_obs(movingObject.getNominalPose());
+    //ctx.env.add_obs(movingObject.getNominalPose());
 
     // return result
     return res;
@@ -292,24 +293,29 @@ StateValidity addEdgeNormalMode(
     const auto &data2 = g[v2];
 
     // for debug only
-    int deb = -1;
-    if(data1.name == "box1" && data2.name == "goal1" && data1.orientationIndex==3 && data2.orientationIndex == 2)
-        deb = 1;
+    bool deb = false;
+    if(data1.name == "box1" && data2.name == "goal2" && data1.orientationIndex==0 && data2.orientationIndex == 0)
+        deb = true;
 
     // 1) Temporarily remove start from obstacle. If target is also an obstacle, remove it, too.
     std::vector<ReloPush::State> took_out(0);
     took_out.push_back(ReloPush::State(data1.x,data1.y,data1.nominalOrientation));
-    ctx.env.remove_obs(ReloPush::State(data1.x,data1.y,data1.nominalOrientation));
+    ctx.removeObs(ReloPush::State(data1.x,data1.y,data1.nominalOrientation));
     if(data2.type==VertexType::OBJECT_VERTEX)
     {
         took_out.push_back(ReloPush::State(data2.x,data2.y,data2.nominalOrientation));
-        ctx.env.remove_obs(ReloPush::State(data2.x,data2.y,data2.nominalOrientation));
+        ctx.removeObs(ReloPush::State(data2.x,data2.y,data2.nominalOrientation));
     }
 
 
     // Create start/goal states with (x, y, theta)
     ReloPush::State start(data1.x, data1.y, data1.getActualOrientation());
     ReloPush::State goal(data2.x, data2.y, data2.getActualOrientation());
+
+    // check if goal is valid
+    auto gv = ctx.env_push.stateValid(goal);
+    if(gv.get_validity()!=StateValidity::valid)
+        return gv.get_validity();
 
     //use prepush dist
     ReloPush::State start_prepush = find_pre_push(start,ctx.parameters.PrePush_dist);
@@ -323,7 +329,7 @@ StateValidity addEdgeNormalMode(
 
     // put the obstacles back
     for(auto it : took_out)
-        ctx.env.add_obs(it);
+        ctx.addObs(it);
 
 
     // 4) If all waypoints are valid => add the edge to the graph
@@ -361,8 +367,11 @@ StateValidity addEdgePrerelocation(
 
     // for debug
     bool deb = false;
-    if(data1.name == "box2" && data2.name == "goal2" && data1.orientationIndex == 0 && data2.orientationIndex==0)
+    if(data1.name == "box1" && data2.name == "goal2" && data1.orientationIndex == 0 && data2.orientationIndex==0)
         deb = true;
+
+    // for debug
+    //int obs_before = ctx.env.get_obs().size();
 
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation());
     ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation());
@@ -379,12 +388,22 @@ StateValidity addEdgePrerelocation(
     auto final_push_index = data1.orientationIndex;
 
     // Temporarily remove the start and goal from the obstacles list
-    ctx.env.remove_obs(startPose);
+    ctx.removeObs(startPose);
     if(data2.type==VertexType::OBJECT_VERTEX)
-        ctx.env.remove_obs(goalPose);
+        ctx.removeObs(goalPose);
+
+    // check goal validity
+    auto gv = ctx.env_push.stateValid(goalPose);
+    if(!gv)
+    {
+        ctx.addObs(startPose);
+        if(data2.type==VertexType::OBJECT_VERTEX)
+            ctx.addObs(goalPose);
+        return gv.get_validity();
+    }
 
     // set goal on map for costmap
-    ctx.env.changeGoal(goalPose);
+    //ctx.env.changeGoal(goalPose);
 
     // 2) We'll attempt to relocate the start position in multiple directions
     //    derived from the "other" orientation indices of the object.
@@ -443,17 +462,17 @@ StateValidity addEdgePrerelocation(
             auto relocated_object = ReloPush::revert_pre_push(relocated_robot,ctx.parameters.PrePush_dist); // landing object at prerelocation
 
             // 2a) Quick boundary/collision checks if desired:
-            if (!ctx.env.stateValid(relocated_object))
+            if (!ctx.env_push.stateValid(relocated_object))
                 break; // no reason to keep going further in this direction
 
-            if (!ctx.env.stateValid(relocated_robot)) //todo: might by okay to skip this?
+            if (!ctx.env_push.stateValid(relocated_robot)) //todo: might by okay to skip this?
                 break;
 
             ReloPush::State PreRelocation_object = ReloPush::State(relocated_object.x,relocated_object.y,startPose.yaw);
 
             // check if final appraoch is valid
             auto final_prepush = find_pre_push(PreRelocation_object, ctx.parameters.PrePush_dist);
-            if(!ctx.env.stateValid(final_prepush))
+            if(!ctx.env_push.stateValid(final_prepush))
                 continue; // there may be other valid ones further toward this direction
 
             // 2b) Now check if is_longpath_case(...) says it's "good."
@@ -468,6 +487,7 @@ StateValidity addEdgePrerelocation(
             double relocationDist = shiftDist;  // if we interpret shiftDist as Eucl. distance
             // Then plan a Dubins path from 'relocated' to 'goalPose'
             //   e.g. auto dubinsRes = PlanDubins(relocated, goalPose, ctx);
+
             auto dubinsRes = PlanDubins(final_prepush, goalPose_prepush, ctx);
             // check validity, etc.
             if (dubinsRes.first == pathType::SP) // todo: duplicate path planning
@@ -507,6 +527,10 @@ StateValidity addEdgePrerelocation(
 
     StateValidity out_validity = StateValidity::out_of_boundary;
 
+    // for debug
+    //int obs_mid = ctx.env.get_obs().size();
+    std::unordered_set<ReloPush::State> obs_mid1, obs_mid2;
+
     if (!foundAny)
     {
         // we never found a valid pre-relocation
@@ -514,9 +538,17 @@ StateValidity addEdgePrerelocation(
     }
     else
     {
+        // for debug
+        //obs_mid1 = ctx.env.get_obs();
         // check if approach to final push is feasible
         auto planApproach = check_approach_validity(bestRelocated_robot, bestFinalPrepush, bestPreRelocation_object, movingObject,
                                                     bestOrientationIndex, final_push_index, landingAngleChange, ctx);
+
+        //obs_mid2 = ctx.env.get_obs();
+
+        //bool env_debug = false;
+        //if(obs_mid1.size() != obs_mid2.size())
+        //    env_debug = true;
 
         if(planApproach->validity == PlanValidity::success)
         {
@@ -527,7 +559,7 @@ StateValidity addEdgePrerelocation(
 
             if (inserted)
             {
-                g[e].weight = bestCost;
+                g[e].weight = bestCost; // all cost included
                 g[e].mode   = ConnectionMode::PRE_RELOCATION;
                 g[e].preRelo.used        = true;
                 g[e].preRelo.xRelocated_robot  = bestRelocated.x;
@@ -537,7 +569,7 @@ StateValidity addEdgePrerelocation(
                 g[e].preRelo.yRelocated_object = bestPreRelocation_object.y;
                 g[e].preRelo.yawRelocated_object = bestPreRelocation_object.yaw;
                 g[e].preRelo.extraCost   = std::hypot(bestRelocated.x - startPose.x,
-                                                    bestRelocated.y - startPose.y);
+                                                    bestRelocated.y - startPose.y);                
                 g[e].preRelo.relocatingIndex = bestOrientationIndex;
                 g[e].preRelo.reason = reason_in;
                 g[e].srcVertexData = g[v1];
@@ -568,11 +600,13 @@ StateValidity addEdgePrerelocation(
             out_validity = StateValidity::no_approach;
         }
     }
-
+    //int obs_mid_last = ctx.env.get_obs().size();
     // restore start and goal as obstacles
-    ctx.env.add_obs(startPose);
+    ctx.addObs(startPose);
     if(data2.type==VertexType::OBJECT_VERTEX)
-        ctx.env.add_obs(goalPose);
+        ctx.addObs(goalPose);
+
+    //int obs_after = ctx.env.get_obs().size();
 
     return out_validity;
 }
@@ -596,8 +630,27 @@ StateValidity addEdgePrerelocation_Optimization(
     if(data1.name=="box1" && data2.name=="goal1" && data1.orientationIndex==3 && data2.orientationIndex == 3)
         deb = true;
 
+    // for debug
+    //auto obs_before = ctx.env.get_obs();
+
     ReloPush::State startPose(data1.x, data1.y, data1.getActualOrientation()); // object
     ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation()); // goal
+
+    // Temporarily remove the start and goal from the obstacles list
+    ctx.removeObs(startPose);
+    if(data2.type==VertexType::OBJECT_VERTEX)
+        ctx.removeObs(goalPose);
+
+    // check goal validity
+
+    auto gv = ctx.env_push.stateValid(goalPose);
+    if(!gv)
+    {
+        ctx.addObs(startPose);
+        if(data2.type==VertexType::OBJECT_VERTEX)
+            ctx.addObs(goalPose);
+        return gv.get_validity();
+    }
 
 
     auto goalPose_prepush = find_pre_push(goalPose, ctx.parameters.PrePush_dist);
@@ -618,6 +671,7 @@ StateValidity addEdgePrerelocation_Optimization(
     int bestOrientationIndex = -1;
     reloDubinsPath bestDubins_prerelo, bestDubins_final;
     ReloPush::State bestPreRelo_object;
+    double bestExtraCost = 0;
 
     // 2) For each orientation axis
     for (int i = 0; i < nSides; ++i)
@@ -690,6 +744,8 @@ StateValidity addEdgePrerelocation_Optimization(
         } // end for sampledPositions
         */
 
+
+        /*
         auto init_guess_xy = ReloPush::find_init_guess_intersection(goalPose.x,goalPose.y,goalPose.yaw,
                                                                     startPose_prepush.x,startPose_prepush.y,sideAngle,
                                                                     ctx.parameters.turning_rad_pair.push,sideAngle-startPose.yaw);
@@ -710,16 +766,27 @@ StateValidity addEdgePrerelocation_Optimization(
             continue;
 
         auto orientation_length = computeLocalOrientation<double>(xc, yc, ctx.parameters.turning_rad_pair.push);
-        double th1pc = orientation_length.th1pc;
+        double th1pc = orientation_length.th1pc; // todo: is it same as th2 + (th_ip - th_i)?
 
-        // use prepush for initial guess
+        // use prepush for initial guess (result is robot pose)
         auto init_guess = ReloPush::State(init_guess_xy.first, init_guess_xy.second, sideAngle + th1pc);
-        auto init_guess_prepush = find_pre_push(init_guess,ctx.parameters.PrePush_dist);
+        //auto init_guess_prepush = find_pre_push(init_guess,ctx.parameters.PrePush_dist);
+        */
+
+        auto init_guess = ReloPush::FindInitialGuess(Eigen::Vector3d(startPose_prepush.x,startPose_prepush.y,sideAngle),Eigen::Vector3d(goalPose.x,goalPose.y,goalPose.yaw),
+                                                     ctx.parameters.PrePush_dist,ctx.parameters.turning_rad_pair.push,startPose.yaw);
+
 
         //double x_init_guess = init_guess_xy.first;
         //double y_init_guess = init_guess_xy.second;
-        double x_init_guess = init_guess_prepush.x;
-        double y_init_guess = init_guess_prepush.y;
+        //double x_init_guess = init_guess_prepush.x;
+        //double y_init_guess = init_guess_prepush.y;
+        double x_init_guess = init_guess.second.x();
+        double y_init_guess = init_guess.second.y();
+
+        // ************ no init guess
+        //x_init_guess = goalPose_prepush.x;
+        //y_init_guess = goalPose_prepush.y;
 
         // Call your function:
         // (x_i, y_i, th_i, x2, y2, th2, sideAngle, R, x_init_guess, y_init_guess)
@@ -753,6 +820,9 @@ StateValidity addEdgePrerelocation_Optimization(
             continue;
         }
 
+        if(costOpt > 50)
+            continue;
+
         // If the cost is infinite or >= bestCost, skip
         if (costOpt >= bestCost)
             continue;
@@ -770,31 +840,36 @@ StateValidity addEdgePrerelocation_Optimization(
         // 2d) Keep the best
         if (totalCost < bestCost)
         {
-            bestCost = totalCost;
-            bestOpt  = ReloPush::OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
-            bestOrientationIndex = i;
+            auto temp_opt = ReloPush::OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
 
             //auto start_pivot = ReloPush::State(startPose.x,startPose.y,sideAngle);
             //auto startPrepush = find_pre_push(start_pivot,ctx.parameters.PrePush_dist);
             auto robot_prerelo = ReloPush::State(relocationX,relocationY,relocationYaw);
             bestDubins_prerelo = findDubins(startPose_prepush, robot_prerelo, ctx.parameters.turning_rad_pair.push);
 
+            if(isDubinsValid(bestDubins_prerelo,ctx)!=StateValidity::valid)
+                continue;
+
             // object PreRelo
             auto obj_prerelo = ReloPush::revert_pre_push(robot_prerelo,ctx.parameters.PrePush_dist);
             bestPreRelo_object = obj_prerelo;
 
-            double final_push_orientation = startPose.yaw + bestOpt.change_in_yaw;
-            bestPreRelo_orientation = movingObject.getNominalPose().yaw + bestOpt.change_in_yaw;
+            double final_push_orientation = startPose.yaw + temp_opt.change_in_yaw;
+            bestPreRelo_orientation = movingObject.getNominalPose().yaw + temp_opt.change_in_yaw;
             auto final_push_pose = ReloPush::State(obj_prerelo.x,obj_prerelo.y,final_push_orientation);
 
             bestDubins_final = findDubins(find_pre_push(final_push_pose,ctx.parameters.PrePush_dist), find_pre_push(goalPose,ctx.parameters.PrePush_dist), ctx.parameters.turning_rad_pair.push);
+            if(isDubinsValid(bestDubins_final,ctx)!=StateValidity::valid)
+                continue;
 
-            if(bestCost < 50) //todo: handle nan
-                foundAny = true;
+
+            foundAny = true;
+            bestCost = totalCost;
+            bestOpt  = ReloPush::OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
+            bestOrientationIndex = i;
+            bestExtraCost = bestDubins_prerelo.lengthCost();
         }
-
     } // end for each orientation axis
-
 
     StateValidity out_validity = StateValidity::out_of_boundary;
 
@@ -819,7 +894,6 @@ StateValidity addEdgePrerelocation_Optimization(
             {
                 g[e].weight = bestCost;
                 g[e].mode   = ConnectionMode::PRE_RELOCATION;
-
                 g[e].preRelo.used            = true;
                 g[e].preRelo.xRelocated_robot      = bestOpt.x;
                 g[e].preRelo.yRelocated_robot      = bestOpt.y;
@@ -827,7 +901,7 @@ StateValidity addEdgePrerelocation_Optimization(
                 g[e].preRelo.xRelocated_object = bestPreRelo_object.x;
                 g[e].preRelo.yRelocated_object = bestPreRelo_object.y;
                 g[e].preRelo.yawRelocated_object = bestPreRelo_object.yaw;
-                g[e].preRelo.extraCost       = bestOpt.cost; // or bestCost if that is the final total
+                g[e].preRelo.extraCost       = bestExtraCost; // all pushing is included in the weight
                 g[e].preRelo.relocatingIndex = bestOrientationIndex;
                 g[e].preRelo.relocatingIndex= bestOrientationIndex;
                 g[e].preRelo.reason = reason_in;
@@ -843,10 +917,18 @@ StateValidity addEdgePrerelocation_Optimization(
                 // g[e].preRelo.reason = reason_in;
                 out_validity = StateValidity::valid;
             }
-
-
         }
     }
+
+    ctx.addObs(startPose);
+    if(data2.type==VertexType::OBJECT_VERTEX)
+        ctx.addObs(goalPose);
+
+    // for debug
+    //auto obs_after = ctx.env.get_obs();
+
+    //if(obs_before.size() != obs_after.size())
+    //    std::cout << "!!!!" << std::endl;
 
     return out_validity;
 }
@@ -861,7 +943,7 @@ bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
 
     //for debug only
     bool deb = false;
-    if(data1.name=="box2" && data2.name=="goal2")
+    if(data1.name=="box1" && data2.name=="goal2")
         deb = true;
 
     if(data1.name != data2.name)

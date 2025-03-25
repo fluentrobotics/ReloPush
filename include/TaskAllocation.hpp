@@ -8,6 +8,7 @@
 #include <GraphBuilder.hpp>
 
 #include <ObjectInfo.hpp>
+#include <PlanHybridAstar.hpp>
 
 #include <string>
 #include <memory>
@@ -156,20 +157,14 @@ struct FinalAllocation
     // planning context snapshot
     PlanningContext snapshot;
 
-    /*
-    // Pre-relocation info
-    bool usedPreRelocation = false;
-    double xRelocated      = 0.0;
-    double yRelocated      = 0.0;
-    double preReloCost     = 0.0;
-    int relocatingIndex    = -1; // or double relocatingAngle
-    */
-
     std::vector<EdgeData> paths; // contains edge information inc. mode
+    ReloPush::StatePathPtrList transitPaths;
 
     EdgePathList obsReloPaths;
 
     std::pair<ReloPush::StatePathPtr,std::vector<size_t>> toSinglePathPtr(double interpolation_resolution = 0.1);
+
+    double getPushingLength(void) const;
 };
 
 class FinalTaskSequence
@@ -315,7 +310,8 @@ bool performAllocations(const WorkspaceBoundary &boundary,
                         std::unordered_map<std::string, ObjectInfo> &objects,
                         std::unordered_map<std::string, GoalInfo> &goals,
                         std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
-                        std::vector<FinalAllocation> &finalSequence);
+                        std::vector<FinalAllocation> &finalSequence,
+                        bool& use_opt);
 
 // ---------------------------------------------------------------------------
 // Helper Function 5: Print the final sequence

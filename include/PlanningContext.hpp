@@ -26,7 +26,7 @@ std::vector<ReloPush::State> convert_to_states(GoalMap &goals);
  */
 struct PlanningContext
 {
-    Environment env;         ///< The grid map, collision queries, etc.
+    Environment env_push, env_nonpush;         ///< The grid map, collision queries, etc.
     PlanningParameters parameters;///< Example: boundary, thresholds, etc.
     //ObjectList mo_list; //movable objects
     //ObjectList delivered_list; //delivered objects
@@ -36,7 +36,7 @@ struct PlanningContext
     int sample_N = 25;
     int64_t timeout_ms = 0; // 0: no timeout for hybrid-astar
     bool print_res = false; // print result for hybrid-astar
-    bool use_prelo_optimization = true;
+    bool use_prelo_optimization = false;
 
 
     // Evenly sampled positions for optimizations
@@ -51,7 +51,8 @@ struct PlanningContext
     {
         ObjectList static_in = {};
         std::unordered_set<ReloPush::State> obs;
-        env = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
+        env_push = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
+        env_nonpush = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_nonpush, Constants::LF_nonpush, true);
 
         parameters.turning_rad_pair.push = Constants::r_push;
         parameters.turning_rad_pair.non_push = Constants::r_nonpush;
@@ -59,19 +60,20 @@ struct PlanningContext
         parameters.map_resolution = Constants::mapResolution;
         parameters.car_width = Constants::carWidth;
         parameters.obs_rad = Constants::obsRadius;
-        parameters.LF = Constants::LF_push;
+        parameters.LF_push = Constants::LF_push;
+        parameters.LF_nonpush = Constants::LF_nonpush;
         parameters.LB = Constants::LB;
 
         updateObs(mo_list, delivered_list);
-        uniformSampleMap(sample_N);
+        //uniformSampleMap(sample_N);
     }
-
 
     // todo: combine the constructors
     PlanningContext(PlanningParameters params_in, ObjectMap& obs_in, GoalMap& static_in) : parameters(params_in), mo_list(obs_in), delivered_list(static_in)
     {
         std::unordered_set<ReloPush::State> obs;
-        env = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
+        env_push = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
+        env_nonpush = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_nonpush, Constants::LF_nonpush, true);
 
         parameters.turning_rad_pair.push = Constants::r_push;
         parameters.turning_rad_pair.non_push = Constants::r_nonpush;
@@ -79,11 +81,33 @@ struct PlanningContext
         parameters.map_resolution = Constants::mapResolution;
         parameters.car_width = Constants::carWidth;
         parameters.obs_rad = Constants::obsRadius;
-        parameters.LF = Constants::LF_push;
+        parameters.LF_push = Constants::LF_push;
+        parameters.LF_nonpush = Constants::LF_nonpush;
         parameters.LB = Constants::LB;
 
         updateObs(mo_list, delivered_list);
-        uniformSampleMap(sample_N);
+        //uniformSampleMap(sample_N);
+    }
+
+    PlanningContext(PlanningParameters params_in, ObjectMap& obs_in, GoalMap& static_in, bool& use_opt)
+        : parameters(params_in), mo_list(obs_in), delivered_list(static_in), use_prelo_optimization(use_opt)
+    {
+        std::unordered_set<ReloPush::State> obs;
+        env_push = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
+        env_nonpush = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_nonpush, Constants::LF_nonpush, true);
+
+        parameters.turning_rad_pair.push = Constants::r_push;
+        parameters.turning_rad_pair.non_push = Constants::r_nonpush;
+
+        parameters.map_resolution = Constants::mapResolution;
+        parameters.car_width = Constants::carWidth;
+        parameters.obs_rad = Constants::obsRadius;
+        parameters.LF_push = Constants::LF_push;
+        parameters.LF_nonpush = Constants::LF_nonpush;
+        parameters.LB = Constants::LB;
+
+        updateObs(mo_list, delivered_list);
+        //uniformSampleMap(sample_N);
     }
 
     void updateObs()
@@ -95,7 +119,8 @@ struct PlanningContext
         auto delivered_list_states = convert_to_states(delivered_list);
         obs.insert(delivered_list_states.begin(), delivered_list_states.end());
 
-        env = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.push, parameters.LF, false);
+        env_push = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.push, parameters.LF_push, false);
+        env_nonpush = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.non_push, parameters.LF_nonpush, true);
     }
 
     void updateObs(std::unordered_map<std::string, ObjectInfo>& mo_list_in, std::unordered_map<std::string, GoalInfo>& delivered_list_in)
@@ -107,12 +132,26 @@ struct PlanningContext
         auto delivered_list_states = convert_to_states(delivered_list_in);
         obs.insert(delivered_list_states.begin(), delivered_list_states.end());
 
-        env = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.push, parameters.LF, false);
+        env_push = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.push, parameters.LF_push, false);
+        env_nonpush = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.non_push, parameters.LF_nonpush, true);
     }
 
     void updateObs(std::unordered_set<ReloPush::State>& obs_in)
     {
-        env = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs_in, parameters.turning_rad_pair.push, parameters.LF, false);
+        env_push = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs_in, parameters.turning_rad_pair.push, parameters.LF_push, false);
+        env_nonpush = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs_in, parameters.turning_rad_pair.non_push, parameters.LF_nonpush, true);
+    }
+
+    void removeObs(ReloPush::State obs_in)
+    {
+        env_push.remove_obs(obs_in);
+        env_nonpush.remove_obs(obs_in);
+    }
+
+    void addObs(ReloPush::State obs_in)
+    {
+        env_push.add_obs(obs_in);
+        env_nonpush.add_obs(obs_in);
     }
 
     // Function to compute grid dimensions (rows and columns) based on N and aspect ratio

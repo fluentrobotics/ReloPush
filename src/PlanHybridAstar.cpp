@@ -1,6 +1,9 @@
 #include<PlanHybridAstar.hpp>
 
-
+/*
+ * The original SH_ASTAR needs start/goal yaws to be negated. The resulting yaws also need to be negated.
+ * Collision checking needs each state to be back to non-negated yaw
+ */
 PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal_in,
                                   Environment& env, bool allow_reverse, float turning_radius, float speed, int64_t timeout_ms,
                                   bool print_res,float car_width, float LF, float obs_rad)
@@ -47,19 +50,19 @@ PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal
 #pragma endregion
 
     // negate yaw for hybrid astar
-    ReloPush::State start_neg = ReloPush::State(start_in.x,start_in.y,-1*start_in.yaw);
-    ReloPush::State goal_neg = ReloPush::State(goal_in.x, goal_in.y, -1*goal_in.yaw);
+    ReloPush::State start_neg = ReloPush::State(start_in.x,start_in.y,fromOMPL::mod2pi(-1*start_in.yaw));
+    ReloPush::State goal_neg = ReloPush::State(goal_in.x, goal_in.y, fromOMPL::mod2pi(-1*goal_in.yaw));
 
     // choose
     env.changeGoal(goal_neg);
 
-    if(allow_reverse)
-        env.nonPushMode(turning_radius,speed,LF);
-    else
-        env.pushMode(turning_radius,speed,LF);
+    //if(allow_reverse)
+    //    env.nonPushMode(turning_radius,speed,LF);
+    //else
+    //    env.pushMode(turning_radius,speed,LF);
 
     HybridAStar<ReloPush::State, Action, double, Environment> hybridAStar(env);
-    PathPlanResult solution(start_in, goal_in);
+    PathPlanResult solution(start_neg, goal_neg);
     bool searchSuccess = hybridAStar.search(start_neg, solution, allow_reverse, 0, timeout_ms);
 
     //auto time_end = std::chrono::high_resolution_clock::now();
@@ -111,7 +114,7 @@ PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal
     }
 
 
-    return planHybridAstar(start_in, goal_in, ctx.env, allow_reverse, rho, speed, ctx.timeout_ms,ctx.print_res,ctx.parameters.car_width, ctx.parameters.LF,ctx.parameters.obs_rad);
+    return planHybridAstar(start_in, goal_in, ctx.env_nonpush, allow_reverse, rho, speed, ctx.timeout_ms,ctx.print_res,ctx.parameters.car_width, ctx.parameters.LF_nonpush,ctx.parameters.obs_rad);
 }
 
 //PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal_in, Environment& env, bool allow_reverse, int64_t timeout_ms ,bool print_res,float car_width, float obs_rad)

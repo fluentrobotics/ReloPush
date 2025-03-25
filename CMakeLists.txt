@@ -46,7 +46,6 @@ endif()
 
 add_executable(ReloPush src/main.cpp
     src/GraphBuilder.cpp
-    src/InputParser.hpp
     src/InputParser.cpp
     src/DubinsTools.cpp
     src/FromOMPL.cpp
@@ -62,6 +61,8 @@ add_executable(ReloPush src/main.cpp
     src/Visualization/QtPathWindow.cpp
     src/Visualization/QtPathManager.cpp
     src/Visualization/QtMainControlWindow.cpp
+    src/PrintInColor.cpp
+    src/BatchInstanceParcer.cpp
 )
 target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt6::Widgets Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
 
@@ -82,6 +83,28 @@ target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${O
 add_executable(test_prerelo_opt test/test_prerelo_optimization.cpp src/PreReloOptimization.cpp src/FromOMPL.cpp)
 target_link_libraries(test_prerelo_opt Ceres::ceres ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
 
+add_executable(test_parse_instance
+    test/test_parse_instance.cpp
+    src/GraphBuilder.cpp
+    src/InputParser.cpp
+    src/DubinsTools.cpp
+    src/FromOMPL.cpp
+    src/TfTools.cpp
+    src/params.cpp
+    src/PathPlanningTools.cpp
+    include/TaskAllocation.hpp
+    src/TaskAllocartion.cpp
+    src/PlanningContext.cpp
+    src/PreReloOptimization.cpp
+    src/PlanHybridAstar.cpp
+    src/Visualization/VisualizationWidget.cpp
+    src/Visualization/QtPathWindow.cpp
+    src/Visualization/QtPathManager.cpp
+    src/Visualization/QtMainControlWindow.cpp
+    src/PrintInColor.cpp
+    src/BatchInstanceParcer.cpp)
+target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt6::Widgets Ceres::ceres)
+
 include(GNUInstallDirs)
 install(TARGETS ReloPush
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -96,6 +119,10 @@ install(TARGETS test_hybrid_astar
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(TARGETS test_prerelo_opt
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS test_parse_instance
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

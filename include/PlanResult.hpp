@@ -43,14 +43,14 @@ struct PlanResult {
     bool success = false;
 
     // return path as a vector of States
-    std::vector<State> getPath(bool negateYaw = false)
+    std::vector<State> getPath(bool negateYaw = true)
     {
         std::vector<State> out_vec(states.size());
 
         for(size_t n=0; n<states.size(); n++){
             out_vec[n] = states[n].first;
             if(negateYaw)
-                out_vec[n].yaw*=-1;
+                out_vec[n].yaw=fromOMPL::mod2pi(-1*out_vec[n].yaw);
         }
 
         return out_vec;

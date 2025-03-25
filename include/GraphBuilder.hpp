@@ -9,8 +9,6 @@
 #include <PlanHybridAstar.hpp>
 
 
-
-
 /**
  * @brief Add a new vertex to the graph. This can be either OBJECT_VERTEX or GOAL_VERTEX.
  *

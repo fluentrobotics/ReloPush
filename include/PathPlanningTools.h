@@ -68,7 +68,7 @@ using namespace libMultiRobotPlanning;
 // };
 
 namespace Constants {
-    static float steer_limit_push = 0.15; // 0.185
+    static float steer_limit_push = 0.185; // 0.185
     static float steer_limit_nonpush = 0.26; // 0.28
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
@@ -84,10 +84,10 @@ namespace Constants {
     //extern float deltat; // non-push as default
     // [#] --- A movement cost penalty for turning (choosing non straight motion
     // primitives)
-    static const float penaltyTurning = 50;
+    static const float penaltyTurning = 4;//50;
     // [#] --- A movement cost penalty for reversing (choosing motion primitives >
     // 2)
-    static const float penaltyReversing = 1.5; //8
+    static const float penaltyReversing = 2.0;//1.5; //8
     // [#] --- A movement cost penalty for change of direction (changing from
     // primitives < 3 to primitives > 2)
     static const float penaltyCOD = 3.0;
@@ -109,13 +109,14 @@ namespace Constants {
 
     // width of car
     static const float carWidth = 0.285;
-    // distance from rear to vehicle front end
-    static const float LF_nonpush = 0.3;  //0.38
-    static const float LF_push = 0.45; // 0.65
-    // distance from rear to vehicle back end
-    static const float LB = 0.12;
     // obstacle default radius
     static const float obsRadius = 0.075;
+    // distance from rear to vehicle front end
+    static const float LF_nonpush = 0.38;  //0.38
+    static const float LF_push = 0.54; //LF_nonpush + obsRadius; // 0.65
+    // distance from rear to vehicle back end
+    static const float LB = 0.12;
+
 
     // R = 3, 6.75 DEG
     //extern double dx[];
@@ -721,7 +722,8 @@ public:
             ySucc = s.y + planCont.dx[act] * sin(-s.yaw) +
                     planCont.dy[act] * cos(-s.yaw);
             yawSucc = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act]);
-            double yawSucc_neg = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act] + M_PI); // need to negate for collision checking
+            //double yawSucc_neg = Constants::normalizeHeadingRad(s.yaw + planCont.dyaw[act] + M_PI); // need to negate for collision checking
+
             if (act != action) {  // penalize turning
                 g = g * Constants::penaltyTurning;
                 if (act >= 3)  // penalize change of direction
@@ -731,8 +733,9 @@ public:
                 g = g * Constants::penaltyReversing;
             }
             ReloPush::State tempState(xSucc, ySucc, yawSucc, s.time+1);
+            double yawSucc_neg = Constants::normalizeHeadingRad(-1*yawSucc);
             ReloPush::State tempState_neg(xSucc, ySucc, yawSucc_neg, s.time+1);
-            if (stateValid(tempState_neg)) { // todo: use unifed parameters from planning context
+            if (stateValid(tempState_neg,-1,-1,planCont.LF,planCont.LF)) { // todo: use unifed parameters from planning context
                 neighbors.emplace_back(
                     Neighbor<ReloPush::State, Action, double>(tempState, act, g));
             }
@@ -796,18 +799,29 @@ public:
 
     void remove_obs(const ReloPush::State& s)
     {
-        for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
+        for (auto it = m_obstacles.begin(); it != m_obstacles.end();) {
             if(it->x == s.x && it->y == s.y)
             {
                 it = m_obstacles.erase(it);
-                break;
+                //break;
             }
+            else
+            {
+                ++it;
+            }
+
         }
     }
 
 
     StateValiditySet stateValid(const ReloPush::State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
                                 float LF = Constants::LF_push, float LB = Constants::LB) {
+
+        if(car_width<0)
+            car_width = Constants::carWidth;
+        if(obs_rad<0)
+            obs_rad = Constants::obsRadius;
+
         //dynamic obstacles
         auto it = dynamic_obs.equal_range(s.time);
         for (auto itr = it.first; itr != it.second; ++itr) {
@@ -820,12 +834,19 @@ public:
             if (s.agentCollision(it->second,LF,car_width)) return StateValiditySet(false, StateValidity::collision);;
             //if (s.agentCollision(it->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
 
+        // boundary
+        double x_ind = s.x / Constants::mapResolution;
+        double y_ind = s.y / Constants::mapResolution;
+        if (x_ind < 0 || x_ind >= m_dimx || y_ind < 0 || y_ind >= m_dimy)
+            return StateValiditySet(false, StateValidity::out_of_boundary);
+
         Eigen::Matrix2f rot;
-        rot << cos(s.yaw), sin(s.yaw), -sin(s.yaw), cos(s.yaw);
+        rot << cos(s.yaw), sin(s.yaw),
+                -sin(s.yaw), cos(s.yaw); // R_W^R
         for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
             Eigen::Matrix<float, 2, 1> obs;
             obs << it->x - s.x, it->y - s.y;
-            auto rotated_obs = rot * obs;
+            auto rotated_obs = rot * obs; // obs i.r.t. robot
 
             /*
             if (rotated_obs(0) > -LB - obs_rad &&
@@ -838,6 +859,9 @@ public:
                 return StateValiditySet(false, StateValidity::collision);
             }
             */
+
+
+
             float dx = 0.0f;
             if (rotated_obs(0) < -LB)
                 dx = -LB - rotated_obs(0);
@@ -855,6 +879,7 @@ public:
             if (dx*dx + dy*dy <= obs_rad * obs_rad) {
                 return StateValiditySet(false, StateValidity::collision);
             }
+
         }
 
         /* Jeeho: MuSHR's original transformation seems to be wrong
@@ -875,12 +900,6 @@ public:
             }
         }
         */
-
-        // boundary
-        double x_ind = s.x / Constants::mapResolution;
-        double y_ind = s.y / Constants::mapResolution;
-        if (x_ind < 0 || x_ind >= m_dimx || y_ind < 0 || y_ind >= m_dimy)
-            return StateValiditySet(false, StateValidity::out_of_boundary);
 
         return StateValiditySet(true, StateValidity::valid);
         // Eigen::Matrix2f rot;
