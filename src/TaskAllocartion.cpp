@@ -1054,7 +1054,7 @@ bool performAllocations(const WorkspaceBoundary &boundary,
 
     while (!objGoalPairs.empty())
     {
-        std::cout << "\n============================\n"
+         std::cout << "\n============================\n"
                   << "Remaining pairs: " << objGoalPairs.size() << "\n";
 
         // (a) Build the graph from scratch

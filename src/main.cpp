@@ -18,9 +18,10 @@ int main(int argc, char *argv[])
     google::InitGoogleLogging(argv[0]);
     QApplication app(argc, argv);
 
-    std::string filename = "iros_obj10.txt";
-    int instance_ind = 2;
-    bool use_opt = true;
+    //std::string filename = "input_opt2obj.txt";
+    std::string filename = "iros_obj4.txt";
+    int instance_ind = 72;
+    bool use_opt = false;
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file

@@ -315,7 +315,12 @@ StateValidity addEdgeNormalMode(
     // check if goal is valid
     auto gv = ctx.env_push.stateValid(goal);
     if(gv.get_validity()!=StateValidity::valid)
+    {
+        // put the obstacles back
+        for(auto it : took_out)
+            ctx.addObs(it);
         return gv.get_validity();
+    }
 
     //use prepush dist
     ReloPush::State start_prepush = find_pre_push(start,ctx.parameters.PrePush_dist);
@@ -627,7 +632,7 @@ StateValidity addEdgePrerelocation_Optimization(
 
     // for debug
     bool deb = false;
-    if(data1.name=="box1" && data2.name=="goal1" && data1.orientationIndex==3 && data2.orientationIndex == 3)
+    if(data1.name=="b3" && data2.name=="d3" && data1.orientationIndex==3 && data2.orientationIndex == 2)
         deb = true;
 
     // for debug
@@ -666,14 +671,14 @@ StateValidity addEdgePrerelocation_Optimization(
     bool foundAny = false;
 
     // We'll keep track of the best relocation result
-    ReloPush::OptResult bestOpt(0.0, 0.0, 0.0, bestCost,0);
+    ReloPush::OptResult bestOpt(0.0, 0.0, 0.0, bestCost,0); //obj
     double bestPreRelo_orientation = 0;
     int bestOrientationIndex = -1;
     reloDubinsPath bestDubins_prerelo, bestDubins_final;
-    ReloPush::State bestPreRelo_object;
+    ReloPush::State bestPreRelo_object, bestPreRelo_robot;
     double bestExtraCost = 0;
 
-    // 2) For each orientation axis
+    // 2) For each orientation axis (pre-relo pushing)
     for (int i = 0; i < nSides; ++i)
     {
         // Optionally skip the orientation used by normal mode, if desired:
@@ -773,7 +778,7 @@ StateValidity addEdgePrerelocation_Optimization(
         //auto init_guess_prepush = find_pre_push(init_guess,ctx.parameters.PrePush_dist);
         */
 
-        auto init_guess = ReloPush::FindInitialGuess(Eigen::Vector3d(startPose_prepush.x,startPose_prepush.y,sideAngle),Eigen::Vector3d(goalPose.x,goalPose.y,goalPose.yaw),
+        auto init_guess_robot = ReloPush::FindInitialGuess(Eigen::Vector3d(startPose_prepush.x,startPose_prepush.y,sideAngle),Eigen::Vector3d(goalPose.x,goalPose.y,goalPose.yaw),
                                                      ctx.parameters.PrePush_dist,ctx.parameters.turning_rad_pair.push,startPose.yaw);
 
 
@@ -781,8 +786,11 @@ StateValidity addEdgePrerelocation_Optimization(
         //double y_init_guess = init_guess_xy.second;
         //double x_init_guess = init_guess_prepush.x;
         //double y_init_guess = init_guess_prepush.y;
-        double x_init_guess = init_guess.second.x();
-        double y_init_guess = init_guess.second.y();
+        double x_init_guess = init_guess_robot.first.x();
+        double y_init_guess = init_guess_robot.first.y();
+
+
+
 
         // ************ no init guess
         //x_init_guess = goalPose_prepush.x;
@@ -844,21 +852,26 @@ StateValidity addEdgePrerelocation_Optimization(
 
             //auto start_pivot = ReloPush::State(startPose.x,startPose.y,sideAngle);
             //auto startPrepush = find_pre_push(start_pivot,ctx.parameters.PrePush_dist);
-            auto robot_prerelo = ReloPush::State(relocationX,relocationY,relocationYaw);
-            bestDubins_prerelo = findDubins(startPose_prepush, robot_prerelo, ctx.parameters.turning_rad_pair.push);
+            // object PreRelo
+            //auto obj_prerelo = ReloPush::revert_pre_push(robot_prerelo,ctx.parameters.PrePush_dist);
+            auto obj_prerelo = ReloPush::State(relocationX,relocationY,relocationYaw);
+            bestPreRelo_object = obj_prerelo;
 
+            bestPreRelo_robot = find_pre_push(obj_prerelo,ctx.parameters.PrePush_dist);
+            bestDubins_prerelo = findDubins(startPose_prepush, bestPreRelo_robot, ctx.parameters.turning_rad_pair.push);
+
+            auto pre_relo_path_valid = isDubinsValid(bestDubins_prerelo,ctx);
             if(isDubinsValid(bestDubins_prerelo,ctx)!=StateValidity::valid)
                 continue;
 
-            // object PreRelo
-            auto obj_prerelo = ReloPush::revert_pre_push(robot_prerelo,ctx.parameters.PrePush_dist);
-            bestPreRelo_object = obj_prerelo;
+
 
             double final_push_orientation = startPose.yaw + temp_opt.change_in_yaw;
             bestPreRelo_orientation = movingObject.getNominalPose().yaw + temp_opt.change_in_yaw;
             auto final_push_pose = ReloPush::State(obj_prerelo.x,obj_prerelo.y,final_push_orientation);
 
             bestDubins_final = findDubins(find_pre_push(final_push_pose,ctx.parameters.PrePush_dist), find_pre_push(goalPose,ctx.parameters.PrePush_dist), ctx.parameters.turning_rad_pair.push);
+            auto final_path_valid = isDubinsValid(bestDubins_final,ctx);
             if(isDubinsValid(bestDubins_final,ctx)!=StateValidity::valid)
                 continue;
 
@@ -882,7 +895,9 @@ StateValidity addEdgePrerelocation_Optimization(
 
     else
     {
-        auto planApproach = check_approach_validity(bestDubins_prerelo.targetState, bestDubins_final.startState, movingObject, bestOrientationIndex, final_push_index, bestOpt.change_in_yaw, ctx);
+        //std::cout << "Opt OK" << std::endl;
+        auto planApproach = check_approach_validity(bestDubins_prerelo.targetState, bestDubins_final.startState,
+                                                    movingObject, bestOrientationIndex, final_push_index, bestOpt.change_in_yaw, ctx);
 
         if(planApproach->validity == PlanValidity::success)
         {
@@ -895,8 +910,8 @@ StateValidity addEdgePrerelocation_Optimization(
                 g[e].weight = bestCost;
                 g[e].mode   = ConnectionMode::PRE_RELOCATION;
                 g[e].preRelo.used            = true;
-                g[e].preRelo.xRelocated_robot      = bestOpt.x;
-                g[e].preRelo.yRelocated_robot      = bestOpt.y;
+                g[e].preRelo.xRelocated_robot      = bestPreRelo_robot.x;
+                g[e].preRelo.yRelocated_robot      = bestPreRelo_robot.y;
                 g[e].preRelo.yawReloacted_robot = bestPreRelo_orientation;
                 g[e].preRelo.xRelocated_object = bestPreRelo_object.x;
                 g[e].preRelo.yRelocated_object = bestPreRelo_object.y;
@@ -917,6 +932,10 @@ StateValidity addEdgePrerelocation_Optimization(
                 // g[e].preRelo.reason = reason_in;
                 out_validity = StateValidity::valid;
             }
+        }
+        else
+        {
+            //std::cout << "Approach failed" << std::endl;
         }
     }
 

@@ -312,9 +312,15 @@ namespace ReloPush{
         template <typename T>
         bool operator()(const T* const param, T* residual) const {
             // param = [x1, y1]
-            T x1w = param[0];  // prerelocation x
-            T y1w = param[1]; // prerelocation y
+            T x1w = param[0];  // prerelocation x (obj)
+            T y1w = param[1]; // prerelocation y (obj)
             T th1p = mod2pi<T>(param[2]); // prerelocation th
+
+            if(th1p<T(-1e20) || th1p>T(1e20)) // optimization might went crazy
+            {
+                residual[0] = T(200.0);
+                return true;
+            }
 
             // limit optimization range (soft constraint)
             //if(x1w < T(ws.xMin) || x1w > T(ws.xMax) || y1w < T(ws.yMin) || y1w > T(ws.yMax))
@@ -330,12 +336,9 @@ namespace ReloPush{
                 return true;
             }
 
-            // Find the shortest path using Dubins
-            T path_a_length = Dubins_length_ceres<T>(T(x_i_pre_), T(y_i_pre_), T(th_ip_),
-                                                     x1w, y1w, th1p, T(R_));
-
-            T obj_pre_relo_x = x1w + T(pre_push_dist) * ceres::cos(th1p);
-            T obj_pre_relo_y = y1w + T(pre_push_dist) * ceres::sin(th1p);
+            // robot-centric pre-relo
+            T obj_pre_relo_x = x1w - T(pre_push_dist) * ceres::cos(th1p);
+            T obj_pre_relo_y = y1w - T(pre_push_dist) * ceres::sin(th1p);
 
             if(this->isInBoundary(obj_pre_relo_x,obj_pre_relo_y)==false)
             {
@@ -343,6 +346,10 @@ namespace ReloPush{
                 residual[0] = T(200.0);
                 return true;
             }
+
+            // Find the shortest path using Dubins
+            T path_a_length = Dubins_length_ceres<T>(T(x_i_pre_), T(y_i_pre_), T(th_ip_),
+                                                     obj_pre_relo_x, obj_pre_relo_y, th1p, T(R_));
 
             T th1  = mod2pi<T>((th1p - T(th_ip_)) + T(th_i_)); // final pushing orientation
 

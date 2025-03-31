@@ -68,7 +68,7 @@ using namespace libMultiRobotPlanning;
 // };
 
 namespace Constants {
-    static float steer_limit_push = 0.185; // 0.185
+    static float steer_limit_push = 0.2; // 0.185
     static float steer_limit_nonpush = 0.26; // 0.28
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
@@ -113,7 +113,7 @@ namespace Constants {
     static const float obsRadius = 0.075;
     // distance from rear to vehicle front end
     static const float LF_nonpush = 0.38;  //0.38
-    static const float LF_push = 0.54; //LF_nonpush + obsRadius; // 0.65
+    static const float LF_push = (LF_nonpush + obsRadius)*1.01; //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
     static const float LB = 0.12;
 
@@ -848,7 +848,7 @@ public:
             obs << it->x - s.x, it->y - s.y;
             auto rotated_obs = rot * obs; // obs i.r.t. robot
 
-            /*
+
             if (rotated_obs(0) > -LB - obs_rad &&
                 rotated_obs(0) < LF + obs_rad &&
                 rotated_obs(1) > -car_width / 2.0 - obs_rad &&
@@ -858,10 +858,10 @@ public:
                 //std::cout << "x: " << rotated_obs(0) << " y: " << rotated_obs(1) << std::endl;
                 return StateValiditySet(false, StateValidity::collision);
             }
-            */
 
 
 
+/*
             float dx = 0.0f;
             if (rotated_obs(0) < -LB)
                 dx = -LB - rotated_obs(0);
@@ -879,6 +879,7 @@ public:
             if (dx*dx + dy*dy <= obs_rad * obs_rad) {
                 return StateValiditySet(false, StateValidity::collision);
             }
+*/
 
         }
 

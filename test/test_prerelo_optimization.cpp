@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
 
     // 1) Our "constants" from your example:
 
-    /*
+/*
     double x_i   = 1.2;       // Starting x
     double y_i   = 3.1;       // Starting y
     double th_i  = 0;    // Starting orientation
@@ -42,9 +42,19 @@ int main(int argc, char** argv) {
     double y2    = 1.5;       // Goal y
     double th2   = 0;   // Goal orientation
     double R     = 1.9188; // turning radius
-    */
+*/
+
+    double x_i   = 1.053499816410735;       // Starting x
+    double y_i   = 1.5889540125669037;       // Starting y
+    double th_i  = 4.70575;    // Starting orientation
+    double th_ip = 1.564099651924602;  // Secondary heading
+    double x2    = 0.557636022567749;       // Goal x
+    double y2    = 2.989194631576538;       // Goal y
+    double th2   = 3.995207281904765;   // Goal orientation
+    double R     = 1.5496432781219482; // turning radius
 
 
+/*
     double x_i   = 1.2;       // Starting x
     double y_i   = 1;       // Starting y
     double th_i  = 4.7123;    // Starting orientation
@@ -53,7 +63,20 @@ int main(int argc, char** argv) {
     double y2    = 1.5;       // Goal y
     double th2   = 5.4124;   // Goal orientation
     double R     = 1.9188; // turning radius
+*/
 
+/*
+    double x_i = 2.281902189811266;
+    double y_i = 2.550387669539164;
+    double th_i =  4.707587558373694;
+    double x2 = 0.6486319899559021;
+    double y2 = 3.4546070098876953;
+    double th2 = 5.4250272989233554;
+    double th_ip = 3.136791231578797;
+    double R = 1.5496432781219482;
+        //x_init_guess: 2.4745738059108167
+        //y_init_guess: 2.167457858022773
+*/
 
     /*
     double x_i   = 2.5;       // Starting x
@@ -100,7 +123,7 @@ int main(int argc, char** argv) {
     // Find a good initial guess for this optimization
     // try intersection
 
-    double pre_push_dist = 0.38+0.075;
+    double pre_push_dist = 0.54;// 0.38+0.075;
     // Get pre-push
     auto pushPose = ReloPush::State(x_i,y_i,th_ip);
     //auto Start_prepush = find_pre_push(pushPose, pre_push_dist);
@@ -131,16 +154,16 @@ int main(int argc, char** argv) {
 
     //double init_x = intersection.first - pre_push_dist * cos(th_ip + locOriRes.th1pc);
     //double init_y = intersection.second - pre_push_dist * sin(th_ip + locOriRes.th1pc);
-    double init_x = init_guess.second.x();
-    double init_y = init_guess.second.y();
+    double init_x = init_guess.first.x();
+    double init_y = init_guess.first.y();
 
     std::cout << "Initial Guess: " << init_x << ", " << init_y << std::endl;
 
     double goal_prepush_x = x2 - pre_push_dist * cos(th2);
     double goal_prepush_y = y2 - pre_push_dist * sin(th2);
 
-    param[0] = init_x;
-    param[1] = init_y;
+    //param[0] = init_x;
+    //param[1] = init_y;
 
     //param[0] = 1.16;
     //param[1] = 3.17;
@@ -148,6 +171,8 @@ int main(int argc, char** argv) {
     // 3) Build the problem
     ceres::Problem problem;
 
+
+    /*
     // Create a cost function (AutoDiff or NumericDiff).
     // We'll use AutoDiffCostFunction, which needs a functor, the #residuals,
     // and the size of each parameter block.
@@ -215,6 +240,7 @@ int main(int argc, char** argv) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "Elapsed time: " << duration.count() << " ms" << std::endl;
 
+
     // Start Prepush
     double x_i_prepush = x_i - pre_push_dist * cos(th_ip);
     double y_i_prepush = y_i - pre_push_dist * sin(th_ip);
@@ -230,6 +256,8 @@ int main(int argc, char** argv) {
     cost_function->Evaluate(&parameters, cost_eval, nullptr);
     std::cout << "Final cost = " << cost_eval[0] << "\n\n";
 
+*/
+
 
     double init_guess_th = th2 + (th_ip-th_i);
     std::cout << "=== SE2 Optimization ===" << std::endl;
@@ -238,6 +266,9 @@ int main(int argc, char** argv) {
     //double paramSE2[3] = {goal_prepush_x,goal_prepush_y,th2}; // init from goal
     //double paramSE2[3] = {start_prepush_x,start_prepush_y,th_ip}; // init from start
     //double paramSE2[3] = {param[0],param[1],yaw_l};
+    double robot_prerelo_x_init = paramSE2[0] - pre_push_dist * cos(paramSE2[2]);
+    double robot_prerelo_y_init = paramSE2[1] - pre_push_dist * sin(paramSE2[2]);
+
 
     ceres::Solver::Summary summarySE2;
     ceres::Problem problemSE2;
@@ -258,6 +289,9 @@ int main(int argc, char** argv) {
 
     ceres::Solve(optionsSE2, &problemSE2, &summarySE2);
 
+    double robot_prerelo_x_1 = paramSE2[0] - pre_push_dist * cos(paramSE2[2]);
+    double robot_prerelo_y_1 = paramSE2[1] - pre_push_dist * sin(paramSE2[2]);
+
     optionsSE2.minimizer_type = ceres::LINE_SEARCH;
     optionsSE2.max_num_line_search_step_size_iterations = 5;
     optionsSE2.line_search_direction_type = ceres::BFGS;
@@ -268,8 +302,8 @@ int main(int argc, char** argv) {
     ceres::Solve(optionsSE2, &problemSE2, &summarySE2);
 
 
-    std::cout << summary.FullReport() << "\n";
-    std::cout << "Final SE2 x1,y1,th1 (Robot): " << paramSE2[0] << ", " << paramSE2[1] << ", " << paramSE2[2] << "\n";
+    std::cout << summarySE2.FullReport() << "\n";
+    std::cout << "Final SE2 x1,y1,th1 (obj): " << paramSE2[0] << ", " << paramSE2[1] << ", " << paramSE2[2] << "\n";
     double cost_eval_se2[1];
     double* parametersSE2 = &paramSE2[0];
     cost_function_se2->Evaluate(&parametersSE2, cost_eval_se2, nullptr);
@@ -278,12 +312,12 @@ int main(int argc, char** argv) {
 
 
     // object prerelo
-    double obj_prerelo_x = paramSE2[0] + pre_push_dist * cos(paramSE2[2]);
-    double obj_prerelo_y = paramSE2[1] + pre_push_dist * sin(paramSE2[2]);
+    double robot_prerelo_x = paramSE2[0] - pre_push_dist * cos(paramSE2[2]);
+    double robot_prerelo_y = paramSE2[1] - pre_push_dist * sin(paramSE2[2]);
     // final prepush
     double final_push_th = th_i + (paramSE2[2]-th_ip);
-    double final_prepush_x = obj_prerelo_x - pre_push_dist * cos(final_push_th);
-    double final_prepush_y = obj_prerelo_y - pre_push_dist * sin(final_push_th);
+    double final_prepush_x = paramSE2[0] - pre_push_dist * cos(final_push_th);
+    double final_prepush_y = paramSE2[1] - pre_push_dist * sin(final_push_th);
 
     return 0;
 }

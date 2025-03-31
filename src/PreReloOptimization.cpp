@@ -366,16 +366,16 @@ namespace ReloPush
         problem.AddResidualBlock(cost_function, nullptr, param);
         */
 
-        double param[3];
-        param[0] = x_init_guess;
-        param[1] = y_init_guess;
-        param[2] = th2 + (th_ip - th_i); //colinear
+        double paramSE2[3];
+        paramSE2[0] = x_init_guess;
+        paramSE2[1] = y_init_guess;
+        paramSE2[2] = th2 + (th_ip - th_i); //colinear
 
-        ceres::Problem problem;
-        ceres::CostFunction* cost_function =
-            new ceres::AutoDiffCostFunction<CostFunctorSE2, 1, 2>(
+        ceres::Problem problemSE2;
+        ceres::CostFunction* cost_function_se2 =
+            new ceres::AutoDiffCostFunction<CostFunctorSE2, 1, 3>(
                 new CostFunctorSE2(x_i, y_i, th_i, x2, y2, th2, th_ip, R,ctx.parameters.PrePush_dist, ctx.parameters.boundary));
-        problem.AddResidualBlock(cost_function, nullptr, param);
+        problemSE2.AddResidualBlock(cost_function_se2, nullptr, paramSE2);
 
 
         // 4) Configure the solver
@@ -385,6 +385,8 @@ namespace ReloPush
         options.gradient_tolerance = 1e-4;
         options.parameter_tolerance = 1e-4;
         options.use_nonmonotonic_steps = true;
+        options.num_threads = 4;
+        options.initial_trust_region_radius = 1;
         //options.num_threads = 4;
         //options.minimizer_type = ceres::LINE_SEARCH;
         /*
@@ -399,7 +401,7 @@ namespace ReloPush
 
         // 5) Run the solver
         ceres::Solver::Summary summary;
-        ceres::Solve(options, &problem, &summary);
+        ceres::Solve(options, &problemSE2, &summary);
 
         // 6) Print results
         //std::cout << summary.BriefReport() << "\n";
@@ -407,8 +409,8 @@ namespace ReloPush
 
         // If you want, we can evaluate the final cost:
         double cost_eval[1];
-        double* parameters = &param[0];
-        cost_function->Evaluate(&parameters, cost_eval, nullptr);
+        double* parameters = &paramSE2[0];
+        cost_function_se2->Evaluate(&parameters, cost_eval, nullptr);
         //std::cout << "Final cost = " << cost_eval[0] << "\n";
 
 
@@ -419,24 +421,24 @@ namespace ReloPush
         options.function_tolerance = 1e-8;  // Rough convergence for the next optimization
         options.gradient_tolerance = 1e-8;
         options.parameter_tolerance = 1e-8;
-        ceres::Solve(options, &problem, &summary);
+        ceres::Solve(options, &problemSE2, &summary);
         //std::cout << summary.BriefReport() << "\n";
-        parameters = &param[0];
-        cost_function->Evaluate(&parameters, cost_eval, nullptr);
+        parameters = &paramSE2[0];
+        cost_function_se2->Evaluate(&parameters, cost_eval, nullptr);
 
 
         // Start Prepush
-        double x_i_prepush = x_i - ctx.parameters.PrePush_dist * cos(th_ip);
-        double y_i_prepush = y_i - ctx.parameters.PrePush_dist * sin(th_ip);
-        auto yaw_l = findLandingYaw(x_i_prepush,y_i_prepush,th_i,param[0],param[1],th_ip,R);
+        //double x_i_prepush = x_i - ctx.parameters.PrePush_dist * cos(th_ip);
+        //double y_i_prepush = y_i - ctx.parameters.PrePush_dist * sin(th_ip);
+        //auto yaw_l = findLandingYaw(x_i_prepush,y_i_prepush,th_i,paramSE2[0],paramSE2[1],th_ip,R);
 
-        // Optimized robot relo
-        ReloPush::State robotRelo(param[0],param[1],yaw_l);
+        // Optimized obj relo
+        ReloPush::State objRelo(paramSE2[0],paramSE2[1],paramSE2[2]);
 
         // pre-relocation from optimized car prepush for pre-relo
         //ReloPush::State PreRelo = revert_pre_push(robotRelo,ctx.parameters.PrePush_dist);
 
-        return OptResult(robotRelo.x,robotRelo.y,yaw_l,cost_eval[0], yaw_l-th_ip);
+        return OptResult(objRelo.x,objRelo.y,objRelo.yaw,cost_eval[0], objRelo.yaw-th_ip);
     }
 }
 

@@ -15,8 +15,8 @@ PathPlanResultPtr planHybridAstar(ReloPush::State start_in, ReloPush::State goal
 
 #pragma region check_validity
     // check if states are valid
-    auto start_valid = env.stateValid(start_in, car_width,obs_rad);
-    auto goal_valid = env.stateValid(goal_in, car_width, obs_rad);
+    auto start_valid = env.stateValid(start_in, car_width,obs_rad,LF);
+    auto goal_valid = env.stateValid(goal_in, car_width, obs_rad,LF);
 
     // not valid start/target
     if(!start_valid)
