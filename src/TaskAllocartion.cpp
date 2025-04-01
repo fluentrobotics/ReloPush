@@ -1041,7 +1041,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
 }
 
 // ---------------------------------------------------------------------------
-// Helper Function 4: The main planning/allocation loop
+// Helper Function 4a: The main planning/allocation loop
 // ---------------------------------------------------------------------------
 bool performAllocations(const WorkspaceBoundary &boundary,
                         std::unordered_map<std::string, ObjectInfo> &objects,
@@ -1159,6 +1159,214 @@ bool performAllocations(const WorkspaceBoundary &boundary,
     }
     return true;
 }
+
+
+#include <iostream> #include <unordered_map> #include <vector> #include <algorithm>
+
+// Helper function to print the current allocation state.
+void printCurrentState(const std::vector<FinalAllocation> &finalSequence,
+                       const std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
+                       const GoalMap &delivered_objs)
+{
+    std::cout << "\n---------- Current State ----------" << std::endl;
+    std::cout << "Final Sequence:" << std::endl;
+    for (const auto &alloc : finalSequence)
+    {
+        std::cout << "  " << alloc.object.name << " -> "
+                  << alloc.goal.name << " (cost=" << alloc.cost << ")" << std::endl;
+    }
+
+    std::cout << "Remaining Object-Goal Pairs:" << std::endl;
+    for (const auto &pair : objGoalPairs)
+    {
+        std::cout << "  " << pair.first << " -> " << pair.second.goalName << std::endl;
+    }
+
+    std::cout << "Delivered Objects:" << std::endl;
+    for (const auto &deliv : delivered_objs)
+    {
+        std::cout << "  " << deliv.first << " delivered to " << deliv.second.name << std::endl;
+    }
+    std::cout << "-----------------------------------\n" << std::endl;
+}
+
+
+// ---------------------------------------------------------------------------
+// Helper Function 4b: The main planning/allocation loop (DFS)
+// ---------------------------------------------------------------------------
+
+bool performAllocationsDFS(
+    const WorkspaceBoundary &boundary,
+    std::unordered_map<std::string, ObjectInfo> objects,         // passed by value (hard copy)
+    std::unordered_map<std::string, GoalInfo> goals,             // passed by value
+    std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,// passed by value
+    GoalMap delivered_objs,                                      // passed by value
+    std::vector<FinalAllocation> &finalSequence,                 // passed by reference
+    bool use_opt)
+{
+    // Print the current state at this recursion level.
+    printCurrentState(finalSequence, objGoalPairs, delivered_objs);
+
+    // Base case: if no remaining pairs, we have a complete solution.
+    if (objGoalPairs.empty()) {
+        std::cout << "All rearrangements allocated successfully." << std::endl;
+        return true;
+    }
+
+    // Build the planning graph and context using the current state.
+    Graph g;
+    initGraph(g, objects, goals);
+
+    PlanningParameters params;
+    params.boundary = boundary;
+
+    // delivered_objs become static obstacles.
+    PlanningContext planCtx(params, objects, delivered_objs, use_opt);
+    buildAllEdges(g, planCtx);
+
+    // Compute cost matrix pairs for the remaining object–goal pairs.
+    auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
+
+    // Gather candidate allocations.
+    std::vector<LowestCostInfo> candidates;
+    for (auto &entry : pairResults) {
+        auto &pcr = entry.second;
+        if (!pcr.matrixResult->sortedEntries.empty()) {
+            auto bestEntry = pcr.matrixResult->sortedEntries.front();
+            LowestCostInfo info;
+            info.objectName = pcr.objectName;
+            info.goalName = pcr.goalName;
+            info.cost = bestEntry.cost;
+            info.row = bestEntry.row;
+            info.col = bestEntry.col;
+            candidates.push_back(info);
+        }
+    }
+
+    // Sort candidates in ascending order of cost.
+    std::sort(candidates.begin(), candidates.end(),
+              [](const LowestCostInfo &a, const LowestCostInfo &b) {
+                  return a.cost < b.cost;
+              });
+
+    // Iterate over each candidate.
+    for (auto candidate : candidates) {
+        std::cout << "Attempting candidate: " << candidate.objectName
+                  << " -> " << candidate.goalName
+                  << ", cost: " << candidate.cost << std::endl;
+
+        // Variables to hold feasibility check results.
+        LowestCostInfo bestPick;
+        std::vector<EdgePath> ObsReloPathList;
+        std::unordered_map<std::string, ReloPush::State> ToUpdate;
+        EdgeMatrixEntry bestMatEntry;
+        ReloPush::StatePathPtrList transitPaths;
+
+        // Check if this candidate allocation is feasible.
+        bool isFeasible = findFeasibleAllocation(
+            pairResults, objGoalPairs, planCtx, ObsReloPathList,
+            bestPick, ToUpdate, candidate.objectName,
+            objects, bestMatEntry, transitPaths);
+
+        std::cout << "Feasibility check for candidate "
+                  << candidate.objectName << " -> " << candidate.goalName
+                  << ": " << (isFeasible ? "Feasible" : "Infeasible") << std::endl;
+
+        if (!isFeasible) {
+            std::cout << "Candidate " << candidate.objectName << " -> "
+                      << candidate.goalName << " is infeasible. Trying next candidate." << std::endl;
+            continue;
+        }
+
+        // If feasible, update object positions if needed.
+        for (const auto &pair : ToUpdate) {
+            std::cout << "Relocating: " << pair.first
+                      << " updated to state: " << pair.second << std::endl;
+            objects[pair.first].x = pair.second.x;
+            objects[pair.first].y = pair.second.y;
+        }
+
+        // Mark the candidate object as delivered.
+        delivered_objs[candidate.objectName] = goals[candidate.goalName];
+
+        // Build the FinalAllocation entry for this candidate.
+        FinalAllocation chosen;
+        chosen.object = objects[candidate.objectName];
+        chosen.goal = goals[candidate.goalName];
+        chosen.cost = candidate.cost;
+        chosen.row = candidate.row;
+        chosen.col = candidate.col;
+        chosen.vertexChain = bestMatEntry.vertexChain;
+        chosen.transitPaths = transitPaths;
+        chosen.startPose = ReloPush::State(
+            chosen.object.x, chosen.object.y,
+            chosen.object.getOrientation(chosen.row));
+        chosen.goalPose = ReloPush::State(
+            chosen.goal.x, chosen.goal.y,
+            chosen.goal.getOrientation(chosen.col));
+        chosen.paths = pairResults[candidate.objectName]
+                           .matrixResult->getBestPathMatEntry()
+                           .edgesInfo;
+        chosen.obsReloPaths = std::make_shared<std::vector<EdgePath>>(ObsReloPathList);
+        chosen.snapshot = planCtx;
+
+        std::cout << "Selected candidate: "
+                  << candidate.objectName << " -> " << candidate.goalName << std::endl;
+
+        // Backup current state for backtracking.
+        auto objectsBackup = objects;
+        auto goalsBackup = goals;
+        auto objGoalPairsBackup = objGoalPairs;
+        auto delivered_objsBackup = delivered_objs;
+        auto finalSequenceBackup = finalSequence;
+
+        // Remove the candidate from the remaining state.
+        objGoalPairs.erase(candidate.objectName);
+        objects.erase(candidate.objectName);
+        goals.erase(candidate.goalName);
+
+        // Push the candidate allocation onto the final sequence.
+        finalSequence.push_back(chosen);
+
+        std::cout << "State after candidate commit:" << std::endl;
+        printCurrentState(finalSequence, objGoalPairs, delivered_objs);
+
+        // Recursively attempt to allocate the remaining pairs.
+        if (performAllocationsDFS(
+                boundary, objects, goals, objGoalPairs,
+                delivered_objs, finalSequence, use_opt))
+        {
+            return true;  // Complete solution found.
+        }
+        else {
+            // Backtracking: remove candidate from finalSequence...
+            std::cout << "Backtracking from candidate: "
+                      << candidate.objectName << " -> " << candidate.goalName << std::endl;
+            finalSequence.pop_back();
+
+            // ... remove candidate from delivered_objs.
+            delivered_objs.erase(candidate.objectName);
+
+            // ... and restore all state from backups.
+            objects = objectsBackup;
+            goals = goalsBackup;
+            objGoalPairs = objGoalPairsBackup;
+            //delivered_objs = delivered_objsBackup;
+            finalSequence = finalSequenceBackup;
+            planCtx = PlanningContext(params, objects, delivered_objs, use_opt);
+
+            std::cout << "State after backtracking:" << std::endl;
+            printCurrentState(finalSequence, objGoalPairs, delivered_objs);
+        }
+    }
+
+    std::cout << "No feasible allocation found at this level, backtracking further." << std::endl;
+    return false;
+}
+
+
+
+
 
 // ---------------------------------------------------------------------------
 // Helper Function 5: Print the final sequence

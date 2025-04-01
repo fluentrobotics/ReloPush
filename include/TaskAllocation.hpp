@@ -304,7 +304,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
                             std::string &failedObjectName, ObjectMap objects);
 
 // ---------------------------------------------------------------------------
-// Helper Function 4: The main planning/allocation loop
+// Helper Function 4a: The main planning/allocation loop
 // ---------------------------------------------------------------------------
 bool performAllocations(const WorkspaceBoundary &boundary,
                         std::unordered_map<std::string, ObjectInfo> &objects,
@@ -312,6 +312,17 @@ bool performAllocations(const WorkspaceBoundary &boundary,
                         std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
                         std::vector<FinalAllocation> &finalSequence,
                         bool& use_opt);
+
+// ---------------------------------------------------------------------------
+// Helper Function 4b: The main planning/allocation loop (DFS)
+// ---------------------------------------------------------------------------
+bool performAllocationsDFS( const WorkspaceBoundary &boundary,
+                                            std::unordered_map<std::string, ObjectInfo> objects,
+                                            std::unordered_map<std::string, GoalInfo> goals,
+                                            std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
+                                            GoalMap delivered_objs,
+                                            std::vector<FinalAllocation> &finalSequence,
+                                            bool use_opt);
 
 // ---------------------------------------------------------------------------
 // Helper Function 5: Print the final sequence

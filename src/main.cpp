@@ -19,9 +19,10 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "input_opt2obj.txt";
-    std::string filename = "iros_obj4.txt";
-    int instance_ind = 72;
+    std::string filename = "iros_obj8.txt";
+    int instance_ind = 18;
     bool use_opt = false;
+    bool vis = true;
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file
@@ -34,6 +35,7 @@ int main(int argc, char *argv[])
     if(argc > 3) // parse from arg
     {
         handle_args(argc, argv, filename, instance_ind, use_opt);
+        vis = false; // disable for evaluations
     }
 
     Color::println("\n=== " + filename + " ind: " + std::to_string(instance_ind) + " ===",Color::GREEN);
@@ -55,7 +57,9 @@ int main(int argc, char *argv[])
 
     // 2) Perform the main planning/allocation loop
     std::vector<FinalAllocation> finalSequence;
-    bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence, use_opt);
+    //bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence, use_opt);
+    GoalMap delivered_objs;
+    bool ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, finalSequence, use_opt);
 
     auto end = std::chrono::high_resolution_clock::now();
 
@@ -75,9 +79,9 @@ int main(int argc, char *argv[])
     printFinalSequence(finalSequence);
 
     // 4) Visualization
-    if (!finalSequence.empty())
+    if (!finalSequence.empty() && vis)
     {
-       //visualizeResults(finalSequence, app);
+       visualizeResults(finalSequence, app);
     }
 
     writeFinalSequenceSummary(filename, instance_ind,

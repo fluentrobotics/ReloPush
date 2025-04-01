@@ -9,10 +9,10 @@
 #include <memory>
 #include <variant>
 
-// Include your headers
 #include <TaskAllocation.hpp>
 #include <State.h>
 #include <config.h>
+#include <PathPlanningTools.h>
 
 
 // Function to export data to a text file
@@ -178,6 +178,7 @@ void writeFinalSequenceSummary(const std::string &filename_in, int instanceIndex
     // Write all the collected data to file.
     file << "Filename: " << filename << "\n";
     file << "Instance_Index: " << instanceIndex << "\n";
+    file << "Turning_rad_push: " << Constants::r_push << "\n";
     file << "Objects: " << objectNamesStream.str() << "\n";
     file << "Goals: " << goalNamesStream.str() << "\n";
     file << "Rows: " << rowsStream.str() << "\n";

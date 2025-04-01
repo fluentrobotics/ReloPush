@@ -68,7 +68,7 @@ using namespace libMultiRobotPlanning;
 // };
 
 namespace Constants {
-    static float steer_limit_push = 0.2; // 0.185
+    static float steer_limit_push = 0.185; // 0.185
     static float steer_limit_nonpush = 0.26; // 0.28
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
