@@ -294,7 +294,7 @@ StateValidity addEdgeNormalMode(
 
     // for debug only
     bool deb = false;
-    if(data1.name == "box1" && data2.name == "goal2" && data1.orientationIndex==0 && data2.orientationIndex == 0)
+    if(data1.name == "b1" && data2.name == "d1" && data1.orientationIndex==1 && data2.orientationIndex == 1)
         deb = true;
 
     // 1) Temporarily remove start from obstacle. If target is also an obstacle, remove it, too.
@@ -313,7 +313,7 @@ StateValidity addEdgeNormalMode(
     ReloPush::State goal(data2.x, data2.y, data2.getActualOrientation());
 
     // check if goal is valid
-    auto gv = ctx.env_push.stateValid(goal);
+    auto gv = ctx.env_push.stateValid(goal,Constants::obsRadius*2,Constants::obsRadius,Constants::obsRadius,Constants::obsRadius); // can the object fit here?
     if(gv.get_validity()!=StateValidity::valid)
     {
         // put the obstacles back
@@ -398,7 +398,7 @@ StateValidity addEdgePrerelocation(
         ctx.removeObs(goalPose);
 
     // check goal validity
-    auto gv = ctx.env_push.stateValid(goalPose);
+    auto gv = ctx.env_push.stateValid(goalPose,Constants::obsRadius*2,Constants::obsRadius,Constants::obsRadius,Constants::obsRadius); // can the object fit here?
     if(!gv)
     {
         ctx.addObs(startPose);
@@ -648,7 +648,7 @@ StateValidity addEdgePrerelocation_Optimization(
 
     // check goal validity
 
-    auto gv = ctx.env_push.stateValid(goalPose);
+    auto gv = ctx.env_push.stateValid(goalPose,Constants::obsRadius*2,Constants::obsRadius,Constants::obsRadius,Constants::obsRadius); // can the object fit here?
     if(!gv)
     {
         ctx.addObs(startPose);

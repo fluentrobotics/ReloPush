@@ -19,8 +19,9 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "input_opt2obj.txt";
-    std::string filename = "iros_obj8.txt";
-    int instance_ind = 18;
+    //std::string filename = "alpha_to_omega.txt";
+    std::string filename = "omega_to_alpha.txt";
+    int instance_ind = 0;
     bool use_opt = false;
     bool vis = true;
 

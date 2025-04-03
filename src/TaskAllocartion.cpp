@@ -1331,6 +1331,11 @@ bool performAllocationsDFS(
         std::cout << "State after candidate commit:" << std::endl;
         printCurrentState(finalSequence, objGoalPairs, delivered_objs);
 
+        // for debug only
+        bool deb = false;
+        if(candidate.objectName == "b5")
+            deb = true;
+
         // Recursively attempt to allocate the remaining pairs.
         if (performAllocationsDFS(
                 boundary, objects, goals, objGoalPairs,
@@ -1342,7 +1347,7 @@ bool performAllocationsDFS(
             // Backtracking: remove candidate from finalSequence...
             std::cout << "Backtracking from candidate: "
                       << candidate.objectName << " -> " << candidate.goalName << std::endl;
-            finalSequence.pop_back();
+            //finalSequence.pop_back();
 
             // ... remove candidate from delivered_objs.
             delivered_objs.erase(candidate.objectName);
