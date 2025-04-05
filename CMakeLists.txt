@@ -29,10 +29,14 @@ if(NOT Eigen3_FOUND)
     message(FATAL_ERROR "\n Eigen 3 NOT FOUND \n")
 endif()
 
+find_package(GTest 1.14.0 REQUIRED)
+
 find_package(Ceres REQUIRED)
 
 ## Path Visualization
-find_package(Qt6 COMPONENTS Widgets REQUIRED)
+find_package(Qt5 COMPONENTS Widgets REQUIRED)
+
+#find_package(absl CONFIG REQUIRED)
 
 include_directories(include ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS})
 
@@ -64,11 +68,19 @@ add_executable(ReloPush src/main.cpp
     src/PrintInColor.cpp
     src/BatchInstanceParcer.cpp
 )
-target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt6::Widgets Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
+if(APPLE)
+    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
+else()
+    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets ${CERES_LIBRARIES} absl::log_initialize)
+endif()
 
 # Dubins Path Planning
 add_executable(test_dubins test/test_dubins.cpp)
-target_link_libraries(test_dubins ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
+if(APPLE)
+    target_link_libraries(test_dubins ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
+else()
+    target_link_libraries(test_dubins ${OMPL_LIBRARIES} ${Boost_LIBRARIES} absl::log_initialize)
+endif()
 
 # Hybrid Astar Planning
 add_executable(test_hybrid_astar test/test_hybrid_astar.cpp
@@ -77,11 +89,19 @@ add_executable(test_hybrid_astar test/test_hybrid_astar.cpp
     src/Visualization/VisualizationWidget.cpp
     src/PlanHybridAstar.cpp
     src/PlanningContext.cpp)
-target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt6::Widgets)
+if(APPLE)
+    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt5::Widgets)
+else()
+    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} Qt5::Widgets absl::log_initialize)
+endif()
 
 # Pre-relocation Optimization
 add_executable(test_prerelo_opt test/test_prerelo_optimization.cpp src/PreReloOptimization.cpp src/FromOMPL.cpp)
-target_link_libraries(test_prerelo_opt Ceres::ceres ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
+if(APPLE)
+    target_link_libraries(test_prerelo_opt Ceres::ceres ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
+else()
+     target_link_libraries(test_prerelo_opt ${CERES_LIBRARIES} ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} absl::log_initialize)
+endif()
 
 add_executable(test_parse_instance
     test/test_parse_instance.cpp
@@ -103,7 +123,15 @@ add_executable(test_parse_instance
     src/Visualization/QtMainControlWindow.cpp
     src/PrintInColor.cpp
     src/BatchInstanceParcer.cpp)
-target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt6::Widgets Ceres::ceres)
+
+if(APPLE)
+    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt5::Widgets Ceres::ceres)
+else()
+    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets ${CERES_LIBRARIES} absl::log_initialize)
+endif()
+
+add_executable(test_trajectory_gen test/test_trajectory_gen.cpp)
+target_link_libraries(test_trajectory_gen ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets)
 
 include(GNUInstallDirs)
 install(TARGETS ReloPush
@@ -123,6 +151,10 @@ install(TARGETS test_prerelo_opt
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(TARGETS test_parse_instance
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS test_trajectory_gen
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
