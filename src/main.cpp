@@ -9,18 +9,20 @@
 #include <Visualization/VisualizeResults.h>
 #include <chrono>
 
+#include "absl/log/initialize.h"
 
 // ---------------------------------------------------------------------------
 // Main Function
 // ---------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    google::InitGoogleLogging(argv[0]);
+    //google::InitGoogleLogging(argv[0]);
+    absl::InitializeLog();
     QApplication app(argc, argv);
 
     //std::string filename = "input_opt2obj.txt";
-    //std::string filename = "alpha_to_omega.txt";
-    std::string filename = "omega_to_alpha.txt";
+    std::string filename = "alpha_to_omega.txt";
+    //std::string filename = "omega_to_alpha.txt";
     int instance_ind = 0;
     bool use_opt = false;
     bool vis = true;
@@ -60,7 +62,7 @@ int main(int argc, char *argv[])
     std::vector<FinalAllocation> finalSequence;
     //bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence, use_opt);
     GoalMap delivered_objs;
-    bool ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, finalSequence, use_opt);
+    bool ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robots[0] ,finalSequence, use_opt);
 
     auto end = std::chrono::high_resolution_clock::now();
 
@@ -87,5 +89,7 @@ int main(int argc, char *argv[])
 
     writeFinalSequenceSummary(filename, instance_ind,
                               static_cast<double>(duration.count()), finalSequence, use_opt);
+
+
 
 }

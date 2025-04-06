@@ -69,7 +69,7 @@ using namespace libMultiRobotPlanning;
 
 namespace Constants {
     static float steer_limit_push = 0.185; // 0.185
-    static float steer_limit_nonpush = 0.26; // 0.28
+    static float steer_limit_nonpush = 0.34; // 0.28
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
     // [m] --- The minimum turning radius of the vehicle
@@ -79,8 +79,8 @@ namespace Constants {
     //static float r = 0.5;
     //static const float r = 3;
     //static const float deltat = 6.75 / 180.0 * M_PI;
-    static float deltat_push = speed_limit / r_push / 1.5;
-    static float deltat_nonpush = speed_limit / r_nonpush / 1.5;
+    static float deltat_push = speed_limit / r_push / 2;
+    static float deltat_nonpush = speed_limit / r_nonpush / 2;
     //extern float deltat; // non-push as default
     // [#] --- A movement cost penalty for turning (choosing non straight motion
     // primitives)
@@ -97,7 +97,7 @@ namespace Constants {
     static float heuristicWeight = 1.0f;
 
     // map resolution
-    static const float mapResolution = 0.1;
+    static const float mapResolution = 0.05;
 
     static const float xyResolution_push = r_push * deltat_push;
     static const float xyResolution_nonpush = r_nonpush * deltat_nonpush;
@@ -112,10 +112,10 @@ namespace Constants {
     // obstacle default radius
     static const float obsRadius = 0.075;
     // distance from rear to vehicle front end
-    static const float LF_nonpush = 0.38;  //0.38
-    static const float LF_push = (LF_nonpush + obsRadius)*1.01; //LF_nonpush + obsRadius; // 0.65
+    static const float LF_nonpush = 0.3;  //0.38
+    static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
-    static const float LB = 0.12;
+    static const float LB = 0.08; //0.12
 
 
     // R = 3, 6.75 DEG
@@ -188,6 +188,29 @@ struct PathPlanResult : PlanResultType
         : start_pose(start_in), goal_pose(goal_in), obs_rm(obs_to_rm), obs_add(obs_to_add)
     {
         success = false;
+    }
+
+    void summary(bool negateYaw = true)
+    {
+        std::cout << "Start: ";
+        start_pose.print(true,negateYaw);
+        std::cout << "Goal: ";
+        goal_pose.print(true,negateYaw);
+        if(validity!=PlanValidity::success)
+        {
+            std::cout << "Reason for failure: ";
+            if(validity==PlanValidity::no_sol)
+                std::cout << "No Solution";
+            else if(validity==PlanValidity::start_inval)
+                std::cout << "Start Invalid";
+            else if(validity==PlanValidity::goal_inval)
+                std::cout << "Goal Invalid";
+            std::cout << std::endl;
+        }
+        else
+        {
+            std::cout << "Plan OK" << std::endl;
+        }
     }
 };
 

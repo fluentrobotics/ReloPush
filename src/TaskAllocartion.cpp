@@ -1201,6 +1201,7 @@ bool performAllocationsDFS(
     std::unordered_map<std::string, GoalInfo> goals,             // passed by value
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,// passed by value
     GoalMap delivered_objs,                                      // passed by value
+    ReloPush::State robot,
     std::vector<FinalAllocation> &finalSequence,                 // passed by reference
     bool use_opt)
 {
@@ -1219,6 +1220,12 @@ bool performAllocationsDFS(
 
     PlanningParameters params;
     params.boundary = boundary;
+
+    bool deb0 = false;
+    if(delivered_objs.size()==9)
+        deb0=true;
+
+
 
     // delivered_objs become static obstacles.
     PlanningContext planCtx(params, objects, delivered_objs, use_opt);
@@ -1255,6 +1262,11 @@ bool performAllocationsDFS(
                   << " -> " << candidate.goalName
                   << ", cost: " << candidate.cost << std::endl;
 
+        // for debug only
+        bool deb = false;
+        if(candidate.objectName == "b5")
+            deb = true;
+
         // Variables to hold feasibility check results.
         LowestCostInfo bestPick;
         std::vector<EdgePath> ObsReloPathList;
@@ -1277,6 +1289,7 @@ bool performAllocationsDFS(
                       << candidate.goalName << " is infeasible. Trying next candidate." << std::endl;
             continue;
         }
+
 
         // If feasible, update object positions if needed.
         for (const auto &pair : ToUpdate) {
@@ -1313,6 +1326,29 @@ bool performAllocationsDFS(
         std::cout << "Selected candidate: "
                   << candidate.objectName << " -> " << candidate.goalName << std::endl;
 
+
+        ReloPush::State next_starting_pose = find_pre_push(chosen.goalPose,planCtx.parameters.PrePush_dist);
+
+        // if goal is the start
+        if(chosen.startPose.isSamePose(chosen.goalPose))
+        {
+            next_starting_pose = robot;
+            chosen.paths.clear(); // skip this task
+            //chosen.firstApproachPath->clear();
+        }
+        else
+        {
+            auto app_plan = planHybridAstar(robot,find_pre_push(chosen.startPose,planCtx.parameters.PrePush_dist),planCtx,true);
+            if(app_plan->success!=true)
+            {
+                std::cout << "\t\tApproach Failed. Trying other candidate" << std::endl;
+                app_plan->summary();
+                continue;
+            }
+            // Approach found
+            chosen.firstApproachPath = app_plan->getPathPtr();
+        }
+        // Check for approach path
         // Backup current state for backtracking.
         auto objectsBackup = objects;
         auto goalsBackup = goals;
@@ -1331,15 +1367,12 @@ bool performAllocationsDFS(
         std::cout << "State after candidate commit:" << std::endl;
         printCurrentState(finalSequence, objGoalPairs, delivered_objs);
 
-        // for debug only
-        bool deb = false;
-        if(candidate.objectName == "b5")
-            deb = true;
+
 
         // Recursively attempt to allocate the remaining pairs.
         if (performAllocationsDFS(
                 boundary, objects, goals, objGoalPairs,
-                delivered_objs, finalSequence, use_opt))
+                delivered_objs, next_starting_pose,finalSequence, use_opt))
         {
             return true;  // Complete solution found.
         }

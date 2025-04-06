@@ -48,16 +48,17 @@ int main(int argc, char *argv[])
     // init robot pose
     ReloPush::State start(0,0,1);
     // init goal
-    ReloPush::State goal(3,3,1);
+    ReloPush::State goal(2,3,-0.6);
 
     // plan
     auto res = planHybridAstar(start,goal,planCtx,true);
     // path in StatePath
     ReloPush::StatePath plannedPath = res->getPath(true);
-    //for(size_t n=0; n<plannedPath.size(); n++)
-    //{
-    //    plannedPath[n] = res->states[n].first;
-    //}
+    for(size_t n=0; n<plannedPath.size(); n++)
+    {
+        //plannedPath[n] = res->states[n].first;
+        plannedPath[n].print();
+    }
 
     // Create visualization widget with custom colors
     VisualizationWidget *viz = new VisualizationWidget(nullptr,

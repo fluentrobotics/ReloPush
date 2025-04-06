@@ -56,7 +56,7 @@ struct PlanResult {
         return out_vec;
     }
 
-    ReloPush::StatePathPtr getPathPtr(bool negateYaw)
+    ReloPush::StatePathPtr getPathPtr(bool negateYaw = true)
     {
         return std::make_shared<ReloPush::StatePath>(getPath(negateYaw));
     }

@@ -158,7 +158,8 @@ struct FinalAllocation
     PlanningContext snapshot;
 
     std::vector<EdgeData> paths; // contains edge information inc. mode
-    ReloPush::StatePathPtrList transitPaths;
+    ReloPush::StatePathPtrList transitPaths; // path for transit to an object
+    ReloPush::StatePathPtr firstApproachPath; // robot to first object
 
     EdgePathList obsReloPaths;
 
@@ -321,6 +322,7 @@ bool performAllocationsDFS( const WorkspaceBoundary &boundary,
                                             std::unordered_map<std::string, GoalInfo> goals,
                                             std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
                                             GoalMap delivered_objs,
+                                            ReloPush::State robot,
                                             std::vector<FinalAllocation> &finalSequence,
                                             bool use_opt);
 

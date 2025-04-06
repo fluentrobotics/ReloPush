@@ -1,4 +1,4 @@
-#include <Visualization/QTPathManager.h>
+#include <Visualization/QtPathManager.h>
 
 PathManager::PathManager(QObject *parent)
     : QObject(parent)

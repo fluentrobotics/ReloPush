@@ -32,7 +32,7 @@ namespace ReloPush
         {
             //return std::tie(time, x, y, yaw) == std::tie(s.time, s.x, s.y, s.yaw);
 
-            if(abs(x - s.x) < 0.00000001 && abs(y - s.y) < 0.00000001)
+            if(abs(x - s.x) < 0.00001 && abs(y - s.y) < 0.00001)
                 return true;
 
             return false;
@@ -78,9 +78,12 @@ namespace ReloPush
             return outState;
         }
 
-        void print(bool add_line = true)
+        void print(bool add_line = true, bool negateYaw = false)
         {
-            std::cout << "[" << x << ", " << y << ", " << yaw << "]";
+            auto out_yaw = yaw;
+            if(negateYaw)
+                out_yaw = fromOMPL::mod2pi((out_yaw*=-1));
+            std::cout << "[" << x << ", " << y << ", " << out_yaw << "]";
             if(add_line)
                 std::cout << "," << std::endl;
             else

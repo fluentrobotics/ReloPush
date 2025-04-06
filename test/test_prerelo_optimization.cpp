@@ -3,6 +3,7 @@
 //#include <GraphBuilder.hpp>
 #include "ceres/ceres.h"
 #include "glog/logging.h"
+#include "absl/log/initialize.h"
 
 #include <ompl/base/spaces/DubinsStateSpace.h>
 #include <ompl/base/spaces/ReedsSheppStateSpace.h>
@@ -30,6 +31,7 @@ typedef ompl::base::SE2StateSpace::StateType OmplState;
 
 int main(int argc, char** argv) {
     //google::InitGoogleLogging(argv[0]);
+    absl::InitializeLog();
 
     // 1) Our "constants" from your example:
 
