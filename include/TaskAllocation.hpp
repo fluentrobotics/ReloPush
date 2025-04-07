@@ -9,6 +9,7 @@
 
 #include <ObjectInfo.hpp>
 #include <PlanHybridAstar.hpp>
+#include <trajectory.hpp> // for generating fianl trajectory
 
 #include <string>
 #include <memory>
@@ -164,10 +165,13 @@ struct FinalAllocation
     EdgePathList obsReloPaths;
 
     std::pair<ReloPush::StatePathPtr,std::vector<size_t>> toSinglePathPtr(double interpolation_resolution = 0.1);
+    ReloPush::trajectory genTrajectory(double interpolation_resolution = 0.1);
 
     double getPushingLength(void) const;
 };
 
+
+// deprecated
 class FinalTaskSequence
 {
 public:

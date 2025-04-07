@@ -137,9 +137,10 @@ std::pair<ReloPush::StatePathPtr,std::vector<size_t>> FinalAllocation::toSingleP
     return std::make_pair(std::make_shared<ReloPush::StatePath>(combined), path_sizes);
 }
 
-ReloPush::trajectory genTrajectory(double interpolation_resolution)
+ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolution)
 {
-
+    ReloPush::trajectory out_traj;
+    
 }
 
 std::vector<ReloPush::State> FinalTaskSequence::to_StateList(void)

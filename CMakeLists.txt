@@ -8,6 +8,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+# Add ZeroMQ cmake file
+list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/include/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/config.h @ONLY)
 
@@ -37,8 +39,28 @@ find_package(Ceres REQUIRED)
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
 
 #find_package(absl CONFIG REQUIRED)
+# ZeroMQ
+if (NOT TARGET libzmq AND NOT TARGET libzmq-static)
+  find_package(ZeroMQ QUIET)
 
-include_directories(include ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS})
+  # libzmq autotools install: fallback to pkg-config
+  if(NOT ZeroMQ_FOUND)
+    message(STATUS "CMake libzmq package not found, trying again with pkg-config (normal install of zeromq)")
+    list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/libzmq-pkg-config)
+    find_package(ZeroMQ REQUIRED)
+  endif()
+
+  # TODO "REQUIRED" above should already cause a fatal failure if not found, but this doesn't seem to work
+  if(NOT ZeroMQ_FOUND)
+    message(FATAL_ERROR "ZeroMQ was not found, neither as a CMake package nor via pkg-config")
+  endif()
+
+  #if (ZeroMQ_FOUND AND NOT (TARGET libzmq OR TARGET libzmq-static))
+  #  message(FATAL_ERROR "ZeroMQ version not supported!")
+  #endif()
+endif()
+
+include_directories(include ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS} ${ZeroMQ_INCLUDE_DIRS})
 
 ## ODE ##
 if(APPLE)
@@ -71,7 +93,7 @@ add_executable(ReloPush src/main.cpp
 if(APPLE)
     target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
 else()
-    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets ${CERES_LIBRARIES} absl::log_initialize)
+    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets ${CERES_LIBRARIES} ${ZeroMQ_LIBRARIES} absl::log_initialize)
 endif()
 
 # Dubins Path Planning
@@ -133,6 +155,12 @@ endif()
 add_executable(test_trajectory_gen test/test_trajectory_gen.cpp)
 target_link_libraries(test_trajectory_gen ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets)
 
+
+# test ZeroMQ
+add_executable(test_zeromq test/test_zeromq.cpp src/BinaryString.cpp src/base64.cpp)
+target_link_libraries(test_zeromq ${ZeroMQ_LIBRARIES})
+
+
 include(GNUInstallDirs)
 install(TARGETS ReloPush
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -155,6 +183,10 @@ install(TARGETS test_parse_instance
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(TARGETS test_trajectory_gen
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS test_zeromq
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

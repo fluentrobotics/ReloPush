@@ -8,7 +8,7 @@
 #include <TaskAllocation.hpp>
 #include <Visualization/VisualizeResults.h>
 #include <chrono>
-
+#include <trajectory.hpp>
 #include "absl/log/initialize.h"
 
 // ---------------------------------------------------------------------------
@@ -89,6 +89,9 @@ int main(int argc, char *argv[])
 
     writeFinalSequenceSummary(filename, instance_ind,
                               static_cast<double>(duration.count()), finalSequence, use_opt);
+
+    // generate resulting trajectory
+
 
 
 
