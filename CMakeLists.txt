@@ -34,7 +34,21 @@ find_package(GTest 1.14.0 REQUIRED)
 find_package(Ceres REQUIRED)
 
 ## Path Visualization
-find_package(Qt5 COMPONENTS Widgets REQUIRED)
+# First, try to find Qt6 with the Widgets component quietly.
+find_package(Qt6 COMPONENTS Widgets QUIET)
+
+if (Qt6_FOUND)
+    message(STATUS "Found Qt6, using Qt6::Widgets")
+    set(QT_WIDGET_TARGET Qt6::Widgets)
+    # Optionally, define a preprocessor symbol to help your source code distinguish versions.
+    add_compile_definitions(USE_QT6)
+else()
+    message(STATUS "Qt6 not found; trying Qt5")
+    find_package(Qt5 COMPONENTS Widgets REQUIRED)
+    message(STATUS "Found Qt5, using Qt5::Widgets")
+    set(QT_WIDGET_TARGET Qt5::Widgets)
+    add_compile_definitions(USE_QT5)
+endif()
 
 #find_package(absl CONFIG REQUIRED)
 
@@ -69,9 +83,9 @@ add_executable(ReloPush src/main.cpp
     src/BatchInstanceParcer.cpp
 )
 if(APPLE)
-    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
+    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
 else()
-    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets ${CERES_LIBRARIES} absl::log_initialize)
+    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${CERES_LIBRARIES} absl::log_initialize)
 endif()
 
 # Dubins Path Planning
@@ -90,9 +104,9 @@ add_executable(test_hybrid_astar test/test_hybrid_astar.cpp
     src/PlanHybridAstar.cpp
     src/PlanningContext.cpp)
 if(APPLE)
-    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt5::Widgets)
+    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib ${QT_WIDGET_TARGET})
 else()
-    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} Qt5::Widgets absl::log_initialize)
+    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${QT_WIDGET_TARGET} absl::log_initialize)
 endif()
 
 # Pre-relocation Optimization
@@ -125,13 +139,13 @@ add_executable(test_parse_instance
     src/BatchInstanceParcer.cpp)
 
 if(APPLE)
-    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt5::Widgets Ceres::ceres)
+    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib ${QT_WIDGET_TARGET} Ceres::ceres)
 else()
-    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets ${CERES_LIBRARIES} absl::log_initialize)
+    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${CERES_LIBRARIES} absl::log_initialize)
 endif()
 
 add_executable(test_trajectory_gen test/test_trajectory_gen.cpp)
-target_link_libraries(test_trajectory_gen ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets)
+target_link_libraries(test_trajectory_gen ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET})
 
 include(GNUInstallDirs)
 install(TARGETS ReloPush
