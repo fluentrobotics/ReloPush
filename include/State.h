@@ -93,7 +93,9 @@ namespace ReloPush
         double x;
         double y;
         double yaw;
-        int time;
+        float time;
+        float vel;
+        bool is_pushing;
 
     private:
         boost::numeric::ublas::matrix<double> rot;

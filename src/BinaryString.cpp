@@ -160,3 +160,24 @@ float binarystr2float(std::string str_in)
     return receivedValue;
 }
 
+std::string bool2binarystr(bool b_in)
+{
+    std::string out_str;
+    if(b_in)
+        out_str="t";
+    else
+        out_str="f";
+
+    return out_str;
+}
+
+bool binarystr2bool(std::string str_in)
+{
+    if(str_in=="t")
+        return true;
+    else if(str_in=="f")
+        return false;
+    else {
+        //??????
+    }
+}

@@ -93,7 +93,7 @@ namespace ReloPush {
     }
 
     /// Split a string by a delimiter
-    std::vector<std::string> split(std::string s, std::string delimiter)
+    std::vector<std::string> split2(std::string s, std::string delimiter)
     {
         size_t pos_start = 0, pos_end, delim_len = delimiter.length();
         std::string token;
@@ -210,11 +210,11 @@ namespace ReloPush {
         void deserialize(std::string& str_traj)
         {
             // split header
-            auto header_sp = split(str_traj,header_delim);
+            auto header_sp = split2(str_traj,header_delim);
             if(header_sp[0] == "t") // trajectory
             {
                 // split elements
-                auto elem_sp = split(header_sp[1],elem_delim);
+                auto elem_sp = split2(header_sp[1],elem_delim);
                 // first elem is time_zero
                 auto time_zero_str = elem_sp[0];
                 time_zero = binarystr2float(time_zero_str);
@@ -224,7 +224,7 @@ namespace ReloPush {
                 for(size_t n=1; n<elem_size; n++)
                 {
                     // split variables
-                    auto var_sp = split(elem_sp[n],var_delim); // x y yaw vel time
+                    auto var_sp = split2(elem_sp[n],var_delim); // x y yaw vel time
                     float x_in = binarystr2float(var_sp[0]);
                     float y_in = binarystr2float(var_sp[1]);
                     float yaw_in = binarystr2float(var_sp[2]);

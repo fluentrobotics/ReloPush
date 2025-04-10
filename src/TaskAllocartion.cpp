@@ -137,9 +137,134 @@ std::pair<ReloPush::StatePathPtr,std::vector<size_t>> FinalAllocation::toSingleP
     return std::make_pair(std::make_shared<ReloPush::StatePath>(combined), path_sizes);
 }
 
-ReloPush::trajectory genTrajectory(double interpolation_resolution)
-{
 
+
+// Normalize angle to [-pi, pi)
+static double normalizeAngle(double theta) {
+    while (theta > M_PI) theta -= 2.0 * M_PI;
+    while (theta <= -M_PI) theta += 2.0 * M_PI;
+    return theta;
+}
+
+// Compute difference between angles, normalized
+static double angleDiff(double a, double b) {
+    return normalizeAngle(a - b);
+}
+
+// Check if the segment from prev to curr is forward
+bool isForwardSegment(const ReloPush::State &prev, const ReloPush::State &curr) {
+    double dx = curr.x - prev.x;
+    double dy = curr.y - prev.y;
+    double seg_angle = std::atan2(dy, dx);
+    double heading_diff = std::fabs(angleDiff(seg_angle, prev.yaw));
+    const double THRESHOLD = M_PI / 2.0; // 90 degrees
+    return (heading_diff <= THRESHOLD);
+}
+
+
+/**
+ * @brief Generates a timed trajectory from an ordered list of States.
+ *
+ * Based on velocities (v_forward, v_backward, v_transition), it assigns time stamps.
+ */
+ReloPush::StatePath generateTimedTrajectory(const ReloPush::StatePath &path,
+                                            float v_forward,
+                                            float v_backward,
+                                            float v_transition, bool is_pushing)
+{
+    ReloPush::StatePath timed_path;
+    if (path.empty()) return timed_path;
+
+    float current_time = 0;
+    // Start with the first state.
+    ReloPush::State first = path.front();
+    first.time = current_time;
+    timed_path.push_back(first);
+
+    bool prev_forward = true;  // Initial assumption
+
+    for (size_t i = 1; i < path.size(); ++i) {
+        const ReloPush::State &prev = timed_path.back();
+        ReloPush::State curr = path[i];
+        curr.is_pushing = is_pushing;
+
+        // Compute distance between states.
+        float dx = curr.x - prev.x;
+        float dy = curr.y - prev.y;
+        float distance = std::sqrt(dx * dx + dy * dy);
+
+        // Determine direction.
+        bool curr_forward = isForwardSegment(prev, curr);
+        if (i == 1) prev_forward = curr_forward;
+        bool direction_changed = (curr_forward != prev_forward);
+
+        // Choose appropriate velocity.
+        float velocity = direction_changed ? v_transition :
+                             (curr_forward ? v_forward : v_backward);
+
+        curr.vel = velocity;
+
+        // Compute time difference (ms)
+        float delta_time_sec = (velocity > 1e-6) ? (distance / velocity) : 0.0;
+        current_time += delta_time_sec;
+        curr.time = current_time;
+        timed_path.push_back(curr);
+        prev_forward = curr_forward;
+    }
+    return timed_path;
+}
+
+ReloPush::trajectory_elem state2trajelem(ReloPush::State& s, float time_off = 0)
+{
+    ReloPush::trajectory_elem out_elem(s.x,s.y,s.yaw,s.vel,s.time+time_off,s.is_pushing);
+    return out_elem;
+}
+
+ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
+                                    float v_forward, float v_backward, float v_transition,
+                                    bool is_pushing)
+{
+    auto p = generateTimedTrajectory(*sp,v_forward,v_backward,v_transition,is_pushing); //todo: add is_pushing during graph gen
+
+    ReloPush::trajectory out_traj;
+    for(auto& it : p)
+    {
+       out_traj.append_waypoint(state2trajelem(it));
+    }
+
+    return out_traj;
+}
+
+
+
+ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolution)
+{
+    // todo: parse these from param
+    float v_forward = 0.4;
+    float v_backward = 0.25;
+    float v_trans = 0.15;
+    // add approach
+    auto app_traj = statePath2traj(firstApproachPath,v_forward,v_backward,v_trans,false);
+
+    std::vector<ReloPush::trajectory> trajs;
+
+    for(auto& it : paths) // for each edge (possibly multiple if obs-relocated)
+    {
+        for(auto& ep : it.paths) // for each edgepath (one or more for each edge)
+        {
+            auto temp_traj = statePath2traj(ep->toStatePath(interpolation_resolution),v_forward,v_backward,v_trans,ep->is_pushing);
+            trajs.push_back(temp_traj);
+        }
+    }
+
+    // augment trajectories one by one
+    for(auto& it : trajs)
+    {
+        app_traj.augment_trajectory(it);
+    }
+
+    // return
+    return app_traj;
 }
 
 std::vector<ReloPush::State> FinalTaskSequence::to_StateList(void)
@@ -151,6 +276,21 @@ std::vector<ReloPush::State> FinalTaskSequence::to_StateList(void)
 
     return out_list;
 }
+
+
+
+ReloPush::trajectory FA2Trajectory(std::vector<FinalAllocation>& fa)
+{
+    ReloPush::trajectory out_traj;
+    for(auto& it : fa)
+    {
+        auto temp = it.genTrajectory();
+        out_traj.augment_trajectory(temp);
+    }
+    return out_traj;
+}
+
+
 
 /**
  * @brief Scans an Eigen::MatrixXd for its minimal value (if any).
@@ -1340,15 +1480,23 @@ bool performAllocationsDFS(
         }
         else
         {
-            auto app_plan = planHybridAstar(robot,find_pre_push(chosen.startPose,planCtx.parameters.PrePush_dist),planCtx,true);
+            // todo: handle empty approach just in case
+            auto approach_start = chosen.paths[0].paths[0]->getFirstWaypoint();
+
+            auto app_plan = planHybridAstar(robot,approach_start,planCtx,true);
             if(app_plan->success!=true)
             {
+                bool deb = false; // for debug only
+                if(candidate.objectName=="b5")
+                    deb=true;
                 std::cout << "\t\tApproach Failed. Trying other candidate" << std::endl;
                 app_plan->summary();
                 continue;
             }
             // Approach found
             chosen.firstApproachPath = app_plan->getPathPtr();
+            // Push the candidate allocation onto the final sequence.
+            finalSequence.push_back(chosen);
         }
         // Check for approach path
         // Backup current state for backtracking.
@@ -1363,8 +1511,7 @@ bool performAllocationsDFS(
         objects.erase(candidate.objectName);
         goals.erase(candidate.goalName);
 
-        // Push the candidate allocation onto the final sequence.
-        finalSequence.push_back(chosen);
+
 
         std::cout << "State after candidate commit:" << std::endl;
         printCurrentState(finalSequence, objGoalPairs, delivered_objs);

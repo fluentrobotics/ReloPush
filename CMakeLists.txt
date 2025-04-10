@@ -155,6 +155,9 @@ endif()
 add_executable(test_trajectory_gen test/test_trajectory_gen.cpp)
 target_link_libraries(test_trajectory_gen ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets)
 
+add_executable(test_trajectory_vis test/test_trajectory_gen.cpp)
+target_link_libraries(test_trajectory_vis ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets)
+
 
 # test ZeroMQ
 add_executable(test_zeromq test/test_zeromq.cpp src/BinaryString.cpp src/base64.cpp)

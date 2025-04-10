@@ -7,6 +7,7 @@
 #include <memory>
 
 #include <BinaryString.h>
+#include <batchInstanceParcer.hpp>
 
 class zeromp_object{
 public:
@@ -59,6 +60,7 @@ public:
 
 namespace ReloPush {
 
+/*
     ////////////////// String <-> Binary ////////////////
     std::string float2binarystr(float f_in)
     {
@@ -94,24 +96,7 @@ namespace ReloPush {
             //??????
         }
     }
-
-    /// Split a string by a delimiter
-    std::vector<std::string> split(std::string s, std::string delimiter)
-    {
-        size_t pos_start = 0, pos_end, delim_len = delimiter.length();
-        std::string token;
-        std::vector<std::string> res;
-
-        while ((pos_end = s.find(delimiter, pos_start)) != std::string::npos)
-        {
-          token = s.substr(pos_start, pos_end - pos_start);
-          pos_start = pos_end + delim_len;
-          res.push_back(token);
-        }
-
-        res.push_back(s.substr(pos_start));
-        return res;
-    }
+    */
 
     class trajectory_elem
     {
@@ -120,7 +105,7 @@ namespace ReloPush {
         float y;
         float yaw;
         float ref_vel; //reference velocity
-        float time_ms;
+        float time;
         bool is_pushing;
 
         trajectory_elem()
@@ -129,13 +114,13 @@ namespace ReloPush {
                y=0;
                yaw=0;
                ref_vel=0;
-               time_ms=-1;
+               time=-1;
                is_pushing = false;
            }
 
 
-        trajectory_elem(float x_in, float y_in, float yaw_in, float ref_vel_in, float time_ms_in, bool is_pushing_in)
-            : x(x_in), y(y_in), yaw(yaw_in), ref_vel(ref_vel_in), time_ms(time_ms_in), is_pushing(is_pushing_in)
+        trajectory_elem(float x_in, float y_in, float yaw_in, float ref_vel_in, float time_in, bool is_pushing_in)
+            : x(x_in), y(y_in), yaw(yaw_in), ref_vel(ref_vel_in), time(time_in), is_pushing(is_pushing_in)
         {}
 
         // Print function for trajectory_elem
@@ -144,7 +129,7 @@ namespace ReloPush {
                       << ", y=" << y
                       << ", yaw=" << yaw
                       << ", ref_vel=" << ref_vel
-                      << ", time_ms=" << time_ms << ")";
+                      << ", time=" << time << ")";
         }
 
     };
@@ -179,6 +164,24 @@ namespace ReloPush {
             trajectory_points->push_back(wpt);
         }
 
+        void augment_trajectory(trajectory traj_in)
+        {
+            if(trajectory_points->size()>0)
+            {
+                float time_off = trajectory_points->back().time + 0.5; // todo: calculate time offset
+                for(size_t n=0; n<traj_in.trajectory_points->size(); n++)
+                {
+                    auto temp = traj_in.trajectory_points->at(n);
+                    temp.time += time_off; // apply time
+                    append_waypoint(temp);
+                }
+            }
+            else // current trajectory is empty
+            {
+                trajectory_points = traj_in.trajectory_points;
+            }
+        }
+
         std::string serialize()
         {
             // header!time_zero;x,y,yaw,vel,time,is_pushing;...;
@@ -196,7 +199,7 @@ namespace ReloPush {
                 temp_str += var_delim;
                 temp_str += float2binarystr(trajectory_points->at(n).ref_vel);
                 temp_str += var_delim;
-                temp_str += float2binarystr(trajectory_points->at(n).time_ms);
+                temp_str += float2binarystr(trajectory_points->at(n).time);
                 temp_str += var_delim;
                 temp_str += bool2binarystr(trajectory_points->at(n).is_pushing);
 

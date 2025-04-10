@@ -165,10 +165,21 @@ struct FinalAllocation
     EdgePathList obsReloPaths;
 
     std::pair<ReloPush::StatePathPtr,std::vector<size_t>> toSinglePathPtr(double interpolation_resolution = 0.1);
+    /**
+     * @brief Generates a timed trajectory from an ordered list of States.
+     *
+     * Based on velocities (v_forward, v_backward, v_transition), it assigns time stamps.
+     */
+    ReloPush::StatePath generateTimedTrajectory(const ReloPush::StatePath &path,
+                                                double v_forward,
+                                                double v_backward,
+                                                double v_transition, bool is_pushing);
     ReloPush::trajectory genTrajectory(double interpolation_resolution = 0.1);
 
     double getPushingLength(void) const;
 };
+
+ReloPush::trajectory FA2Trajectory(std::vector<FinalAllocation>& fa);
 
 
 // deprecated

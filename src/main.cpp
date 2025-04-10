@@ -11,6 +11,94 @@
 #include <trajectory.hpp>
 #include "absl/log/initialize.h"
 
+#include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QGraphicsPolygonItem>
+#include <QTimer>
+#include <QPen>
+#include <QBrush>
+
+// ---------------------------------------------------------------------------
+// TrajectoryView: Custom QGraphicsView for Visualizing the Trajectory
+// ---------------------------------------------------------------------------
+class TrajectoryView : public QGraphicsView {
+    Q_OBJECT
+public:
+    TrajectoryView(QWidget* parent = nullptr)
+        : QGraphicsView(parent), arrowItem(nullptr)
+    {
+        scene = new QGraphicsScene(this);
+        setScene(scene);
+        setRenderHint(QPainter::Antialiasing);
+        scaleFactor = 100.0; // meters to pixels conversion factor
+    }
+
+    // Set the trajectory (with time stamps) and start the animation.
+    void setTrajectory(const ReloPush::trajectory& traj) {
+        scene->clear();
+        auto& points = *(traj.trajectory_points);
+
+        // Draw the complete trajectory as blue line segments.
+        QPen linePen(QColor("#0000FF"));  // Blue color via hex code.
+        linePen.setWidth(2);
+        for (size_t i = 1; i < points.size(); i++) {
+            const ReloPush::trajectory_elem& prev = points[i - 1];
+            const ReloPush::trajectory_elem& curr = points[i];
+            scene->addLine(prev.x * scaleFactor, -prev.y * scaleFactor,
+                           curr.x * scaleFactor, -curr.y * scaleFactor,
+                           linePen);
+        }
+
+        // Create the robot item as an arrow if it doesn't exist.
+        if (!arrowItem) {
+            QPolygonF arrow;
+            // Define the arrow polygon so that a zero yaw means arrow points to the right.
+            // Tip: (7.5, 0) and Base: (-7.5, -5) and (-7.5, 5)
+            arrow << QPointF(7.5, 0) << QPointF(-7.5, -5) << QPointF(-7.5, 5);
+            arrowItem = scene->addPolygon(arrow, QPen(QColor("#FF5733")), QBrush(QColor("#FF5733")));
+            // Center the rotation about the arrow's centroid.
+            arrowItem->setTransformOriginPoint(arrowItem->boundingRect().center());
+        }
+
+        // Set initial arrow position and start the animation.
+        if (!points.empty()) {
+            updateArrowPosition(points[0]);
+            animateFromIndex(0, points);
+        }
+    }
+
+private:
+    // Recursively animate the arrow from one trajectory element to the next,
+    // using the time differences as delays.
+    void animateFromIndex(size_t index, const std::vector<ReloPush::trajectory_elem>& points) {
+        if (index >= points.size() - 1) return;
+        // Compute delay as difference between next and current time (assumed in ms).
+        float currentTime = points[index].time;
+        float nextTime = points[index + 1].time;
+        int delay = static_cast<int>((nextTime - currentTime)*1000);
+        QTimer::singleShot(delay, this, [=, &points]() {
+            updateArrowPosition(points[index + 1]);
+            animateFromIndex(index + 1, points);
+        });
+    }
+
+    // Update arrow position (world-to-screen conversion) and rotation.
+    void updateArrowPosition(const ReloPush::trajectory_elem& elem) {
+        qreal x = elem.x * scaleFactor;
+        qreal y = -elem.y * scaleFactor; // Invert y for screen coordinates.
+        arrowItem->setPos(x, y);
+        qreal angleDegrees = -elem.yaw * 180.0 / M_PI; // Conversion: radians to degrees.
+        arrowItem->setRotation(angleDegrees);
+    }
+
+    QGraphicsScene* scene;
+    QGraphicsPolygonItem* arrowItem;
+    double scaleFactor;
+};
+
+#include "main.moc"
+
+
 // ---------------------------------------------------------------------------
 // Main Function
 // ---------------------------------------------------------------------------
@@ -46,7 +134,6 @@ int main(int argc, char *argv[])
 
     parse_instance_from_file(filename, instance_ind, objects, goals, robots, objGoalPairs);
 
-
     /*
     // 1) Parse and initialize
     if (!parseAndInitialize(filename, boundary, objects, goals, objGoalPairs))
@@ -54,7 +141,6 @@ int main(int argc, char *argv[])
         return 1;
     }
     */
-
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -84,15 +170,30 @@ int main(int argc, char *argv[])
     // 4) Visualization
     if (!finalSequence.empty() && vis)
     {
-       visualizeResults(finalSequence, app);
+       //visualizeResults(finalSequence, app);
     }
 
-    writeFinalSequenceSummary(filename, instance_ind,
-                              static_cast<double>(duration.count()), finalSequence, use_opt);
+    //writeFinalSequenceSummary(filename, instance_ind,
+    //                          static_cast<double>(duration.count()), finalSequence, use_opt);
 
     // generate resulting trajectory
 
+    auto finalTrajectory = FA2Trajectory(finalSequence);
+    //QApplication app(argc, argv);
+    QMainWindow window;
+    window.setWindowTitle("Trajectory Visualization (Arrow Format)");
+    window.resize(800, 600);
 
+    TrajectoryView* view = new TrajectoryView();
+    window.setCentralWidget(view);
+
+    // Create a trajectory object and fill it with sample data.
+    // Here we use similar data as before, with time stamps (in ms).
+
+    view->setTrajectory(finalTrajectory);
+
+    window.show();
+    return app.exec();
 
 
 }

@@ -66,4 +66,8 @@ std::string float2binarystr(float f_in);
 
 float binarystr2float(std::string str_in);
 
+std::string bool2binarystr(bool b_in);
+
+bool binarystr2bool(std::string str_in);
+
 #endif // HEXNDOUBLE_H
