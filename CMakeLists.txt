@@ -9,7 +9,11 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Add ZeroMQ cmake file
-list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+if(UNIX)
+    list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+elseif(APPLE)
+    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew")
+endif()
 
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/include/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/config.h @ONLY)
 
@@ -36,18 +40,37 @@ find_package(GTest 1.14.0 REQUIRED)
 find_package(Ceres REQUIRED)
 
 ## Path Visualization
-find_package(Qt5 COMPONENTS Widgets REQUIRED)
+# First, try to find Qt6 with the Widgets component quietly.
+find_package(Qt6 COMPONENTS Widgets QUIET)
+
+if (Qt6_FOUND)
+    message(STATUS "Found Qt6, using Qt6::Widgets")
+    set(QT_WIDGET_TARGET Qt6::Widgets)
+    # Optionally, define a preprocessor symbol to help your source code distinguish versions.
+    add_compile_definitions(USE_QT6)
+else()
+    message(STATUS "Qt6 not found; trying Qt5")
+    find_package(Qt5 COMPONENTS Widgets REQUIRED)
+    message(STATUS "Found Qt5, using {QT_WIDGET_TARGET}")
+    set(QT_WIDGET_TARGET {QT_WIDGET_TARGET})
+    add_compile_definitions(USE_QT5)
+endif()
 
 #find_package(absl CONFIG REQUIRED)
 # ZeroMQ
 if (NOT TARGET libzmq AND NOT TARGET libzmq-static)
+    message(STATUS "Trying to find ZeroMQ")
   find_package(ZeroMQ QUIET)
 
   # libzmq autotools install: fallback to pkg-config
   if(NOT ZeroMQ_FOUND)
     message(STATUS "CMake libzmq package not found, trying again with pkg-config (normal install of zeromq)")
     list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/libzmq-pkg-config)
-    find_package(ZeroMQ REQUIRED)
+    if(APPLE)
+        find_package(ZeroMQ REQUIRED)
+    else()
+        find_package(ZeroMQ REQUIRED)
+    endif()
   endif()
 
   # TODO "REQUIRED" above should already cause a fatal failure if not found, but this doesn't seem to work
@@ -61,6 +84,7 @@ if (NOT TARGET libzmq AND NOT TARGET libzmq-static)
 endif()
 
 include_directories(include ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS} ${ZeroMQ_INCLUDE_DIRS})
+message(STATUS ${ZeroMQ_INCLUDE_DIRS})
 
 ## ODE ##
 if(APPLE)
@@ -91,9 +115,9 @@ add_executable(ReloPush src/main.cpp
     src/BatchInstanceParcer.cpp
 )
 if(APPLE)
-    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
+    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
 else()
-    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets ${CERES_LIBRARIES} ${ZeroMQ_LIBRARIES} absl::log_initialize)
+    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${CERES_LIBRARIES} ${ZeroMQ_LIBRARIES} absl::log_initialize)
 endif()
 
 # Dubins Path Planning
@@ -112,9 +136,9 @@ add_executable(test_hybrid_astar test/test_hybrid_astar.cpp
     src/PlanHybridAstar.cpp
     src/PlanningContext.cpp)
 if(APPLE)
-    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt5::Widgets)
+    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib ${QT_WIDGET_TARGET})
 else()
-    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} Qt5::Widgets absl::log_initialize)
+    target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${QT_WIDGET_TARGET} absl::log_initialize)
 endif()
 
 # Pre-relocation Optimization
@@ -147,21 +171,25 @@ add_executable(test_parse_instance
     src/BatchInstanceParcer.cpp)
 
 if(APPLE)
-    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib Qt5::Widgets Ceres::ceres)
+    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib ${QT_WIDGET_TARGET} Ceres::ceres)
 else()
-    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets ${CERES_LIBRARIES} absl::log_initialize)
+    target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${CERES_LIBRARIES} absl::log_initialize)
 endif()
 
 add_executable(test_trajectory_gen test/test_trajectory_gen.cpp)
-target_link_libraries(test_trajectory_gen ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets)
+target_link_libraries(test_trajectory_gen ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET})
 
 add_executable(test_trajectory_vis test/test_trajectory_gen.cpp)
-target_link_libraries(test_trajectory_vis ${Boost_LIBRARIES} ${Eigen_LIBRARIES} Qt5::Widgets)
+target_link_libraries(test_trajectory_vis ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET})
 
 
 # test ZeroMQ
 add_executable(test_zeromq test/test_zeromq.cpp src/BinaryString.cpp src/base64.cpp)
-target_link_libraries(test_zeromq ${ZeroMQ_LIBRARIES})
+if(APPLE)
+    target_link_libraries(test_zeromq ${ZeroMQ_LIBRARIES})
+else()
+    target_link_libraries(test_zeromq ${ZeroMQ_LIBRARIES})
+endif()
 
 
 include(GNUInstallDirs)

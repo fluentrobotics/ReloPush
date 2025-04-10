@@ -1,7 +1,9 @@
+
 #include <zmq.hpp>
 #include <iostream>
 #include <string>
 #include <memory>
+#include <thread>
 
 #include <BinaryString.h>
 
@@ -260,7 +262,17 @@ namespace ReloPush {
 
 int main() {
     zeromp_object mqClient;
-    mqClient.connect();
+    #ifdef __APPLE__
+            // For macOS, initialize Google Logging with the program name.
+        mqClient.connect("tcp://192.168.1.13:5555");
+    std::cout << "APPLE" << std::endl;
+    #else
+            // For non-macOS systems, initialize Abseil Logging.
+        mqClient.connect();
+    #endif
+
+    // Allow time for the connection to establish.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // test trajectory
     ReloPush::trajectory test_traj;
