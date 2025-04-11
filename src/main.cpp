@@ -8,6 +8,7 @@
 #include <TaskAllocation.hpp>
 #include <Visualization/VisualizeResults.h>
 #include <chrono>
+#include <thread>
 #include <trajectory.hpp>
 #ifdef __APPLE__
 // Include the glog header when compiling on MacOS.
@@ -17,92 +18,9 @@
     #include "absl/log/initialize.h"
 #endif
 
-#include <QGraphicsView>
-#include <QGraphicsScene>
-#include <QGraphicsPolygonItem>
-#include <QTimer>
-#include <QPen>
-#include <QBrush>
+#include <Visualization/TrajectoryView.h>
+#include <base64.h>
 
-// ---------------------------------------------------------------------------
-// TrajectoryView: Custom QGraphicsView for Visualizing the Trajectory
-// ---------------------------------------------------------------------------
-class TrajectoryView : public QGraphicsView {
-    Q_OBJECT
-public:
-    TrajectoryView(QWidget* parent = nullptr)
-        : QGraphicsView(parent), arrowItem(nullptr)
-    {
-        scene = new QGraphicsScene(this);
-        setScene(scene);
-        setRenderHint(QPainter::Antialiasing);
-        scaleFactor = 100.0; // meters to pixels conversion factor
-    }
-
-    // Set the trajectory (with time stamps) and start the animation.
-    void setTrajectory(const ReloPush::trajectory& traj) {
-        scene->clear();
-        auto& points = *(traj.trajectory_points);
-
-        // Draw the complete trajectory as blue line segments.
-        QPen linePen(QColor("#0000FF"));  // Blue color via hex code.
-        linePen.setWidth(2);
-        for (size_t i = 1; i < points.size(); i++) {
-            const ReloPush::trajectory_elem& prev = points[i - 1];
-            const ReloPush::trajectory_elem& curr = points[i];
-            scene->addLine(prev.x * scaleFactor, -prev.y * scaleFactor,
-                           curr.x * scaleFactor, -curr.y * scaleFactor,
-                           linePen);
-        }
-
-        // Create the robot item as an arrow if it doesn't exist.
-        if (!arrowItem) {
-            QPolygonF arrow;
-            // Define the arrow polygon so that a zero yaw means arrow points to the right.
-            // Tip: (7.5, 0) and Base: (-7.5, -5) and (-7.5, 5)
-            arrow << QPointF(7.5, 0) << QPointF(-7.5, -5) << QPointF(-7.5, 5);
-            arrowItem = scene->addPolygon(arrow, QPen(QColor("#FF5733")), QBrush(QColor("#FF5733")));
-            // Center the rotation about the arrow's centroid.
-            arrowItem->setTransformOriginPoint(arrowItem->boundingRect().center());
-        }
-
-        // Set initial arrow position and start the animation.
-        if (!points.empty()) {
-            updateArrowPosition(points[0]);
-            animateFromIndex(0, points);
-        }
-    }
-
-private:
-    // Recursively animate the arrow from one trajectory element to the next,
-    // using the time differences as delays.
-    void animateFromIndex(size_t index, const std::vector<ReloPush::trajectory_elem>& points) {
-        if (index >= points.size() - 1) return;
-        // Compute delay as difference between next and current time (assumed in ms).
-        float currentTime = points[index].time;
-        float nextTime = points[index + 1].time;
-        int delay = static_cast<int>((nextTime - currentTime)*1000);
-        QTimer::singleShot(delay, this, [=, &points]() {
-            updateArrowPosition(points[index + 1]);
-            animateFromIndex(index + 1, points);
-        });
-    }
-
-    // Update arrow position (world-to-screen conversion) and rotation.
-    void updateArrowPosition(const ReloPush::trajectory_elem& elem) {
-        qreal x = elem.x * scaleFactor;
-        qreal y = -elem.y * scaleFactor; // Invert y for screen coordinates.
-        arrowItem->setPos(x, y);
-        qreal angleDegrees = -elem.yaw * 180.0 / M_PI; // Conversion: radians to degrees.
-        arrowItem->setRotation(angleDegrees);
-    }
-
-    QGraphicsScene* scene;
-    QGraphicsPolygonItem* arrowItem;
-    double scaleFactor;
-};
-
-#include "main.moc"
 
 // ---------------------------------------------------------------------------
 // Main Function
@@ -124,6 +42,7 @@ int main(int argc, char *argv[])
     int instance_ind = 0;
     bool use_opt = false;
     bool vis = true;
+    bool sim = false;
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file
@@ -131,7 +50,6 @@ int main(int argc, char *argv[])
     std::unordered_map<std::string, GoalInfo>   goals;
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs;
     std::vector<ReloPush::State> robots;
-
 
     if(argc > 3) // parse from arg
     {
@@ -143,6 +61,40 @@ int main(int argc, char *argv[])
     Color::println("Use Optimized PreRelocation? " + std::to_string(use_opt),Color::YELLOW);
 
     parse_instance_from_file(filename, instance_ind, objects, goals, robots, objGoalPairs);
+
+    // send via zeromq
+    zeromp_object mqClient;
+    #ifdef __APPLE__
+            // For macOS, initialize Google Logging with the program name.
+        mqClient.connect("tcp://192.168.1.13:5555");
+    std::cout << "APPLE" << std::endl;
+    #else
+            // For non-macOS systems, initialize Abseil Logging.
+        mqClient.connect();
+    #endif
+
+    if(sim)
+    {
+        // init robot init pose
+        ReloPush::trajectory_elem robot(robots[0].x,robots[0].y,robots[0].yaw,-1,-1,false);
+        auto robot_str = "r!!!"+robot.serialize();
+        std::string encoded_data_robot = base64_encode(reinterpret_cast<const unsigned char*>(robot_str.c_str()), robot_str.length());
+        mqClient.send_and_wait(encoded_data_robot); //todo: gen message properly
+    }
+    else // real robot. get pose from ros bridge
+    {
+        auto req = std::string("l!!!");
+        auto req_msg = base64_encode(reinterpret_cast<const unsigned char*>(req.c_str()), req.length());
+        auto r_str = mqClient.send_and_wait(req_msg);
+        auto r_dec = base64_decode(r_str,false);
+        auto robot = ReloPush::trajectory_elem(r_dec);
+        // For now, assume there is only one robot
+        robots[0].x = robot.x;
+        robots[0].y = robot.y;
+        robots[0].yaw = robot.yaw;
+        std::cout << "Robot at: " << robot.x << ", " << robot.y << ", " << robot.yaw << std::endl;
+    }
+
 
     /*
     // 1) Parse and initialize
@@ -187,7 +139,6 @@ int main(int argc, char *argv[])
     //                          static_cast<double>(duration.count()), finalSequence, use_opt);
 
     // generate resulting trajectory
-
     auto finalTrajectory = FA2Trajectory(finalSequence);
     //QApplication app(argc, argv);
     QMainWindow window;
@@ -203,7 +154,18 @@ int main(int argc, char *argv[])
     view->setTrajectory(finalTrajectory);
 
     window.show();
+
+
+    // Allow time for the previous request to end
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
+    // send trajectory
+    auto s = finalTrajectory.serialize();
+    std::string encoded_data = base64_encode(reinterpret_cast<const unsigned char*>(s.c_str()), s.length());
+    //for debug
+    std::cout << encoded_data.size() << std::endl;
+    auto res = mqClient.send_and_wait(encoded_data);
+    std::cout << res << std::endl; // response from server
+
     return app.exec();
-
-
 }

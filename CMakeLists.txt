@@ -115,6 +115,10 @@ add_executable(ReloPush src/main.cpp
     src/Visualization/QtMainControlWindow.cpp
     src/PrintInColor.cpp
     src/BatchInstanceParcer.cpp
+    src/Visualization/TrajectoryView.cpp
+    include/Visualization/TrajectoryView.h
+    src/BinaryString.cpp
+    src/base64.cpp
 )
 if(APPLE)
     target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)

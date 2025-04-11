@@ -109,19 +109,67 @@ namespace ReloPush {
         bool is_pushing;
 
         trajectory_elem()
-           {
-               x=0;
-               y=0;
-               yaw=0;
-               ref_vel=0;
-               time=-1;
-               is_pushing = false;
-           }
+        {
+           x=0;
+           y=0;
+           yaw=0;
+           ref_vel=0;
+           time=-1;
+           is_pushing = false;
+        }
+        trajectory_elem(std::string& serialized_waypoint)
+        {
+            deserialize(serialized_waypoint);
+        }
 
 
         trajectory_elem(float x_in, float y_in, float yaw_in, float ref_vel_in, float time_in, bool is_pushing_in)
             : x(x_in), y(y_in), yaw(yaw_in), ref_vel(ref_vel_in), time(time_in), is_pushing(is_pushing_in)
         {}
+
+        std::string serialize()
+        {
+            std::string var_delim = ",,,";
+            std::string temp_str=""; // string for one waypoint
+            temp_str += float2binarystr(x);
+            temp_str += var_delim;
+            temp_str += float2binarystr(y);
+            temp_str += var_delim;
+            temp_str += float2binarystr(yaw);
+            temp_str += var_delim;
+            temp_str += float2binarystr(ref_vel);
+            temp_str += var_delim;
+            temp_str += float2binarystr(time);
+            temp_str += var_delim;
+            temp_str += bool2binarystr(is_pushing);
+
+            return temp_str;
+        }
+
+        void deserialize(std::string& str_pose)
+        {
+            std::string header_delim = "!!!";
+            std::string elem_delim = ";;;";
+            std::string var_delim = ",,,";
+
+            // split variables
+            auto var_sp = split(str_pose,var_delim); // x y yaw vel time
+            if(var_sp.size()==6)
+            {
+                float x_in = binarystr2float(var_sp[0]);
+                float y_in = binarystr2float(var_sp[1]);
+                float yaw_in = binarystr2float(var_sp[2]);
+                float vel_in = binarystr2float(var_sp[3]);
+                float time_in = binarystr2float(var_sp[4]);
+                bool is_pushing_in = binarystr2bool(var_sp[5]);
+
+                x=x_in; y=y_in; yaw=yaw_in; ref_vel=vel_in; time=time_in; is_pushing=is_pushing_in;
+            }
+            else
+            {
+                std::cout << "Cannot deserialize" << std::endl;
+            }
+        }
 
         // Print function for trajectory_elem
         void print() const {
@@ -138,9 +186,9 @@ namespace ReloPush {
     {
     public:
         float time_zero=0;
-        std::string header_delim = "!";
-        std::string elem_delim = ";";
-        std::string var_delim = ",";
+        std::string header_delim = "!!!";
+        std::string elem_delim = ";;;";
+        std::string var_delim = ",,,";
         std::string header = "t"; // header for trajectory
 
         std::shared_ptr<std::vector<trajectory_elem>> trajectory_points;
