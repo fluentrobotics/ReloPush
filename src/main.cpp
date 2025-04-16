@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "input_opt2obj.txt";
-    std::string filename = "alpha_to_omega.txt";
+    std::string filename = "alpha_to_omega_simp.txt";
     //std::string filename = "omega_to_alpha.txt";
     int instance_ind = 0;
     bool use_opt = false;
@@ -93,6 +93,30 @@ int main(int argc, char *argv[])
         robots[0].y = robot.y;
         robots[0].yaw = robot.yaw;
         std::cout << "Robot at: " << robot.x << ", " << robot.y << ", " << robot.yaw << std::endl;
+
+        // send objects for vis
+        auto obj_vis = std::string("o!!!");
+        std::vector<std::string> strs;
+        for(auto& it : objects)
+        {
+            std::string temp="";
+            temp+=float2binarystr(it.second.x);
+            temp+=",,,";
+            temp+=float2binarystr(it.second.y);
+            temp+=",,,";
+            temp+=float2binarystr(it.second.nominalOrientation);
+            strs.push_back(temp);
+        }
+
+        for(int n=0; n<strs.size(); n++)
+        {
+            obj_vis+=strs[n];
+            if(n!=strs.size()-1)
+                obj_vis+=";;;";
+        }
+        auto obj_vis_msg = base64_encode(reinterpret_cast<const unsigned char*>(obj_vis.c_str()), obj_vis.length());
+        mqClient.send_and_wait(obj_vis_msg);
+
     }
 
 
@@ -153,7 +177,7 @@ int main(int argc, char *argv[])
 
     view->setTrajectory(finalTrajectory);
 
-    window.show();
+    //window.show();
 
 
     // Allow time for the previous request to end

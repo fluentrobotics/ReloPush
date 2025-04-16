@@ -163,55 +163,82 @@ bool isForwardSegment(const ReloPush::State &prev, const ReloPush::State &curr) 
 
 
 /**
- * @brief Generates a timed trajectory from an ordered list of States.
+ * @brief Generate a timed trajectory from an ordered list of States.
  *
- * Based on velocities (v_forward, v_backward, v_transition), it assigns time stamps.
+ * If state[i].is_push==true, we assume the robot always drives forward,
+ * using velocity = v_p. If is_push==false, we determine forward/backward
+ * by comparing the waypoint’s yaw to the displacement vector. In that case,
+ * use velocity = v_np for forward, velocity = -v_backward for backward.
+ *
+ * @param path            Input sequence of waypoints without timing.
+ * @param v_p             Forward pushing velocity (e.g. 0.4).
+ * @param v_np            Forward non-pushing velocity (e.g. 0.5).
+ * @param v_backward      Backward velocity magnitude (e.g. 0.25).
+ * @return A new path with time values assigned in each ReloPush::State.
  */
 ReloPush::StatePath generateTimedTrajectory(const ReloPush::StatePath &path,
-                                            float v_forward,
-                                            float v_backward,
-                                            float v_transition, bool is_pushing)
+                                            float v_p,
+                                            float v_np,
+                                            float v_backward, bool is_pushing)
 {
-    ReloPush::StatePath timed_path;
-    if (path.empty()) return timed_path;
-
-    float current_time = 0;
-    // Start with the first state.
-    ReloPush::State first = path.front();
-    first.time = current_time;
-    timed_path.push_back(first);
-
-    bool prev_forward = true;  // Initial assumption
-
-    for (size_t i = 1; i < path.size(); ++i) {
-        const ReloPush::State &prev = timed_path.back();
-        ReloPush::State curr = path[i];
-        curr.is_pushing = is_pushing;
-
-        // Compute distance between states.
-        float dx = curr.x - prev.x;
-        float dy = curr.y - prev.y;
-        float distance = std::sqrt(dx * dx + dy * dy);
-
-        // Determine direction.
-        bool curr_forward = isForwardSegment(prev, curr);
-        if (i == 1) prev_forward = curr_forward;
-        bool direction_changed = (curr_forward != prev_forward);
-
-        // Choose appropriate velocity.
-        float velocity = direction_changed ? v_transition :
-                             (curr_forward ? v_forward : v_backward);
-
-        curr.vel = velocity;
-
-        // Compute time difference (ms)
-        float delta_time_sec = (velocity > 1e-6) ? (distance / velocity) : 0.0;
-        current_time += delta_time_sec;
-        curr.time = current_time;
-        timed_path.push_back(curr);
-        prev_forward = curr_forward;
+    ReloPush::StatePath timedPath;
+    if (path.empty()) {
+        return timedPath;
     }
-    return timed_path;
+
+    // Prepare output container with same size
+    timedPath.resize(path.size());
+    // Copy the first state and initialize its time
+    timedPath[0] = path[0];
+    timedPath[0].time = 0.0f;
+
+    // Iterate over each pair of consecutive waypoints
+    for (size_t i = 0; i + 1 < path.size(); ++i)
+    {
+        const auto &s1 = timedPath[i];
+        auto &s2 = timedPath[i + 1];
+
+        // Copy next state from input
+        s2 = path[i + 1];
+
+        // Calculate displacement from s1 to s2
+        float dx = s2.x - s1.x;
+        float dy = s2.y - s1.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+
+        // Determine whether it’s forward or backward
+        // by projecting (dx, dy) onto s1’s heading vector.
+        float headingX = std::cos(s1.yaw);
+        float headingY = std::sin(s1.yaw);
+        float dot = dx * headingX + dy * headingY; // if dot>0 => forward; else backward
+
+        // Decide velocity
+        float chosenVel = 0.0f;
+        if (is_pushing) {
+            // For pushing, always drive forward at v_p
+            chosenVel = v_p;
+        } else {
+            // Non-pushing: forward = v_np, backward = -v_backward
+            if (dot >= 0.0f)
+                chosenVel = v_np;          // forward
+            else
+                chosenVel = v_backward;  // backward (negative velocity)
+        }
+
+        // Compute travel time for segment i->i+1
+        // (Use absolute value for distance ÷ speed)
+        float speed = std::fabs(chosenVel);
+        float dt = (speed > 1e-6f) ? (dist / speed) : 0.0f;
+
+        // Accumulate the time in s2
+        s2.time = s1.time + dt;
+        // Assign speed
+        timedPath[i].vel = chosenVel;
+        // Assign is_push
+        timedPath[i].is_pushing = is_pushing;
+    }
+
+    return timedPath;
 }
 
 ReloPush::trajectory_elem state2trajelem(ReloPush::State& s, float time_off = 0)
@@ -221,10 +248,10 @@ ReloPush::trajectory_elem state2trajelem(ReloPush::State& s, float time_off = 0)
 }
 
 ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
-                                    float v_forward, float v_backward, float v_transition,
+                                    float v_p, float v_np, float v_backward,
                                     bool is_pushing)
 {
-    auto p = generateTimedTrajectory(*sp,v_forward,v_backward,v_transition,is_pushing); //todo: add is_pushing during graph gen
+    auto p = generateTimedTrajectory(*sp,v_p,v_np,v_backward,is_pushing); //todo: add is_pushing during graph gen
 
     ReloPush::trajectory out_traj;
     for(auto& it : p)
@@ -240,11 +267,12 @@ ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
 ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolution)
 {
     // todo: parse these from param
-    float v_forward = 0.4;
-    float v_backward = 0.25;
-    float v_trans = 0.15;
+    float v_p = 0.35;
+    float v_np = 0.4;
+    float v_backward = -0.3;
+
     // add approach
-    auto app_traj = statePath2traj(firstApproachPath,v_forward,v_backward,v_trans,false);
+    auto app_traj = statePath2traj(firstApproachPath,v_p,v_np,v_backward,false);
 
     std::vector<ReloPush::trajectory> trajs;
 
@@ -252,7 +280,7 @@ ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolut
     {
         for(auto& ep : it.paths) // for each edgepath (one or more for each edge)
         {
-            auto temp_traj = statePath2traj(ep->toStatePath(interpolation_resolution),v_forward,v_backward,v_trans,ep->is_pushing);
+            auto temp_traj = statePath2traj(ep->toStatePath(interpolation_resolution),v_p,v_np,v_backward,ep->is_pushing);
             trajs.push_back(temp_traj);
         }
     }

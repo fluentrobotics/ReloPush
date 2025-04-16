@@ -216,7 +216,7 @@ namespace ReloPush {
         {
             if(trajectory_points->size()>0)
             {
-                float time_off = trajectory_points->back().time + 0.5; // todo: calculate time offset
+                float time_off = trajectory_points->back().time; // todo: calculate time offset
                 for(size_t n=0; n<traj_in.trajectory_points->size(); n++)
                 {
                     auto temp = traj_in.trajectory_points->at(n);

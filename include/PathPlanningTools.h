@@ -69,7 +69,7 @@ using namespace libMultiRobotPlanning;
 
 namespace Constants {
     static float steer_limit_push = 0.185; // 0.185
-    static float steer_limit_nonpush = 0.3; // 0.28
+    static float steer_limit_nonpush = 0.28; // 0.28
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
     // [m] --- The minimum turning radius of the vehicle
@@ -108,14 +108,14 @@ namespace Constants {
     //extern float yawResolution; // non-push as default
 
     // width of car
-    static const float carWidth = 0.285;
+    const float carWidth = 0.5; // 0.285
     // obstacle default radius
-    static const float obsRadius = 0.075;
+    const float obsRadius = 0.075; //0.075
     // distance from rear to vehicle front end
-    static const float LF_nonpush = 0.2;  //0.38
+    const float LF_nonpush = 0.39;  //0.38
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
-    static const float LB = 0.08; //0.12
+    static const float LB = 0.12; //0.12
 
 
     // R = 3, 6.75 DEG
@@ -756,7 +756,7 @@ public:
                 g = g * Constants::penaltyReversing;
             }
             ReloPush::State tempState(xSucc, ySucc, yawSucc, s.time+1);
-            double yawSucc_neg = Constants::normalizeHeadingRad(-1*yawSucc);
+            double yawSucc_neg = Constants::normalizeHeadingRad(yawSucc);
             ReloPush::State tempState_neg(xSucc, ySucc, yawSucc_neg, s.time+1);
             if (stateValid(tempState_neg,-1,-1,planCont.LF,planCont.LF)) { // todo: use unifed parameters from planning context
                 neighbors.emplace_back(
@@ -867,6 +867,75 @@ public:
         rot << cos(s.yaw), sin(s.yaw),
                 -sin(s.yaw), cos(s.yaw); // R_W^R
         for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
+            // s.x, s.y, s.yaw => robot pose in world
+            // LF, LB, car_width => car bounding rectangle extends forward LF, backward LB, half-width car_width/2
+            // Suppose it->x, it->y => obstacle center in world
+            //        it->side      => side length of the square obstacle (axis-aligned for this snippet)
+
+            Eigen::Matrix2f rot;  // world->robot rotation
+            rot <<  cos(-s.yaw), -sin(-s.yaw),
+                    sin(-s.yaw),  cos(-s.yaw);
+
+            // 1) Check if any obstacle corner lies inside the robot footprint.
+            float halfSide = obs_rad* 0.5f;
+
+            // These are the 4 corners of the square obstacle in world frame (axis-aligned).
+            std::array<Eigen::Vector2f,4> obsCornersWorld = {
+                Eigen::Vector2f(it->x - halfSide, it->y - halfSide),
+                Eigen::Vector2f(it->x + halfSide, it->y - halfSide),
+                Eigen::Vector2f(it->x + halfSide, it->y + halfSide),
+                Eigen::Vector2f(it->x - halfSide, it->y + halfSide)
+            };
+
+            for (const auto &cornerW : obsCornersWorld)
+            {
+                // Convert corner to robot frame
+                Eigen::Vector2f cornerR = rot * (cornerW - Eigen::Vector2f(s.x, s.y));
+
+                // Now check if this corner is inside the car’s bounding rectangle in robot coords:
+                //    x in [-LB, +LF],  y in [-car_width/2, +car_width/2]
+                if (cornerR.x() >= -LB && cornerR.x() <= LF &&
+                    cornerR.y() >= -car_width*0.5f && cornerR.y() <= car_width*0.5f)
+                {
+                    // Collision if any obstacle corner intrudes
+                    return StateValiditySet(false, StateValidity::collision);
+                }
+            }
+
+            // 2) Check if any corner of the robot lies inside the square obstacle.
+            // Define the 4 corners of the car footprint in the robot’s local frame.
+            std::array<Eigen::Vector2f,4> carCornersRobot = {
+                Eigen::Vector2f(-LB, -car_width*0.5f),
+                Eigen::Vector2f(-LB,  car_width*0.5f),
+                Eigen::Vector2f( LF,  car_width*0.5f),
+                Eigen::Vector2f( LF, -car_width*0.5f)
+            };
+
+            // To transform car corners into the world frame, use the inverse rotation of `rot`,
+            // which is just R_world = transpose of `rot` for a pure rotation, plus the robot’s position.
+            Eigen::Matrix2f R_robotToWorld;
+            R_robotToWorld << cos(s.yaw), -sin(s.yaw),
+                              sin(s.yaw),  cos(s.yaw);
+
+            Eigen::Vector2f robotPosWorld(s.x, s.y);
+
+            for (const auto &cornerR : carCornersRobot)
+            {
+                // Transform robot-frame corner to world
+                Eigen::Vector2f cornerW = robotPosWorld + R_robotToWorld * cornerR;
+
+                // Check if this corner is inside the axis-aligned square obstacle:
+                if (cornerW.x() >= it->x - halfSide && cornerW.x() <= it->x + halfSide &&
+                    cornerW.y() >= it->y - halfSide && cornerW.y() <= it->y + halfSide)
+                {
+                    // Collision if any car corner is inside the obstacle
+                    return StateValiditySet(false, StateValidity::collision);
+                }
+            }
+
+
+
+            /* Original
             Eigen::Matrix<float, 2, 1> obs;
             obs << it->x - s.x, it->y - s.y;
             auto rotated_obs = rot * obs; // obs i.r.t. robot
@@ -881,6 +950,7 @@ public:
                 //std::cout << "x: " << rotated_obs(0) << " y: " << rotated_obs(1) << std::endl;
                 return StateValiditySet(false, StateValidity::collision);
             }
+            */
 
 
 
