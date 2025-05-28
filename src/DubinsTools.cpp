@@ -360,7 +360,7 @@ bool is_longpath_case(ReloPush::State& s1, ReloPush::State& s2, double turning_r
 //         return std::make_pair<pathType,reloDubinsPath>(pathType::smallLP,{s1,s2,dubinsSet.type_, dubinsSet.length_[0], dubinsSet.length_[1], dubinsSet.length_[2], turning_rad});
 // }
 
-std::pair<pathType,reloDubinsPath> PlanDubins(ReloPush::State s1, ReloPush::State& s2, PlanningContext& ctx, bool use_pre_push_pose)
+std::pair<pathType,reloDubinsPath> PlanDubins(ReloPush::State s1, ReloPush::State s2, PlanningContext& ctx, bool use_pre_push_pose)
 {
     float turning_rad = ctx.parameters.turning_rad_pair.push;
 

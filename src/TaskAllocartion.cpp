@@ -251,12 +251,30 @@ ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
                                     float v_p, float v_np, float v_backward,
                                     bool is_pushing)
 {
+
     auto p = generateTimedTrajectory(*sp,v_p,v_np,v_backward,is_pushing); //todo: add is_pushing during graph gen
 
     ReloPush::trajectory out_traj;
     for(auto& it : p)
     {
        out_traj.append_waypoint(state2trajelem(it));
+    }
+    // push more
+    if(is_pushing)
+    {
+        auto last_wpt = p.back();
+        auto push_more = ReloPush::revert_pre_push(last_wpt,0.18); //todo: parese from param
+
+        auto last_t = out_traj.trajectory_points->back().time;
+        auto last_v = out_traj.trajectory_points->back().ref_vel;
+
+        // swap vel
+        out_traj.trajectory_points->back().ref_vel = v_p;
+
+        auto new_t = sqrt(pow(push_more.x-last_wpt.x,2) + pow(push_more.y-last_wpt.y,2))/v_p + last_t;
+
+        ReloPush::trajectory_elem p_more(push_more.x,push_more.y,push_more.yaw,last_v,new_t,is_pushing);
+        out_traj.append_waypoint(p_more);
     }
 
     return out_traj;

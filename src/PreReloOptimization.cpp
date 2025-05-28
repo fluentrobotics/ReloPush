@@ -4,7 +4,7 @@
 
 namespace ReloPush
 {
-    ReloPush::State revert_pre_push(ReloPush::State& prePushState, float distance)
+    ReloPush::State revert_pre_push(ReloPush::State prePushState, float distance)
     {
         ReloPush::State outState(prePushState);
 

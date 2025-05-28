@@ -115,7 +115,7 @@ namespace Constants {
     const float LF_nonpush = 0.39;  //0.38
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
-    static const float LB = 0.12; //0.12
+    static const float LB = 0.16; //0.12
 
 
     // R = 3, 6.75 DEG
@@ -756,7 +756,7 @@ public:
                 g = g * Constants::penaltyReversing;
             }
             ReloPush::State tempState(xSucc, ySucc, yawSucc, s.time+1);
-            double yawSucc_neg = Constants::normalizeHeadingRad(yawSucc);
+            double yawSucc_neg = Constants::normalizeHeadingRad(yawSucc*-1);
             ReloPush::State tempState_neg(xSucc, ySucc, yawSucc_neg, s.time+1);
             if (stateValid(tempState_neg,-1,-1,planCont.LF,planCont.LF)) { // todo: use unifed parameters from planning context
                 neighbors.emplace_back(
@@ -877,7 +877,7 @@ public:
                     sin(-s.yaw),  cos(-s.yaw);
 
             // 1) Check if any obstacle corner lies inside the robot footprint.
-            float halfSide = obs_rad* 0.5f;
+            float halfSide = obs_rad;
 
             // These are the 4 corners of the square obstacle in world frame (axis-aligned).
             std::array<Eigen::Vector2f,4> obsCornersWorld = {

@@ -36,9 +36,9 @@ int main(int argc, char *argv[])
     #endif
     QApplication app(argc, argv);
 
-    //std::string filename = "input_opt2obj.txt";
-    std::string filename = "alpha_to_omega_simp.txt";
-    //std::string filename = "omega_to_alpha.txt";
+    //std::string filename = "alpha_to_omega_simp.txt";
+    std::string filename = "omega_to_alpha_simp.txt";
+
     int instance_ind = 0;
     bool use_opt = false;
     bool vis = true;
@@ -116,6 +116,30 @@ int main(int argc, char *argv[])
         }
         auto obj_vis_msg = base64_encode(reinterpret_cast<const unsigned char*>(obj_vis.c_str()), obj_vis.length());
         mqClient.send_and_wait(obj_vis_msg);
+
+        // send goal for vis
+        auto goal_vis = std::string("g!!!");
+        strs.clear();
+        for(auto& it : goals)
+        {
+            std::string temp="";
+            temp+=float2binarystr(it.second.x);
+            temp+=",,,";
+            temp+=float2binarystr(it.second.y);
+            temp+=",,,";
+            temp+=float2binarystr(it.second.nominalOrientation);
+            strs.push_back(temp);
+        }
+
+        for(int n=0; n<strs.size(); n++)
+        {
+            goal_vis+=strs[n];
+            if(n!=strs.size()-1)
+                goal_vis+=";;;";
+        }
+        auto goal_vis_msg = base64_encode(reinterpret_cast<const unsigned char*>(goal_vis.c_str()), goal_vis.length());
+        mqClient.send_and_wait(goal_vis_msg);
+
 
     }
 

@@ -216,6 +216,7 @@ namespace ReloPush {
         {
             if(trajectory_points->size()>0)
             {
+                // todo: apply new velocity to the last existing waypoint
                 float time_off = trajectory_points->back().time; // todo: calculate time offset
                 for(size_t n=0; n<traj_in.trajectory_points->size(); n++)
                 {
