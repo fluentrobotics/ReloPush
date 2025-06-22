@@ -183,7 +183,7 @@ float get_longpath_d_thres(ReloPush::State& s1, ReloPush::State& s2, float turni
 bool is_longpath_case(ReloPush::State& s1, ReloPush::State& s2, double turning_rad);
 //std::pair<pathType,reloDubinsPath> is_good_path(State& s1, State& s2, float turning_rad, bool use_pre_push_pose = true);
 
-std::pair<pathType,reloDubinsPath> PlanDubins(ReloPush::State s1, ReloPush::State& s2, PlanningContext& ctx, bool use_pre_push_pose = true);
+std::pair<pathType,reloDubinsPath> PlanDubins(ReloPush::State s1, ReloPush::State s2, PlanningContext& ctx, bool use_pre_push_pose = true);
 
 
 

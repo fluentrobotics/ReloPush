@@ -32,7 +32,7 @@ typedef ompl::base::SE2StateSpace::StateType OmplState;
 namespace ReloPush{
 
     // Object from pre-push
-    ReloPush::State revert_pre_push(ReloPush::State& prePushState, float distance);
+    ReloPush::State revert_pre_push(ReloPush::State prePushState, float distance);
 
     struct OptResult
     {

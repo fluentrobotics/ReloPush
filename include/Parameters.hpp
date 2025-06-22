@@ -42,7 +42,8 @@ struct PlanningParameters
     float LF_push;
     float LF_nonpush;
     float LB;
-    double PrePush_dist = 0.47; //0.54
+    double PrePush_dist = 0.54;//0.47; //0.54
+    double push_more = 0.14;
 
     // Possibly other fields:
     // double normalModeThreshold;
