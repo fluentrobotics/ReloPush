@@ -21,6 +21,8 @@
 #include <Visualization/TrajectoryView.h>
 #include <base64.h>
 
+enum planningSimOrReal {planOnly, sim, real};
+
 
 // ---------------------------------------------------------------------------
 // Main Function
@@ -37,12 +39,13 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "omega_to_alpha_simp.txt";
+    std::string filename = "iros_obj6.txt";
 
     int instance_ind = 0;
     bool use_opt = false;
     bool vis = true;
-    bool sim = false;
+    //bool sim = true;
+    planningSimOrReal sim = planningSimOrReal::planOnly;
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file
@@ -73,13 +76,14 @@ int main(int argc, char *argv[])
         mqClient.connect();
     #endif
 
-    if(sim)
+    if(sim!=planningSimOrReal::real)
     {
         // init robot init pose
         ReloPush::trajectory_elem robot(robots[0].x,robots[0].y,robots[0].yaw,-1,-1,false);
         auto robot_str = "r!!!"+robot.serialize();
         std::string encoded_data_robot = base64_encode(reinterpret_cast<const unsigned char*>(robot_str.c_str()), robot_str.length());
-        mqClient.send_and_wait(encoded_data_robot); //todo: gen message properly
+        if(sim == planningSimOrReal::sim)
+            mqClient.send_and_wait(encoded_data_robot); //todo: gen message properly
     }
     else // real robot. get pose from ros bridge
     {
@@ -139,8 +143,6 @@ int main(int argc, char *argv[])
         }
         auto goal_vis_msg = base64_encode(reinterpret_cast<const unsigned char*>(goal_vis.c_str()), goal_vis.length());
         mqClient.send_and_wait(goal_vis_msg);
-
-
     }
 
 
@@ -180,7 +182,7 @@ int main(int argc, char *argv[])
     // 4) Visualization
     if (!finalSequence.empty() && vis)
     {
-       //visualizeResults(finalSequence, app);
+       visualizeResults(finalSequence, app);
     }
 
     //writeFinalSequenceSummary(filename, instance_ind,

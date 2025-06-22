@@ -59,30 +59,43 @@ endif()
 if(UNIX)
     find_package(absl CONFIG REQUIRED)
 endif()
+
+
 # ZeroMQ
-if (NOT TARGET libzmq AND NOT TARGET libzmq-static)
-    message(STATUS "Trying to find ZeroMQ")
-  find_package(ZeroMQ QUIET)
+if(APPLE)
+    find_path(ZMQ_INCLUDE_DIR zmq.h PATHS /opt/homebrew/include)
+    find_library(ZMQ_LIB NAMES zmq PATHS /opt/homebrew/lib)
 
-  # libzmq autotools install: fallback to pkg-config
-  if(NOT ZeroMQ_FOUND)
-    message(STATUS "CMake libzmq package not found, trying again with pkg-config (normal install of zeromq)")
-    list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/libzmq-pkg-config)
-    if(APPLE)
-        find_package(ZeroMQ REQUIRED)
-    else()
-        find_package(ZeroMQ REQUIRED)
+    if(NOT ZMQ_INCLUDE_DIR OR NOT ZMQ_LIB)
+      message(FATAL_ERROR "ZeroMQ was not found. Install with 'brew install zeromq'.")
     endif()
-  endif()
 
-  # TODO "REQUIRED" above should already cause a fatal failure if not found, but this doesn't seem to work
-  if(NOT ZeroMQ_FOUND)
-    message(FATAL_ERROR "ZeroMQ was not found, neither as a CMake package nor via pkg-config")
-  endif()
+    include_directories(${ZMQ_INCLUDE_DIR})
+else()
+    if (NOT TARGET libzmq AND NOT TARGET libzmq-static)
+        message(STATUS "Trying to find ZeroMQ")
+      find_package(ZeroMQ QUIET)
 
-  #if (ZeroMQ_FOUND AND NOT (TARGET libzmq OR TARGET libzmq-static))
-  #  message(FATAL_ERROR "ZeroMQ version not supported!")
-  #endif()
+      # libzmq autotools install: fallback to pkg-config
+      if(NOT ZeroMQ_FOUND)
+        message(STATUS "CMake libzmq package not found, trying again with pkg-config (normal install of zeromq)")
+        list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/libzmq-pkg-config)
+        if(APPLE)
+            find_package(ZeroMQ REQUIRED)
+        else()
+            find_package(ZeroMQ REQUIRED)
+        endif()
+      endif()
+
+      # TODO "REQUIRED" above should already cause a fatal failure if not found, but this doesn't seem to work
+      if(NOT ZeroMQ_FOUND)
+        message(FATAL_ERROR "ZeroMQ was not found, neither as a CMake package nor via pkg-config")
+      endif()
+
+      #if (ZeroMQ_FOUND AND NOT (TARGET libzmq OR TARGET libzmq-static))
+      #  message(FATAL_ERROR "ZeroMQ version not supported!")
+      #endif()
+    endif()
 endif()
 
 include_directories(include ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS} ${ZeroMQ_INCLUDE_DIRS})
@@ -121,7 +134,7 @@ add_executable(ReloPush src/main.cpp
     src/base64.cpp
 )
 if(APPLE)
-    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
+    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${ZMQ_LIB} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
 else()
     target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${CERES_LIBRARIES} ${ZeroMQ_LIBRARIES} absl::log_initialize)
 endif()
@@ -192,7 +205,7 @@ target_link_libraries(test_trajectory_vis ${Boost_LIBRARIES} ${Eigen_LIBRARIES} 
 # test ZeroMQ
 add_executable(test_zeromq test/test_zeromq.cpp src/BinaryString.cpp src/base64.cpp)
 if(APPLE)
-    target_link_libraries(test_zeromq ${ZeroMQ_LIBRARIES})
+    target_link_libraries(test_zeromq ${ZMQ_LIB})
 else()
     target_link_libraries(test_zeromq ${ZeroMQ_LIBRARIES})
 endif()
