@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     std::string filename = "iros_obj6.txt";
 
     int instance_ind = 0;
-    bool use_opt = false;
+    bool use_opt = true;
     bool vis = true;
     //bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
