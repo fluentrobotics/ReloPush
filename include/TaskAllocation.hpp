@@ -332,6 +332,8 @@ bool performAllocations(const WorkspaceBoundary &boundary,
 // ---------------------------------------------------------------------------
 // Helper Function 4b: The main planning/allocation loop (DFS)
 // ---------------------------------------------------------------------------
+
+/*
 bool performAllocationsDFS( const WorkspaceBoundary &boundary,
                                             std::unordered_map<std::string, ObjectInfo> objects,
                                             std::unordered_map<std::string, GoalInfo> goals,
@@ -340,6 +342,18 @@ bool performAllocationsDFS( const WorkspaceBoundary &boundary,
                                             ReloPush::State robot,
                                             std::vector<FinalAllocation> &finalSequence,
                                             bool use_opt);
+                                            */
+
+bool performAllocationsDFS(const WorkspaceBoundary& boundary,
+                           std::unordered_map<std::string, ObjectInfo> objects,
+                           std::unordered_map<std::string, GoalInfo> goals,
+                           std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
+                           GoalMap delivered_objs,
+                           ReloPush::State robot,
+                           std::vector<FinalAllocation>& finalSequence,
+                           bool use_opt,
+                           int depth = 0);
+
 
 // ---------------------------------------------------------------------------
 // Helper Function 5: Print the final sequence

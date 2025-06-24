@@ -6,6 +6,7 @@ EdgeMatrixEntry PairCostResult::getBestPath()
     return matrixResult->getBestPathMatEntry();
 }
 
+/*
 void PairCostResult::remove_top(void)
 {
     if(matrixResult->sortedEntries.size()==0)
@@ -24,6 +25,22 @@ void PairCostResult::remove_top(void)
         //bestCol = matrixResult->sortedEntries[0].col;
     }
 }
+*/
+
+void PairCostResult::remove_top(void)
+{
+    if(matrixResult->sortedEntries.empty())
+        return;
+
+    auto tmp = matrixResult->sortedEntries.front();
+    matrixResult->sortedEntries.erase(matrixResult->sortedEntries.begin());
+    matrixResult->costMat(tmp.row, tmp.col) = std::numeric_limits<double>::infinity();
+
+    // Optional: Verify consistency
+    assert(matrixResult->sortedEntries.empty() ||
+           matrixResult->sortedEntries.front().cost == matrixResult->costMat(matrixResult->sortedEntries.front().row, matrixResult->sortedEntries.front().col));
+}
+
 
 void PathsToSinglePath(std::vector<EdgeData>& paths, std::vector<size_t>& path_sizes,
                        ReloPush::StatePath& out_path, double interpolation_resolution)
@@ -1073,6 +1090,7 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
     planCtx.removeObs(fromObs);
     planCtx.addObs(toObs);
 
+    auto before_obs = planCtx.env_push.get_obs();
     // 2) Attempt path planning (after obs relo)
     auto res = planHybridAstar(fromState_prepush, toState_prepush, planCtx, true);
     if (!res->success)
@@ -1080,6 +1098,12 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
         // revert environment changes
         planCtx.addObs(fromObs);
         planCtx.removeObs(toObs);
+
+        auto after_obs = planCtx.env_push.get_obs();
+        if(before_obs != after_obs){
+            std::cerr << "Environment not properly reverted!" << std::endl;
+            // Add detailed prints here to identify discrepancies
+        }
 
         return res;
     }
@@ -1382,7 +1406,7 @@ void printCurrentState(const std::vector<FinalAllocation> &finalSequence,
 // ---------------------------------------------------------------------------
 // Helper Function 4b: The main planning/allocation loop (DFS)
 // ---------------------------------------------------------------------------
-
+/*
 bool performAllocationsDFS(
     const WorkspaceBoundary &boundary,
     std::unordered_map<std::string, ObjectInfo> objects,         // passed by value (hard copy)
@@ -1412,8 +1436,6 @@ bool performAllocationsDFS(
     bool deb0 = false;
     if(delivered_objs.size()==9)
         deb0=true;
-
-
 
     // delivered_objs become static obstacles.
     PlanningContext planCtx(params, objects, delivered_objs, use_opt);
@@ -1594,6 +1616,208 @@ bool performAllocationsDFS(
     }
 
     std::cout << "No feasible allocation found at this level, backtracking further." << std::endl;
+    return false;
+}
+
+*/
+
+
+
+// Helper: Extract and sort all remaining allocation candidates by cost
+std::vector<LowestCostInfo> getSortedPairCandidates(const PairResultsMap& pairResults) {
+    std::vector<LowestCostInfo> candidates;
+    for (const auto& kv : pairResults) {
+        const auto& pcr = kv.second;
+        for (const auto& entry : pcr.matrixResult->sortedEntries) {
+            if (entry.cost != std::numeric_limits<double>::infinity()) {
+                LowestCostInfo info;
+                info.objectName = pcr.objectName;
+                info.goalName = pcr.goalName;
+                info.row = entry.row;
+                info.col = entry.col;
+                info.cost = entry.cost;
+                candidates.push_back(info);
+            }
+        }
+    }
+    std::sort(candidates.begin(), candidates.end(), [](const LowestCostInfo& a, const LowestCostInfo& b){
+        return a.cost < b.cost;
+    });
+    return candidates;
+}
+
+// Helper: Try a specific allocation, set outAllocation if successful
+bool tryAllocation(
+    const LowestCostInfo& candidate,
+    PairResultsMap& pairResults,
+    PlanningContext& planCtx,
+    std::unordered_map<std::string, ObjectInfo>& objects,
+    std::unordered_map<std::string, GoalInfo>& goals,
+    std::unordered_map<std::string, ObjectGoalPair>& objGoalPairs,
+    GoalMap& delivered_objs,
+    ReloPush::State& robot,
+    FinalAllocation& outAllocation)
+{
+    // Pull out required context
+    auto& bestPairEntry = pairResults[candidate.objectName];
+    EdgeMatrixEntry bestMatEntry = bestPairEntry.matrixResult->getBestPathMatEntry();
+
+    std::vector<EdgePath> ObsReloPathList;
+    std::unordered_map<std::string, ReloPush::State> ToUpdate;
+    ReloPush::StatePathPtrList transitPaths;
+
+    // Plan obs relocations (if any)
+    for (size_t obs = 1; obs < bestMatEntry.obsReloList.size(); obs++) {
+        auto pivotObj = bestMatEntry.vertexChain[obs];
+        auto prev_pair = bestMatEntry.obsReloList[obs - 1];
+        auto next_pair = bestMatEntry.obsReloList[obs];
+
+        auto fromState = prev_pair.second;
+        auto toState = next_pair.first;
+        auto fromState_pre = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
+        auto toState_pre = find_pre_push(toState, planCtx.parameters.PrePush_dist);
+
+        if (!planCtx.env_push.stateValid(fromState_pre))
+            return false;
+
+        auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, prev_pair.first, prev_pair.second,
+                                        pairResults, candidate, ObsReloPathList, ToUpdate, pivotObj.name, fromState);
+        if (!res->success)
+            return false;
+    }
+
+    // Plan from last relocation to final push (if any)
+    if (!bestMatEntry.obsReloList.empty()) {
+        auto last_pair = bestMatEntry.obsReloList.back();
+        auto fromState = last_pair.second;
+        auto& best_obj = objects[candidate.objectName];
+        auto final_approach_obs = ReloPush::State(best_obj.x, best_obj.y, best_obj.getOrientation(candidate.row));
+        auto fromState_pre = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
+        auto toState_pre = bestPairEntry.matrixResult->getBestPathMatEntry().edgesInfo[0].paths[0]->getFirstWaypoint();
+
+        if (planCtx.env_push.stateValid(fromState_pre).get_validity() == StateValidity::out_of_boundary)
+            return false;
+
+        auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, last_pair.first, last_pair.second,
+                                        pairResults, candidate, ObsReloPathList, ToUpdate,
+                                        bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].name,
+                                        fromState);
+        if (!res->success)
+            return false;
+    }
+
+    // Plan transit paths between edges if needed
+    if (bestMatEntry.edgesInfo.size() > 1) {
+        transitPaths.clear();
+        for (size_t n = 1; n < bestMatEntry.edgesInfo.size(); n++) {
+            auto last_goal = bestMatEntry.edgesInfo[n-1].paths.back()->getLastWaypoint();
+            auto this_start = bestMatEntry.edgesInfo[n].paths.front()->getFirstWaypoint();
+            auto res = planHybridAstar(last_goal, this_start, planCtx, true);
+            if (!res->success)
+                return false;
+            transitPaths.push_back(res->getPathPtr(true));
+        }
+    }
+
+    // Build FinalAllocation
+    outAllocation.object = objects[candidate.objectName];
+    outAllocation.goal = goals[candidate.goalName];
+    outAllocation.cost = candidate.cost;
+    outAllocation.row = candidate.row;
+    outAllocation.col = candidate.col;
+    outAllocation.vertexChain = bestMatEntry.vertexChain;
+    outAllocation.transitPaths = transitPaths;
+    outAllocation.startPose = ReloPush::State(outAllocation.object.x, outAllocation.object.y,
+                                              outAllocation.object.getOrientation(outAllocation.row));
+    outAllocation.goalPose = ReloPush::State(outAllocation.goal.x, outAllocation.goal.y,
+                                             outAllocation.goal.getOrientation(outAllocation.col));
+    outAllocation.paths = pairResults[candidate.objectName].matrixResult->getBestPathMatEntry().edgesInfo;
+    outAllocation.obsReloPaths = std::make_shared<std::vector<EdgePath>>(ObsReloPathList);
+    outAllocation.snapshot = planCtx;
+
+    // Commit the ToUpdate states (update object positions)
+    for (const auto& pair : ToUpdate) {
+        objects[pair.first].x = pair.second.x;
+        objects[pair.first].y = pair.second.y;
+        // If you need to update orientation or other fields, do it here.
+    }
+
+    return true;
+}
+
+
+// Main DFS function
+bool performAllocationsDFS(
+    const WorkspaceBoundary& boundary,
+    std::unordered_map<std::string, ObjectInfo> objects,
+    std::unordered_map<std::string, GoalInfo> goals,
+    std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
+    GoalMap delivered_objs,
+    ReloPush::State robot,
+    std::vector<FinalAllocation>& finalSequence,
+    bool use_opt,
+    int depth)
+{
+    // ---- Base case: all objects delivered ----
+    if (objGoalPairs.empty()) {
+        return true;
+    }
+
+    // ---- Build the graph for the current subproblem ----
+    Graph g;
+    initGraph(g, objects, goals);
+
+    PlanningParameters params;
+    params.boundary = boundary;
+    PlanningContext planCtx(params, objects, delivered_objs, use_opt);
+
+    buildAllEdges(g, planCtx);
+
+    // ---- Compute all pairwise assignments/costs ----
+    auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
+
+    // ---- Iterate through sorted candidate pairs ----
+    auto sortedCandidates = getSortedPairCandidates(pairResults);
+    for (const auto& candidate : sortedCandidates) {
+        if (candidate.row == -1 || candidate.col == -1 || candidate.cost == std::numeric_limits<double>::infinity())
+            continue;
+
+        // Keep old copies for backtracking
+        auto old_objects = objects;
+        auto old_goals = goals;
+        auto old_objGoalPairs = objGoalPairs;
+        auto old_delivered_objs = delivered_objs;
+
+
+        // Try this allocation
+        FinalAllocation allocation;
+        bool ok = tryAllocation(candidate, pairResults, planCtx, objects, goals, objGoalPairs, delivered_objs, robot, allocation);
+        if (!ok)
+            continue;
+
+        // Mark as delivered for this recursion
+        delivered_objs[candidate.objectName] = goals[candidate.goalName];
+        objects.erase(candidate.objectName);
+        goals.erase(candidate.goalName);
+        objGoalPairs.erase(candidate.objectName);
+
+        finalSequence.push_back(allocation);
+
+        // --- RECURSE ---
+        if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt, depth + 1)) {
+            return true; // found a solution!
+        }
+
+        // --- BACKTRACK ---
+        finalSequence.pop_back();
+        objects = old_objects;
+        goals = old_goals;
+        objGoalPairs = old_objGoalPairs;
+        delivered_objs = old_delivered_objs;
+        // Note: revert robot state if it can change
+    }
+
+    // No valid allocation found at this depth
     return false;
 }
 
