@@ -106,6 +106,8 @@ struct PlanningContext
         parameters.LF_nonpush = Constants::LF_nonpush;
         parameters.LB = Constants::LB;
 
+        parameters.PrePush_dist = Constants::prepush_th;
+
         updateObs(mo_list, delivered_list);
         //uniformSampleMap(sample_N);
     }

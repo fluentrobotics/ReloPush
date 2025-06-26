@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     std::string filename = "iros_obj6.txt";
 
     int instance_ind = 0;
-    bool use_opt = true;
+    bool use_opt = false;
     bool vis = true;
     //bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
     // 4) Visualization
     if (!finalSequence.empty() && vis)
     {
-       visualizeResults(finalSequence, app);
+        visualizeResults(finalSequence, app);
     }
 
     //writeFinalSequenceSummary(filename, instance_ind,

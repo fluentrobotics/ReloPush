@@ -165,9 +165,11 @@ ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, d
     OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
     OmplState *dubinsEnd = (OmplState *)dubinsSpace.allocState();
     dubinsStart->setXY(start.x, start.y);
-    dubinsStart->setYaw(-start.yaw);
+    //dubinsStart->setYaw(-start.yaw);
+    dubinsStart->setYaw(mod2pi(start.yaw));
     dubinsEnd->setXY(goal.x, goal.y);
-    dubinsEnd->setYaw(-goal.yaw);
+    //dubinsEnd->setYaw(-goal.yaw);
+    dubinsEnd->setYaw(mod2pi(goal.yaw));
     ompl::base::DubinsStateSpace::DubinsPath dubinsPath = dubinsSpace.dubins(dubinsStart, dubinsEnd);
     //dubinsStart->setXY(start.x, start.y);
     //dubinsStart->setYaw(-start.yaw);
@@ -243,8 +245,11 @@ int main(int /*argc*/, char ** /*argv*/)
     //New Y: 2.50049
     //State start(0.223708,2.50049, 0);
 
-    State start(1, 3.2, 1.5 * M_PI);
-    State goal(1.5, 1.5, 1.5 * M_PI + 0.7);
+    State start(1.11157628, 1.136766, 1.5395157545608618);
+    State goal(0.9260568763535091, 2.612194685829129, 2.3200068632748465);
+
+    //State start(1.126264805132916, 1.6061862941057266, 1.5395157545608618);
+    //State goal(0.6061966419219971, 2.956084966659546, 2.3200068632748465);
 
     // New X: 0.387293
     // New Y: 2.38971
@@ -252,7 +257,7 @@ int main(int /*argc*/, char ** /*argv*/)
     // State start(0.387293,2.38971, 0);
     // State goal(1.3815808296203613,2.2772977352142334, -0.117008);
 
-    findDubins(start, goal, 1.23855733871);
+    findDubins(start, goal, 1.41);
     //  findDubins(start, goal,1);
 
 

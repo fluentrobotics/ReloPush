@@ -1706,7 +1706,18 @@ bool tryAllocation(
             return false;
     }
 
-    // Plan transit paths between edges if needed
+    // Plan approach (transit)
+
+    auto obj_info = objects[candidate.objectName];
+    ReloPush::State obj_start = obj_info.getPushingPose(candidate.row);
+    ReloPush::State obj_start_pre = find_pre_push(obj_start,planCtx.parameters.PrePush_dist);
+    auto res_app = planHybridAstar(robot, obj_start_pre, planCtx, true);
+    if(!res_app->success)
+        return false;
+    transitPaths.push_back(res_app->getPathPtr(true));
+
+
+    // Plan transit paths between edges if needed (prerelocation)
     if (bestMatEntry.edgesInfo.size() > 1) {
         transitPaths.clear();
         for (size_t n = 1; n < bestMatEntry.edgesInfo.size(); n++) {
@@ -1763,6 +1774,8 @@ bool performAllocationsDFS(
         return true;
     }
 
+    printCurrentState(finalSequence, objGoalPairs, delivered_objs);
+
     // ---- Build the graph for the current subproblem ----
     Graph g;
     initGraph(g, objects, goals);
@@ -1777,48 +1790,56 @@ bool performAllocationsDFS(
     auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
 
     // ---- Iterate through sorted candidate pairs ----
-    auto sortedCandidates = getSortedPairCandidates(pairResults);
-    for (const auto& candidate : sortedCandidates) {
-        if (candidate.row == -1 || candidate.col == -1 || candidate.cost == std::numeric_limits<double>::infinity())
-            continue;
+    while (true) {
+        // Get sorted global candidate list
+        auto sortedCandidates = getSortedPairCandidates(pairResults);
+        // No more candidates? No solution at this recursion
+        if (sortedCandidates.empty()) return false;
 
-        // Keep old copies for backtracking
+        // Pick the best
+        auto candidate = sortedCandidates.front();
+        if (candidate.row == -1 || candidate.col == -1 || candidate.cost == std::numeric_limits<double>::infinity())
+            return false;
+
+        // Backup for backtracking
         auto old_objects = objects;
         auto old_goals = goals;
         auto old_objGoalPairs = objGoalPairs;
         auto old_delivered_objs = delivered_objs;
+        auto old_robot = robot;
 
-
-        // Try this allocation
         FinalAllocation allocation;
         bool ok = tryAllocation(candidate, pairResults, planCtx, objects, goals, objGoalPairs, delivered_objs, robot, allocation);
-        if (!ok)
-            continue;
+        if (ok) {
+            delivered_objs[candidate.objectName] = goals[candidate.goalName];
+            objects.erase(candidate.objectName);
+            goals.erase(candidate.goalName);
+            objGoalPairs.erase(candidate.objectName);
+            finalSequence.push_back(allocation);
 
-        // Mark as delivered for this recursion
-        delivered_objs[candidate.objectName] = goals[candidate.goalName];
-        objects.erase(candidate.objectName);
-        goals.erase(candidate.goalName);
-        objGoalPairs.erase(candidate.objectName);
+            // update robot pose
+            robot = find_pre_push(allocation.goalPose, planCtx.parameters.PrePush_dist);
 
-        finalSequence.push_back(allocation);
-
-        // --- RECURSE ---
-        if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt, depth + 1)) {
-            return true; // found a solution!
+            if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt, depth + 1)) {
+                return true;
+            }
+            // Backtrack
+            finalSequence.pop_back();
+            objects = old_objects;
+            goals = old_goals;
+            objGoalPairs = old_objGoalPairs;
+            delivered_objs = old_delivered_objs;
+            robot = old_robot;
         }
 
-        // --- BACKTRACK ---
-        finalSequence.pop_back();
-        objects = old_objects;
-        goals = old_goals;
-        objGoalPairs = old_objGoalPairs;
-        delivered_objs = old_delivered_objs;
-        // Note: revert robot state if it can change
+        // If fail: invalidate this candidate and try next best
+        // Mark cost as infinity in the matrix and remove from sortedEntries
+        auto& matrixRes = pairResults[candidate.objectName].matrixResult;
+        matrixRes->costMat(candidate.row, candidate.col) = std::numeric_limits<double>::infinity();
+        auto& sorted = matrixRes->sortedEntries;
+        sorted.erase(std::remove_if(sorted.begin(), sorted.end(),
+                                    [&](const RowColCost& rcc) { return rcc.row == candidate.row && rcc.col == candidate.col; }), sorted.end());
     }
-
-    // No valid allocation found at this depth
-    return false;
 }
 
 

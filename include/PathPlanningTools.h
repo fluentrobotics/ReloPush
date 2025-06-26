@@ -73,7 +73,8 @@ namespace Constants {
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
     // [m] --- The minimum turning radius of the vehicle
-    static float r_push = L / tanf(fabs(steer_limit_push));
+    //static float r_push = L / tanf(fabs(steer_limit_push));
+    static float r_push = 1.41f;
     static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
     //extern float r; // non-push as default
     //static float r = 0.5;
@@ -108,14 +109,16 @@ namespace Constants {
     //extern float yawResolution; // non-push as default
 
     // width of car
-    const float carWidth = 0.5; // 0.285
+    static const float carWidth = 0.285;
     // obstacle default radius
-    const float obsRadius = 0.075; //0.075
+    static const float obsRadius = 0.075;
     // distance from rear to vehicle front end
-    const float LF_nonpush = 0.39;  //0.38
+    static const float LF_nonpush = 0.38;  //0.38
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
-    static const float LB = 0.16; //0.12
+    static const float LB = 0.12; //0.12
+
+    static const float prepush_th = LF_push*1.01;
 
 
     // R = 3, 6.75 DEG
@@ -220,8 +223,11 @@ typedef std::shared_ptr<PathPlanResult> PathPlanResultPtr;
 // bool and reason
 struct StateValiditySet{
     std::pair<bool, StateValidity> data;
+    ReloPush::State colliding;
 
     StateValiditySet(bool is_valid, StateValidity validity) : data(is_valid,validity) {}
+
+    StateValiditySet(bool is_valid, StateValidity validity, ReloPush::State collide) : data(is_valid,validity), colliding(collide) {}
 
     operator bool() const {
         return data.first;
@@ -880,13 +886,34 @@ public:
             float halfSide = obs_rad;
 
             // These are the 4 corners of the square obstacle in world frame (axis-aligned).
+            /*
             std::array<Eigen::Vector2f,4> obsCornersWorld = {
                 Eigen::Vector2f(it->x - halfSide, it->y - halfSide),
                 Eigen::Vector2f(it->x + halfSide, it->y - halfSide),
                 Eigen::Vector2f(it->x + halfSide, it->y + halfSide),
                 Eigen::Vector2f(it->x - halfSide, it->y + halfSide)
             };
+*/
+            // Get oriented corners of obstacle
+            float obs_cx = it->x;
+            float obs_cy = it->y;
+            float obs_yaw = it->yaw; // or .nominalOrientation or whatever your ObjectInfo uses
 
+            Eigen::Matrix2f obsRot;
+            obsRot << std::cos(obs_yaw), -std::sin(obs_yaw),
+                std::sin(obs_yaw),  std::cos(obs_yaw);
+
+            std::array<Eigen::Vector2f,4> obsCornersLocal = {
+                Eigen::Vector2f(-halfSide, -halfSide),
+                Eigen::Vector2f( halfSide, -halfSide),
+                Eigen::Vector2f( halfSide,  halfSide),
+                Eigen::Vector2f(-halfSide,  halfSide)
+            };
+            std::array<Eigen::Vector2f,4> obsCornersWorld;
+            for (int i = 0; i < 4; ++i)
+                obsCornersWorld[i] = obsRot * obsCornersLocal[i] + Eigen::Vector2f(obs_cx, obs_cy);
+
+            /*
             for (const auto &cornerW : obsCornersWorld)
             {
                 // Convert corner to robot frame
@@ -898,7 +925,30 @@ public:
                     cornerR.y() >= -car_width*0.5f && cornerR.y() <= car_width*0.5f)
                 {
                     // Collision if any obstacle corner intrudes
-                    return StateValiditySet(false, StateValidity::collision);
+                    return StateValiditySet(false, StateValidity::collision, *it);
+                }
+            }
+*/
+            for (int i = 0; i < 4; ++i)
+            {
+                const auto& cornerW = obsCornersWorld[i];
+                // Convert to robot frame
+                Eigen::Vector2f cornerR = rot * (cornerW - Eigen::Vector2f(s.x, s.y));
+                if (cornerR.x() >= -LB && cornerR.x() <= LF &&
+                    cornerR.y() >= -car_width*0.5f && cornerR.y() <= car_width*0.5f)
+                {
+                    /*
+                    std::cout << "\n==== COLLISION DETECTED ====\n";
+                    std::cout << "robot_pose: " << s.x << " " << s.y << " " << s.yaw << std::endl;
+                    std::cout << "robot_size: " << LF << " " << LB << " " << car_width << std::endl;
+                    std::cout << "object_pose: " << it->x << " " << it->y << " " << it->yaw << std::endl;
+                    std::cout << "object_size: " << (obs_rad*2) << std::endl;
+                    std::cout << "euclidean_distance: " << std::hypot(s.x - it->x, s.y - it->y) << std::endl;
+                    std::cout << "colliding_corner_world: " << cornerW.x() << " " << cornerW.y() << std::endl;
+                    std::cout << "============================\n";
+                    */
+
+                    return StateValiditySet(false, StateValidity::collision, *it);
                 }
             }
 
