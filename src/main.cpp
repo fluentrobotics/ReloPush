@@ -41,8 +41,13 @@ int main(int argc, char *argv[])
     //std::string filename = "alpha_to_omega_simp.txt";
     std::string filename = "iros_obj6.txt";
 
+<<<<<<< Updated upstream
     int instance_ind = 0;
     bool use_opt = false;
+=======
+    int instance_ind = 11;
+    bool use_opt = true;
+>>>>>>> Stashed changes
     bool vis = true;
     //bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
@@ -182,14 +187,92 @@ int main(int argc, char *argv[])
     // 4) Visualization
     if (!finalSequence.empty() && vis)
     {
+<<<<<<< Updated upstream
         visualizeResults(finalSequence, app);
+=======
+       //visualizeResults(finalSequence, app);
+>>>>>>> Stashed changes
     }
 
     //writeFinalSequenceSummary(filename, instance_ind,
     //                          static_cast<double>(duration.count()), finalSequence, use_opt);
 
+
+
+
+
+
+    // 3.5) Print total path length and total pushing length for the entire solution
+
+    double total_path_length = 0.0;
+    double total_pushing_length = 0.0;
+
+    // Use the combined path for each allocation to get the length.
+    for (auto& fa : finalSequence) {
+        // Reconstruct the whole path for this allocation
+        ReloPush::StatePathPtr singlePathPtr;
+        std::vector<size_t> si;
+
+        if(fa.firstApproachPath && !fa.firstApproachPath->empty())
+        {
+            for(size_t i=1; i<fa.firstApproachPath->size(); ++i)
+            {
+                const auto& prev = fa.firstApproachPath->at(i - 1);
+                const auto& curr = fa.firstApproachPath->at(i);
+                double dx = curr.x - prev.x;
+                double dy = curr.y - prev.y;
+                total_path_length += std::sqrt(dx * dx + dy * dy);
+            }
+        }
+
+
+        std::tie(singlePathPtr, si) = fa.toSinglePathPtr(0.1); // Or use your default resolution
+
+
+
+        if (singlePathPtr && !singlePathPtr->empty()) {
+            // Sum up Euclidean distances
+            for (size_t i = 1; i < singlePathPtr->size(); ++i) {
+                const auto& prev = singlePathPtr->at(i - 1);
+                const auto& curr = singlePathPtr->at(i);
+                double dx = curr.x - prev.x;
+                double dy = curr.y - prev.y;
+                total_path_length += std::sqrt(dx * dx + dy * dy);
+            }
+        }
+
+        // Pushing length as reported by the object
+        total_pushing_length += fa.getPushingLength();
+    }
+
+    std::cout << "=== Solution Summary ===" << std::endl;
+    std::cout << "Total path length (all movements): " << total_path_length << std::endl;
+    std::cout << "Total pushing length: " << total_pushing_length << std::endl;
+    std::cout << "Planning time(ms): " << duration.count() << std::endl;
+
+
+
+
+    // Compose output filename
+    std::string result_filename = std::string(CMAKE_SOURCE_DIR) + "/result_" + filename;
+    std::cout << "saving to: "<< result_filename << std::endl;
+
+    // Open for appending (if you run many instances), or for writing (overwrite)
+    std::ofstream outfile(result_filename.c_str(), std::ios::app);
+
+    // Write in required format, with fixed precision
+    outfile << "===\n";
+    outfile << "index:" << instance_ind << "\n";
+    outfile << "planning_time(s):\n"; // left empty
+    outfile << "total_length(m):" << std::fixed << std::setprecision(6) << total_path_length << "\n";
+    outfile << "pushing_length(m):" << std::fixed << std::setprecision(6) << total_pushing_length << "\n";
+
+
     // generate resulting trajectory
     auto finalTrajectory = FA2Trajectory(finalSequence);
+
+
+    /*
     //QApplication app(argc, argv);
     QMainWindow window;
     window.setWindowTitle("Trajectory Visualization (Arrow Format)");
@@ -208,14 +291,17 @@ int main(int argc, char *argv[])
 
     // Allow time for the previous request to end
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    */
 
     // send trajectory
+    /*
     auto s = finalTrajectory.serialize();
     std::string encoded_data = base64_encode(reinterpret_cast<const unsigned char*>(s.c_str()), s.length());
     //for debug
     std::cout << encoded_data.size() << std::endl;
     auto res = mqClient.send_and_wait(encoded_data);
     std::cout << res << std::endl; // response from server
+    */
 
     return app.exec();
 }
