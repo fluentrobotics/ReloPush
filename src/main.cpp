@@ -39,15 +39,10 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj6.txt";
+    std::string filename = "iros_obj7.txt";
 
-<<<<<<< Updated upstream
     int instance_ind = 0;
-    bool use_opt = false;
-=======
-    int instance_ind = 11;
     bool use_opt = true;
->>>>>>> Stashed changes
     bool vis = true;
     //bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
@@ -187,11 +182,7 @@ int main(int argc, char *argv[])
     // 4) Visualization
     if (!finalSequence.empty() && vis)
     {
-<<<<<<< Updated upstream
-        visualizeResults(finalSequence, app);
-=======
        //visualizeResults(finalSequence, app);
->>>>>>> Stashed changes
     }
 
     //writeFinalSequenceSummary(filename, instance_ind,
