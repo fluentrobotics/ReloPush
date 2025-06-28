@@ -59,10 +59,10 @@ rosrun reloPush reloPush {test_data_filename} {data_index} {record_log} {method}
 
 ## Citing this work
 ```
-@article{ahn2024relopush,
+@inproceedings{ahn2025relopush,
   title={ReloPush: Multi-object Rearrangement in Confined Spaces with a Nonholonomic Mobile Robot Pusher},
   author={Ahn, Jeeho and Mavrogiannis, Christoforos},
-  journal={arXiv preprint arXiv:2409.18231},
-  year={2024}
+  booktitle={Proceedings of the IEEE International Conference on Robotics and Automation (ICRA)},
+  year={2025}
 }
 ```
