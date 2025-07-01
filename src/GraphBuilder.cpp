@@ -208,14 +208,15 @@ PathPlanResultPtr check_approach_validity(ReloPush::State relocated_robot, ReloP
     // apply angle change
     object.applyRotation(angleChange);
 
+    auto temp_obs = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex));
     // add to obstacles
-    ctx.addObs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
+    ctx.addObs(temp_obs);
 
     // plan hybrid astar
     auto res = planHybridAstar(relocated_robot, final_prepush, ctx, true);
 
     // remove obs
-    ctx.removeObs(ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)));
+    ctx.removeObs(temp_obs);
 
     // restore object
     //ctx.env.add_obs(temp_obs);
@@ -299,12 +300,14 @@ StateValidity addEdgeNormalMode(
 
     // 1) Temporarily remove start from obstacle. If target is also an obstacle, remove it, too.
     std::vector<ReloPush::State> took_out(0);
-    took_out.push_back(ReloPush::State(data1.x,data1.y,data1.nominalOrientation));
-    ctx.removeObs(ReloPush::State(data1.x,data1.y,data1.nominalOrientation));
+    auto temp_obs = ReloPush::State(data1.x,data1.y,data1.nominalOrientation);
+    took_out.push_back(temp_obs);
+    ctx.removeObs(temp_obs);
     if(data2.type==VertexType::OBJECT_VERTEX)
     {
-        took_out.push_back(ReloPush::State(data2.x,data2.y,data2.nominalOrientation));
-        ctx.removeObs(ReloPush::State(data2.x,data2.y,data2.nominalOrientation));
+        auto temp_obs2 = ReloPush::State(data2.x,data2.y,data2.nominalOrientation);
+        took_out.push_back(temp_obs2);
+        ctx.removeObs(temp_obs2);
     }
 
 

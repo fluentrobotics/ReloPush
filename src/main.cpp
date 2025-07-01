@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj7.txt";
+    std::string filename = "iros_obj6.txt";
 
     int instance_ind = 0;
     bool use_opt = true;
@@ -239,9 +239,7 @@ int main(int argc, char *argv[])
     std::cout << "=== Solution Summary ===" << std::endl;
     std::cout << "Total path length (all movements): " << total_path_length << std::endl;
     std::cout << "Total pushing length: " << total_pushing_length << std::endl;
-    std::cout << "Planning time(ms): " << duration.count() << std::endl;
-
-
+    std::cout << "Planning time(s): " << (float)duration.count()/1000 << std::endl;
 
 
     // Compose output filename
@@ -254,9 +252,10 @@ int main(int argc, char *argv[])
     // Write in required format, with fixed precision
     outfile << "===\n";
     outfile << "index:" << instance_ind << "\n";
-    outfile << "planning_time(s):\n"; // left empty
+    outfile << "planning_time(s):" << (float)duration.count()/1000 << "\n"; // left empty
     outfile << "total_length(m):" << std::fixed << std::setprecision(6) << total_path_length << "\n";
     outfile << "pushing_length(m):" << std::fixed << std::setprecision(6) << total_pushing_length << "\n";
+    outfile.close();
 
 
     // generate resulting trajectory
