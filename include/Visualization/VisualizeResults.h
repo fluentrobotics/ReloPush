@@ -78,10 +78,14 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
         }
 
         // 4) Retrieve obstacles from snapshot
-        auto obstaclesSet = finalSequence[i].snapshot.env_push.get_obs();
-        std::vector<ReloPush::State> obstacles(
-            obstaclesSet.begin(), obstaclesSet.end()
-            );
+        ObjectMap obstaclesSet = finalSequence[i].snapshot.env_push.get_obs();
+//        std::vector<ObjectInfo> obstacles(
+//            obstaclesSet.begin(), obstaclesSet.end()
+//            );
+        std::vector<ObjectInfo> obstacles;
+        for (auto& kv : obstaclesSet) {
+            obstacles.push_back(std::move(kv.second));
+        }
         viz->setObstacles(obstacles);
 
         // goals

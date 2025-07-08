@@ -208,7 +208,9 @@ PathPlanResultPtr check_approach_validity(ReloPush::State relocated_robot, ReloP
     // apply angle change
     object.applyRotation(angleChange);
 
-    auto temp_obs = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex));
+    //auto temp_obs = ReloPush::State(preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex));
+    auto temp_obs = ObjectInfo(movingObject.name,preRelocation.x,preRelocation.y, object.getOrientation(landingOrientationIndex)
+                               ,movingObject.numberOfSides,movingObject.enclosingRadius);
     // add to obstacles
     ctx.addObs(temp_obs);
 
@@ -250,7 +252,8 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ReloPus
     // remove object from initial pose
     //ctx.env.remove_obs(movingObject.getNominalPose());
 
-    auto obj_prerelo = ReloPush::revert_pre_push(preRelocation,ctx.parameters.PrePush_dist);
+    auto obj_prerelo_state = ReloPush::revert_pre_push(preRelocation,ctx.parameters.PrePush_dist);
+    ObjectInfo obj_prerelo = ObjectInfo(movingObject.name, obj_prerelo_state.x,obj_prerelo_state.y,obj_prerelo_state.yaw,movingObject.numberOfSides,movingObject.enclosingRadius);
     // add to obstacles
     ctx.addObs(obj_prerelo);
 
@@ -299,13 +302,15 @@ StateValidity addEdgeNormalMode(
         deb = true;
 
     // 1) Temporarily remove start from obstacle. If target is also an obstacle, remove it, too.
-    std::vector<ReloPush::State> took_out(0);
-    auto temp_obs = ReloPush::State(data1.x,data1.y,data1.nominalOrientation);
+    std::vector<ObjectInfo> took_out(0);
+    //auto temp_obs = ReloPush::State(data1.x,data1.y,data1.nominalOrientation);
+    auto temp_obs = ObjectInfo(data1.name,data1.x,data1.y,data1.nominalOrientation,data1.numberOfSides,data1.radius);
     took_out.push_back(temp_obs);
     ctx.removeObs(temp_obs);
     if(data2.type==VertexType::OBJECT_VERTEX)
     {
-        auto temp_obs2 = ReloPush::State(data2.x,data2.y,data2.nominalOrientation);
+        //auto temp_obs2 = ReloPush::State(data2.x,data2.y,data2.nominalOrientation);
+        temp_obs2 = ObjectInfo(data2.name,data2.x,data2.y,data2.nominalOrientation,data2.numberOfSides,data2.radius);
         took_out.push_back(temp_obs2);
         ctx.removeObs(temp_obs2);
     }

@@ -33,7 +33,7 @@ public:
     void setPath(const std::vector<ReloPush::State>& path_, const std::vector<size_t>& path_segment_lengths_);
 
     // Set obstacles
-    void setObstacles(const std::vector<ReloPush::State> &obstacles);
+    void setObstacles(const std::vector<ObjectInfo> &obstacles);
 
     // Set goals
     void setGoals(const GoalMap &goals);

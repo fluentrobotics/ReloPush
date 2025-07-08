@@ -12,12 +12,12 @@
  *        - nominal orientation
  *        - number of sides
  */
-struct ObjectInfo
+struct ObjectInfo// : ReloPush::State
 {
     std::string name;
     double x;
     double y;
-    double nominalOrientation;
+    double nominalOrientation; // might be duplicate with State yaw
     int numberOfSides;
     double enclosingRadius;
 
@@ -77,10 +77,9 @@ struct ObjectInfo
     }
 };
 
-/**
- * @brief A similar struct for "goal-level" info,
- *        if we want discrete orientations for the goal as well.
- */
+typedef ObjectInfo GoalInfo;
+
+/*
 struct GoalInfo
 {
     std::string name;
@@ -109,8 +108,22 @@ struct GoalInfo
         return nominalOrientation + (orientationIndex * stepAngle);
     }
 };
+*/
 
-typedef std::unordered_map<std::string, ObjectInfo> ObjectMap;
-typedef std::unordered_map<std::string, GoalInfo> GoalMap;
+typedef std::unordered_map<std::string, ObjectInfo> ObjectMap, GoalMap;
+//typedef std::unordered_map<std::string, GoalInfo> GoalMap;
+
+struct ObjectGoalPair
+{
+    std::string objectName;
+    std::string goalName;
+
+    ObjectGoalPair()
+    {}
+
+    ObjectGoalPair(std::string obj, std::string goal)
+        : objectName(obj), goalName(goal)
+    {}
+};
 
 #endif // OBJECTINFO_HPP

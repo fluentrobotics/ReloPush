@@ -54,6 +54,8 @@ namespace ReloPush
             return false;
         }
 
+
+
         State(const State &) = default;
         State(State &&) = default;
         State &operator=(const State &) = default;

@@ -39,9 +39,9 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj6.txt";
+    std::string filename = "iros_obj8.txt";
 
-    int instance_ind = 0;
+    int instance_ind = 2;
     bool use_opt = true;
     bool vis = true;
     //bool sim = true;
@@ -49,8 +49,8 @@ int main(int argc, char *argv[])
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file
-    std::unordered_map<std::string, ObjectInfo> objects;
-    std::unordered_map<std::string, GoalInfo>   goals;
+    ObjectMap objects, goals;
+    //std::unordered_map<std::string, ObjectInfo>   goals;
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs;
     std::vector<ReloPush::State> robots;
 
@@ -244,6 +244,9 @@ int main(int argc, char *argv[])
 
     // Compose output filename
     std::string result_filename = std::string(CMAKE_SOURCE_DIR) + "/result_" + filename;
+    if(use_opt)
+        result_filename = std::string(CMAKE_SOURCE_DIR) + "/result_opt_" + filename;
+
     std::cout << "saving to: "<< result_filename << std::endl;
 
     // Open for appending (if you run many instances), or for writing (overwrite)

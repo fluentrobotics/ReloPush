@@ -6,18 +6,17 @@
 #include <ObjectInfo.hpp>
 #include <unordered_map>
 
-typedef std::vector<ObjectInfo> ObjectList;
-typedef std::vector<GoalInfo> GoalList;
+typedef std::vector<ObjectInfo> ObjectList, GoalList;
 
 ReloPush::State object_to_state(ObjectInfo& obj);
 
-ReloPush::State goal_to_state(GoalInfo& goal);
+//ReloPush::State goal_to_state(ObjectMap& goal);
 
 // Function to convert ObjectMap to std::vector<State>
 std::vector<ReloPush::State> convert_to_states(ObjectMap &objects);
 
 // Function to convert GoalMap to std::vector<State>
-std::vector<ReloPush::State> convert_to_states(GoalMap &goals);
+//std::vector<ReloPush::State> convert_to_states(GoalMap &goals);
 
 /**
  * @brief A single struct containing everything needed for planning:
@@ -32,11 +31,12 @@ struct PlanningContext
     //ObjectList delivered_list; //delivered objects
 
     ObjectMap mo_list;
-    GoalMap delivered_list;
+    ObjectMap delivered_list;
     int sample_N = 25;
     int64_t timeout_ms = 0; // 0: no timeout for hybrid-astar
     bool print_res = false; // print result for hybrid-astar
     bool use_prelo_optimization = false;
+    size_t num_of_obj = 0;
 
 
     // Evenly sampled positions for optimizations
@@ -50,7 +50,8 @@ struct PlanningContext
     PlanningContext(PlanningParameters params_in, ObjectMap& obs_in) : parameters(params_in), mo_list(obs_in)
     {
         ObjectList static_in = {};
-        std::unordered_set<ReloPush::State> obs;
+        //std::unordered_set<ReloPush::State> obs;
+        ObjectMap obs;
         env_push = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
         env_nonpush = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_nonpush, Constants::LF_nonpush, true);
 
@@ -63,6 +64,8 @@ struct PlanningContext
         parameters.LF_push = Constants::LF_push;
         parameters.LF_nonpush = Constants::LF_nonpush;
         parameters.LB = Constants::LB;
+
+        num_of_obj = mo_list.size();
 
         updateObs(mo_list, delivered_list);
         //uniformSampleMap(sample_N);
@@ -71,7 +74,8 @@ struct PlanningContext
     // todo: combine the constructors
     PlanningContext(PlanningParameters params_in, ObjectMap& obs_in, GoalMap& static_in) : parameters(params_in), mo_list(obs_in), delivered_list(static_in)
     {
-        std::unordered_set<ReloPush::State> obs;
+        //std::unordered_set<ReloPush::State> obs;
+        ObjectMap obs;
         env_push = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
         env_nonpush = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_nonpush, Constants::LF_nonpush, true);
 
@@ -85,6 +89,8 @@ struct PlanningContext
         parameters.LF_nonpush = Constants::LF_nonpush;
         parameters.LB = Constants::LB;
 
+        num_of_obj = mo_list.size() + delivered_list.size();
+
         updateObs(mo_list, delivered_list);
         //uniformSampleMap(sample_N);
     }
@@ -92,7 +98,8 @@ struct PlanningContext
     PlanningContext(PlanningParameters params_in, ObjectMap& obs_in, GoalMap& static_in, bool& use_opt)
         : parameters(params_in), mo_list(obs_in), delivered_list(static_in), use_prelo_optimization(use_opt)
     {
-        std::unordered_set<ReloPush::State> obs;
+        //std::unordered_set<ReloPush::State> obs;
+        ObjectMap obs;
         env_push = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_push, Constants::LF_push, false); //todo: params:: -> parameters
         env_nonpush = Environment(params_in.boundary.xMax, params_in.boundary.yMax, obs, Constants::r_nonpush, Constants::LF_nonpush, true);
 
@@ -108,53 +115,96 @@ struct PlanningContext
 
         parameters.PrePush_dist = Constants::prepush_th;
 
+        num_of_obj = mo_list.size() + delivered_list.size();
+
         updateObs(mo_list, delivered_list);
         //uniformSampleMap(sample_N);
     }
 
     void updateObs()
     {
-        std::unordered_set<ReloPush::State> obs;
-        auto mo_list_states = convert_to_states(mo_list);
-        obs.insert(mo_list_states.begin(), mo_list_states.end());
+        //std::unordered_set<ReloPush::State> obs;
+        //auto mo_list_states = convert_to_states(mo_list);
+        //obs.insert(mo_list_states.begin(), mo_list_states.end());
 
-        auto delivered_list_states = convert_to_states(delivered_list);
-        obs.insert(delivered_list_states.begin(), delivered_list_states.end());
+//        auto delivered_list_states = convert_to_states(delivered_list);
+//        obs.insert(delivered_list_states.begin(), delivered_list_states.end());
 
-        env_push = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.push, parameters.LF_push, false);
-        env_nonpush = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.non_push, parameters.LF_nonpush, true);
+        env_push = Environment(parameters.boundary.xMax, parameters.boundary.yMax, mo_list, parameters.turning_rad_pair.push, parameters.LF_push, false);
+        env_nonpush = Environment(parameters.boundary.xMax, parameters.boundary.yMax, mo_list, parameters.turning_rad_pair.non_push, parameters.LF_nonpush, true);
+
+        // --- invariant check: env_nonpush must contain exactly one obstacle per object+delivered_obj ---
+        size_t actual = env_nonpush.get_obs().size();
+        size_t expected = mo_list.size() + delivered_list.size();
+        if (actual != expected) {
+            std::cerr << "[ERROR] PlanningContext::updateObs(): "
+                      << "mismatched obstacle count in non-push map: "
+                      << actual << " vs expected " << expected
+                      << " (undelivered=" << mo_list.size()
+                      << " + delivered=" << delivered_list.size() << ")\n";
+            assert(false);
+        }
     }
 
-    void updateObs(std::unordered_map<std::string, ObjectInfo>& mo_list_in, std::unordered_map<std::string, GoalInfo>& delivered_list_in)
+    void updateObs(std::unordered_map<std::string, ObjectInfo>& mo_list_in, std::unordered_map<std::string, ObjectInfo>& delivered_list_in)
     {
-        std::unordered_set<ReloPush::State> obs;
-        auto mo_list_states = convert_to_states(mo_list_in);
-        obs.insert(mo_list_states.begin(), mo_list_states.end());
+        //std::unordered_set<ReloPush::State> obs;
+        ObjectMap obs = mo_list_in;
+        obs.insert(delivered_list_in.begin(), delivered_list_in.end());
+//        auto mo_list_states = convert_to_states(mo_list_in);
+//        obs.insert(mo_list_states.begin(), mo_list_states.end());
 
-        auto delivered_list_states = convert_to_states(delivered_list_in);
-        obs.insert(delivered_list_states.begin(), delivered_list_states.end());
+//        auto delivered_list_states = convert_to_states(delivered_list_in);
+//        obs.insert(delivered_list_states.begin(), delivered_list_states.end());
 
         env_push = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.push, parameters.LF_push, false);
         env_nonpush = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs, parameters.turning_rad_pair.non_push, parameters.LF_nonpush, true);
+
+        // same invariant check here too
+        size_t actual = env_nonpush.get_obs().size();
+        size_t expected = mo_list_in.size() + delivered_list_in.size();
+        if (actual != expected) {
+            std::cerr << "[ERROR] PlanningContext::updateObs(maps): "
+                      << "mismatched obstacle count in non-push map: "
+                      << actual << " vs expected " << expected << "\n";
+            assert(false);
+        }
     }
 
-    void updateObs(std::unordered_set<ReloPush::State>& obs_in)
+    void updateObs(ObjectMap& obs_in)
     {
         env_push = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs_in, parameters.turning_rad_pair.push, parameters.LF_push, false);
         env_nonpush = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs_in, parameters.turning_rad_pair.non_push, parameters.LF_nonpush, true);
     }
 
-    void removeObs(ReloPush::State obs_in)
+    void removeObs(ObjectInfo obs_in)
     {
         env_push.remove_obs(obs_in);
         env_nonpush.remove_obs(obs_in);
     }
 
-    void addObs(ReloPush::State obs_in)
+    void addObs(ObjectInfo obs_in)
     {
         env_push.add_obs(obs_in);
         env_nonpush.add_obs(obs_in);
     }
+
+    // for sanity check
+    void checkObsCount(const std::string where) {
+       size_t actual   = env_nonpush.get_obs().size();
+       size_t expected = mo_list.size() + delivered_list.size();
+       if (actual != expected) {
+         std::cerr << "[FATAL] Obstacle-count mismatch at “"
+                   << where << "”: got "
+                   << actual << " but expected "
+                   << expected << " (|objGoalPairs|="
+                   << mo_list.size()
+                   << " + |delivered|="
+                   << delivered_list.size() << ")\n";
+         assert(false);
+       }
+     }
+
 
     // Function to compute grid dimensions (rows and columns) based on N and aspect ratio
     std::pair<int, int> computeGridDimensions(int N, double width, double height) {

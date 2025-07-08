@@ -36,6 +36,7 @@ typedef boost::geometry::model::segment<Point> Segment;
 //#include <reloPush/params.h>
 #include <Parameters.hpp>
 //#include "timer.hpp"
+#include <ObjectInfo.hpp>
 
 using libMultiRobotPlanning::HybridAStar;
 using libMultiRobotPlanning::Neighbor;
@@ -68,20 +69,20 @@ using namespace libMultiRobotPlanning;
 // };
 
 namespace Constants {
-    static float steer_limit_push = 0.185; // 0.185
+    static float steer_limit_push = 0.2; // 0.185
     static float steer_limit_nonpush = 0.28; // 0.28
     static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
     static float L = 0.29f;
     // [m] --- The minimum turning radius of the vehicle
-    //static float r_push = L / tanf(fabs(steer_limit_push));
-    static float r_push = 1.41f;
+    static float r_push = L / tanf(fabs(steer_limit_push));
+    //static float r_push = 1.41f;
     static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
     //extern float r; // non-push as default
     //static float r = 0.5;
     //static const float r = 3;
     //static const float deltat = 6.75 / 180.0 * M_PI;
-    static float deltat_push = speed_limit / r_push / 2;
-    static float deltat_nonpush = speed_limit / r_nonpush / 2;
+    static float deltat_push = speed_limit / r_push / 1.5;
+    static float deltat_nonpush = speed_limit / r_nonpush / 1.5;
     //extern float deltat; // non-push as default
     // [#] --- A movement cost penalty for turning (choosing non straight motion
     // primitives)
@@ -98,7 +99,7 @@ namespace Constants {
     static float heuristicWeight = 1.0f;
 
     // map resolution
-    static const float mapResolution = 0.05;
+    static const float mapResolution = 0.1;
 
     static const float xyResolution_push = r_push * deltat_push;
     static const float xyResolution_nonpush = r_nonpush * deltat_nonpush;
@@ -111,7 +112,9 @@ namespace Constants {
     // width of car
     static const float carWidth = 0.285;
     // obstacle default radius
-    static const float obsRadius = 0.075;
+    static const float obsHalfSide = 0.075;
+    static const float obsRadius = obsHalfSide * sqrt(2);
+    static const float obsEncDiameter = obsHalfSide*2*sqrt(2);
     // distance from rear to vehicle front end
     static const float LF_nonpush = 0.38;  //0.38
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
@@ -223,11 +226,11 @@ typedef std::shared_ptr<PathPlanResult> PathPlanResultPtr;
 // bool and reason
 struct StateValiditySet{
     std::pair<bool, StateValidity> data;
-    ReloPush::State colliding;
+    ObjectInfo colliding;
 
     StateValiditySet(bool is_valid, StateValidity validity) : data(is_valid,validity) {}
 
-    StateValiditySet(bool is_valid, StateValidity validity, ReloPush::State collide) : data(is_valid,validity), colliding(collide) {}
+    StateValiditySet(bool is_valid, StateValidity validity, ObjectInfo collide) : data(is_valid,validity), colliding(collide) {}
 
     operator bool() const {
         return data.first;
@@ -289,7 +292,7 @@ public:
   }
   */
 
-    Environment(float maxx, float maxy, std::unordered_set<ReloPush::State> obstacles, float turning_rad_in, float LF_in, bool use_reverse,
+    Environment(float maxx, float maxy, ObjectMap obstacles, float turning_rad_in, float LF_in, bool use_reverse,
                 ReloPush::State goal = ReloPush::State(0,0,0), float speed = 0.385f)
         : m_obstacles(std::move(obstacles)),
         m_goal(goal)  // NOLINT
@@ -389,8 +392,8 @@ public:
         double reedsSheppCost = 0;
         // non-holonomic-without-obstacles heuristic: use a Reeds-Shepp (or Dubins if reversing not allowed)
         std::unique_ptr<ompl::base::SE2StateSpace> path(
-            planCont.allow_reverse ? (ompl::base::SE2StateSpace *)(new ompl::base::ReedsSheppStateSpace(planCont.turning_radius))
-                                   : (ompl::base::SE2StateSpace *)(new ompl::base::DubinsStateSpace(planCont.turning_radius))
+            planCont.allow_reverse ? (ompl::base::SE2StateSpace *)(new ompl::base::ReedsSheppStateSpace(Constants::r_nonpush))
+                                   : (ompl::base::SE2StateSpace *)(new ompl::base::DubinsStateSpace(Constants::r_nonpush))
             );
         OmplState* rsStart = (OmplState *)path->allocState();
         OmplState* rsEnd = (OmplState *)path->allocState();
@@ -450,10 +453,10 @@ public:
                            std::hash<ReloPush::State>>& _camefrom) {
         double goal_distance =
             sqrt(pow(state.x - m_goal.x, 2) + pow(state.y - m_goal.y, 2));
-        if (goal_distance > 2 * (Constants::LB + planCont.LF)) return false;
+        if (goal_distance > 2 * (Constants::LB + Constants::LF_nonpush)) return false;
 
         //ompl::base::ReedsSheppStateSpace reedsSheppSpace(Constants::r);
-        ompl::base::ReedsSheppStateSpace reedsSheppSpace(planCont.turning_radius);
+        ompl::base::ReedsSheppStateSpace reedsSheppSpace(Constants::r_nonpush);
         OmplState* rsStart = (OmplState*)reedsSheppSpace.allocState();
         OmplState* rsEnd = (OmplState*)reedsSheppSpace.allocState();
         rsStart->setXY(state.x, state.y);
@@ -479,16 +482,16 @@ public:
             case 1:  // RS_LEFT
                 deltat = -reedsShepppath.length_[pathidx];
                 //dx = Constants::r * sin(-deltat);
-                dx = planCont.turning_radius * sin(-deltat);
+                dx = Constants::r_nonpush * sin(-deltat);
                 // dy = Constants::r * (1 - cos(-deltat));
                 act = 2;
                 //cost = reedsShepppath.length_[pathidx] * Constants::r * Constants::penaltyTurning;
-                cost = reedsShepppath.length_[pathidx] * planCont.turning_radius * Constants::penaltyTurning;
+                cost = reedsShepppath.length_[pathidx] * Constants::r_nonpush * Constants::penaltyTurning;
                 break;
             case 2:  // RS_STRAIGHT
                 deltat = 0;
                 //dx = reedsShepppath.length_[pathidx] * Constants::r;
-                dx = reedsShepppath.length_[pathidx] * planCont.turning_radius;
+                dx = reedsShepppath.length_[pathidx] * Constants::r_nonpush;
                 // dy = 0;
                 act = 0;
                 cost = dx;
@@ -496,11 +499,11 @@ public:
             case 3:  // RS_RIGHT
                 deltat = reedsShepppath.length_[pathidx];
                 //dx = Constants::r * sin(deltat);
-                dx = planCont.turning_radius * sin(deltat);
+                dx = Constants::r_nonpush * sin(deltat);
                 // dy = -Constants::r * (1 - cos(deltat));
                 act = 1;
                 //cost = reedsShepppath.length_[pathidx] * Constants::r * Constants::penaltyTurning;
-                cost = reedsShepppath.length_[pathidx] * planCont.turning_radius * Constants::penaltyTurning;
+                cost = reedsShepppath.length_[pathidx] * Constants::r_nonpush * Constants::penaltyTurning;
                 break;
             default:
                 std::cout << "\033[1m\033[31m"
@@ -557,7 +560,7 @@ public:
     ompl::base::DubinsStateSpace::DubinsPath findDubins(ReloPush::State& start, ReloPush::State& goal)
     {
         //ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
-        ompl::base::DubinsStateSpace dubinsSpace(planCont.turning_radius);
+        ompl::base::DubinsStateSpace dubinsSpace(Constants::r_nonpush);
         OmplState *dubinsStart = (OmplState *)dubinsSpace.allocState();
         OmplState *dubinsEnd = (OmplState *)dubinsSpace.allocState();
         dubinsStart->setXY(start.x, start.y);
@@ -764,7 +767,7 @@ public:
             ReloPush::State tempState(xSucc, ySucc, yawSucc, s.time+1);
             double yawSucc_neg = Constants::normalizeHeadingRad(yawSucc*-1);
             ReloPush::State tempState_neg(xSucc, ySucc, yawSucc_neg, s.time+1);
-            if (stateValid(tempState_neg,-1,-1,planCont.LF,planCont.LF)) { // todo: use unifed parameters from planning context
+            if (stateValid(tempState_neg,Constants::carWidth,Constants::obsRadius,Constants::LF_nonpush)) { // todo: use unifed parameters from planning context
                 neighbors.emplace_back(
                     Neighbor<ReloPush::State, Action, double>(tempState, act, g));
             }
@@ -772,7 +775,7 @@ public:
         // wait
         g = planCont.dx[0];
         ReloPush::State tempState(s.x, s.y, s.yaw, s.time + 1);
-        if (stateValid(tempState)) {
+        if (stateValid(tempState,Constants::carWidth,Constants::obsRadius,Constants::LF_nonpush)) {
             neighbors.emplace_back(Neighbor<ReloPush::State, Action, double>(tempState, 6, g));
         }
     }
@@ -793,41 +796,46 @@ public:
     int Ecount = 0;
     int Dcount = 0;
 
-    void add_obs(ReloPush::State obs_in)
+    void add_obs(ObjectInfo obs_in)
     {
-        m_obstacles.insert(obs_in);
+        //m_obstacles.insert(obs_in);
+        m_obstacles.insert(std::make_pair(obs_in.name,obs_in));
         updateCostmap();
     }
 
-    std::vector<ReloPush::State> takeout_start_collision(const ReloPush::State& s)
+    std::vector<ObjectInfo> takeout_start_collision(const ReloPush::State& s)
     {
         double x_ind = s.x / Constants::mapResolution;
         double y_ind = s.y / Constants::mapResolution;
 
-        std::vector<ReloPush::State> took_out(0);
+        std::vector<ObjectInfo> took_out(0);
 
         Eigen::Matrix2f rot;
         rot << cos(-s.yaw), -sin(-s.yaw), sin(-s.yaw), cos(-s.yaw);
-        for (auto it = m_obstacles.begin(); it != m_obstacles.end(); ) {
+        //for (auto it = m_obstacles.begin(); it != m_obstacles.end(); )
+        for (auto& pair : m_obstacles)
+        {
             Eigen::Matrix<float, 1, 2> obs;
-            obs << it->x - s.x, it->y - s.y;
+            obs << pair.second.x - s.x, pair.second.y - s.y;
             auto rotated_obs = obs * rot;
             if (rotated_obs(0) > -Constants::LB - Constants::obsRadius &&
                 rotated_obs(0) < planCont.LF + Constants::obsRadius &&
                 rotated_obs(1) > -Constants::carWidth / 2.0 - Constants::obsRadius &&
                 rotated_obs(1) < Constants::carWidth / 2.0 + Constants::obsRadius)
             {
-                took_out.push_back(*it);
-                it = m_obstacles.erase(it); // Remove the element and get the iterator to the next element
-            } else {
-                ++it; // Move to the next element
+                took_out.push_back(pair.second);
+                m_obstacles.erase(pair.first); // Remove the element and get the iterator to the next element
             }
+            //else {
+                //++it; // Move to the next element
+            //}
         }
         return took_out;
     }
 
-    void remove_obs(const ReloPush::State& s)
+    void remove_obs(const std::string& obs_name)
     {
+        /*
         for (auto it = m_obstacles.begin(); it != m_obstacles.end();) {
             if(it->x == s.x && it->y == s.y)
             {
@@ -840,11 +848,23 @@ public:
             }
 
         }
+        */
+        size_t rm = m_obstacles.erase(obs_name);
+        if(rm==0)
+        {
+            std::cout << "[remove obs] obs " << obs_name << "was not found" << std::endl;
+        }
+    }
+
+    void remove_obs(const ObjectInfo& obsInfo)
+    {
+        remove_obs(obsInfo.name);
     }
 
 
+
     StateValiditySet stateValid(const ReloPush::State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
-                                float LF = Constants::LF_push, float LB = Constants::LB) {
+                                float LF = Constants::LF_nonpush, float LB = Constants::LB) {
 
         if(car_width<0)
             car_width = Constants::carWidth;
@@ -855,12 +875,12 @@ public:
         auto it = dynamic_obs.equal_range(s.time);
         for (auto itr = it.first; itr != it.second; ++itr) {
             //if (s.agentCollision(itr->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);
-            if (s.agentCollision(itr->second,LF,car_width)) return StateValiditySet(false, StateValidity::collision);
+            if (s.agentCollision(itr->second.getNominalPose(),LF,car_width)) return StateValiditySet(false, StateValidity::collision);
         }
         auto itlow = dynamic_obs.lower_bound(-s.time);
         auto itup = dynamic_obs.upper_bound(-1);
         for (auto it = itlow; it != itup; ++it)
-            if (s.agentCollision(it->second,LF,car_width)) return StateValiditySet(false, StateValidity::collision);;
+            if (s.agentCollision(it->second.getNominalPose(),LF,car_width)) return StateValiditySet(false, StateValidity::collision);
             //if (s.agentCollision(it->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
 
         // boundary
@@ -872,7 +892,9 @@ public:
         Eigen::Matrix2f rot;
         rot << cos(s.yaw), sin(s.yaw),
                 -sin(s.yaw), cos(s.yaw); // R_W^R
-        for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
+        //for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
+        for(auto& oPair : m_obstacles) {
+            auto oInfo = oPair.second;
             // s.x, s.y, s.yaw => robot pose in world
             // LF, LB, car_width => car bounding rectangle extends forward LF, backward LB, half-width car_width/2
             // Suppose it->x, it->y => obstacle center in world
@@ -895,9 +917,14 @@ public:
             };
 */
             // Get oriented corners of obstacle
-            float obs_cx = it->x;
+            /*float obs_cx = it->x;
             float obs_cy = it->y;
-            float obs_yaw = it->yaw; // or .nominalOrientation or whatever your ObjectInfo uses
+            float obs_yaw = it->yaw;*/ // or .nominalOrientation or whatever your ObjectInfo uses
+
+            float obs_cx = oInfo.x;
+            float obs_cy = oInfo.y;
+            float obs_yaw = oInfo.nominalOrientation; // or .nominalOrientation or whatever your ObjectInfo uses
+
 
             Eigen::Matrix2f obsRot;
             obsRot << std::cos(obs_yaw), -std::sin(obs_yaw),
@@ -948,7 +975,7 @@ public:
                     std::cout << "============================\n";
                     */
 
-                    return StateValiditySet(false, StateValidity::collision, *it);
+                    return StateValiditySet(false, StateValidity::collision, oInfo);
                 }
             }
 
@@ -975,8 +1002,8 @@ public:
                 Eigen::Vector2f cornerW = robotPosWorld + R_robotToWorld * cornerR;
 
                 // Check if this corner is inside the axis-aligned square obstacle:
-                if (cornerW.x() >= it->x - halfSide && cornerW.x() <= it->x + halfSide &&
-                    cornerW.y() >= it->y - halfSide && cornerW.y() <= it->y + halfSide)
+                if (cornerW.x() >= oInfo.x - halfSide && cornerW.x() <= oInfo.x + halfSide &&
+                    cornerW.y() >= oInfo.y - halfSide && cornerW.y() <= oInfo.y + halfSide)
                 {
                     // Collision if any car corner is inside the obstacle
                     return StateValiditySet(false, StateValidity::collision);
@@ -1055,7 +1082,8 @@ public:
         // std::cout << ro(0) << ro(1) << std::endl;
     }
 
-    std::unordered_set<ReloPush::State> get_obs()
+    //std::unordered_set<ReloPush::State> get_obs()
+    std::unordered_map<std::string,ObjectInfo> get_obs()
     {
         return m_obstacles;
     }
@@ -1101,10 +1129,13 @@ private:
         heap.clear();
 
         std::set<std::pair<int, int>> temp_obs_set;
-        for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
+        //for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
+        for(auto& oPair : m_obstacles)
+        {
+            ObjectInfo oInfo = oPair.second;
             temp_obs_set.insert(
-                std::make_pair(static_cast<int>(it->x / Constants::mapResolution),
-                               static_cast<int>(it->y / Constants::mapResolution)));
+                std::make_pair(static_cast<int>(oInfo.x / Constants::mapResolution),
+                               static_cast<int>(oInfo.y / Constants::mapResolution)));
         }
 
         int goal_x = static_cast<int>(m_goal.x / Constants::mapResolution);
@@ -1273,13 +1304,13 @@ private:
 
     int m_dimx;
     int m_dimy;
-    std::unordered_set<ReloPush::State> m_obstacles;
+    ObjectMap m_obstacles;
     std::vector<std::vector<double>> holonomic_cost_map;
     ReloPush::State m_goal;
 
     PlanningContext planCont;
 
-    std::multimap<int, ReloPush::State> dynamic_obs;
+    std::multimap<int, ObjectInfo> dynamic_obs;
 };
 
 

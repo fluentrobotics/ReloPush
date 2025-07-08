@@ -1086,24 +1086,31 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
                           const std::string &pivotObjName,
                           const ReloPush::State &objNewState)
 {
+    planCtx.checkObsCount("\to1");
     // 1) Environment updates
     planCtx.removeObs(fromObs);
     planCtx.addObs(toObs);
 
     auto before_obs = planCtx.env_push.get_obs();
     // 2) Attempt path planning (after obs relo)
+    planCtx.checkObsCount("\to2");
     auto res = planHybridAstar(fromState_prepush, toState_prepush, planCtx, true);
+    planCtx.checkObsCount("\to3");
     if (!res->success)
     {
+        planCtx.checkObsCount("\to4");
         // revert environment changes
         planCtx.addObs(fromObs);
         planCtx.removeObs(toObs);
+        planCtx.checkObsCount("\to5");
 
         auto after_obs = planCtx.env_push.get_obs();
+        planCtx.checkObsCount("\to6");
         if(before_obs != after_obs){
             std::cerr << "Environment not properly reverted!" << std::endl;
             // Add detailed prints here to identify discrepancies
         }
+        planCtx.checkObsCount("\to7");
 
         return res;
     }
@@ -1658,6 +1665,7 @@ bool tryAllocation(
     ReloPush::State& robot,
     FinalAllocation& outAllocation)
 {
+    planCtx.checkObsCount("\t1");
     // Pull out required context
     auto& bestPairEntry = pairResults[candidate.objectName];
     EdgeMatrixEntry bestMatEntry = bestPairEntry.matrixResult->getBestPathMatEntry();
@@ -1697,7 +1705,7 @@ bool tryAllocation(
 
         if (planCtx.env_push.stateValid(fromState_pre).get_validity() == StateValidity::out_of_boundary)
             return false;
-
+planCtx.checkObsCount("\t2");
         auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, last_pair.first, last_pair.second,
                                         pairResults, candidate, ObsReloPathList, ToUpdate,
                                         bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].name,
@@ -1707,7 +1715,7 @@ bool tryAllocation(
     }
 
     // Plan approach (transit)
-
+planCtx.checkObsCount("\t3");
     auto obj_info = objects[candidate.objectName];
     ReloPush::State obj_start = obj_info.getPushingPose(candidate.row);
     ReloPush::State obj_start_pre = find_pre_push(obj_start,planCtx.parameters.PrePush_dist);
@@ -1716,7 +1724,7 @@ bool tryAllocation(
         return false;
     transitPaths.push_back(res_app->getPathPtr(true));
 
-
+planCtx.checkObsCount("\t4");
     // Plan transit paths between edges if needed (prerelocation)
     if (bestMatEntry.edgesInfo.size() > 1) {
         transitPaths.clear();
@@ -1729,7 +1737,7 @@ bool tryAllocation(
             transitPaths.push_back(res->getPathPtr(true));
         }
     }
-
+planCtx.checkObsCount("\t5");
     // Build FinalAllocation
     outAllocation.object = objects[candidate.objectName];
     outAllocation.goal = goals[candidate.goalName];
@@ -1745,13 +1753,15 @@ bool tryAllocation(
     outAllocation.paths = pairResults[candidate.objectName].matrixResult->getBestPathMatEntry().edgesInfo;
     outAllocation.obsReloPaths = std::make_shared<std::vector<EdgePath>>(ObsReloPathList);
     outAllocation.snapshot = planCtx;
-
+planCtx.checkObsCount("\t6");
     // Commit the ToUpdate states (update object positions)
     for (const auto& pair : ToUpdate) {
         objects[pair.first].x = pair.second.x;
         objects[pair.first].y = pair.second.y;
         // If you need to update orientation or other fields, do it here.
     }
+
+    planCtx.checkObsCount("\t7");
 
     return true;
 }
@@ -1760,8 +1770,8 @@ bool tryAllocation(
 // Main DFS function
 bool performAllocationsDFS(
     const WorkspaceBoundary& boundary,
-    std::unordered_map<std::string, ObjectInfo> objects,
-    std::unordered_map<std::string, GoalInfo> goals,
+    ObjectMap objects,
+    ObjectMap goals,
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
     GoalMap delivered_objs,
     ReloPush::State robot,
@@ -1789,8 +1799,11 @@ bool performAllocationsDFS(
     // ---- Compute all pairwise assignments/costs ----
     auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
 
+     planCtx.checkObsCount("0");
+
     // ---- Iterate through sorted candidate pairs ----
     while (true) {
+        planCtx.checkObsCount("1");
         // Get sorted global candidate list
         auto sortedCandidates = getSortedPairCandidates(pairResults);
         // No more candidates? No solution at this recursion
@@ -1809,8 +1822,11 @@ bool performAllocationsDFS(
         auto old_robot = robot;
 
         FinalAllocation allocation;
+        planCtx.checkObsCount("before Alloc");
         bool ok = tryAllocation(candidate, pairResults, planCtx, objects, goals, objGoalPairs, delivered_objs, robot, allocation);
+        planCtx.checkObsCount("After Alloc "+ std::to_string(depth));
         if (ok) {
+            planCtx.checkObsCount("Alloc ok");
             delivered_objs[candidate.objectName] = goals[candidate.goalName];
             objects.erase(candidate.objectName);
             goals.erase(candidate.goalName);
@@ -1823,6 +1839,8 @@ bool performAllocationsDFS(
             if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt, depth + 1)) {
                 return true;
             }
+
+            planCtx.checkObsCount("Alloc ng");
             // Backtrack
             finalSequence.pop_back();
             objects = old_objects;
@@ -1830,8 +1848,9 @@ bool performAllocationsDFS(
             objGoalPairs = old_objGoalPairs;
             delivered_objs = old_delivered_objs;
             robot = old_robot;
+            planCtx.checkObsCount("2");
         }
-
+        planCtx.checkObsCount("2-3 " + std::to_string(depth));
         // If fail: invalidate this candidate and try next best
         // Mark cost as infinity in the matrix and remove from sortedEntries
         auto& matrixRes = pairResults[candidate.objectName].matrixResult;
@@ -1839,6 +1858,8 @@ bool performAllocationsDFS(
         auto& sorted = matrixRes->sortedEntries;
         sorted.erase(std::remove_if(sorted.begin(), sorted.end(),
                                     [&](const RowColCost& rcc) { return rcc.row == candidate.row && rcc.col == candidate.col; }), sorted.end());
+
+         planCtx.checkObsCount("3");
     }
 }
 

@@ -67,8 +67,8 @@ std::vector<std::string> read_file(std::string f_path)
 }
 
 bool parse_instance_from_file( std::string file_path, size_t data_ind,
-                              std::unordered_map<std::string, ObjectInfo>& objects,
-                              std::unordered_map<std::string, GoalInfo>& goals,
+                              ObjectMap& objects,
+                              ObjectMap& goals,
                               std::vector<ReloPush::State>& robots,
                               std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs)
 {
@@ -194,7 +194,7 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
 
         GoalInfo parsedGoal;
         try {
-            parsedGoal = GoalInfo(
+            parsedGoal = ObjectInfo(
                 goal_elem_sp[0],
                 std::stof(goal_elem_sp[1]),
                 std::stof(goal_elem_sp[2]),

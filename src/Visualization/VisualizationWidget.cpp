@@ -79,7 +79,7 @@ void VisualizationWidget::setPath(const std::vector<ReloPush::State>& path_, con
     update();
 }
 
-void VisualizationWidget::setObstacles(const std::vector<ReloPush::State> &obstacles_)
+void VisualizationWidget::setObstacles(const std::vector<ObjectInfo> &obstacles_)
 {
     obstacles = obstacles_;
     update();
