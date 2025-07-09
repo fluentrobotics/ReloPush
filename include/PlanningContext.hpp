@@ -146,11 +146,13 @@ struct PlanningContext
         }
     }
 
-    void updateObs(std::unordered_map<std::string, ObjectInfo>& mo_list_in, std::unordered_map<std::string, ObjectInfo>& delivered_list_in)
+    void updateObs(ObjectMap& mo_list_in, ObjectMap& delivered_list_in)
     {
         //std::unordered_set<ReloPush::State> obs;
-        ObjectMap obs = mo_list_in;
-        obs.insert(delivered_list_in.begin(), delivered_list_in.end());
+        ObjectMap obs;
+        obs.append(mo_list_in);
+        obs.append(delivered_list_in);
+        //obs.insert(delivered_list_in.begin(), delivered_list_in.end());
 //        auto mo_list_states = convert_to_states(mo_list_in);
 //        obs.insert(mo_list_states.begin(), mo_list_states.end());
 
@@ -175,6 +177,12 @@ struct PlanningContext
     {
         env_push = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs_in, parameters.turning_rad_pair.push, parameters.LF_push, false);
         env_nonpush = Environment(parameters.boundary.xMax, parameters.boundary.yMax, obs_in, parameters.turning_rad_pair.non_push, parameters.LF_nonpush, true);
+    }
+
+    void removeObs(std::string objName)
+    {
+        env_push.remove_obs(objName);
+        env_nonpush.remove_obs(objName);
     }
 
     void removeObs(ObjectInfo obs_in)

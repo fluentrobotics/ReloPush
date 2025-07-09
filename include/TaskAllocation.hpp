@@ -305,7 +305,7 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
                           const LowestCostInfo &bestPick,
                           std::vector<EdgePath> &ObsReloPathList,
                           std::unordered_map<std::string, ReloPush::State> &ToUpdate,
-                          const std::string &pivotObjName,
+                          const ObjectInfo &pivotObjInfo,
                           const ReloPush::State &objNewState);
 
 // ---------------------------------------------------------------------------

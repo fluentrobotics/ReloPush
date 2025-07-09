@@ -310,7 +310,7 @@ StateValidity addEdgeNormalMode(
     if(data2.type==VertexType::OBJECT_VERTEX)
     {
         //auto temp_obs2 = ReloPush::State(data2.x,data2.y,data2.nominalOrientation);
-        temp_obs2 = ObjectInfo(data2.name,data2.x,data2.y,data2.nominalOrientation,data2.numberOfSides,data2.radius);
+        auto temp_obs2 = ObjectInfo(data2.name,data2.x,data2.y,data2.nominalOrientation,data2.numberOfSides,data2.radius);
         took_out.push_back(temp_obs2);
         ctx.removeObs(temp_obs2);
     }
@@ -401,17 +401,17 @@ StateValidity addEdgePrerelocation(
     auto final_push_index = data1.orientationIndex;
 
     // Temporarily remove the start and goal from the obstacles list
-    ctx.removeObs(startPose);
+    ctx.removeObs(data1.name);
     if(data2.type==VertexType::OBJECT_VERTEX)
-        ctx.removeObs(goalPose);
+        ctx.removeObs(data2.name);
 
     // check goal validity
     auto gv = ctx.env_push.stateValid(goalPose,Constants::obsRadius*2,Constants::obsRadius,Constants::obsRadius,Constants::obsRadius); // can the object fit here?
     if(!gv)
     {
-        ctx.addObs(startPose);
+        ctx.addObs(data1.toObjectInfo());
         if(data2.type==VertexType::OBJECT_VERTEX)
-            ctx.addObs(goalPose);
+            ctx.addObs(data2.toObjectInfo());
         return gv.get_validity();
     }
 
@@ -615,9 +615,9 @@ StateValidity addEdgePrerelocation(
     }
     //int obs_mid_last = ctx.env.get_obs().size();
     // restore start and goal as obstacles
-    ctx.addObs(startPose);
+    ctx.addObs(data1.toObjectInfo());
     if(data2.type==VertexType::OBJECT_VERTEX)
-        ctx.addObs(goalPose);
+        ctx.addObs(data2.toObjectInfo());
 
     //int obs_after = ctx.env.get_obs().size();
 
@@ -650,18 +650,18 @@ StateValidity addEdgePrerelocation_Optimization(
     ReloPush::State goalPose(data2.x, data2.y, data2.getActualOrientation()); // goal
 
     // Temporarily remove the start and goal from the obstacles list
-    ctx.removeObs(startPose);
+    ctx.removeObs(data1.name);
     if(data2.type==VertexType::OBJECT_VERTEX)
-        ctx.removeObs(goalPose);
+        ctx.removeObs(data2.name);
 
     // check goal validity
 
     auto gv = ctx.env_push.stateValid(goalPose,Constants::obsRadius*2,Constants::obsRadius,Constants::obsRadius,Constants::obsRadius); // can the object fit here?
     if(!gv)
     {
-        ctx.addObs(startPose);
+        ctx.addObs(data1.toObjectInfo());
         if(data2.type==VertexType::OBJECT_VERTEX)
-            ctx.addObs(goalPose);
+            ctx.addObs(data2.toObjectInfo());
         return gv.get_validity();
     }
 
@@ -947,9 +947,9 @@ StateValidity addEdgePrerelocation_Optimization(
         }
     }
 
-    ctx.addObs(startPose);
+    ctx.addObs(data1.toObjectInfo());
     if(data2.type==VertexType::OBJECT_VERTEX)
-        ctx.addObs(goalPose);
+        ctx.addObs(data2.toObjectInfo());
 
     // for debug
     //auto obs_after = ctx.env.get_obs();
@@ -1313,18 +1313,21 @@ std::vector<Vertex> getGoalVertices(const Graph &g, const std::string &goalName)
 void buildAllEdges(Graph &g, PlanningContext ctx)
 {
     // 0) Init env with obstacles
-    std::unordered_set<ReloPush::State> obs;
-    for(auto& it : ctx.mo_list)
-    {
-        obs.insert(ReloPush::State(it.second.x, it.second.y, it.second.nominalOrientation));
-        //obs.insert(State(it.get_x(),it.get_y(),0));
-    }
+    //std::unordered_set<ReloPush::State> obs;
+    ObjectMap obs = ctx.mo_list;
+    obs.insert(ctx.delivered_list.begin(),ctx.delivered_list.end()); // collect all obstacles for collision checking
+//    for(auto& it : ctx.mo_list)
+//    {
+//        obs.insert(ReloPush::State(it.second.x, it.second.y, it.second.nominalOrientation));
 
-    for(auto& it : ctx.delivered_list)
-    {
-        obs.insert(ReloPush::State(it.second.x, it.second.y, it.second.nominalOrientation));
-        //obs.insert(State(it.get_x(),it.get_y(),0));
-    }
+//        //obs.insert(State(it.get_x(),it.get_y(),0));
+//    }
+
+//    for(auto& it : ctx.delivered_list)
+//    {
+//        obs.insert(ReloPush::State(it.second.x, it.second.y, it.second.nominalOrientation));
+//        //obs.insert(State(it.get_x(),it.get_y(),0));
+//    }
     ctx.updateObs(obs);
 
 

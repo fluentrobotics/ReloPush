@@ -9,6 +9,7 @@
 #include <State.h>
 #include <variant>
 #include <DubinsTools.h>
+#include <ObjectInfo.hpp>
 
 using EdgePathTypes = std::variant<reloDubinsPath, ReloPush::StatePathPtr>; // for storing in edge
 
@@ -184,6 +185,11 @@ struct VertexData
 
         double stepAngle = (2.0 * M_PI) / static_cast<double>(numberOfSides);
         return nominalOrientation + (orientationIndex * stepAngle);
+    }
+
+    ObjectInfo toObjectInfo() const
+    {
+        return ObjectInfo(name,x,y,getActualOrientation(),numberOfSides,radius);
     }
 };
 

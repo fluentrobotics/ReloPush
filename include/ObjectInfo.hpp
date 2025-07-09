@@ -3,6 +3,7 @@
 #include <string>
 #include <cmath>
 #include <unordered_map>
+#include <vector>
 #include <State.h>
 
 /**
@@ -39,6 +40,26 @@ struct ObjectInfo// : ReloPush::State
     ObjectInfo(std::string name_in, double x_in, double y_in, double nominal_yaw, int nSide, double radius)
         : name(name_in), x(x_in), y(y_in), nominalOrientation(nominal_yaw), numberOfSides(nSide),enclosingRadius(radius)
     {
+    }
+
+    ObjectInfo(std::string name_in, ReloPush::State& pose, int nSide, double radius)
+        : name(name_in), numberOfSides(nSide), enclosingRadius(radius)
+    {
+        x = pose.x;
+        y = pose.y;
+        nominalOrientation = pose.yaw;
+    }
+
+    // use info from an existing object info, use pose from state
+    ObjectInfo(const ObjectInfo& obj_info, ReloPush::State& pose)
+    {
+        name = obj_info.name;
+        numberOfSides = obj_info.numberOfSides;
+        enclosingRadius = obj_info.enclosingRadius;
+
+        x = pose.x;
+        y = pose.y;
+        nominalOrientation = pose.yaw;
     }
 
     double getOrientation(int orientationIndex) const
@@ -110,8 +131,60 @@ struct GoalInfo
 };
 */
 
-typedef std::unordered_map<std::string, ObjectInfo> ObjectMap, GoalMap;
+//typedef std::unordered_map<std::string, ObjectInfo> ObjectMap, GoalMap;
 //typedef std::unordered_map<std::string, GoalInfo> GoalMap;
+
+
+class ObjectMap : public std::unordered_map<std::string, ObjectInfo> {
+public:
+
+    // Default constructor
+    ObjectMap() = default;
+
+    // Constructor from std::unordered_map
+    ObjectMap(const std::unordered_map<std::string, ObjectInfo>& other)
+        : std::unordered_map<std::string, ObjectInfo>(other.begin(), other.end()) {}
+
+    std::vector<ObjectInfo> toList() const {
+        std::vector<ObjectInfo> out;
+        out.reserve(this->size()); // Use 'this->size()'
+        for (const auto& pair : *this) { // Iterate over *this
+            out.push_back(pair.second);
+        }
+        return out;
+    }
+
+    std::vector<ReloPush::State> toStateList() const {
+        std::vector<ReloPush::State> out;
+        out.reserve(this->size());
+        for (const auto& pair : *this) {
+            out.push_back(ReloPush::State(pair.second.x, pair.second.y, pair.second.nominalOrientation));
+        }
+        return out;
+    }
+
+    void append(const ObjectMap& other) {
+        for (const auto& pair : other) {
+            if (this->count(pair.first)) {
+                std::cerr << "[Warning] ObjectMap: Key '" << pair.first << "' already exists. Overwriting value." << std::endl;
+            }
+            (*this)[pair.first] = pair.second;
+        }
+    }
+
+    // Example custom member function
+    void printObjectNames() const {
+        for (const auto& pair : *this) {
+            std::cout << pair.first << std::endl;
+        }
+    }
+
+    // Add more member functions as needed
+};
+
+
+typedef ObjectMap GoalMap;
+
 
 struct ObjectGoalPair
 {

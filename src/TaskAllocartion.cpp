@@ -508,12 +508,13 @@ ReloPush::StatePathPtr Find_ObsRelo(ObjectInfo& mo, PlanningContext& ctx, std::v
             StateValidity validity = StateValidity::valid;
 
 
-            auto obs = ctx.env_push.get_obs();
-            // add path points as obstacles
+            ObjectMap obsMap = ctx.env_push.get_obs();
+            auto obs = obsMap.toStateList();
+            // add path points as obstacles to avoid overlap with path
             std::vector<ReloPush::State> pathObs;
             std::vector<size_t> path_sizes; // dummy
             PathsToSinglePath(edgesInfo,path_sizes,pathObs,ctx.parameters.obs_rad*2);
-            obs.insert(pathObs.begin(), pathObs.end());
+            obs.insert(obs.end(),pathObs.begin(), pathObs.end());
 
 
             for(auto& it: obs)
@@ -1083,13 +1084,15 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
                           const LowestCostInfo &bestPick,
                           std::vector<EdgePath> &ObsReloPathList,
                           std::unordered_map<std::string, ReloPush::State> &ToUpdate,
-                          const std::string &pivotObjName,
+                          const ObjectInfo &pivotObjInfo,
                           const ReloPush::State &objNewState)
 {
     planCtx.checkObsCount("\to1");
     // 1) Environment updates
-    planCtx.removeObs(fromObs);
-    planCtx.addObs(toObs);
+    //planCtx.removeObs(fromObs);
+    planCtx.removeObs(pivotObjInfo.name);
+    //planCtx.addObs(toObs);
+    planCtx.addObs(ObjectInfo(pivotObjInfo, toObs));
 
     auto before_obs = planCtx.env_push.get_obs();
     // 2) Attempt path planning (after obs relo)
@@ -1100,14 +1103,17 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
     {
         planCtx.checkObsCount("\to4");
         // revert environment changes
-        planCtx.addObs(fromObs);
-        planCtx.removeObs(toObs);
+        //planCtx.addObs(fromObs);
+        planCtx.removeObs(pivotObjInfo.name);
+        planCtx.addObs(ObjectInfo(pivotObjInfo, fromObs));
+        //planCtx.removeObs(toObs);
+
         planCtx.checkObsCount("\to5");
 
         auto after_obs = planCtx.env_push.get_obs();
         planCtx.checkObsCount("\to6");
-        if(before_obs != after_obs){
-            std::cerr << "Environment not properly reverted!" << std::endl;
+        //if(before_obs != after_obs){
+        //    std::cerr << "Environment not properly reverted!" << std::endl;
             // Add detailed prints here to identify discrepancies
         }
         planCtx.checkObsCount("\to7");
@@ -1126,7 +1132,7 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
     ObsReloPathList.push_back(EdgePath(/*isPrePush=*/false, res->getPathPtr(true)));
 
     // 4) Update the object’s new location
-    ToUpdate[pivotObjName] = objNewState;
+    ToUpdate[pivotObjInfo.name] = objNewState;
 
     return res;
 }
@@ -1189,7 +1195,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
                                             pairResults, bestPick,
                                             ObsReloPathList,
                                             ToUpdate,
-                                            pivotObj.name,
+                                            pivotObj.toObjectInfo(),
                                             fromState);
         if (!res->success)
         {
@@ -1225,7 +1231,7 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
                                             pairResults, bestPick,
                                             ObsReloPathList,
                                             ToUpdate,
-                                            bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].name,
+                                            bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].toObjectInfo(),
                                             fromState);
         if (!res->success)
         {
@@ -1264,8 +1270,8 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
 // Helper Function 4a: The main planning/allocation loop
 // ---------------------------------------------------------------------------
 bool performAllocations(const WorkspaceBoundary &boundary,
-                        std::unordered_map<std::string, ObjectInfo> &objects,
-                        std::unordered_map<std::string, GoalInfo> &goals,
+                        ObjectMap &objects,
+                        ObjectMap &goals,
                         std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
                         std::vector<FinalAllocation> &finalSequence,
                         bool& use_opt)
@@ -1674,22 +1680,23 @@ bool tryAllocation(
     std::unordered_map<std::string, ReloPush::State> ToUpdate;
     ReloPush::StatePathPtrList transitPaths;
 
-    // Plan obs relocations (if any)
+    // Plan obs relocations (if two or more)
     for (size_t obs = 1; obs < bestMatEntry.obsReloList.size(); obs++) {
         auto pivotObj = bestMatEntry.vertexChain[obs];
-        auto prev_pair = bestMatEntry.obsReloList[obs - 1];
+        auto pivotObjInfo = pivotObj.toObjectInfo();
+        auto this_pair = bestMatEntry.obsReloList[obs - 1];
         auto next_pair = bestMatEntry.obsReloList[obs];
 
-        auto fromState = prev_pair.second;
-        auto toState = next_pair.first;
+        auto fromState = this_pair.second; // end of prev obs relo (pivot)
+        auto toState = next_pair.first; // start of next obs relo
         auto fromState_pre = find_pre_push(fromState, planCtx.parameters.PrePush_dist);
         auto toState_pre = find_pre_push(toState, planCtx.parameters.PrePush_dist);
 
         if (!planCtx.env_push.stateValid(fromState_pre))
             return false;
 
-        auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, prev_pair.first, prev_pair.second,
-                                        pairResults, candidate, ObsReloPathList, ToUpdate, pivotObj.name, fromState);
+        auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, this_pair.first, this_pair.second,
+                                        pairResults, candidate, ObsReloPathList, ToUpdate, pivotObjInfo, fromState);
         if (!res->success)
             return false;
     }
@@ -1705,10 +1712,10 @@ bool tryAllocation(
 
         if (planCtx.env_push.stateValid(fromState_pre).get_validity() == StateValidity::out_of_boundary)
             return false;
-planCtx.checkObsCount("\t2");
+        planCtx.checkObsCount("\t2");
         auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, last_pair.first, last_pair.second,
                                         pairResults, candidate, ObsReloPathList, ToUpdate,
-                                        bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].name,
+                                        bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].toObjectInfo(),
                                         fromState);
         if (!res->success)
             return false;

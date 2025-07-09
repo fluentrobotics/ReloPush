@@ -78,7 +78,7 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
         }
 
         // 4) Retrieve obstacles from snapshot
-        ObjectMap obstaclesSet = finalSequence[i].snapshot.env_push.get_obs();
+        ObjectMap obstaclesSet(finalSequence[i].snapshot.env_push.get_obs());
 //        std::vector<ObjectInfo> obstacles(
 //            obstaclesSet.begin(), obstaclesSet.end()
 //            );
