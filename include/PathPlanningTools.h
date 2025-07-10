@@ -1083,7 +1083,7 @@ public:
     }
 
     //std::unordered_set<ReloPush::State> get_obs()
-    std::unordered_map<std::string,ObjectInfo> get_obs()
+    ObjectMap get_obs()
     {
         return m_obstacles;
     }

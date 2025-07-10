@@ -345,8 +345,8 @@ bool performAllocationsDFS( const WorkspaceBoundary &boundary,
                                             */
 
 bool performAllocationsDFS(const WorkspaceBoundary& boundary,
-                           std::unordered_map<std::string, ObjectInfo> objects,
-                           std::unordered_map<std::string, GoalInfo> goals,
+                           ObjectMap objects,
+                           GoalMap goals,
                            std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
                            GoalMap delivered_objs,
                            ReloPush::State robot,

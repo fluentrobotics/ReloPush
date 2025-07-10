@@ -16,8 +16,8 @@ public:
     ~MainControlWindow();
 
 private slots:
-    void onAddPathClicked();
-    void onRemovePathClicked();
+//    void onAddPathClicked();
+//    void onRemovePathClicked();
 
 private:
     QWidget *centralWidget;
@@ -29,10 +29,10 @@ private:
     PathManager *pathManager;
 
     // Sample data generators for demonstration
-    std::vector<ReloPush::State> generatePath1();
-    std::vector<ReloPush::State> generatePath2();
-    std::vector<ReloPush::State> generateObstacles1();
-    std::vector<ReloPush::State> generateObstacles2();
+//    std::vector<ReloPush::State> generatePath1();
+//    std::vector<ReloPush::State> generatePath2();
+//    std::vector<ReloPush::State> generateObstacles1();
+//    std::vector<ReloPush::State> generateObstacles2();
 };
 
 #endif // MAINCONTROLWINDOW_H

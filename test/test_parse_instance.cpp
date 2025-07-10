@@ -11,8 +11,8 @@ int main(int argc, char *argv[])
 
     // parsing info
 
-    std::unordered_map<std::string, ObjectInfo> objects;
-    std::unordered_map<std::string, GoalInfo>   goals;
+    ObjectMap objects;
+    GoalMap   goals;
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs;
     std::vector<ReloPush::State> robots;
 

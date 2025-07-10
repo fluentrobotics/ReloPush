@@ -21,8 +21,8 @@ MainControlWindow::MainControlWindow(QWidget *parent)
 
     setCentralWidget(centralWidget);
 
-    connect(addPathButton, &QPushButton::clicked, this, &MainControlWindow::onAddPathClicked);
-    connect(removePathButton, &QPushButton::clicked, this, &MainControlWindow::onRemovePathClicked);
+    //connect(addPathButton, &QPushButton::clicked, this, &MainControlWindow::onAddPathClicked);
+    //connect(removePathButton, &QPushButton::clicked, this, &MainControlWindow::onRemovePathClicked);
 }
 
 MainControlWindow::~MainControlWindow()
@@ -30,6 +30,7 @@ MainControlWindow::~MainControlWindow()
     // PathManager will handle the deletion of PathWindows
 }
 
+/*
 void MainControlWindow::onAddPathClicked()
 {
     // For demonstration, we'll add pre-defined paths. In a real application,
@@ -62,7 +63,9 @@ void MainControlWindow::onAddPathClicked()
         }
     }
 }
+*/
 
+/*
 void MainControlWindow::onRemovePathClicked()
 {
     QListWidgetItem *selectedItem = pathListWidget->currentItem();
@@ -139,3 +142,4 @@ std::vector<ReloPush::State> MainControlWindow::generateObstacles2()
     obstacles.emplace_back(40.0f, 30.0f, 0.0f);
     return obstacles;
 }
+*/

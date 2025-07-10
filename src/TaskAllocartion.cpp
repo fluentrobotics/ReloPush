@@ -1112,9 +1112,9 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
 
         auto after_obs = planCtx.env_push.get_obs();
         planCtx.checkObsCount("\to6");
-        //if(before_obs != after_obs){
-        //    std::cerr << "Environment not properly reverted!" << std::endl;
-            // Add detailed prints here to identify discrepancies
+        if(before_obs != after_obs){
+            std::cerr << "Environment not properly reverted!" << std::endl;
+             //Add detailed prints here to identify discrepancies
         }
         planCtx.checkObsCount("\to7");
 
@@ -1671,6 +1671,13 @@ bool tryAllocation(
     ReloPush::State& robot,
     FinalAllocation& outAllocation)
 {
+
+    // for debug
+    //bool deb = (candidate.objectName == "b1");
+    //std::cout << "[debug] " << candidate.objectName << std::endl;
+    auto obs_backup = planCtx.env_nonpush.get_obs();
+
+
     planCtx.checkObsCount("\t1");
     // Pull out required context
     auto& bestPairEntry = pairResults[candidate.objectName];
@@ -1713,6 +1720,7 @@ bool tryAllocation(
         if (planCtx.env_push.stateValid(fromState_pre).get_validity() == StateValidity::out_of_boundary)
             return false;
         planCtx.checkObsCount("\t2");
+
         auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, last_pair.first, last_pair.second,
                                         pairResults, candidate, ObsReloPathList, ToUpdate,
                                         bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].toObjectInfo(),
@@ -1722,16 +1730,20 @@ bool tryAllocation(
     }
 
     // Plan approach (transit)
-planCtx.checkObsCount("\t3");
+    //planCtx.checkObsCount("\t3");
     auto obj_info = objects[candidate.objectName];
     ReloPush::State obj_start = obj_info.getPushingPose(candidate.row);
     ReloPush::State obj_start_pre = find_pre_push(obj_start,planCtx.parameters.PrePush_dist);
     auto res_app = planHybridAstar(robot, obj_start_pre, planCtx, true);
     if(!res_app->success)
+    {
+        // restore obstacles
+        planCtx.updateObs(obs_backup);
         return false;
+    }
     transitPaths.push_back(res_app->getPathPtr(true));
 
-planCtx.checkObsCount("\t4");
+    //planCtx.checkObsCount("\t4");
     // Plan transit paths between edges if needed (prerelocation)
     if (bestMatEntry.edgesInfo.size() > 1) {
         transitPaths.clear();
@@ -1740,11 +1752,16 @@ planCtx.checkObsCount("\t4");
             auto this_start = bestMatEntry.edgesInfo[n].paths.front()->getFirstWaypoint();
             auto res = planHybridAstar(last_goal, this_start, planCtx, true);
             if (!res->success)
+            {
+                // restore obstacles
+                planCtx.updateObs(obs_backup);
                 return false;
+            }
             transitPaths.push_back(res->getPathPtr(true));
         }
     }
-planCtx.checkObsCount("\t5");
+    //planCtx.checkObsCount("\t5");
+
     // Build FinalAllocation
     outAllocation.object = objects[candidate.objectName];
     outAllocation.goal = goals[candidate.goalName];
@@ -1760,7 +1777,8 @@ planCtx.checkObsCount("\t5");
     outAllocation.paths = pairResults[candidate.objectName].matrixResult->getBestPathMatEntry().edgesInfo;
     outAllocation.obsReloPaths = std::make_shared<std::vector<EdgePath>>(ObsReloPathList);
     outAllocation.snapshot = planCtx;
-planCtx.checkObsCount("\t6");
+    //planCtx.checkObsCount("\t6");
+
     // Commit the ToUpdate states (update object positions)
     for (const auto& pair : ToUpdate) {
         objects[pair.first].x = pair.second.x;
@@ -1778,7 +1796,7 @@ planCtx.checkObsCount("\t6");
 bool performAllocationsDFS(
     const WorkspaceBoundary& boundary,
     ObjectMap objects,
-    ObjectMap goals,
+    GoalMap goals,
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
     GoalMap delivered_objs,
     ReloPush::State robot,
@@ -1832,6 +1850,7 @@ bool performAllocationsDFS(
         planCtx.checkObsCount("before Alloc");
         bool ok = tryAllocation(candidate, pairResults, planCtx, objects, goals, objGoalPairs, delivered_objs, robot, allocation);
         planCtx.checkObsCount("After Alloc "+ std::to_string(depth));
+
         if (ok) {
             planCtx.checkObsCount("Alloc ok");
             delivered_objs[candidate.objectName] = goals[candidate.goalName];

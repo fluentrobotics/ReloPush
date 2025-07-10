@@ -11,7 +11,7 @@ class PathWindow : public QMainWindow
 
 public:
     explicit PathWindow(const std::vector<ReloPush::State>& path,
-                        const std::vector<ReloPush::State>& obstacles,
+                        const std::vector<ObjectInfo>& obstacles,
                         QWidget *parent = nullptr,
                         QString windowTitle = "Path Visualization",
                         QColor initialPoseColor = Qt::blue,

@@ -3,7 +3,7 @@
 #include <QFileDialog>
 
 PathWindow::PathWindow(const std::vector<ReloPush::State>& path,
-                       const std::vector<ReloPush::State>& obstacles,
+                       const std::vector<ObjectInfo>& obstacles,
                        QWidget *parent,
                        QString windowTitle,
                        QColor initialPoseColor,

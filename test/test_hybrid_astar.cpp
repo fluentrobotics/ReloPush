@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     viz->setPath(plannedPath);
 
     // Create obstacles
-    std::vector<ReloPush::State> obstacles;
+    std::vector<ObjectInfo> obstacles;
     //obstacles.emplace_back(1.0f, 1.0f, 1.0f);
     //obstacles.emplace_back(1.0f, 10.4f, 1.0f);
     viz->setObstacles(obstacles);

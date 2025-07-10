@@ -60,7 +60,7 @@ private:
     ReloPush::State initial_pose;
     ReloPush::State goal_pose;
     std::vector<ReloPush::State> path;
-    std::vector<ReloPush::State> obstacles;
+    std::vector<ObjectInfo> obstacles;
     std::vector<ReloPush::State> prerelocations;
     std::vector<size_t> path_segment_lengths;
     GoalMap goals;

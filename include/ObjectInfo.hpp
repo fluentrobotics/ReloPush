@@ -62,6 +62,11 @@ struct ObjectInfo// : ReloPush::State
         nominalOrientation = pose.yaw;
     }
 
+    bool operator==(const ObjectInfo& other) const {
+        return x == other.x && y == other.y && nominalOrientation == other.nominalOrientation
+                && name == other.name, enclosingRadius == other.enclosingRadius;
+    }
+
     double getOrientation(int orientationIndex) const
     {
         // If numberOfSides <= 0, fallback or just return nominalOrientation

@@ -21,8 +21,8 @@ std::string removeExtension(const std::string& filename);
 std::vector<std::string> read_file(std::string f_path);
 
 bool parse_instance_from_file( std::string file_path, size_t data_ind,
-                               std::unordered_map<std::string, ObjectInfo>& objects,
-                               std::unordered_map<std::string, GoalInfo>& goals,
+                               ObjectMap& objects,
+                               GoalMap& goals,
                                std::vector<ReloPush::State>& robots,
                                std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs);
 

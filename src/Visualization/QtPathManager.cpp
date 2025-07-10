@@ -14,7 +14,7 @@ PathManager::~PathManager()
 }
 
 void PathManager::addPath(const std::vector<ReloPush::State>& path,
-                          const std::vector<ReloPush::State>& obstacles,
+                          const std::vector<ObjectInfo>& obstacles,
                           QString windowTitle,
                           QColor initialPoseColor,
                           QColor goalPoseColor,

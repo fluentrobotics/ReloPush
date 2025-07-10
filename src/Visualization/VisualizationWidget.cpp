@@ -282,7 +282,7 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
         {
             QPointF pos = mapCoord(obs.x, obs.y);
             // Assuming drawObstacle accepts (painter, position, color)
-            drawObstacle(painter, pos, obs.yaw, obstacle_color);
+            drawObstacle(painter, pos, obs.nominalOrientation, obstacle_color);
         }
     }
 

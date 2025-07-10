@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
     //std::string filename = "alpha_to_omega_simp.txt";
     std::string filename = "iros_obj8.txt";
 
-    int instance_ind = 2;
+    int instance_ind = 0;
     bool use_opt = true;
     bool vis = true;
     //bool sim = true;
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
     // 4) Visualization
     if (!finalSequence.empty() && vis)
     {
-       //visualizeResults(finalSequence, app);
+       visualizeResults(finalSequence, app);
     }
 
     //writeFinalSequenceSummary(filename, instance_ind,
