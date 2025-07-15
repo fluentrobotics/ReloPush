@@ -143,9 +143,9 @@ std::pair<ReloPush::StatePathPtr,std::vector<size_t>> FinalAllocation::toSingleP
 
     ReloPush::StatePath combined;
     // Reserve space for performance (optional).
-    combined.reserve(obs_path.size() + out_path.size());
+    combined.reserve(firstApproachPath->size() + obs_path.size() + out_path.size());
 
-    // Insert all elements from vec1 and then vec2.
+    combined.insert(combined.end(), firstApproachPath->begin(), firstApproachPath->end());
     combined.insert(combined.end(), obs_path.begin(), obs_path.end());
     combined.insert(combined.end(), out_path.begin(), out_path.end());
 
@@ -1687,6 +1687,8 @@ bool tryAllocation(
     std::unordered_map<std::string, ReloPush::State> ToUpdate;
     ReloPush::StatePathPtrList transitPaths;
 
+    ReloPush::State firstAppGoal;
+
     // Plan obs relocations (if two or more)
     for (size_t obs = 1; obs < bestMatEntry.obsReloList.size(); obs++) {
         auto pivotObj = bestMatEntry.vertexChain[obs];
@@ -1727,21 +1729,33 @@ bool tryAllocation(
                                         fromState);
         if (!res->success)
             return false;
+
+        //update first approach goal
+        firstAppGoal = find_pre_push(last_pair.first, planCtx.parameters.PrePush_dist);
     }
+    else
+    {
+        auto obj_info = objects[candidate.objectName];
+        ReloPush::State obj_start = obj_info.getPushingPose(candidate.row);
+        ReloPush::State obj_start_pre = find_pre_push(obj_start,planCtx.parameters.PrePush_dist);
+        firstAppGoal = obj_start_pre;
+    }
+
+
 
     // Plan approach (transit)
     //planCtx.checkObsCount("\t3");
-    auto obj_info = objects[candidate.objectName];
-    ReloPush::State obj_start = obj_info.getPushingPose(candidate.row);
-    ReloPush::State obj_start_pre = find_pre_push(obj_start,planCtx.parameters.PrePush_dist);
-    auto res_app = planHybridAstar(robot, obj_start_pre, planCtx, true);
+    //auto res_app = planHybridAstar(robot, obj_start_pre, planCtx, true);
+    auto res_app = planHybridAstar(robot, firstAppGoal, planCtx, true);
     if(!res_app->success)
     {
         // restore obstacles
         planCtx.updateObs(obs_backup);
         return false;
     }
-    transitPaths.push_back(res_app->getPathPtr(true));
+    //transitPaths.push_back(res_app->getPathPtr(true));
+    ReloPush::StatePathPtr firstApp = res_app->getPathPtr(true); // store it to allocation if evertying is fine
+
 
     //planCtx.checkObsCount("\t4");
     // Plan transit paths between edges if needed (prerelocation)
@@ -1777,6 +1791,7 @@ bool tryAllocation(
     outAllocation.paths = pairResults[candidate.objectName].matrixResult->getBestPathMatEntry().edgesInfo;
     outAllocation.obsReloPaths = std::make_shared<std::vector<EdgePath>>(ObsReloPathList);
     outAllocation.snapshot = planCtx;
+    outAllocation.firstApproachPath = firstApp;
     //planCtx.checkObsCount("\t6");
 
     // Commit the ToUpdate states (update object positions)

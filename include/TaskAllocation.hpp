@@ -360,4 +360,5 @@ bool performAllocationsDFS(const WorkspaceBoundary& boundary,
 // ---------------------------------------------------------------------------
 void printFinalSequence(const std::vector<FinalAllocation> &finalSequence);
 
+
 #endif // TASKALLOCATION_HPP

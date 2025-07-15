@@ -10,6 +10,7 @@
 #include <chrono>
 #include <thread>
 #include <trajectory.hpp>
+#include <array>
 #ifdef __APPLE__
 // Include the glog header when compiling on MacOS.
     #include <glog/logging.h>
@@ -22,6 +23,133 @@
 #include <base64.h>
 
 enum planningSimOrReal {planOnly, sim, real};
+
+
+// Assuming FinalAllocation, ReloPush::StatePath, etc. are visible
+struct ActionRecord {
+    int action_type;          // 0=transit, 1=push/obsRelo
+    std::string object_name;
+    std::string goal_name;
+    double x, y, yaw;
+};
+
+std::vector<ActionRecord> extractActionSequence(const std::vector<FinalAllocation>& finalSequence) {
+    std::vector<ActionRecord> actions;
+
+    for (const auto& fa : finalSequence) {
+        // 1. First approach path (action type 0)
+        if (fa.firstApproachPath) {
+            for (const auto& s : *(fa.firstApproachPath)) {
+                actions.push_back({0, fa.object.name, fa.goal.name, s.x, s.y, s.yaw});
+            }
+        }
+
+        // 2. ObsReloPaths (action type 1)
+        if (fa.obsReloPaths) {
+            for (const auto& edgePath : *(fa.obsReloPaths)) {
+                // Each EdgePath can be a path of states
+                if (std::holds_alternative<ReloPush::StatePathPtr>(edgePath.path)) {
+                    auto ptr = std::get<ReloPush::StatePathPtr>(edgePath.path);
+                    for (const auto& s : *ptr) {
+                        actions.push_back({1, fa.object.name, fa.goal.name, s.x, s.y, s.yaw});
+                    }
+                }
+                // Handle reloDubinsPath if needed, similar to codebase
+            }
+        }
+
+        // 3. Main push paths (action type 1)
+        for (const auto& edgeData : fa.paths) {
+            for (const auto& pathVariant : edgeData.paths) {
+                if (std::holds_alternative<ReloPush::StatePathPtr>(pathVariant->path)) {
+                    auto ptr = std::get<ReloPush::StatePathPtr>(pathVariant->path);
+                    for (const auto& s : *ptr) {
+                        actions.push_back({1, fa.object.name, fa.goal.name, s.x, s.y, s.yaw});
+                    }
+                }
+                // Again, handle reloDubinsPath if you want
+            }
+        }
+
+        // 4. Transit paths (action type 0)
+        for (const auto& transitPtr : fa.transitPaths) {
+            if (transitPtr) {
+                for (const auto& s : *transitPtr) {
+                    actions.push_back({0, fa.object.name, fa.goal.name, s.x, s.y, s.yaw});
+                }
+            }
+        }
+    }
+    return actions;
+}
+
+// You can adapt this mapping code if you have existing indices in your objects/goals
+std::unordered_map<std::string, int> make_index_map(const std::vector<FinalAllocation>& seq, bool object_map) {
+    std::unordered_map<std::string, int> idx;
+    int cur = 1; // visualizer expects indices starting at 1
+    for (const auto& fa : seq) {
+        const std::string& name = object_map ? fa.object.name : fa.goal.name;
+        if (idx.count(name) == 0)
+            idx[name] = cur++;
+    }
+    return idx;
+}
+
+void save_actions_for_visualizer(const std::vector<FinalAllocation>& finalSequence, const std::string& filename) {
+    // Map names to indices
+    auto obj_idx_map  = make_index_map(finalSequence, true);
+    auto goal_idx_map = make_index_map(finalSequence, false);
+
+    std::ofstream out(filename);
+    out << "actions: [\n";
+
+    for (const auto& fa : finalSequence) {
+        int obj_idx = obj_idx_map[fa.object.name];
+        int goal_idx = goal_idx_map[fa.goal.name];
+
+        // 1. firstApproachPath (action type 0)
+        if (fa.firstApproachPath) {
+            for (const auto& s : *(fa.firstApproachPath)) {
+                out << "  [0," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
+            }
+        }
+
+        // 2. obsReloPaths (action type 1)
+        if (fa.obsReloPaths) {
+            for (const auto& edgePath : *(fa.obsReloPaths)) {
+                if (std::holds_alternative<ReloPush::StatePathPtr>(edgePath.path)) {
+                    auto ptr = std::get<ReloPush::StatePathPtr>(edgePath.path);
+                    for (const auto& s : *ptr) {
+                        out << "  [1," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
+                    }
+                }
+            }
+        }
+
+        // 3. paths (action type 1)
+        for (const auto& edgeData : fa.paths) {
+            for (const auto& pathVariant : edgeData.paths) {
+                if (std::holds_alternative<ReloPush::StatePathPtr>(pathVariant->path)) {
+                    auto ptr = std::get<ReloPush::StatePathPtr>(pathVariant->path);
+                    for (const auto& s : *ptr) {
+                        out << "  [1," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
+                    }
+                }
+            }
+        }
+
+        // 4. transitPaths (action type 0)
+        for (const auto& transitPtr : fa.transitPaths) {
+            if (transitPtr) {
+                for (const auto& s : *transitPtr) {
+                    out << "  [0," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
+                }
+            }
+        }
+    }
+    out << "]\n";
+    out.close();
+}
 
 
 // ---------------------------------------------------------------------------
@@ -39,7 +167,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj8.txt";
+    std::string filename = "iros_obj10.txt";
 
     int instance_ind = 0;
     bool use_opt = true;
@@ -265,6 +393,21 @@ int main(int argc, char *argv[])
     auto finalTrajectory = FA2Trajectory(finalSequence);
 
 
+    auto actions = extractActionSequence(finalSequence);
+//    for (const auto& act : actions) {
+//        std::cout << "[" << act.action_type
+//                  << "," << act.object_name
+//                  << "," << act.goal_name
+//                  << "," << act.x
+//                  << "," << act.y
+//                  << "," << act.yaw << "],\n"<< std::flush;;
+//    }
+
+
+
+    //save_actions_for_visualizer(finalSequence,std::string(CMAKE_SOURCE_DIR) + "/result_opt_actions_" + filename);
+
+
     /*
     //QApplication app(argc, argv);
     QMainWindow window;
@@ -296,5 +439,6 @@ int main(int argc, char *argv[])
     std::cout << res << std::endl; // response from server
     */
 
-    return app.exec();
+    //return app.exec();
+    return 0;
 }
