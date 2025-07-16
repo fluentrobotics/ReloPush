@@ -184,6 +184,12 @@ public:
         }
     }
 
+    void updateObjectPosition(std::string& obj_name, ReloPush::State& pose_in)
+    {
+        (*this)[obj_name].x = pose_in.x;
+        (*this)[obj_name].y = pose_in.y;
+    }
+
     // Add more member functions as needed
 };
 

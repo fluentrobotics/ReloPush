@@ -113,7 +113,7 @@ namespace Constants {
     static const float carWidth = 0.285;
     // obstacle default radius
     static const float obsHalfSide = 0.075;
-    static const float obsRadius = obsHalfSide * sqrt(2);
+    static const float obsRadius = obsHalfSide;
     static const float obsEncDiameter = obsHalfSide*2*sqrt(2);
     // distance from rear to vehicle front end
     static const float LF_nonpush = 0.38;  //0.38
@@ -1080,6 +1080,49 @@ public:
         // temp << 1, 2;
         // auto ro = temp * rot;
         // std::cout << ro(0) << ro(1) << std::endl;
+    }
+
+    StateValiditySet stateValid2(const ReloPush::State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
+                                float LF = Constants::LF_nonpush, float LB = Constants::LB) {
+
+
+        float half_width = car_width / 2.0;
+
+        // Robot corners
+        std::vector<ReloPush::State> corners = {
+            {s.x + LF * cos(s.yaw) - half_width * sin(s.yaw), s.y + LF * sin(s.yaw) + half_width * cos(s.yaw), s.yaw},
+            {s.x + LF * cos(s.yaw) + half_width * sin(s.yaw), s.y + LF * sin(s.yaw) - half_width * cos(s.yaw), s.yaw},
+            {s.x - LB * cos(s.yaw) - half_width * sin(s.yaw), s.y - LB * sin(s.yaw) + half_width * cos(s.yaw), s.yaw},
+            {s.x - LB * cos(s.yaw) + half_width * sin(s.yaw), s.y - LB * sin(s.yaw) - half_width * cos(s.yaw), s.yaw}
+        };
+
+        // todo: get it as input param
+        double xMin = 0, yMin = 0, xMax = 4.0, yMax = 5.2;
+
+        // Check boundary
+        for (const auto& corner : corners) {
+            if (corner.x < xMin || corner.x > xMax ||
+                corner.y < yMin || corner.y > yMax) {
+                //validity.add(StateValidity::out_of_boundary);
+                return StateValiditySet(false, StateValidity::out_of_boundary);
+            }
+        }
+
+        // Check collisions
+        //auto obstacles = planCtx.env_nonpush.get_obs();
+        auto obstacles = m_obstacles;
+        for (const auto& obstacle : obstacles) {
+            for (const auto& corner : corners) {
+                double dist = hypot(obstacle.second.x - corner.x, obstacle.second.y - corner.y);
+                if (dist <= obs_rad) {
+                    //validity.add(StateValidity::collision);
+                    return StateValiditySet(false, StateValidity::collision, obstacle.second);
+                }
+            }
+        }
+
+        //validity.add(StateValidity::valid);
+        return StateValiditySet(true, StateValidity::valid);
     }
 
     //std::unordered_set<ReloPush::State> get_obs()

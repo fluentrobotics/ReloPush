@@ -163,6 +163,7 @@ struct FinalAllocation
     ReloPush::StatePathPtr firstApproachPath; // robot to first object
 
     EdgePathList obsReloPaths;
+    std::unordered_map<std::string,ReloPush::State> obsReloUpdate;
 
     std::pair<ReloPush::StatePathPtr,std::vector<size_t>> toSinglePathPtr(double interpolation_resolution = 0.1);
     /**

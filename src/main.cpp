@@ -317,10 +317,6 @@ int main(int argc, char *argv[])
     //                          static_cast<double>(duration.count()), finalSequence, use_opt);
 
 
-
-
-
-
     // 3.5) Print total path length and total pushing length for the entire solution
 
     double total_path_length = 0.0;
@@ -393,15 +389,17 @@ int main(int argc, char *argv[])
     auto finalTrajectory = FA2Trajectory(finalSequence);
 
 
-    auto actions = extractActionSequence(finalSequence);
-//    for (const auto& act : actions) {
-//        std::cout << "[" << act.action_type
-//                  << "," << act.object_name
-//                  << "," << act.goal_name
-//                  << "," << act.x
-//                  << "," << act.y
-//                  << "," << act.yaw << "],\n"<< std::flush;;
-//    }
+   //  auto actions = extractActionSequence(finalSequence);
+   // for (const auto& act : actions) {
+   //     std::cout << "[" << act.action_type
+   //               << "," << act.object_name
+   //               << "," << act.goal_name
+   //               << "," << act.x
+   //               << "," << act.y
+   //               << "," << act.yaw << "],\n"<< std::flush;;
+   // }
+
+    finalTrajectory.print();
 
 
 
