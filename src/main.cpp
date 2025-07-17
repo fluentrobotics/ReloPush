@@ -292,72 +292,75 @@ int main(int argc, char *argv[])
 
     auto end = std::chrono::high_resolution_clock::now();
 
-    if(!ok)
-    {
-        // plan failed
-        Color::println("Failed to find a solution",Color::YELLOW,Color::BG_RED);
-        return -1;
-    }
-
     // Calculate the elapsed time in milliseconds
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "Elapsed time: " << duration.count() << " ms" << std::endl;
 
-
-    // 3) Print the final sequence
-    printFinalSequence(finalSequence);
-
-    // 4) Visualization
-    if (!finalSequence.empty() && vis)
-    {
-       visualizeResults(finalSequence, app);
-    }
-
-    //writeFinalSequenceSummary(filename, instance_ind,
-    //                          static_cast<double>(duration.count()), finalSequence, use_opt);
-
-
-    // 3.5) Print total path length and total pushing length for the entire solution
-
     double total_path_length = 0.0;
     double total_pushing_length = 0.0;
 
-    // Use the combined path for each allocation to get the length.
-    for (auto& fa : finalSequence) {
-        // Reconstruct the whole path for this allocation
-        ReloPush::StatePathPtr singlePathPtr;
-        std::vector<size_t> si;
+    if(ok)
+    {
+        // 3) Print the final sequence
+        printFinalSequence(finalSequence);
 
-        if(fa.firstApproachPath && !fa.firstApproachPath->empty())
+        // 4) Visualization
+        if (!finalSequence.empty() && vis)
         {
-            for(size_t i=1; i<fa.firstApproachPath->size(); ++i)
+           visualizeResults(finalSequence, app);
+        }
+
+        //writeFinalSequenceSummary(filename, instance_ind,
+        //                          static_cast<double>(duration.count()), finalSequence, use_opt);
+
+
+        // 3.5) Print total path length and total pushing length for the entire solution
+
+
+        // Use the combined path for each allocation to get the length.
+        for (auto& fa : finalSequence) {
+            // Reconstruct the whole path for this allocation
+            ReloPush::StatePathPtr singlePathPtr;
+            std::vector<size_t> si;
+
+            /*
+            if(fa.firstApproachPath && !fa.firstApproachPath->empty())
             {
-                const auto& prev = fa.firstApproachPath->at(i - 1);
-                const auto& curr = fa.firstApproachPath->at(i);
-                double dx = curr.x - prev.x;
-                double dy = curr.y - prev.y;
-                total_path_length += std::sqrt(dx * dx + dy * dy);
+                for(size_t i=1; i<fa.firstApproachPath->size(); ++i)
+                {
+                    const auto& prev = fa.firstApproachPath->at(i - 1);
+                    const auto& curr = fa.firstApproachPath->at(i);
+                    double dx = curr.x - prev.x;
+                    double dy = curr.y - prev.y;
+                    total_path_length += std::sqrt(dx * dx + dy * dy);
+                }
+            }*/
+
+
+            std::tie(singlePathPtr, si) = fa.toSinglePathPtr(0.1); // Or use your default resolution
+
+
+
+            if (singlePathPtr && !singlePathPtr->empty()) {
+                // Sum up Euclidean distances
+                for (size_t i = 1; i < singlePathPtr->size(); ++i) {
+                    const auto& prev = singlePathPtr->at(i - 1);
+                    const auto& curr = singlePathPtr->at(i);
+                    double dx = curr.x - prev.x;
+                    double dy = curr.y - prev.y;
+                    total_path_length += std::sqrt(dx * dx + dy * dy);
+                }
             }
+
+            // Pushing length as reported by the object
+            total_pushing_length += fa.getPushingLength();
         }
-
-
-        std::tie(singlePathPtr, si) = fa.toSinglePathPtr(0.1); // Or use your default resolution
-
-
-
-        if (singlePathPtr && !singlePathPtr->empty()) {
-            // Sum up Euclidean distances
-            for (size_t i = 1; i < singlePathPtr->size(); ++i) {
-                const auto& prev = singlePathPtr->at(i - 1);
-                const auto& curr = singlePathPtr->at(i);
-                double dx = curr.x - prev.x;
-                double dy = curr.y - prev.y;
-                total_path_length += std::sqrt(dx * dx + dy * dy);
-            }
-        }
-
-        // Pushing length as reported by the object
-        total_pushing_length += fa.getPushingLength();
+    }
+    else
+    {
+        // plan failed
+        Color::println("Failed to find a solution",Color::YELLOW,Color::BG_RED);
+        //return -1;
     }
 
     std::cout << "=== Solution Summary ===" << std::endl;
@@ -367,9 +370,9 @@ int main(int argc, char *argv[])
 
 
     // Compose output filename
-    std::string result_filename = std::string(CMAKE_SOURCE_DIR) + "/result_" + filename;
+    std::string result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_" + filename;
     if(use_opt)
-        result_filename = std::string(CMAKE_SOURCE_DIR) + "/result_opt_" + filename;
+        result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_opt_" + filename;
 
     std::cout << "saving to: "<< result_filename << std::endl;
 
@@ -399,7 +402,7 @@ int main(int argc, char *argv[])
    //               << "," << act.yaw << "],\n"<< std::flush;;
    // }
 
-    finalTrajectory.print();
+    //finalTrajectory.print();
 
 
 
