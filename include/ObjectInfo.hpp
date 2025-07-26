@@ -186,6 +186,10 @@ public:
 
     void updateObjectPosition(std::string& obj_name, ReloPush::State& pose_in)
     {
+        // it is supposed to be already exsiting in the map
+        if ((*this).find(obj_name) == (*this).end()) {
+            std::cerr << "[OBJ_UPDATE] Key '" << obj_name << "' does not exist in the map." << std::endl;
+        }
         (*this)[obj_name].x = pose_in.x;
         (*this)[obj_name].y = pose_in.y;
     }

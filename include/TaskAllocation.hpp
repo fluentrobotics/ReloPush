@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/graph/filtered_graph.hpp>
 
 #include <GraphData.hpp>
 #include <GraphBuilder.hpp>

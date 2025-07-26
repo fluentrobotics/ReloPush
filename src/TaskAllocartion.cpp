@@ -660,6 +660,34 @@ MatrixResult computeCostMatrixWithPaths(
 }
 */ //previous version
 
+
+struct VertexNameFilter
+{
+    using vertex_descriptor = Graph::vertex_descriptor;
+
+    // Default ctor: only used to create the "end" iterator
+    VertexNameFilter()
+    : g(nullptr), src(), name() {}
+
+    // Real ctor: store graph ptr and the src-vertex’s name
+    VertexNameFilter(const Graph* g_, vertex_descriptor s)
+    : g(g_), src(s), name((*g_)[s].name) {}
+
+    bool operator()(vertex_descriptor v) const
+    {
+        // In the "end" iterator case, g==nullptr → treat everything as allowed
+        if (!g) return true;
+        // Always allow the source; otherwise exclude same-name vertices
+        return v == src || (*g)[v].name != name;
+    }
+
+    private:
+    const Graph*        g;
+    vertex_descriptor   src;
+    std::string         name;
+};
+
+
 MatrixResultPtr computeCostMatrixWithPaths(
     const Graph &g,
     const std::vector<Vertex> &objectVerts,
@@ -698,12 +726,22 @@ MatrixResultPtr computeCostMatrixWithPaths(
     {
         Vertex src = objectVerts[i];
 
+
+        // build a default-constructible filter that knows about 'g' and 'src'
+        VertexNameFilter vf(&g, src);
+        auto fg = boost::make_filtered_graph(
+                     g,
+                     boost::keep_all(),  // no edge filtering
+                     vf);                // our named functor
+
+
+
         // Distances & predecessors
         std::vector<double> distMap(numV, std::numeric_limits<double>::infinity());
         std::vector<Vertex> predMap(numV, Graph::null_vertex());
 
         boost::dijkstra_shortest_paths(
-            g, src,
+            fg, src,//g, src,
             boost::distance_map(boost::make_iterator_property_map(distMap.begin(), indexMap))
                 .predecessor_map(boost::make_iterator_property_map(predMap.begin(), indexMap))
                 .weight_map(get(&EdgeData::weight, g))); // todo: skip unnecessary search
@@ -1698,7 +1736,7 @@ bool tryAllocation(
 
     std::unordered_map<std::string, ReloPush::State> obsReloUpdate;
 
-    // Plan obs relocations (if two or more)
+    // Plan obs relocations (if two or more). Transit paths between obsRelo
     for (size_t obs = 1; obs < bestMatEntry.obsReloList.size(); obs++) {
         auto pivotObj = bestMatEntry.vertexChain[obs];
         auto pivotObjInfo = pivotObj.toObjectInfo();
@@ -1723,9 +1761,15 @@ bool tryAllocation(
     }
 
     // Plan from last relocation to final push (if any)
+    // 1. Robot to first obsRelo start [robot -> firstObsStart]
+    // 2. Last obsRelo start to pushing start [lastObsStart -> FirstWaypoint]
     if (!bestMatEntry.obsReloList.empty()) {
 
         auto last_pair = bestMatEntry.obsReloList.back();
+        auto first_pair = bestMatEntry.obsReloList.front();
+
+
+
         auto fromState = last_pair.second;
         auto& best_obj = objects[candidate.objectName];
         auto final_approach_obs = ReloPush::State(best_obj.x, best_obj.y, best_obj.getOrientation(candidate.row));
@@ -1734,21 +1778,27 @@ bool tryAllocation(
 
         if (planCtx.env_push.stateValid(fromState_pre).get_validity() == StateValidity::out_of_boundary)
             return false;
+
         planCtx.checkObsCount("\t2");
 
-        auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, last_pair.first, last_pair.second,
+        auto res_lastobs = attemptObsRelocation(planCtx, fromState_pre, toState_pre, last_pair.first, last_pair.second,
                                         pairResults, candidate, ObsReloPathList, ToUpdate,
                                         bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].toObjectInfo(),
-                                        fromState);
-        if (res->validity != PlanValidity::success)
+                                        fromState); // last obs relo to first wpt
+        if (res_lastobs->validity != PlanValidity::success)
             return false;
+
+
 
         // Obs Relo ok
         obsReloUpdate.insert(std::make_pair(bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].name,last_pair.second));
 
         //update first approach goal
-        firstAppGoal = find_pre_push(last_pair.first, planCtx.parameters.PrePush_dist);
+        firstAppGoal = find_pre_push(first_pair.first, planCtx.parameters.PrePush_dist); // todo: start of first pair
+
     }
+
+    // no Obstacle Relocation
     else
     {
         //auto obj_info = objects[candidate.objectName];
@@ -1904,6 +1954,10 @@ bool performAllocationsDFS(
         planCtx.checkObsCount("After Alloc "+ std::to_string(depth));
 
         if (ok) {
+            // for debug only
+            //std::string rearr_obj = candidate.objectName;
+            //std::cout << "ro: " << rearr_obj << std::endl;
+
             planCtx.checkObsCount("Alloc ok");
             delivered_objs[candidate.objectName] = goals[candidate.goalName];
             objects.erase(candidate.objectName);
