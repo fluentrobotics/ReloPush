@@ -110,13 +110,13 @@ namespace Constants {
     //extern float yawResolution; // non-push as default
 
     // width of car
-    static const float carWidth = 0.285;
+    static const float carWidth = 0.36; // 0.285
     // obstacle default radius
     static const float obsHalfSide = 0.075;
     static const float obsRadius = obsHalfSide;
     static const float obsEncDiameter = obsHalfSide*2*sqrt(2);
     // distance from rear to vehicle front end
-    static const float LF_nonpush = 0.38;  //0.38
+    static const float LF_nonpush = 0.375;  //0.38
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
     static const float LB = 0.12; //0.12
@@ -440,7 +440,7 @@ public:
     bool isSolution(
         const ReloPush::State &state, double gscore,
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                           std::hash<ReloPush::State>> &_camefrom) {
+                           ReloPush::StateHasher> &_camefrom) {
 
         bool isSol = planCont.allow_reverse ? isSolutionWithReverse(state, gscore, _camefrom) : isSolutionWithoutReverse(state, gscore, _camefrom);
 
@@ -450,7 +450,7 @@ public:
     bool isSolutionWithReverse(
         const ReloPush::State& state, double gscore,
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                           std::hash<ReloPush::State>>& _camefrom) {
+                           ReloPush::StateHasher>& _camefrom) {
         double goal_distance =
             sqrt(pow(state.x - m_goal.x, 2) + pow(state.y - m_goal.y, 2));
         if (goal_distance > 2 * (Constants::LB + Constants::LF_nonpush)) return false;
@@ -554,6 +554,21 @@ public:
         //           << std::get<3>(iter->second) << std::endl;
 
         _camefrom.insert(cameFrom.begin(), cameFrom.end());
+
+
+        // for debug only
+/*
+        std::cout << "Original m_goal: " << m_goal << std::endl;
+        std::cout << "Updated m_goal: " << path.back() << std::endl;
+        std::cout << "getGoal(): " << getGoal() << std::endl;
+        std::cout << "cameFrom keys: ";
+        for (const auto& entry : _camefrom) {
+            std::cout << entry.first << " ";
+        }
+        std::cout << std::endl;
+*/
+
+
         return true;
     }
 
@@ -596,7 +611,7 @@ public:
     bool isSolutionWithoutReverse(
         const ReloPush::State &state, double gscore,
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                           std::hash<ReloPush::State>> &_camefrom) {
+                           ReloPush::StateHasher> &_camefrom) {
         double goal_distance =
             sqrt(pow(state.x - getGoal().x, 2) + pow(state.y - getGoal().y, 2));
         if (goal_distance > 10 * (Constants::LB + planCont.LF)) return false;
@@ -615,7 +630,7 @@ public:
 
         std::vector<ReloPush::State> path;
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                           std::hash<ReloPush::State>>
+                           ReloPush::StateHasher>
             cameFrom;
         cameFrom.clear();
         path.emplace_back(state);

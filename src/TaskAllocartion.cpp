@@ -303,9 +303,11 @@ ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
 ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolution)
 {
     // todo: parse these from param
-    float v_p = 0.35;
+    float v_p = 0.32;
     float v_np = 0.4;
     float v_backward = -0.3;
+
+    /*
 
     // add approach
     auto app_traj = statePath2traj(firstApproachPath,v_p,v_np,v_backward,false);
@@ -321,11 +323,45 @@ ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolut
         }
     }
 
+
+    */
+
+    std::vector<ReloPush::trajectory> trajs;
+
+    // first approach
+    auto app_traj = statePath2traj(firstApproachPath,v_p,v_np,v_backward,false);
+
+    // obstacle relocation
+    for(auto& op : *obsReloPaths)
+    {
+        auto obsPath = op.toStatePath();
+        trajs.push_back(statePath2traj(obsPath,v_p,v_np,v_backward,op.is_pushing));
+    }
+
+    // main pushing
+    for(auto& p : paths)
+    {
+        for (size_t n=0; n<p.paths.size(); n++)
+        {
+            auto edgePath = p.paths[n]->toStatePath();
+            trajs.push_back(statePath2traj(edgePath,v_p,v_np,v_backward,p.paths[n]->is_pushing));
+
+            // transit between edges (exists sometimes)
+            if(edgeTransitPaths.size()>n && edgeTransitPaths.size()>0)
+            {
+                auto edgeTrans = edgeTransitPaths[n];
+                trajs.push_back(statePath2traj(edgeTrans,v_p,v_np,v_backward,false));
+            }
+
+        }
+    }
+
     // augment trajectories one by one
     for(auto& it : trajs)
     {
         app_traj.augment_trajectory(it);
     }
+
 
     // return
     return app_traj;
@@ -1408,7 +1444,7 @@ bool performAllocations(const WorkspaceBoundary &boundary,
         chosen.row    = bestPick.row;
         chosen.col    = bestPick.col;
         chosen.vertexChain = bestMatEntry.vertexChain;
-        chosen.transitPaths = transitPaths;
+        chosen.edgeTransitPaths = transitPaths;
 
         chosen.startPose = ReloPush::State(chosen.object.x, chosen.object.y,
                                            chosen.object.getOrientation(chosen.row));
@@ -1844,12 +1880,27 @@ bool tryAllocation(
 
 
     //planCtx.checkObsCount("\t4");
-    // Plan transit paths between edges if needed (prerelocation)
+    // Plan transit paths between edges if needed. (if next edge has pre-relocation, it will likely to have different start)
     if (bestMatEntry.edgesInfo.size() > 1) {
         transitPaths.clear();
         for (size_t n = 1; n < bestMatEntry.edgesInfo.size(); n++) {
             auto last_goal = bestMatEntry.edgesInfo[n-1].paths.back()->getLastWaypoint();
             auto this_start = bestMatEntry.edgesInfo[n].paths.front()->getFirstWaypoint();
+
+            // inter-vertex movement (object moved to next vertex)
+            auto prev_vertex = bestMatEntry.edgesInfo[n-1].srcVertexData;
+            auto next_vertex = bestMatEntry.edgesInfo[n-1].sinkVertexData;
+
+            auto prev_obj = prev_vertex.toObjectInfo();
+            auto next_obj = next_vertex.toObjectInfo();
+
+            //temporary change in obstacles
+            auto moved_obj = next_obj;
+            moved_obj.name = prev_obj.name;
+            planCtx.removeObs(prev_obj);
+            planCtx.addObs(moved_obj);
+
+
             auto res = planHybridAstar(last_goal, this_start, planCtx, true);
             if (res->validity != PlanValidity::success)
             {
@@ -1857,6 +1908,12 @@ bool tryAllocation(
                 planCtx.updateObs(obs_backup);
                 return false;
             }
+
+            // put back
+            planCtx.removeObs(moved_obj);
+            planCtx.addObs(prev_obj);
+
+
             transitPaths.push_back(res->getPathPtr(true));
         }
     }
@@ -1869,7 +1926,7 @@ bool tryAllocation(
     outAllocation.row = candidate.row;
     outAllocation.col = candidate.col;
     outAllocation.vertexChain = bestMatEntry.vertexChain;
-    outAllocation.transitPaths = transitPaths;
+    outAllocation.edgeTransitPaths = transitPaths;
     outAllocation.startPose = ReloPush::State(outAllocation.object.x, outAllocation.object.y,
                                               outAllocation.object.getOrientation(outAllocation.row));
     outAllocation.goalPose = ReloPush::State(outAllocation.goal.x, outAllocation.goal.y,
@@ -1904,12 +1961,28 @@ bool performAllocationsDFS(
     ReloPush::State robot,
     std::vector<FinalAllocation>& finalSequence,
     bool use_opt,
+    const std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
     int depth)
 {
     // ---- Base case: all objects delivered ----
     if (objGoalPairs.empty()) {
         return true;
     }
+
+
+    // handle timeout
+    auto time_now = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_now - time_start);
+
+/*
+
+    if(duration.count() > 1200000) // 1200 seconds
+    {
+        //timeout
+        return false;
+    }
+*/
+
 
     printCurrentState(finalSequence, objGoalPairs, delivered_objs);
 
@@ -1977,7 +2050,7 @@ bool performAllocationsDFS(
                 objects.updateObjectPosition(objNameObs,objNewPose);
             }
 
-            if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt, depth + 1)) {
+            if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt,time_start, depth + 1)) {
                 return true;
             }
 
@@ -2052,7 +2125,7 @@ void printFinalSequence(const std::vector<FinalAllocation> &finalSequence)
             {
                 if(n!=0)
                 {
-                    std::cout << "transit " << fa.transitPaths[n-1]->size() << std::endl;
+                    std::cout << "transit " << fa.edgeTransitPaths[n-1]->size() << std::endl;
                 }
 
                 fa.paths[n].printPath();

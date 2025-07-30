@@ -28,13 +28,31 @@ namespace ReloPush
 
         State() = default;
 
+        /*
         bool operator==(const State &s) const
         {
             //return std::tie(time, x, y, yaw) == std::tie(s.time, s.x, s.y, s.yaw);
 
-            if(abs(x - s.x) < 0.00001 && abs(y - s.y) < 0.00001)
+            if(abs(x - s.x) < 0.0001 && abs(y - s.y) < 0.0001)
                 return true;
 
+            return false;
+        }
+        */
+
+        bool operator==(const State &s) const {
+            constexpr double pos_tol = 0.0001; // Tolerance for x and y (e.g., 0.1 mm)
+            constexpr double yaw_tol = 0.01;   // Tolerance for yaw (e.g., 0.57 degrees)
+
+            // Check position (x, y)
+            if (std::fabs(x - s.x) < pos_tol && std::fabs(y - s.y) < pos_tol) {
+                // Compute angular difference considering wrap-around
+                double yaw_diff = std::fmod(yaw - s.yaw + M_PI, 2 * M_PI) - M_PI;
+                // Check if angular difference is within tolerance
+                if (std::fabs(yaw_diff) < yaw_tol) {
+                    return true;
+                }
+            }
             return false;
         }
 
@@ -132,6 +150,27 @@ namespace ReloPush
     typedef std::vector<StatePath> StatePathList;
     typedef std::shared_ptr<StatePathList> StatePathListPtr;
     typedef std::vector<StatePathPtr> StatePathPtrList;
+
+
+    struct StateHasher {
+        size_t operator()(const State& s) const {
+            constexpr double pos_tol = 0.0005; // Tolerance for x and y (0.5 mm)
+            constexpr double yaw_tol = 0.01;   // Tolerance for yaw (0.57 degrees)
+            // Discretize by rounding to tolerance
+            int x_int = static_cast<int>(std::round(s.x / pos_tol));
+            int y_int = static_cast<int>(std::round(s.y / pos_tol));
+            // Normalize yaw to [0, 2π) before discretizing
+            double yaw_normalized = std::fmod(s.yaw, 2 * M_PI);
+            if (yaw_normalized < 0) yaw_normalized += 2 * M_PI;
+            int yaw_int = static_cast<int>(std::round(yaw_normalized / yaw_tol));
+            // Combine hashes
+            size_t h1 = std::hash<int>{}(x_int);
+            size_t h2 = std::hash<int>{}(y_int);
+            size_t h3 = std::hash<int>{}(yaw_int);
+            return h1 ^ (h2 << 1) ^ (h3 << 2);
+        }
+    };
+
 }
 
 

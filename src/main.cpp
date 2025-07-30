@@ -33,55 +33,7 @@ struct ActionRecord {
     double x, y, yaw;
 };
 
-std::vector<ActionRecord> extractActionSequence(const std::vector<FinalAllocation>& finalSequence) {
-    std::vector<ActionRecord> actions;
 
-    for (const auto& fa : finalSequence) {
-        // 1. First approach path (action type 0)
-        if (fa.firstApproachPath) {
-            for (const auto& s : *(fa.firstApproachPath)) {
-                actions.push_back({0, fa.object.name, fa.goal.name, s.x, s.y, s.yaw});
-            }
-        }
-
-        // 2. ObsReloPaths (action type 1)
-        if (fa.obsReloPaths) {
-            for (const auto& edgePath : *(fa.obsReloPaths)) {
-                // Each EdgePath can be a path of states
-                if (std::holds_alternative<ReloPush::StatePathPtr>(edgePath.path)) {
-                    auto ptr = std::get<ReloPush::StatePathPtr>(edgePath.path);
-                    for (const auto& s : *ptr) {
-                        actions.push_back({1, fa.object.name, fa.goal.name, s.x, s.y, s.yaw});
-                    }
-                }
-                // Handle reloDubinsPath if needed, similar to codebase
-            }
-        }
-
-        // 3. Main push paths (action type 1)
-        for (const auto& edgeData : fa.paths) {
-            for (const auto& pathVariant : edgeData.paths) {
-                if (std::holds_alternative<ReloPush::StatePathPtr>(pathVariant->path)) {
-                    auto ptr = std::get<ReloPush::StatePathPtr>(pathVariant->path);
-                    for (const auto& s : *ptr) {
-                        actions.push_back({1, fa.object.name, fa.goal.name, s.x, s.y, s.yaw});
-                    }
-                }
-                // Again, handle reloDubinsPath if you want
-            }
-        }
-
-        // 4. Transit paths (action type 0)
-        for (const auto& transitPtr : fa.transitPaths) {
-            if (transitPtr) {
-                for (const auto& s : *transitPtr) {
-                    actions.push_back({0, fa.object.name, fa.goal.name, s.x, s.y, s.yaw});
-                }
-            }
-        }
-    }
-    return actions;
-}
 
 // You can adapt this mapping code if you have existing indices in your objects/goals
 std::unordered_map<std::string, int> make_index_map(const std::vector<FinalAllocation>& seq, bool object_map) {
@@ -102,6 +54,72 @@ void save_actions_for_visualizer(const std::vector<FinalAllocation>& finalSequen
 
     std::ofstream out(filename);
     out << "actions: [\n";
+
+
+    for(const auto& fa : finalSequence)
+    {
+        int obj_idx = obj_idx_map[fa.object.name];
+        int goal_idx = goal_idx_map[fa.goal.name];
+
+
+        //first approach: type 0
+        for (const auto& s : *(fa.firstApproachPath)) {
+            out << "  [0," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
+        }
+
+        //obstacle relocation
+        for (const auto& op : *(fa.obsReloPaths)) {
+            std::string mode_str = "";
+            if(op.is_pushing)
+                mode_str = "1";
+            else
+                mode_str = "0";
+
+            auto obsPath = op.toStatePath();
+
+            for (const auto& s : *obsPath)
+            {
+                out << "  [" << mode_str <<"," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
+            }
+        }
+
+        for (const auto& p : fa.paths)
+        {
+            // each edge
+            // multiple if prerelocation
+            for (size_t n=0; n<p.paths.size(); n++)
+            {
+                std::string mode_str = "";
+                if(p.paths[n]->is_pushing)
+                    mode_str = "1";
+                else
+                    mode_str = "0";
+
+                auto edgePath = p.paths[n]->toStatePath();
+
+                for (const auto& s : *edgePath)
+                {
+                    out << "  [" << mode_str <<"," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
+                }
+
+                // transit between edges (exists sometimes)
+                if(fa.edgeTransitPaths.size()>n && fa.edgeTransitPaths.size()>0)
+                {
+                    for (const auto& s : *(fa.edgeTransitPaths[n]))
+                    {
+                        out << "  [0," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
+                    }
+
+                }
+            }
+        }
+
+    }
+
+
+
+
+    /*
 
     for (const auto& fa : finalSequence) {
         int obj_idx = obj_idx_map[fa.object.name];
@@ -147,6 +165,9 @@ void save_actions_for_visualizer(const std::vector<FinalAllocation>& finalSequen
             }
         }
     }
+
+    */
+
     out << "]\n";
     out.close();
 }
@@ -167,13 +188,13 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj12.txt";
+    std::string filename = "iros_obj8.txt";
 
-    int instance_ind = 0;
+    int instance_ind = 63;
     bool use_opt = true;
     bool vis = true;
     //bool sim = true;
-    planningSimOrReal sim = planningSimOrReal::planOnly;
+    planningSimOrReal sim = planningSimOrReal::real;
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file
@@ -211,7 +232,9 @@ int main(int argc, char *argv[])
         auto robot_str = "r!!!"+robot.serialize();
         std::string encoded_data_robot = base64_encode(reinterpret_cast<const unsigned char*>(robot_str.c_str()), robot_str.length());
         if(sim == planningSimOrReal::sim)
+        {
             mqClient.send_and_wait(encoded_data_robot); //todo: gen message properly
+        }
     }
     else // real robot. get pose from ros bridge
     {
@@ -225,7 +248,10 @@ int main(int argc, char *argv[])
         robots[0].y = robot.y;
         robots[0].yaw = robot.yaw;
         std::cout << "Robot at: " << robot.x << ", " << robot.y << ", " << robot.yaw << std::endl;
+    }
 
+    if(sim!=planningSimOrReal::planOnly)
+    {
         // send objects for vis
         auto obj_vis = std::string("o!!!");
         std::vector<std::string> strs;
@@ -288,7 +314,7 @@ int main(int argc, char *argv[])
     std::vector<FinalAllocation> finalSequence;
     //bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence, use_opt);
     GoalMap delivered_objs;
-    bool ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robots[0] ,finalSequence, use_opt);
+    bool ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robots[0] ,finalSequence, use_opt, start);
 
     auto end = std::chrono::high_resolution_clock::now();
 
@@ -296,8 +322,15 @@ int main(int argc, char *argv[])
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "Elapsed time: " << duration.count() << " ms" << std::endl;
 
+    bool timeout = false;
+    if(duration.count() > 120000)
+        timeout = true;
+
     double total_path_length = 0.0;
     double total_pushing_length = 0.0;
+
+    if(timeout)
+        total_path_length = -1;
 
     if(ok)
     {
@@ -358,8 +391,11 @@ int main(int argc, char *argv[])
     }
     else
     {
+        if(timeout)
+            Color::println("Timed out",Color::YELLOW,Color::BG_RED);
+        else
         // plan failed
-        Color::println("Failed to find a solution",Color::YELLOW,Color::BG_RED);
+            Color::println("Failed to find a solution",Color::YELLOW,Color::BG_RED);
         //return -1;
     }
 
@@ -406,7 +442,7 @@ int main(int argc, char *argv[])
 
 
 
-    //save_actions_for_visualizer(finalSequence,std::string(CMAKE_SOURCE_DIR) + "/result_opt_actions_" + filename);
+    save_actions_for_visualizer(finalSequence,std::string(CMAKE_SOURCE_DIR) + "/result_opt_actions_" + filename);
 
 
     /*
@@ -431,14 +467,16 @@ int main(int argc, char *argv[])
     */
 
     // send trajectory
-    /*
-    auto s = finalTrajectory.serialize();
-    std::string encoded_data = base64_encode(reinterpret_cast<const unsigned char*>(s.c_str()), s.length());
-    //for debug
-    std::cout << encoded_data.size() << std::endl;
-    auto res = mqClient.send_and_wait(encoded_data);
-    std::cout << res << std::endl; // response from server
-    */
+    if(sim!=planningSimOrReal::planOnly)
+    {
+        auto s = finalTrajectory.serialize();
+        std::string encoded_data = base64_encode(reinterpret_cast<const unsigned char*>(s.c_str()), s.length());
+        //for debug
+        std::cout << encoded_data.size() << std::endl;
+        auto res = mqClient.send_and_wait(encoded_data);
+        std::cout << res << std::endl; // response from server
+    }
+
 
     //return app.exec();
     return 0;
