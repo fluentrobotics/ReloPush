@@ -25,27 +25,29 @@ public:
         socket.connect(ip_str);
     }
 
-    int send(std::string msg_str)
+    int send(std::string msg_str, bool print = false)
     {
         // Create a ZeroMQ message and copy the string data into it.
         zmq::message_t request(msg_str.size());
         memcpy(request.data(), msg_str.c_str(), msg_str.size());
 
-        std::cout << "Sending message: " << msg_str << std::endl;
+        if(print)
+            std::cout << "Sending message: " << msg_str << std::endl;
 
         // Send the message.
         socket.send(request, zmq::send_flags::none);
         // todo: handle exceptions
         return 0;
     }
-    std::string wait_for_response()
+    std::string wait_for_response(bool print = false)
     {
         // Wait for the reply from the server.
         zmq::message_t reply;
         socket.recv(reply, zmq::recv_flags::none);
         // Convert the reply to a std::string.
         std::string reply_str(static_cast<char*>(reply.data()), reply.size());
-        std::cout << "Received reply: " << reply_str << std::endl;
+        if(print)
+            std::cout << "Received reply: " << reply_str << std::endl;
 
         return reply_str;
     }

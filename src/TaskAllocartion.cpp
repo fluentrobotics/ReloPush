@@ -209,9 +209,14 @@ ReloPush::StatePath generateTimedTrajectory(const ReloPush::StatePath &path,
     timedPath[0] = path[0];
     timedPath[0].time = 0.0f;
 
+     float time_offset = 0.0f;
+     bool is_prev_forward = true;
+
     // Iterate over each pair of consecutive waypoints
     for (size_t i = 0; i + 1 < path.size(); ++i)
     {
+        bool add_wait = false;
+
         const auto &s1 = timedPath[i];
         auto &s2 = timedPath[i + 1];
 
@@ -237,9 +242,19 @@ ReloPush::StatePath generateTimedTrajectory(const ReloPush::StatePath &path,
         } else {
             // Non-pushing: forward = v_np, backward = -v_backward
             if (dot >= 0.0f)
+            {
                 chosenVel = v_np;          // forward
+                if(!is_prev_forward)
+                    add_wait = true;
+                is_prev_forward = true;
+            }
             else
+            {
                 chosenVel = v_backward;  // backward (negative velocity)
+                if(is_prev_forward)
+                    add_wait = true;
+                is_prev_forward = false;
+            }
         }
 
         // Compute travel time for segment i->i+1
@@ -247,8 +262,15 @@ ReloPush::StatePath generateTimedTrajectory(const ReloPush::StatePath &path,
         float speed = std::fabs(chosenVel);
         float dt = (speed > 1e-6f) ? (dist / speed) : 0.0f;
 
+        if(add_wait)
+            time_offset = 0.8;
+        else {
+            time_offset = 0;
+        }
+
+
         // Accumulate the time in s2
-        s2.time = s1.time + dt;
+        s2.time = s1.time + dt + time_offset;
         // Assign speed
         timedPath[i].vel = chosenVel;
         // Assign is_push
@@ -281,7 +303,7 @@ ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
     if(is_pushing)
     {
         auto last_wpt = p.back();
-        auto push_more = ReloPush::revert_pre_push(last_wpt,0.18); //todo: parese from param
+        auto push_more = ReloPush::revert_pre_push(last_wpt,0.05); //todo: parese from param
 
         auto last_t = out_traj.trajectory_points->back().time;
         auto last_v = out_traj.trajectory_points->back().ref_vel;
@@ -303,8 +325,8 @@ ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
 ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolution)
 {
     // todo: parse these from param
-    float v_p = 0.32;
-    float v_np = 0.4;
+    float v_p = 0.28;
+    float v_np = 0.35;
     float v_backward = -0.3;
 
     /*
@@ -1756,6 +1778,7 @@ bool tryAllocation(
     //bool deb = (candidate.objectName == "b1");
     //std::cout << "[debug] " << candidate.objectName << std::endl;
     auto obs_backup = planCtx.env_nonpush.get_obs();
+    PlanningContext planCtx_backup = planCtx;
 
 
     planCtx.checkObsCount("\t1");
@@ -1804,8 +1827,6 @@ bool tryAllocation(
         auto last_pair = bestMatEntry.obsReloList.back();
         auto first_pair = bestMatEntry.obsReloList.front();
 
-
-
         auto fromState = last_pair.second;
         auto& best_obj = objects[candidate.objectName];
         auto final_approach_obs = ReloPush::State(best_obj.x, best_obj.y, best_obj.getOrientation(candidate.row));
@@ -1850,7 +1871,8 @@ bool tryAllocation(
     // Plan approach (transit)
     //planCtx.checkObsCount("\t3");
     //auto res_app = planHybridAstar(robot, obj_start_pre, planCtx, true);
-    auto res_app = planHybridAstar(robot, firstAppGoal, planCtx, true);
+
+    auto res_app = planHybridAstar(robot, firstAppGoal, planCtx_backup, true); // before any obs relocation
     if(res_app->validity != PlanValidity::success)
     {
 

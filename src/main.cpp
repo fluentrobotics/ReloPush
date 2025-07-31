@@ -472,9 +472,9 @@ int main(int argc, char *argv[])
         auto s = finalTrajectory.serialize();
         std::string encoded_data = base64_encode(reinterpret_cast<const unsigned char*>(s.c_str()), s.length());
         //for debug
-        std::cout << encoded_data.size() << std::endl;
+        //std::cout << encoded_data.size() << std::endl;
         auto res = mqClient.send_and_wait(encoded_data);
-        std::cout << res << std::endl; // response from server
+        //std::cout << res << std::endl; // response from server
     }
 
 
