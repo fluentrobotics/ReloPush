@@ -1379,6 +1379,52 @@ void buildAllEdges(Graph &g, PlanningContext ctx)
 }
 
 
+void saveGraphState(const Graph& g, const std::string& filename) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        // Handle error, e.g., throw or log
+        return;
+    }
+
+    // Save vertices (pushing poses, which imply object poses via association)
+    out << "VERTICES" << std::endl;
+    auto verts = boost::vertices(g);
+    for (auto v : boost::make_iterator_range(verts)) {
+        // Access vertex properties (adjust if using property maps instead of bundled properties)
+        auto& vp = g[v];  // Assuming bundled vertex properties
+        out << v << " "  // Vertex ID (size_t or int)
+            << vp.name << " "  // Associated object ID
+            << vp.x << " "
+            << vp.y << " "
+            << vp.nominalOrientation << std::endl;
+    }
+
+    // Save edges and their paths
+    out << "EDGES" << std::endl;
+    auto edges = boost::edges(g);
+    for (auto e : boost::make_iterator_range(edges)) {
+        Vertex source = boost::source(e, g);
+        Vertex target = boost::target(e, g);
+        out << source << " -> " << target << std::endl;
+
+        // Access edge data (adjust if using property maps)
+        auto& edge_data = g[e];  // Assuming bundled edge properties
+        for (const auto& path_ptr : edge_data.paths) {
+            if (path_ptr) {
+                auto state_path = path_ptr->toStatePath();
+                out << "PATH_START" << std::endl;
+                for (const auto& state : *state_path) {
+                    out << state.x << " " << state.y << " " << state.yaw << std::endl;
+                }
+                out << "PATH_END" << std::endl;
+            }
+        }
+    }
+
+    out.close();
+}
+
+
 // -----------------------------------------------------------------
 // Visualize Graph
 // -----------------------------------------------------------------

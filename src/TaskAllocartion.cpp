@@ -2018,6 +2018,12 @@ bool performAllocationsDFS(
 
     buildAllEdges(g, planCtx);
 
+
+    // for vis
+    //std::string gvis_filename = std::string(CMAKE_SOURCE_DIR) + "/gvis.txt";
+    //saveGraphState(g, gvis_filename);
+
+
     // ---- Compute all pairwise assignments/costs ----
     auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
 

@@ -132,6 +132,8 @@ void buildAllEdges(
 
 void buildAllEdges(Graph &g, PlanningContext ctx);
 
+void saveGraphState(const Graph& g, const std::string& filename);
+
 /**
  * @brief Write the graph to a .dot file for visualization.
  *
