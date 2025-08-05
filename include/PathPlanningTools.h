@@ -75,6 +75,7 @@ namespace Constants {
     static float L = 0.29f;
     // [m] --- The minimum turning radius of the vehicle
     static float r_push = L / tanf(fabs(steer_limit_push));
+    // static float r_push = 1.75; // for figure plot
     //static float r_push = 1.41f;
     static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
     //extern float r; // non-push as default
