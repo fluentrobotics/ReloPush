@@ -302,6 +302,7 @@ ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
     // push more
     if(is_pushing)
     {
+        /*
         auto last_wpt = p.back();
         auto push_more = ReloPush::revert_pre_push(last_wpt,0.05); //todo: parese from param
 
@@ -315,6 +316,7 @@ ReloPush::trajectory statePath2traj(ReloPush::StatePathPtr sp,
 
         ReloPush::trajectory_elem p_more(push_more.x,push_more.y,push_more.yaw,last_v,new_t,is_pushing);
         out_traj.append_waypoint(p_more);
+        */
     }
 
     return out_traj;
@@ -392,7 +394,7 @@ ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolut
 std::vector<ReloPush::State> FinalTaskSequence::to_StateList(void)
 {
     std::vector<ReloPush::State> out_list(task_sequence.size());
-    
+
     for(size_t n=0; n<task_sequence.size(); n++)
         out_list[n] = ReloPush::State(task_sequence[n].goal.x, task_sequence[n].goal.y, task_sequence[n].goal.nominalOrientation);
 
@@ -1875,7 +1877,7 @@ bool tryAllocation(
     auto res_app = planHybridAstar(robot, firstAppGoal, planCtx_backup, true); // before any obs relocation
     if(res_app->validity != PlanValidity::success)
     {
-
+/*
         // try once more with more margins
         auto onceMoreRobot = find_pre_push(robot,0.1);
         auto onceMoreGoal = find_pre_push(firstAppGoal,0.1);
@@ -1893,9 +1895,9 @@ bool tryAllocation(
                 res_app = res_app_om;
             }
         }
-
-
-
+*/
+        planCtx.updateObs(obs_backup);
+        return false;
     }
     //transitPaths.push_back(res_app->getPathPtr(true));
     ReloPush::StatePathPtr firstApp = res_app->getPathPtr(true); // store it to allocation if evertying is fine
@@ -2017,12 +2019,6 @@ bool performAllocationsDFS(
     PlanningContext planCtx(params, objects, delivered_objs, use_opt);
 
     buildAllEdges(g, planCtx);
-
-
-    // for vis
-    //std::string gvis_filename = std::string(CMAKE_SOURCE_DIR) + "/gvis.txt";
-    //saveGraphState(g, gvis_filename);
-
 
     // ---- Compute all pairwise assignments/costs ----
     auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
