@@ -188,9 +188,9 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj2_test.txt";
+    std::string filename = "iros_obj12.txt";
 
-    int instance_ind = 0; // 63
+    int instance_ind = 78; // 63
     bool use_opt = true;
     bool vis = true;
     //bool sim = true;

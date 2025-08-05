@@ -120,7 +120,7 @@ namespace Constants {
     static const float LF_nonpush = 0.375;  //0.38
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
-    static const float LB = 0.12; //0.12
+    static const float LB = 0.2; //0.12
 
     static const float prepush_th = LF_push*1.01;
 
@@ -524,7 +524,9 @@ public:
             //              Constants::normalizeHeadingRad(s.yaw + deltat));
             for (auto iter = next_path.begin(); iter != next_path.end(); iter++) {
                 ReloPush::State next_s = iter->first;
-                if (!stateValid(next_s))
+                // jeeho: need to negate the yaw for the correct collision checking
+                ReloPush::State next_s_neg = ReloPush::State(next_s.x,next_s.y,next_s.yaw*-1);
+                if (!stateValid(next_s_neg))
                     return false;
                 else {
                     gscore += iter->second;
