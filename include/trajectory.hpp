@@ -151,7 +151,7 @@ namespace ReloPush {
         void deserialize(std::string& str_pose)
         {
             std::string header_delim = "!!!";
-            std::string elem_delim = ";;;";
+            std::string elem_delim = ";$;";
             std::string var_delim = ",,,";
 
             // split variables
@@ -189,7 +189,7 @@ namespace ReloPush {
     public:
         float time_zero=0;
         std::string header_delim = "!!!";
-        std::string elem_delim = ";;;";
+        std::string elem_delim = ";$;";
         std::string var_delim = ",,,";
         std::string header = "t"; // header for trajectory
 

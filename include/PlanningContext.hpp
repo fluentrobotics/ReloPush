@@ -37,6 +37,7 @@ struct PlanningContext
     bool print_res = false; // print result for hybrid-astar
     bool use_prelo_optimization = false;
     size_t num_of_obj = 0;
+    bool no_init_guess = false;
 
 
     // Evenly sampled positions for optimizations
@@ -95,8 +96,8 @@ struct PlanningContext
         //uniformSampleMap(sample_N);
     }
 
-    PlanningContext(PlanningParameters params_in, ObjectMap& obs_in, GoalMap& static_in, bool& use_opt)
-        : parameters(params_in), mo_list(obs_in), delivered_list(static_in), use_prelo_optimization(use_opt)
+    PlanningContext(PlanningParameters params_in, ObjectMap& obs_in, GoalMap& static_in, bool& use_opt, bool no_init_guess_in = false)
+        : parameters(params_in), mo_list(obs_in), delivered_list(static_in), use_prelo_optimization(use_opt), no_init_guess(no_init_guess_in)
     {
         //std::unordered_set<ReloPush::State> obs;
         ObjectMap obs;

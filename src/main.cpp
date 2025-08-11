@@ -188,11 +188,12 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj12.txt";
+    std::string filename = "iros_obj4.txt";
 
-    int instance_ind = 78; // 63
+    int instance_ind = 9; // 63 //6
     bool use_opt = true;
     bool vis = true;
+    bool no_init_guess = true;
     //bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
 
@@ -270,7 +271,7 @@ int main(int argc, char *argv[])
         {
             obj_vis+=strs[n];
             if(n!=strs.size()-1)
-                obj_vis+=";;;";
+                obj_vis+=";$;";
         }
         auto obj_vis_msg = base64_encode(reinterpret_cast<const unsigned char*>(obj_vis.c_str()), obj_vis.length());
         mqClient.send_and_wait(obj_vis_msg);
@@ -293,7 +294,7 @@ int main(int argc, char *argv[])
         {
             goal_vis+=strs[n];
             if(n!=strs.size()-1)
-                goal_vis+=";;;";
+                goal_vis+=";$;";
         }
         auto goal_vis_msg = base64_encode(reinterpret_cast<const unsigned char*>(goal_vis.c_str()), goal_vis.length());
         mqClient.send_and_wait(goal_vis_msg);
@@ -314,7 +315,8 @@ int main(int argc, char *argv[])
     std::vector<FinalAllocation> finalSequence;
     //bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence, use_opt);
     GoalMap delivered_objs;
-    bool ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robots[0] ,finalSequence, use_opt, start);
+    bool ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robots[0],
+                                    finalSequence, use_opt, no_init_guess, start);
 
     auto end = std::chrono::high_resolution_clock::now();
 
@@ -408,7 +410,12 @@ int main(int argc, char *argv[])
     // Compose output filename
     std::string result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_" + filename;
     if(use_opt)
-        result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_opt_" + filename;
+    {
+        if(!no_init_guess)
+            result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_opt_" + filename;
+        else
+            result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_opt_no_init_" + filename;
+    }
 
     std::cout << "saving to: "<< result_filename << std::endl;
 

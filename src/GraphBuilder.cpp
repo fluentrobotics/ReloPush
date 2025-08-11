@@ -786,18 +786,29 @@ StateValidity addEdgePrerelocation_Optimization(
         //auto init_guess_prepush = find_pre_push(init_guess,ctx.parameters.PrePush_dist);
         */
 
-        auto init_guess_robot = ReloPush::FindInitialGuess(Eigen::Vector3d(startPose_prepush.x,startPose_prepush.y,sideAngle),Eigen::Vector3d(goalPose.x,goalPose.y,goalPose.yaw),
-                                                     ctx.parameters.PrePush_dist,ctx.parameters.turning_rad_pair.push,startPose.yaw);
 
 
-        //double x_init_guess = init_guess_xy.first;
-        //double y_init_guess = init_guess_xy.second;
-        //double x_init_guess = init_guess_prepush.x;
-        //double y_init_guess = init_guess_prepush.y;
-        double x_init_guess = init_guess_robot.first.x();
-        double y_init_guess = init_guess_robot.first.y();
 
 
+        // ************ no init guess
+        //double x_init_guess = goalPose_prepush.x;
+        //double y_init_guess = goalPose_prepush.y;
+        double x_init_guess = startPose_prepush.x;
+        double y_init_guess = startPose_prepush.y;
+
+
+
+        if(!ctx.no_init_guess) // use initial guess
+        {
+            std::pair<Eigen::Vector2d, Eigen::Vector2d> init_guess_robot
+                    = ReloPush::FindInitialGuess(Eigen::Vector3d(startPose_prepush.x,startPose_prepush.y,sideAngle),
+                                                                 Eigen::Vector3d(goalPose.x,goalPose.y,goalPose.yaw),
+                                                                 ctx.parameters.PrePush_dist,ctx.parameters.turning_rad_pair.push,startPose.yaw);
+
+            x_init_guess = init_guess_robot.first.x();
+            y_init_guess = init_guess_robot.first.y();
+
+        }
 
 
         // ************ no init guess

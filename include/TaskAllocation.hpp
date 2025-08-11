@@ -354,6 +354,7 @@ bool performAllocationsDFS(const WorkspaceBoundary& boundary,
                            ReloPush::State robot,
                            std::vector<FinalAllocation>& finalSequence,
                            bool use_opt,
+                           bool no_init_guess,
                            const std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
                            int depth = 0);
 

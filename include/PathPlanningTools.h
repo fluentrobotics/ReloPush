@@ -111,7 +111,7 @@ namespace Constants {
     //extern float yawResolution; // non-push as default
 
     // width of car
-    static const float carWidth = 0.36; // 0.285
+    static const float carWidth = 0.285; // 0.285 //0.33 // 0.36 for larger margin
     // obstacle default radius
     static const float obsHalfSide = 0.075;
     static const float obsRadius = obsHalfSide;
@@ -120,7 +120,7 @@ namespace Constants {
     static const float LF_nonpush = 0.375;  //0.38
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
-    static const float LB = 0.2; //0.12
+    static const float LB = 0.12; //0.12  // 0.2
 
     static const float prepush_th = LF_push*1.01;
 

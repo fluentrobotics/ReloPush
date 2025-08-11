@@ -1394,7 +1394,7 @@ bool performAllocations(const WorkspaceBoundary &boundary,
         // (b) Setup PlanningParameters and context
         PlanningParameters params;
         params.boundary = boundary;
-        PlanningContext planCtx(params, objects, delivered_objs, use_opt);
+        PlanningContext planCtx(params, objects, delivered_objs, use_opt, false); //todo: add no_init_guess
 
         // (d) Build edges
         buildAllEdges(g, planCtx);
@@ -1976,6 +1976,7 @@ bool tryAllocation(
 
 
 // Main DFS function
+// todo: gather all parameters into one object
 bool performAllocationsDFS(
     const WorkspaceBoundary& boundary,
     ObjectMap objects,
@@ -1985,6 +1986,7 @@ bool performAllocationsDFS(
     ReloPush::State robot,
     std::vector<FinalAllocation>& finalSequence,
     bool use_opt,
+    bool no_init_guess,
     const std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
     int depth)
 {
@@ -1998,14 +2000,14 @@ bool performAllocationsDFS(
     auto time_now = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_now - time_start);
 
-/*
+
 
     if(duration.count() > 1200000) // 1200 seconds
     {
         //timeout
         return false;
     }
-*/
+
 
 
     printCurrentState(finalSequence, objGoalPairs, delivered_objs);
@@ -2016,7 +2018,7 @@ bool performAllocationsDFS(
 
     PlanningParameters params;
     params.boundary = boundary;
-    PlanningContext planCtx(params, objects, delivered_objs, use_opt);
+    PlanningContext planCtx(params, objects, delivered_objs, use_opt, no_init_guess);
 
     buildAllEdges(g, planCtx);
 
@@ -2074,7 +2076,7 @@ bool performAllocationsDFS(
                 objects.updateObjectPosition(objNameObs,objNewPose);
             }
 
-            if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt,time_start, depth + 1)) {
+            if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt, no_init_guess,time_start, depth + 1)) {
                 return true;
             }
 
