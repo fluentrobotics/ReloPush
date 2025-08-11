@@ -188,12 +188,16 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj4.txt";
+    std::string filename = "iros_obj10.txt";
 
-    int instance_ind = 9; // 63 //6
-    bool use_opt = true;
+    int instance_ind = 47; // 63 //6
+    bool use_opt = false;
     bool vis = true;
     bool no_init_guess = true;
+
+
+    bool use_dfs = true;
+
     //bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
 
@@ -315,9 +319,18 @@ int main(int argc, char *argv[])
     std::vector<FinalAllocation> finalSequence;
     //bool ok = performAllocations(boundary, objects, goals, objGoalPairs, finalSequence, use_opt);
     GoalMap delivered_objs;
-    bool ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robots[0],
-                                    finalSequence, use_opt, no_init_guess, start);
+    bool ok;
 
+    if(use_dfs)
+    {
+        ok = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robots[0],
+                                        finalSequence, use_opt, no_init_guess, start);
+    }
+    else
+    {
+        ok = performAllocations(boundary, objects, goals, objGoalPairs, delivered_objs, robots[0],
+                                finalSequence, use_opt, no_init_guess, start);
+    }
     auto end = std::chrono::high_resolution_clock::now();
 
     // Calculate the elapsed time in milliseconds
@@ -409,6 +422,10 @@ int main(int argc, char *argv[])
 
     // Compose output filename
     std::string result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_" + filename;
+    if(!use_dfs) // not using dfs
+    {
+        result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_prevReloPush_" + filename;
+    }
     if(use_opt)
     {
         if(!no_init_guess)

@@ -313,6 +313,7 @@ PathPlanResultPtr attemptObsRelocation(PlanningContext &planCtx,
 // ---------------------------------------------------------------------------
 // Helper Function 3: One iteration of picking the best pair and planning
 // ---------------------------------------------------------------------------
+/*
 bool findFeasibleAllocation(PairResultsMap &pairResults,
                             const std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
                             PlanningContext &planCtx,
@@ -320,31 +321,24 @@ bool findFeasibleAllocation(PairResultsMap &pairResults,
                             LowestCostInfo &bestPick,
                             std::unordered_map<std::string, ReloPush::State> &ToUpdate,
                             std::string &failedObjectName, ObjectMap objects);
+*/
 
 // ---------------------------------------------------------------------------
 // Helper Function 4a: The main planning/allocation loop
 // ---------------------------------------------------------------------------
+/*
 bool performAllocations(const WorkspaceBoundary &boundary,
                         std::unordered_map<std::string, ObjectInfo> &objects,
                         std::unordered_map<std::string, GoalInfo> &goals,
                         std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
                         std::vector<FinalAllocation> &finalSequence,
                         bool& use_opt);
+*/
 
 // ---------------------------------------------------------------------------
 // Helper Function 4b: The main planning/allocation loop (DFS)
 // ---------------------------------------------------------------------------
 
-/*
-bool performAllocationsDFS( const WorkspaceBoundary &boundary,
-                                            std::unordered_map<std::string, ObjectInfo> objects,
-                                            std::unordered_map<std::string, GoalInfo> goals,
-                                            std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
-                                            GoalMap delivered_objs,
-                                            ReloPush::State robot,
-                                            std::vector<FinalAllocation> &finalSequence,
-                                            bool use_opt);
-                                            */
 
 bool performAllocationsDFS(const WorkspaceBoundary& boundary,
                            ObjectMap objects,
@@ -358,6 +352,16 @@ bool performAllocationsDFS(const WorkspaceBoundary& boundary,
                            const std::chrono::time_point<std::chrono::high_resolution_clock> time_start,
                            int depth = 0);
 
+bool performAllocations(const WorkspaceBoundary& boundary,
+                        ObjectMap objects,
+                        GoalMap goals,
+                        std::unordered_map<std::string, ObjectGoalPair> objGoalPairs,
+                        GoalMap delivered_objs,
+                        ReloPush::State robot,
+                        std::vector<FinalAllocation>& finalSequence,
+                        bool use_opt,
+                        bool no_init_guess,
+                        const std::chrono::time_point<std::chrono::high_resolution_clock> time_start);
 
 // ---------------------------------------------------------------------------
 // Helper Function 5: Print the final sequence
