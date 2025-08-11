@@ -188,15 +188,15 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj10.txt";
+    std::string filename = "iros_obj9.txt";
 
-    int instance_ind = 47; // 63 //6
+    int instance_ind = 17; // 63 //6
     bool use_opt = false;
     bool vis = true;
     bool no_init_guess = true;
 
 
-    bool use_dfs = true;
+    bool use_dfs = false;
 
     //bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;

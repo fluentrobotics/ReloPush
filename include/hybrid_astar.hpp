@@ -143,6 +143,10 @@ public:
                     std::get<3>(iter->second) +
                     m_env.admissibleHeuristic(iter->first);  // current.fScore;
                 while (iter != cameFrom.end()) {
+                    if(solution.states.size()>2080)
+                    {
+                        std::terminate(); // todo: occasiuonally, something is wrong and growing this list infinately. need to fix
+                    }
                     // std::cout << " From " << std::get<0>(iter->second)
                     //           << " to Node:" << iter->first
                     //           << " with ACTION: " << std::get<1>(iter->second) << "
