@@ -441,7 +441,7 @@ public:
     bool isSolution(
         const ReloPush::State &state, double gscore,
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                           ReloPush::StateHasher> &_camefrom) {
+                                                                        std::hash<ReloPush::State>> &_camefrom) {
 
         bool isSol = planCont.allow_reverse ? isSolutionWithReverse(state, gscore, _camefrom) : isSolutionWithoutReverse(state, gscore, _camefrom);
 
@@ -451,7 +451,7 @@ public:
     bool isSolutionWithReverse(
         const ReloPush::State& state, double gscore,
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                           ReloPush::StateHasher>& _camefrom) {
+                           std::hash<ReloPush::State>>& _camefrom) {
         double goal_distance =
             sqrt(pow(state.x - m_goal.x, 2) + pow(state.y - m_goal.y, 2));
         if (goal_distance > 2 * (Constants::LB + Constants::LF_nonpush)) return false;
@@ -535,6 +535,7 @@ public:
                             next_s,
                             std::make_tuple<>(path.back(), act, iter->second, gscore)));
                     }
+
                     path.emplace_back(next_s);
                 }
             }
@@ -556,6 +557,12 @@ public:
         //           << std::get<2>(iter->second) << " g_score "
         //           << std::get<3>(iter->second) << std::endl;
 
+        if (cameFrom.empty()) {
+            cameFrom.insert(std::make_pair<>(
+                state,
+                std::make_tuple<>(ReloPush::State(-1, -1, -1, -1), 6, 0, gscore)));  // dummy state
+        }
+
         _camefrom.insert(cameFrom.begin(), cameFrom.end());
 
 
@@ -570,6 +577,13 @@ public:
         }
         std::cout << std::endl;
 */
+
+        if(_camefrom.size() == 0)
+        {
+            bool here = true;
+            std::cout << "empty camefrom" << std::endl;
+        }
+
 
 
         return true;
@@ -614,7 +628,7 @@ public:
     bool isSolutionWithoutReverse(
         const ReloPush::State &state, double gscore,
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                           ReloPush::StateHasher> &_camefrom) {
+                           std::hash<ReloPush::State>> &_camefrom) {
         double goal_distance =
             sqrt(pow(state.x - getGoal().x, 2) + pow(state.y - getGoal().y, 2));
         if (goal_distance > 10 * (Constants::LB + planCont.LF)) return false;
@@ -633,7 +647,7 @@ public:
 
         std::vector<ReloPush::State> path;
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                           ReloPush::StateHasher>
+                           std::hash<ReloPush::State>>
             cameFrom;
         cameFrom.clear();
         path.emplace_back(state);

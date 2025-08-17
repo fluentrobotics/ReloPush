@@ -83,7 +83,7 @@ default. Comment "USE_FIBONACCI_HEAP" to use the d-ary heap instead.
 
 
 template <typename State, typename Action, typename Cost, typename Environment,
-         typename StateHasher = ReloPush::StateHasher>
+         typename StateHasher = std::hash<State>>
 class HybridAStar {
 public:
     HybridAStar(Environment& environment) : m_env(environment) {}
@@ -135,6 +135,11 @@ public:
             if (m_env.isSolution(current.state, current.gScore, cameFrom)) {
                 solution.states.clear();
                 solution.actions.clear();
+
+                // for debug only
+                //auto gg = m_env.getGoal();
+                //std::cout << "g: " << gg.x << ", " << gg.y << ", " << gg.yaw << std::endl;
+
                 auto iter = cameFrom.find(m_env.getGoal());
                 if(iter == cameFrom.end())
                     std::cerr << "iter didn't find the goal\n";

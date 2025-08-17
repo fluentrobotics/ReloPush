@@ -232,7 +232,7 @@ PathPlanResultPtr check_approach_validity(ReloPush::State preRelocation, ReloPus
                                           ObjectInfo movingObject, int landingOrientationIndex,
                                           int finalOrientationIndex, double angleChange, PlanningContext& ctx)
 {
-    if(preRelocation.isSamePose(approachingPose))
+    if(preRelocation.isSamePose(approachingPose)) // todo: yaw might not be correctly compared
     {
         // start and goal are identical. return empty path
         PathPlanResult res_empty;

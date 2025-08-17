@@ -28,21 +28,23 @@ namespace ReloPush
 
         State() = default;
 
-        /*
+
         bool operator==(const State &s) const
         {
-            //return std::tie(time, x, y, yaw) == std::tie(s.time, s.x, s.y, s.yaw);
+            return std::tie(time, x, y, yaw) == std::tie(s.time, s.x, s.y, s.yaw);
 
+            /*
             if(abs(x - s.x) < 0.0001 && abs(y - s.y) < 0.0001)
                 return true;
 
             return false;
+*/
         }
-        */
 
+/*
         bool operator==(const State &s) const {
             constexpr double pos_tol = 0.0001; // Tolerance for x and y (e.g., 0.1 mm)
-            constexpr double yaw_tol = 0.01;   // Tolerance for yaw (e.g., 0.57 degrees)
+            constexpr double yaw_tol = 0.001;   // Tolerance for yaw (e.g., 0.57 degrees)
 
             // Check position (x, y)
             if (std::fabs(x - s.x) < pos_tol && std::fabs(y - s.y) < pos_tol) {
@@ -55,6 +57,7 @@ namespace ReloPush
             }
             return false;
         }
+*/
 
         bool isSamePose(const State &s) const
         {
@@ -154,6 +157,7 @@ namespace ReloPush
 
     struct StateHasher {
         size_t operator()(const State& s) const {
+            /*
             constexpr double pos_tol = 0.0005; // Tolerance for x and y (0.5 mm)
             constexpr double yaw_tol = 0.01;   // Tolerance for yaw (0.57 degrees)
             // Discretize by rounding to tolerance
@@ -168,6 +172,13 @@ namespace ReloPush
             size_t h2 = std::hash<int>{}(y_int);
             size_t h3 = std::hash<int>{}(yaw_int);
             return h1 ^ (h2 << 1) ^ (h3 << 2);
+*/
+            size_t seed = 0;
+            boost::hash_combine(seed, s.x);
+            boost::hash_combine(seed, s.y);
+            boost::hash_combine(seed, s.yaw);
+            return seed;
+
         }
     };
 

@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
     double R     = 1.9188; // turning radius
 */
 
+/*
     double x_i   = 1.053499816410735;       // Starting x
     double y_i   = 1.5889540125669037;       // Starting y
     double th_i  = 4.70575;    // Starting orientation
@@ -67,7 +68,29 @@ int main(int argc, char** argv) {
     double y2    = 2.989194631576538;       // Goal y
     double th2   = 3.995207281904765;   // Goal orientation
     double R     = 1.5496432781219482; // turning radius
+*/
 
+
+    double x_i   = 1;       // Starting x
+    double y_i   = 1;       // Starting y
+    double th_i  = 1.5*M_PI;    // Starting orientation
+    double th_ip = 0.5*M_PI;  // Secondary heading
+    double x2    = 1.5;       // Goal x
+    double y2    = 1.5;       // Goal y
+    double th2   = 5.4124;   // Goal orientation
+    double R     = 1.41; // turning radius
+
+
+    /*
+    double x_i   = 1;       // Starting x
+    double y_i   = 1.5;       // Starting y
+    double th_i  = 4.7123;    // Starting orientation
+    double th_ip = 0.5*M_PI;  // Secondary heading
+    double x2    = 1.1779;       // Goal x
+    double y2    = 1.8824;       // Goal y
+    double th2   = 5.4124;   // Goal orientation
+    double R     = 1.9188; // turning radius
+*/
 
 /*
     double x_i   = 1.2;       // Starting x
@@ -138,7 +161,7 @@ int main(int argc, char** argv) {
     // Find a good initial guess for this optimization
     // try intersection
 
-    double pre_push_dist = 0.54;// 0.38+0.075;
+    double pre_push_dist = 0.33;// 0.38+0.075;
     // Get pre-push
     auto pushPose = ReloPush::State(x_i,y_i,th_ip);
     //auto Start_prepush = find_pre_push(pushPose, pre_push_dist);
@@ -333,6 +356,9 @@ int main(int argc, char** argv) {
     double final_push_th = th_i + (paramSE2[2]-th_ip);
     double final_prepush_x = paramSE2[0] - pre_push_dist * cos(final_push_th);
     double final_prepush_y = paramSE2[1] - pre_push_dist * sin(final_push_th);
+
+    std::cout << "landing prerelo: " << robot_prerelo_x << ", " << robot_prerelo_y << ", " << paramSE2[2] << "\n";
+    std::cout << "final prepush: " << final_prepush_x << ", " << final_prepush_y << ", " << final_push_th << std::endl;
 
     return 0;
 }
