@@ -188,15 +188,15 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj11.txt";
+    std::string filename = "iros_obj12_v1.txt";
 
-    int instance_ind = 3; // 63 //6
+    int instance_ind = 6; // 63 //6
     bool use_opt = false;
     bool vis = true;
     bool no_init_guess = true;
 
 
-    bool use_dfs = false;
+    bool use_dfs = true;
 
     //bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 
     if(argc > 3) // parse from arg
     {
-        handle_args(argc, argv, filename, instance_ind, use_opt);
+        handle_args(argc, argv, filename, instance_ind, use_opt, no_init_guess, use_dfs); // 3rd arg: mode. 'f'=ReloPush-F 'd' = ReloPush-D 'u'=no-init-opt 'o'=ReloPush
         vis = false; // disable for evaluations
     }
 

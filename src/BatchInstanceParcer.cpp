@@ -228,12 +228,60 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
     return true;
 }
 
-void handle_args(int argc, char **argv, std::string& data_file, int& data_ind, bool& use_opt)
+// 3rd arg: mode. 'f'=ReloPush-F 'd' = ReloPush-D 'u'=no-init-opt 'o'=ReloPush
+void handle_args(int argc, char **argv, std::string& data_file, int& data_ind, bool& use_opt, bool& no_init_guess, bool& use_dfs)
 {
     data_file = std::string(argv[1]);
     data_ind = std::atoi(argv[2]);
+    /*
     if(std::atoi(argv[3])==1)
         use_opt = true;
     else
         use_opt = false;
+    */
+
+    std::string mode_str = argv[3];
+    std::string mode_name = "";
+
+    if(mode_str=="f") // optimizized prerelocation
+    {
+        use_opt = true;
+        no_init_guess = false;
+        use_dfs = true;
+
+        mode_name = "ReloPush-F";
+    }
+    else if(mode_str=="d") // no-opt prerelocation
+    {
+        use_opt = false;
+        no_init_guess = false; // dummy
+        use_dfs = true;
+
+        mode_name = "ReloPush-D";
+    }
+    else if(mode_str=="u") // uninformed optimization
+    {
+        use_opt = true;
+        no_init_guess = true;
+        use_dfs = true;
+
+        mode_name = "Uninformed-Opt";
+    }
+    else if(mode_str=="o") // original ReloPush without backtracking
+    {
+        use_opt = false;
+        no_init_guess = false; //dummy
+        use_dfs = false;
+
+        mode_name = "Original";
+    }
+    else
+    {
+        // not a valid mode
+        std::cerr << "invalid mode arg: " << mode_str << std::endl;
+        std::cout << "'f'=ReloPush-F 'd' = ReloPush-D 'u'=no-init-opt 'o'=ReloPush" << std::endl;
+        std::terminate();
+    }
+
+    std::cout << "Running Mode: " << mode_name << std::endl;
 }

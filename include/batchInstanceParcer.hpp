@@ -29,6 +29,6 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
 /*
  * argv[1]: filename, argv[2]: index, argv[3]: use_opt
  */
-void handle_args(int argc, char **argv, std::string& data_file, int& data_ind, bool& use_opt);
+void handle_args(int argc, char **argv, std::string& data_file, int& data_ind, bool& use_opt, bool& no_init_guess, bool& use_dfs);
 
 #endif
