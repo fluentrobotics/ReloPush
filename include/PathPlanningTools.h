@@ -111,7 +111,7 @@ namespace Constants {
     //extern float yawResolution; // non-push as default
 
     // width of car
-    static const float carWidth = 0.34; // 0.285 //0.33 // 0.36 for larger margin
+    static const float carWidth = 0.36; // 0.285 //0.33 // 0.36 for larger margin
     // obstacle default radius
     static const float obsHalfSide = 0.075; // 0.075
     static const float obsRadius = obsHalfSide;
