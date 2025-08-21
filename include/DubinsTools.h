@@ -102,6 +102,9 @@ public:
             waypoints[0] = targetState;
         } // path is too short there is nothing to interpolate
 
+        // append the last (goal) waypoint
+        waypoints.push_back(targetState);
+
 
         return std::make_shared<ReloPush::StatePath>(waypoints);
     }

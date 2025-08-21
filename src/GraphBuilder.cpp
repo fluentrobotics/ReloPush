@@ -87,6 +87,20 @@ ReloPush::State find_pre_push(ReloPush::State& goalState, float distance)
     return outState;
 }
 
+ReloPush::State find_post_push(ReloPush::State& goalState, float distance)
+{
+    ReloPush::State outState(goalState);
+
+    // Calculate the new x and y coordinates
+    outState.x += distance * cos(goalState.yaw);
+    outState.y += distance * sin(goalState.yaw);
+
+    // change angle range
+    outState.yaw = fromOMPL::mod2pi(outState.yaw);
+
+    return outState;
+}
+
 
 // Check Dubins Validity
 StatePathValidity check_dubins_validity(reloDubinsPath& dubins_in, PlanningContext& ctx)

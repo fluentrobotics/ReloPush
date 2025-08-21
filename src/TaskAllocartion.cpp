@@ -365,9 +365,15 @@ ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolut
     // main pushing
     for(auto& p : paths)
     {
-        for (size_t n=0; n<p.paths.size(); n++)
+        for (size_t n=0; n<p.paths.size(); n++) // multiple if prerelocation
         {
             auto edgePath = p.paths[n]->toStatePath();
+            // additional push for prerelocation
+            if(p.paths.size()>1 && n==0)
+            {
+                auto addPush = edgePath->back().get_postPush(Constants::additional_push_dist);
+                edgePath->push_back(addPush);
+            }
             trajs.push_back(statePath2traj(edgePath,v_p,v_np,v_backward,p.paths[n]->is_pushing));
 
             // transit between edges (exists sometimes)
@@ -376,7 +382,6 @@ ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolut
                 auto edgeTrans = edgeTransitPaths[n];
                 trajs.push_back(statePath2traj(edgeTrans,v_p,v_np,v_backward,false));
             }
-
         }
     }
 

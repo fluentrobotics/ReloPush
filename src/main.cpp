@@ -188,18 +188,18 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj12_v1.txt";
+    std::string filename = "iros_obj10.txt";
 
-    int instance_ind = 6; // 63 //6
-    bool use_opt = false;
+    int instance_ind = 9; // 63 //6
+    bool use_opt = true;
     bool vis = true;
-    bool no_init_guess = true;
+    bool no_init_guess = false;
 
 
     bool use_dfs = true;
 
     //bool sim = true;
-    planningSimOrReal sim = planningSimOrReal::planOnly;
+    planningSimOrReal sim = planningSimOrReal::real;
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file

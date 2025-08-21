@@ -101,6 +101,20 @@ namespace ReloPush
             return outState;
         }
 
+        State get_postPush(float distance)
+        {
+            ReloPush::State outState(x,y,yaw);
+
+            // Calculate the new x and y coordinates
+            outState.x += distance * cos(yaw);
+            outState.y += distance * sin(yaw);
+
+            // change angle range
+            outState.yaw = fromOMPL::mod2pi(yaw);
+
+            return outState;
+        }
+
         void print(bool add_line = true, bool negateYaw = false)
         {
             auto out_yaw = yaw;
