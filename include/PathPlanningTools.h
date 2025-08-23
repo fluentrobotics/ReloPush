@@ -117,14 +117,14 @@ namespace Constants {
     static const float obsRadius = obsHalfSide;
     static const float obsEncDiameter = obsHalfSide*2*sqrt(2);
     // distance from rear to vehicle front end
-    static const float LF_nonpush = 0.37;  //0.375
+    static const float LF_nonpush = 0.38;  //0.375
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
     static const float LB = 0.2; //0.12  // 0.2
 
     static const float prepush_th = LF_push*1.01;
 
-    static const float additional_push_dist = 0.075;
+    static const float additional_push_dist = 0.068;
 
     // R = 3, 6.75 DEG
     //extern double dx[];

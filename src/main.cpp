@@ -83,8 +83,10 @@ void save_actions_for_visualizer(const std::vector<FinalAllocation>& finalSequen
             }
         }
 
-        for (const auto& p : fa.paths)
+        //for (const auto& p : fa.paths)
+        for (size_t i=0; i<fa.paths.size(); i++)
         {
+            auto& p = fa.paths[i];
             // each edge
             // multiple if prerelocation
             for (size_t n=0; n<p.paths.size(); n++)
@@ -102,15 +104,16 @@ void save_actions_for_visualizer(const std::vector<FinalAllocation>& finalSequen
                     out << "  [" << mode_str <<"," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
                 }
 
-                // transit between edges (exists sometimes)
-                if(fa.edgeTransitPaths.size()>n && fa.edgeTransitPaths.size()>0)
-                {
-                    for (const auto& s : *(fa.edgeTransitPaths[n]))
-                    {
-                        out << "  [0," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
-                    }
 
+            }
+            // transit between edges (exists sometimes)
+            if(fa.edgeTransitPaths.size()>i && fa.edgeTransitPaths.size()>0)
+            {
+                for (const auto& s : *(fa.edgeTransitPaths[i]))
+                {
+                    out << "  [0," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
                 }
+
             }
         }
 
@@ -188,9 +191,9 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj11_v1.txt";
+    std::string filename = "iros_obj12_v1.txt";
 
-    int instance_ind = 35; // 63 //6
+    int instance_ind = 40; // 63 //6
     bool use_opt = true;
     bool vis = true;
     bool no_init_guess = false;
