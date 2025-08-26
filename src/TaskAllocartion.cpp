@@ -359,6 +359,13 @@ ReloPush::trajectory FinalAllocation::genTrajectory(double interpolation_resolut
     for(auto& op : *obsReloPaths)
     {
         auto obsPath = op.toStatePath();
+        // offset for real robot correction
+        auto landing = obsPath->back();
+        //for debug only
+        //std::cout << landing << std::endl;
+        auto landing_off = landing.get_postPush(Constants::obs_relo_offset);
+        obsPath->at(obsPath->size()-1) = landing_off;
+        //std::cout << obsPath->back() << std::endl;
         trajs.push_back(statePath2traj(obsPath,v_p,v_np,v_backward,op.is_pushing));
     }
 

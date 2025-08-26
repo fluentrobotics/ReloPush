@@ -101,6 +101,20 @@ namespace ReloPush
             return outState;
         }
 
+        State get_prePush(double pre_push_distance)
+        {
+            State outState = State(x,y,yaw);
+
+            // Calculate the new x and y coordinates
+            outState.x -= pre_push_distance * cos(outState.yaw);
+            outState.y -= pre_push_distance * sin(outState.yaw);
+
+            // change angle range
+            outState.yaw = fromOMPL::mod2pi(outState.yaw);
+
+            return outState;
+        }
+
         State get_postPush(float distance)
         {
             ReloPush::State outState(x,y,yaw);
