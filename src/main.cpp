@@ -191,8 +191,8 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
     //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "iros_obj13_v1.txt";
-    filename = "iros_obj4.txt"; // for graph visusalize figure
+    std::string filename = "iros_obj12_v1.txt";
+    //filename = "iros_obj4.txt"; // for graph visusalize figure
 
     int instance_ind = 63; // 63 //6 //40 //8
     bool use_opt = true;
@@ -424,6 +424,14 @@ int main(int argc, char *argv[])
     std::cout << "Planning time(s): " << (float)duration.count()/1000 << std::endl;
 
 
+    int n_obsRelo=0;
+    int n_preRelo=0;
+    for(auto& it : finalSequence)
+    {
+        n_obsRelo += it.countObsRelo();
+        n_preRelo += it.countPreRelo();
+    }
+
     // Compose output filename
     std::string result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_" + filename;
     if(!use_dfs) // not using dfs
@@ -449,6 +457,8 @@ int main(int argc, char *argv[])
     outfile << "planning_time(s):" << (float)duration.count()/1000 << "\n"; // left empty
     outfile << "total_length(m):" << std::fixed << std::setprecision(6) << total_path_length << "\n";
     outfile << "pushing_length(m):" << std::fixed << std::setprecision(6) << total_pushing_length << "\n";
+    outfile << "obs_relocations:" << std::fixed << n_obsRelo << "\n";
+    outfile << "pre_relocations:" << std::fixed << n_preRelo << "\n";
     outfile.close();
 
 

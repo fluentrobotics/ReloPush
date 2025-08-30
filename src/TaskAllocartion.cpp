@@ -154,6 +154,25 @@ std::pair<ReloPush::StatePathPtr,std::vector<size_t>> FinalAllocation::toSingleP
     return std::make_pair(std::make_shared<ReloPush::StatePath>(combined), path_sizes);
 }
 
+int FinalAllocation::countObsRelo()
+{
+    return obsReloUpdate.size();
+}
+
+int FinalAllocation::countPreRelo()
+{
+    int count = 0;
+    for(auto& it : paths)
+    {
+        if(it.mode==ConnectionMode::PRE_RELOCATION)
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
 
 
 // Normalize angle to [-pi, pi)
