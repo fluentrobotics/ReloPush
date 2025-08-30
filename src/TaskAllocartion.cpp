@@ -2011,10 +2011,12 @@ bool performAllocationsDFS(
 
     buildAllEdges(g, planCtx);
 
+    saveGraphState(g,std::string(CMAKE_SOURCE_DIR)+"/gvis4.txt");
+
     // ---- Compute all pairwise assignments/costs ----
     auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
 
-     planCtx.checkObsCount("0");
+    planCtx.checkObsCount("0");
 
     // ---- Iterate through sorted candidate pairs ----
     while (true) {

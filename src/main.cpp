@@ -192,8 +192,9 @@ int main(int argc, char *argv[])
 
     //std::string filename = "alpha_to_omega_simp.txt";
     std::string filename = "iros_obj13_v1.txt";
+    filename = "iros_obj4.txt"; // for graph visusalize figure
 
-    int instance_ind = 8; // 63 //6 //40
+    int instance_ind = 63; // 63 //6 //40 //8
     bool use_opt = true;
     bool vis = true;
     bool no_init_guess = false;
@@ -202,7 +203,7 @@ int main(int argc, char *argv[])
     bool use_dfs = true;
 
     //bool sim = true;
-    planningSimOrReal sim = planningSimOrReal::real;
+    planningSimOrReal sim = planningSimOrReal::planOnly;
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file

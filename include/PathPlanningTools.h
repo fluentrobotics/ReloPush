@@ -111,21 +111,21 @@ namespace Constants {
     //extern float yawResolution; // non-push as default
 
     // width of car
-    static const float carWidth = 0.36; // 0.285 //0.33 // 0.36 for larger margin
+    static const float carWidth = 0.285; // 0.285 //0.33 // 0.36 for larger margin
     // obstacle default radius
-    static const float obsHalfSide = 0.085; // 0.075
+    static const float obsHalfSide = 0.075; // 0.075
     static const float obsRadius = obsHalfSide;
     static const float obsEncDiameter = obsHalfSide*2*sqrt(2);
     // distance from rear to vehicle front end
     static const float LF_nonpush = 0.375;  //0.375
     static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
     // distance from rear to vehicle back end
-    static const float LB = 0.2; //0.12  // 0.2
+    static const float LB = 0.12; //0.12  // 0.2
 
     static const float prepush_th = LF_push*1.01;
 
-    static const float additional_push_dist = 0.025; //0.068
-    static const float obs_relo_offset = 0.03; //-0.24
+    static const float additional_push_dist = 0.025; //0.068 //0.025
+    static const float obs_relo_offset = 0.03; //-0.24 //0.03
 
     // R = 3, 6.75 DEG
     //extern double dx[];
