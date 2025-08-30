@@ -124,8 +124,8 @@ namespace Constants {
 
     static const float prepush_th = LF_push*1.01;
 
-    static const float additional_push_dist = 0.025; //0.068 //0.025
-    static const float obs_relo_offset = 0.03; //-0.24 //0.03
+    static const float additional_push_dist = 0; //0.068 //0.025
+    static const float obs_relo_offset = 0; //-0.24 //0.03
 
     // R = 3, 6.75 DEG
     //extern double dx[];
