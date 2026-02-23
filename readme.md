@@ -1,6 +1,6 @@
 # ReloPush-BOSS: Optimization-Guided Nonmonotone Rearrangement Planning for a Car-Like Robot Pusher
 
-![Demo_vid](doc/img/o13_gif_optimize.gif.gif)
+![Demo_vid](doc/img/o13_gif_optimized.gif)
 
 
 ## Overview
