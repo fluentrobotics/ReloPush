@@ -23,6 +23,15 @@ namespace po = boost::program_options;
 typedef ompl::base::SE2StateSpace::StateType OmplState;
 typedef ompl::base::DubinsStateSpace::DubinsPath dubinsPath;
 
+#if OMPL_VERSION_AT_LEAST(1, 7, 0)
+using DubinsTypePtr = const std::vector<ompl::base::DubinsStateSpace::DubinsPathSegmentType>*;
+#define DUBINS_DEFAULT_TYPE (&ompl::base::DubinsStateSpace::dubinsPathType[0])
+#else
+using DubinsTypePtr = const ompl::base::DubinsStateSpace::DubinsPathSegmentType*;
+#define DUBINS_DEFAULT_TYPE (ompl::base::DubinsStateSpace::dubinsPathType[0])
+#endif
+
+
 void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace::DubinsPath &path, double t,
                        OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius);
 
@@ -40,14 +49,14 @@ public:
         : startState(start), targetState(target), turning_rad(r) ,omplDubins(omplDubinsPath)
     {}
 
-    reloDubinsPath(const ompl::base::DubinsStateSpace::DubinsPathSegmentType *type = ompl::base::DubinsStateSpace::dubinsPathType[0],
+    reloDubinsPath(DubinsTypePtr type = DUBINS_DEFAULT_TYPE,
                    double t = 0., double p = std::numeric_limits<double>::max(), double q = 0., float r=1.0)
     {
         omplDubins = dubinsPath(type,t,p,q);
         turning_rad = r;
     }
 
-    reloDubinsPath(ReloPush::State& start, ReloPush::State& target, const ompl::base::DubinsStateSpace::DubinsPathSegmentType *type = ompl::base::DubinsStateSpace::dubinsPathType[0],
+    reloDubinsPath(ReloPush::State& start, ReloPush::State& target, DubinsTypePtr type = DUBINS_DEFAULT_TYPE,
                    double t = 0., double p = std::numeric_limits<double>::max(), double q = 0., float r=1.0): startState(start), targetState(target)
     {
         omplDubins = dubinsPath(type,t,p,q);
@@ -63,7 +72,7 @@ public:
         return static_cast<float>(omplDubins.length()) * turning_rad;
     }
 
-    float get_turning_radius()
+    float get_turning_radius() const
     {
         return turning_rad;
     }

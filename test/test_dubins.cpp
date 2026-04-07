@@ -48,8 +48,24 @@ struct State
     int time;
 };
 
-void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace::DubinsPath &path, double t,
-                       OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius)
+#include <ompl/config.h>
+
+// Define a helper macro if not already present (safe to add)
+#define OMPL_VERSION_AT_LEAST(major, minor, patch) \
+((OMPL_MAJOR_VERSION > (major)) || \
+ (OMPL_MAJOR_VERSION == (major) && OMPL_MINOR_VERSION > (minor)) || \
+ (OMPL_MAJOR_VERSION == (major) && OMPL_MINOR_VERSION == (minor) && OMPL_PATCH_VERSION >= (patch)))
+
+
+#if OMPL_VERSION_AT_LEAST(1, 7, 0)
+#define DUBINS_TYPE_ELEMENT(path, idx) ((*(path).type_)[(idx)])
+#else
+#define DUBINS_TYPE_ELEMENT(path, idx) ((path).type_[(idx)])
+#endif
+
+
+    void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace::DubinsPath &path, double t,
+                           OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius)
 {
     OmplState *s = space->allocState()->as<OmplState>();
     double seg = t * path.length(), phi, v;
@@ -63,7 +79,8 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
             v = std::min(seg, path.length_[i]);
             phi = s->getYaw();
             seg -= v;
-            switch (path.type_[i])
+            //switch (path.type_[i])
+            switch (DUBINS_TYPE_ELEMENT(path, i))
             {
             case ompl::base::DubinsStateSpace::DUBINS_LEFT:
                 s->setXY(s->getX() + sin(phi + v) - sin(phi), s->getY() - cos(phi + v) + cos(phi));
@@ -86,7 +103,8 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
             v = std::min(seg, path.length_[2 - i]);
             phi = s->getYaw();
             seg -= v;
-            switch (path.type_[2 - i])
+            //switch (path.type_[2 - i])
+            switch (DUBINS_TYPE_ELEMENT(path, 2 - i))
             {
             case ompl::base::DubinsStateSpace::DUBINS_LEFT:  // DUBINS_LEFT
                 s->setXY(s->getX() + sin(phi - v) - sin(phi), s->getY() - cos(phi - v) + cos(phi));
@@ -176,7 +194,8 @@ ompl::base::DubinsStateSpace::DubinsPath findDubins(State &start, State &goal, d
 
     for (auto pathidx = 0; pathidx < 3; pathidx++)
     {
-        switch (dubinsPath.type_[pathidx])
+        //switch (dubinsPath.type_[pathidx])
+        switch (DUBINS_TYPE_ELEMENT(dubinsPath, pathidx))
         {
         case 0:  // DUBINS_LEFT
             std::cout << "Left" << std::endl;

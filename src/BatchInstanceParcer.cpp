@@ -243,7 +243,7 @@ void handle_args(int argc, char **argv, std::string& data_file, int& data_ind, b
     std::string mode_str = argv[3];
     std::string mode_name = "";
 
-    if(mode_str=="f") // optimizized prerelocation
+    if(mode_str=="f") // optimizized prerelocation (BOSS)
     {
         use_opt = true;
         no_init_guess = false;
@@ -251,7 +251,7 @@ void handle_args(int argc, char **argv, std::string& data_file, int& data_ind, b
 
         mode_name = "ReloPush-F";
     }
-    else if(mode_str=="d") // no-opt prerelocation
+    else if(mode_str=="d") // no-opt prerelocation (B)
     {
         use_opt = false;
         no_init_guess = false; // dummy
@@ -259,7 +259,7 @@ void handle_args(int argc, char **argv, std::string& data_file, int& data_ind, b
 
         mode_name = "ReloPush-D";
     }
-    else if(mode_str=="u") // uninformed optimization
+    else if(mode_str=="u") // uninformed optimization (BO)
     {
         use_opt = true;
         no_init_guess = true;

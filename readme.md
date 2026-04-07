@@ -19,11 +19,26 @@ ReloPush-BOSS is multi-object rearrangement task planner incorporated with motio
 
 ### Output
 - A sequence of trajectories/actions to rearrange all movable objects to their designated positions.
+- Visualization of resulting relocation paths.
 
 ### Parameter files
 To separate parameters for motion planning and others, we use two different files to contain necessary parameters:
 - `include/PathPlanningTools.h`: Contains parameters for motion planning
 - `include/Parameters.cpp`: Contains other parameters
+
+## Running a planning instance
+After building the CMake project, run `ReloPush-BOSS` binary with the following arguments:
+
+```
+# arg1: instance file name in input folder
+# arg2: instance index in the file
+# arg3: mode (f: ReloPush-BOSS, u: ReloPush-BO, d: ReloPush-B, o: ReloPush)
+
+# example run (with ReloPush-BOSS, 10 objects, index 0)
+./ReloPush-BOSS ReloPush-BOSS_10_objects.txt 0 f
+```
+
+Alternatively, when the binary is started without an argument, it will use hard-coded planning context (shown on the top of the main function).
 
 
 ## Citing this work

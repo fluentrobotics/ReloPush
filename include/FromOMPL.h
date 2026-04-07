@@ -9,16 +9,24 @@
 
 #include <ompl/geometric/planners/rrt/RRT.h>
 
-namespace fromOMPL{
-extern double twopi;
-extern const double DUBINS_EPS;
-extern const double DUBINS_ZERO;
-double mod2pi(double x);
+#include <ompl/config.h>
 
-double longpath_thres_dist(double& alpha, double& beta);
-bool is_longpath_case(double d, double alpha, double beta);
-ompl::base::DubinsStateSpace::DubinsPath dubins_classification(const double d, const double alpha, const double beta);
-ompl::base::DubinsStateSpace::DubinsPath dubins_exhaustive(const double d, const double alpha, const double beta);
+// Define a helper macro if not already present (safe to add)
+#define OMPL_VERSION_AT_LEAST(major, minor, patch) \
+((OMPL_MAJOR_VERSION > (major)) || \
+ (OMPL_MAJOR_VERSION == (major) && OMPL_MINOR_VERSION > (minor)) || \
+ (OMPL_MAJOR_VERSION == (major) && OMPL_MINOR_VERSION == (minor) && OMPL_PATCH_VERSION >= (patch)))
+
+    namespace fromOMPL{
+    extern double twopi;
+    extern const double DUBINS_EPS;
+    extern const double DUBINS_ZERO;
+    double mod2pi(double x);
+
+    double longpath_thres_dist(double& alpha, double& beta);
+    bool is_longpath_case(double d, double alpha, double beta);
+    ompl::base::DubinsStateSpace::DubinsPath dubins_classification(const double d, const double alpha, const double beta);
+    ompl::base::DubinsStateSpace::DubinsPath dubins_exhaustive(const double d, const double alpha, const double beta);
 }
 
 #endif

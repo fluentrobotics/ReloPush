@@ -109,7 +109,7 @@ if(APPLE)
     link_directories(${ODE_DIR}/lib)
 endif()
 
-add_executable(ReloPush src/main.cpp
+add_executable(ReloPush-BOSS src/main.cpp
     src/GraphBuilder.cpp
     src/InputParser.cpp
     src/DubinsTools.cpp
@@ -134,9 +134,9 @@ add_executable(ReloPush src/main.cpp
     src/base64.cpp
 )
 if(APPLE)
-    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${ZMQ_LIB} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
+    target_link_libraries(ReloPush-BOSS ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${ZMQ_LIB} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
 else()
-    target_link_libraries(ReloPush ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${CERES_LIBRARIES} ${ZeroMQ_LIBRARIES} absl::log_initialize)
+    target_link_libraries(ReloPush-BOSS ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${CERES_LIBRARIES} ${ZeroMQ_LIBRARIES} absl::log_initialize)
 endif()
 
 # Dubins Path Planning
@@ -212,7 +212,7 @@ endif()
 
 
 include(GNUInstallDirs)
-install(TARGETS ReloPush
+install(TARGETS ReloPush-BOSS
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

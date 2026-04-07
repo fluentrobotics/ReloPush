@@ -69,72 +69,72 @@ using namespace libMultiRobotPlanning;
 // };
 
 namespace Constants {
-    static float steer_limit_push = 0.2; // 0.185
-    static float steer_limit_nonpush = 0.28; // 0.28
-    static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
-    static float L = 0.29f;
-    // [m] --- The minimum turning radius of the vehicle
-    static float r_push = L / tanf(fabs(steer_limit_push));
-    // static float r_push = 1.75; // for figure plot
-    //static float r_push = 1.41f;
-    static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
-    //extern float r; // non-push as default
-    //static float r = 0.5;
-    //static const float r = 3;
-    //static const float deltat = 6.75 / 180.0 * M_PI;
-    static float deltat_push = speed_limit / r_push / 1.5;
-    static float deltat_nonpush = speed_limit / r_nonpush / 1.5;
-    //extern float deltat; // non-push as default
-    // [#] --- A movement cost penalty for turning (choosing non straight motion
-    // primitives)
-    static const float penaltyTurning = 4;//50;
-    // [#] --- A movement cost penalty for reversing (choosing motion primitives >
-    // 2)
-    static const float penaltyReversing = 2.0;//1.5; //8
-    // [#] --- A movement cost penalty for change of direction (changing from
-    // primitives < 3 to primitives > 2)
-    static const float penaltyCOD = 3.0;
+static float steer_limit_push = 0.2; // 0.185
+static float steer_limit_nonpush = 0.28; // 0.28
+static float speed_limit = 0.36f; //0.4 // slightly slower than driving speed
+static float L = 0.29f;
+// [m] --- The minimum turning radius of the vehicle
+static float r_push = L / tanf(fabs(steer_limit_push));
+// static float r_push = 1.75; // for figure plot
+//static float r_push = 1.41f;
+static float r_nonpush = L / tanf(fabs(steer_limit_nonpush));
+//extern float r; // non-push as default
+//static float r = 0.5;
+//static const float r = 3;
+//static const float deltat = 6.75 / 180.0 * M_PI;
+static float deltat_push = speed_limit / r_push / 1.5;
+static float deltat_nonpush = speed_limit / r_nonpush / 1.5;
+//extern float deltat; // non-push as default
+// [#] --- A movement cost penalty for turning (choosing non straight motion
+// primitives)
+static const float penaltyTurning = 4;//50;
+// [#] --- A movement cost penalty for reversing (choosing motion primitives >
+// 2)
+static const float penaltyReversing = 2.0;//1.5; //8
+// [#] --- A movement cost penalty for change of direction (changing from
+// primitives < 3 to primitives > 2)
+static const float penaltyCOD = 3.0;
 
-    //extern bool allow_reverse; // only when not pushing
+//extern bool allow_reverse; // only when not pushing
 
-    static float heuristicWeight = 1.0f;
+static float heuristicWeight = 1.0f;
 
-    // map resolution
-    static const float mapResolution = 0.1; //0.1
+// map resolution
+static const float mapResolution = 0.1; //0.1
 
-    static const float xyResolution_push = r_push * deltat_push;
-    static const float xyResolution_nonpush = r_nonpush * deltat_nonpush;
-    //extern float xyResolution; // non-push as default
+static const float xyResolution_push = r_push * deltat_push;
+static const float xyResolution_nonpush = r_nonpush * deltat_nonpush;
+//extern float xyResolution; // non-push as default
 
-    static const float yawResolution_push = deltat_push;
-    static const float yawResolution_nonpush = deltat_nonpush;
-    //extern float yawResolution; // non-push as default
+static const float yawResolution_push = deltat_push;
+static const float yawResolution_nonpush = deltat_nonpush;
+//extern float yawResolution; // non-push as default
 
-    // width of car
-    static const float carWidth = 0.33; // 0.285 //0.33 // 0.36 for larger margin
-    // obstacle default radius
-    static const float obsHalfSide = 0.075; // 0.075
-    static const float obsRadius = obsHalfSide;
-    static const float obsEncDiameter = obsHalfSide*2*sqrt(2);
-    // distance from rear to vehicle front end
-    static const float LF_nonpush = 0.375;  //0.375
-    static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
-    // distance from rear to vehicle back end
-    static const float LB = 0.15; //0.12  // 0.2
+// width of car
+static const float carWidth = 0.285; // 0.285 //0.33 // 0.36 for larger margin
+// obstacle default radius
+static const float obsHalfSide = 0.075; // 0.075
+static const float obsRadius = obsHalfSide;
+static const float obsEncDiameter = obsHalfSide*2*sqrt(2);
+// distance from rear to vehicle front end
+static const float LF_nonpush = 0.375;  //0.375
+static const float LF_push = (LF_nonpush + obsRadius); //LF_nonpush + obsRadius; // 0.65
+// distance from rear to vehicle back end
+static const float LB = 0.12; //0.12  // 0.2
 
-    static const float prepush_th = LF_push*1.01;
+static const float prepush_th = LF_push*1.01;
 
-    static const float additional_push_dist = 0.068; //0.068 //0.025
-    static const float obs_relo_offset = 0; //-0.24 //0.03
+static const float additional_push_dist = 0; //0.068 //0.025
+static const float obs_relo_offset = 0; //-0.24 //0.03
 
-    // R = 3, 6.75 DEG
-    //extern double dx[];
-    //extern double dy[];
-    //extern double dyaw[];
+// R = 3, 6.75 DEG
+//extern double dx[];
+//extern double dy[];
+//extern double dyaw[];
 
-    float normalizeHeadingRad(float t);
+float normalizeHeadingRad(float t);
 
-    /*
+/*
       void update_dx();
       void update_dy();
       void update_dyaw();
@@ -443,7 +443,7 @@ public:
     bool isSolution(
         const ReloPush::State &state, double gscore,
         std::unordered_map<ReloPush::State, std::tuple<ReloPush::State, Action, double, double>,
-                                                                        std::hash<ReloPush::State>> &_camefrom) {
+                           std::hash<ReloPush::State>> &_camefrom) {
 
         bool isSol = planCont.allow_reverse ? isSolutionWithReverse(state, gscore, _camefrom) : isSolutionWithoutReverse(state, gscore, _camefrom);
 
@@ -569,7 +569,7 @@ public:
 
 
         // for debug only
-/*
+        /*
         std::cout << "Original m_goal: " << m_goal << std::endl;
         std::cout << "Updated m_goal: " << path.back() << std::endl;
         std::cout << "getGoal(): " << getGoal() << std::endl;
@@ -591,6 +591,13 @@ public:
         return true;
     }
 
+    #if OMPL_VERSION_AT_LEAST(1, 7, 0)
+    #define DUBINS_TYPE_ELEMENT(path, idx) ((*(path).type_)[(idx)])
+    #else
+    #define DUBINS_TYPE_ELEMENT(path, idx) ((path).type_[(idx)])
+    #endif
+
+
     ompl::base::DubinsStateSpace::DubinsPath findDubins(ReloPush::State& start, ReloPush::State& goal)
     {
         //ompl::base::DubinsStateSpace dubinsSpace(Constants::r);
@@ -605,7 +612,7 @@ public:
             dubinsSpace.dubins(dubinsStart, dubinsEnd);
 
         for (auto pathidx = 0; pathidx < 3; pathidx++) {
-            switch (dubinsPath.type_[pathidx]) {
+            switch (DUBINS_TYPE_ELEMENT(dubinsPath, pathidx)) {
             case 0:  // DUBINS_LEFT
                 std::cout << "Left" << std::endl;
                 break;
@@ -656,7 +663,7 @@ public:
         for (auto pathidx = 0; pathidx < 3; pathidx++) {
             if (fabs(dubinsPath.length_[pathidx]) < 1e-6) continue;
             double deltat = 0, dx = 0, act = 0, cost = 0;
-            switch (dubinsPath.type_[pathidx]) {
+            switch (DUBINS_TYPE_ELEMENT(dubinsPath, pathidx)) {
             case 0:  // DUBINS_LEFT
                 deltat = -dubinsPath.length_[pathidx];
                 //dx = Constants::r * sin(-deltat);
@@ -861,7 +868,7 @@ public:
                 m_obstacles.erase(pair.first); // Remove the element and get the iterator to the next element
             }
             //else {
-                //++it; // Move to the next element
+            //++it; // Move to the next element
             //}
         }
         return took_out;
@@ -915,7 +922,7 @@ public:
         auto itup = dynamic_obs.upper_bound(-1);
         for (auto it = itlow; it != itup; ++it)
             if (s.agentCollision(it->second.getNominalPose(),LF,car_width)) return StateValiditySet(false, StateValidity::collision);
-            //if (s.agentCollision(it->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
+        //if (s.agentCollision(it->second,planCont.LF,Constants::carWidth)) return StateValiditySet(false, StateValidity::collision);;
 
         // boundary
         double x_ind = s.x / Constants::mapResolution;
@@ -925,7 +932,7 @@ public:
 
         Eigen::Matrix2f rot;
         rot << cos(s.yaw), sin(s.yaw),
-                -sin(s.yaw), cos(s.yaw); // R_W^R
+            -sin(s.yaw), cos(s.yaw); // R_W^R
         //for (auto it = m_obstacles.begin(); it != m_obstacles.end(); it++) {
         for(auto& oPair : m_obstacles) {
             auto oInfo = oPair.second;
@@ -936,7 +943,7 @@ public:
 
             Eigen::Matrix2f rot;  // world->robot rotation
             rot <<  cos(-s.yaw), -sin(-s.yaw),
-                    sin(-s.yaw),  cos(-s.yaw);
+                sin(-s.yaw),  cos(-s.yaw);
 
             // 1) Check if any obstacle corner lies inside the robot footprint.
             float halfSide = obs_rad;
@@ -1026,7 +1033,7 @@ public:
             // which is just R_world = transpose of `rot` for a pure rotation, plus the robot’s position.
             Eigen::Matrix2f R_robotToWorld;
             R_robotToWorld << cos(s.yaw), -sin(s.yaw),
-                              sin(s.yaw),  cos(s.yaw);
+                sin(s.yaw),  cos(s.yaw);
 
             Eigen::Vector2f robotPosWorld(s.x, s.y);
 
@@ -1065,7 +1072,7 @@ public:
 
 
 
-/*
+            /*
             float dx = 0.0f;
             if (rotated_obs(0) < -LB)
                 dx = -LB - rotated_obs(0);
@@ -1117,7 +1124,7 @@ public:
     }
 
     StateValiditySet stateValid2(const ReloPush::State& s, float car_width = Constants::carWidth, float obs_rad = Constants::obsRadius,
-                                float LF = Constants::LF_nonpush, float LB = Constants::LB) {
+                                 float LF = Constants::LF_nonpush, float LB = Constants::LB) {
 
 
         float half_width = car_width / 2.0;
@@ -1318,8 +1325,8 @@ private:
 
 
     std::vector<std::pair<ReloPush::State, double>> generatePath(ReloPush::State startState, int act,
-                                                       double deltaSteer,
-                                                       double deltaLength) {
+                                                                 double deltaSteer,
+                                                                 double deltaLength) {
         std::vector<std::pair<ReloPush::State, double>> result;
         double xSucc, ySucc, yawSucc, dx, dy, dyaw, ratio;
         result.emplace_back(std::make_pair<>(startState, 0));

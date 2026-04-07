@@ -119,58 +119,6 @@ void save_actions_for_visualizer(const std::vector<FinalAllocation>& finalSequen
 
     }
 
-
-
-
-    /*
-
-    for (const auto& fa : finalSequence) {
-        int obj_idx = obj_idx_map[fa.object.name];
-        int goal_idx = goal_idx_map[fa.goal.name];
-
-        // 1. firstApproachPath (action type 0)
-        if (fa.firstApproachPath) {
-            for (const auto& s : *(fa.firstApproachPath)) {
-                out << "  [0," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
-            }
-        }
-
-        // 2. obsReloPaths (action type 1)
-        if (fa.obsReloPaths) {
-            for (const auto& edgePath : *(fa.obsReloPaths)) {
-                if (std::holds_alternative<ReloPush::StatePathPtr>(edgePath.path)) {
-                    auto ptr = std::get<ReloPush::StatePathPtr>(edgePath.path);
-                    for (const auto& s : *ptr) {
-                        out << "  [1," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
-                    }
-                }
-            }
-        }
-
-        // 3. paths (action type 1)
-        for (const auto& edgeData : fa.paths) {
-            for (const auto& pathVariant : edgeData.paths) {
-                if (std::holds_alternative<ReloPush::StatePathPtr>(pathVariant->path)) {
-                    auto ptr = std::get<ReloPush::StatePathPtr>(pathVariant->path);
-                    for (const auto& s : *ptr) {
-                        out << "  [1," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
-                    }
-                }
-            }
-        }
-
-        // 4. transitPaths (action type 0)
-        for (const auto& transitPtr : fa.transitPaths) {
-            if (transitPtr) {
-                for (const auto& s : *transitPtr) {
-                    out << "  [0," << obj_idx << "," << goal_idx << "," << s.x << "," << s.y << "," << s.yaw << "],\n";
-                }
-            }
-        }
-    }
-
-    */
-
     out << "]\n";
     out.close();
 }
@@ -190,20 +138,17 @@ int main(int argc, char *argv[])
     #endif
     QApplication app(argc, argv);
 
-    //std::string filename = "alpha_to_omega_simp.txt";
-    std::string filename = "single_demo.txt";
-    //filename = "iros_obj4.txt"; // for graph visusalize figure
+    std::string filename = "ReloPush-BOSS_10_objects.txt";
 
     int instance_ind = 0; // 63 //6 //40 //8
     bool use_opt = true;
     bool vis = true;
     bool no_init_guess = false;
 
-
     bool use_dfs = true;
 
     //bool sim = true;
-    planningSimOrReal sim = planningSimOrReal::real;
+    planningSimOrReal sim = planningSimOrReal::planOnly;
 
     // Data to parse
     WorkspaceBoundary boundary(4,5.2); // todo: parse from file
@@ -309,14 +254,6 @@ int main(int argc, char *argv[])
     }
 
 
-    /*
-    // 1) Parse and initialize
-    if (!parseAndInitialize(filename, boundary, objects, goals, objGoalPairs))
-    {
-        return 1;
-    }
-    */
-
     auto start = std::chrono::high_resolution_clock::now();
 
     // 2) Perform the main planning/allocation loop
@@ -362,12 +299,6 @@ int main(int argc, char *argv[])
            visualizeResults(finalSequence, app);
         }
 
-        //writeFinalSequenceSummary(filename, instance_ind,
-        //                          static_cast<double>(duration.count()), finalSequence, use_opt);
-
-
-        // 3.5) Print total path length and total pushing length for the entire solution
-
 
         // Use the combined path for each allocation to get the length.
         for (auto& fa : finalSequence) {
@@ -375,23 +306,7 @@ int main(int argc, char *argv[])
             ReloPush::StatePathPtr singlePathPtr;
             std::vector<size_t> si;
 
-            /*
-            if(fa.firstApproachPath && !fa.firstApproachPath->empty())
-            {
-                for(size_t i=1; i<fa.firstApproachPath->size(); ++i)
-                {
-                    const auto& prev = fa.firstApproachPath->at(i - 1);
-                    const auto& curr = fa.firstApproachPath->at(i);
-                    double dx = curr.x - prev.x;
-                    double dy = curr.y - prev.y;
-                    total_path_length += std::sqrt(dx * dx + dy * dy);
-                }
-            }*/
-
-
             std::tie(singlePathPtr, si) = fa.toSinglePathPtr(0.1); // Or use your default resolution
-
-
 
             if (singlePathPtr && !singlePathPtr->empty()) {
                 // Sum up Euclidean distances
@@ -478,12 +393,8 @@ int main(int argc, char *argv[])
 
     //finalTrajectory.print();
 
+    // save_actions_for_visualizer(finalSequence,std::string(CMAKE_SOURCE_DIR) + "/result_actions_" + filename);
 
-
-    save_actions_for_visualizer(finalSequence,std::string(CMAKE_SOURCE_DIR) + "/result_opt_actions_" + filename);
-
-
-    /*
     //QApplication app(argc, argv);
     QMainWindow window;
     window.setWindowTitle("Trajectory Visualization (Arrow Format)");
@@ -491,18 +402,11 @@ int main(int argc, char *argv[])
 
     TrajectoryView* view = new TrajectoryView();
     window.setCentralWidget(view);
-
-    // Create a trajectory object and fill it with sample data.
-    // Here we use similar data as before, with time stamps (in ms).
-
     view->setTrajectory(finalTrajectory);
-
-    //window.show();
-
+    window.show();
 
     // Allow time for the previous request to end
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    */
 
     // send trajectory
     if(sim!=planningSimOrReal::planOnly)
@@ -515,7 +419,6 @@ int main(int argc, char *argv[])
         //std::cout << res << std::endl; // response from server
     }
 
-
-    //return app.exec();
+    return app.exec();
     return 0;
 }

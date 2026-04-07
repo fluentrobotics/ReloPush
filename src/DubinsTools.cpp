@@ -21,6 +21,11 @@ double sumUpToIndex(const double* arr, size_t length, unsigned int i) {
     return sum;
 }
 
+#if OMPL_VERSION_AT_LEAST(1, 7, 0)
+#define DUBINS_TYPE_ELEMENT(path, idx) ((*(path).type_)[(idx)])
+#else
+#define DUBINS_TYPE_ELEMENT(path, idx) ((path).type_[(idx)])
+#endif
 
 void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace::DubinsPath &path, double t,
                        OmplState *state, ompl::base::DubinsStateSpace* space, double turning_radius)
@@ -39,7 +44,8 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
             //v = std::min(seg, sumUpToIndex(path.length_,3,i)*turning_radius);
             phi = s->getYaw();
             seg -= v;
-            switch (path.type_[i])
+            //switch (path.type_[i])
+            switch (DUBINS_TYPE_ELEMENT(path, i))
             {
             case ompl::base::DubinsStateSpace::DUBINS_LEFT:
                 s->setXY(s->getX() + sin(phi + v) - sin(phi), s->getY() - cos(phi + v) + cos(phi));
@@ -62,7 +68,8 @@ void jeeho_interpolate(const OmplState *from, const ompl::base::DubinsStateSpace
             v = std::min(seg, path.length_[2 - i]);
             phi = s->getYaw();
             seg -= v;
-            switch (path.type_[2 - i])
+            //switch (path.type_[2 - i])
+            switch (DUBINS_TYPE_ELEMENT(path, 2 - i))
             {
             case ompl::base::DubinsStateSpace::DUBINS_LEFT:  // DUBINS_LEFT
                 s->setXY(s->getX() + sin(phi - v) - sin(phi), s->getY() - cos(phi - v) + cos(phi));
@@ -124,8 +131,8 @@ ReloPush::StatePathPtr interpolateDubins(reloDubinsPath& dubins_in, PlanningCont
         waypoints.resize(1);
         waypoints[0] = dubins_in.targetState;
     } // path is too short there is nothing to interpolate
-    
-    
+
+
     return std::make_shared<ReloPush::StatePath>(waypoints);
 }
 
@@ -219,7 +226,7 @@ reloDubinsPath findDubins(ReloPush::State start, ReloPush::State goal, double tu
     {
         for (auto pathidx = 0; pathidx < 3; pathidx++)
         {
-            switch (dubinsPath.omplDubins.type_[pathidx])
+            switch (DUBINS_TYPE_ELEMENT(dubinsPath.omplDubins, pathidx))
             {
             case 0:  // DUBINS_LEFT
                 std::cout << "Left" << std::endl;
