@@ -15,7 +15,7 @@ elseif(APPLE)
     list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew")
 endif()
 
-configure_file (${CMAKE_CURRENT_SOURCE_DIR}/include/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/config.h @ONLY)
+configure_file (${CMAKE_CURRENT_SOURCE_DIR}/include/ReloPush/config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/include/ReloPush/config.h @ONLY)
 
 
 find_package(Boost REQUIRED)
@@ -98,7 +98,7 @@ else()
     endif()
 endif()
 
-include_directories(include ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS} ${ZeroMQ_INCLUDE_DIRS})
+include_directories(include include/ReloPush ${Boost_INCLUDE_DIRS} ${OMPL_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS} ${ZeroMQ_INCLUDE_DIRS})
 message(STATUS ${ZeroMQ_INCLUDE_DIRS})
 
 ## ODE ##
@@ -110,28 +110,28 @@ if(APPLE)
 endif()
 
 add_executable(ReloPush-BOSS src/main.cpp
-    src/GraphBuilder.cpp
-    src/InputParser.cpp
-    src/DubinsTools.cpp
-    src/FromOMPL.cpp
-    src/TfTools.cpp
-    src/params.cpp
-    src/PathPlanningTools.cpp
-    include/TaskAllocation.hpp
-    src/TaskAllocartion.cpp
-    src/PlanningContext.cpp
-    src/PreReloOptimization.cpp
-    src/PlanHybridAstar.cpp
-    src/Visualization/VisualizationWidget.cpp
-    src/Visualization/QtPathWindow.cpp
-    src/Visualization/QtPathManager.cpp
-    src/Visualization/QtMainControlWindow.cpp
-    src/PrintInColor.cpp
-    src/BatchInstanceParcer.cpp
-    src/Visualization/TrajectoryView.cpp
-    include/Visualization/TrajectoryView.h
-    src/BinaryString.cpp
-    src/base64.cpp
+    src/ReloPush/GraphBuilder.cpp
+    src/ReloPush/InputParser.cpp
+    src/ReloPush/DubinsTools.cpp
+    src/ReloPush/FromOMPL.cpp
+    src/ReloPush/TfTools.cpp
+    src/ReloPush/params.cpp
+    src/ReloPush/PathPlanningTools.cpp
+    include/ReloPush/TaskAllocation.hpp
+    src/ReloPush/TaskAllocartion.cpp
+    src/ReloPush/PlanningContext.cpp
+    src/ReloPush/PreReloOptimization.cpp
+    src/ReloPush/PlanHybridAstar.cpp
+    src/ReloPush/Visualization/VisualizationWidget.cpp
+    src/ReloPush/Visualization/QtPathWindow.cpp
+    src/ReloPush/Visualization/QtPathManager.cpp
+    src/ReloPush/Visualization/QtMainControlWindow.cpp
+    src/ReloPush/PrintInColor.cpp
+    src/ReloPush/BatchInstanceParcer.cpp
+    src/ReloPush/Visualization/TrajectoryView.cpp
+    include/ReloPush/Visualization/TrajectoryView.h
+    src/ReloPush/BinaryString.cpp
+    src/ReloPush/base64.cpp
 )
 if(APPLE)
     target_link_libraries(ReloPush-BOSS ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${ZMQ_LIB} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
@@ -149,11 +149,11 @@ endif()
 
 # Hybrid Astar Planning
 add_executable(test_hybrid_astar test/test_hybrid_astar.cpp
-    src/PathPlanningTools.cpp
-    src/FromOMPL.cpp
-    src/Visualization/VisualizationWidget.cpp
-    src/PlanHybridAstar.cpp
-    src/PlanningContext.cpp)
+    src/ReloPush/PathPlanningTools.cpp
+    src/ReloPush/FromOMPL.cpp
+    src/ReloPush/Visualization/VisualizationWidget.cpp
+    src/ReloPush/PlanHybridAstar.cpp
+    src/ReloPush/PlanningContext.cpp)
 if(APPLE)
     target_link_libraries(test_hybrid_astar ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${ODE_DIR}/lib/libode.dylib ${QT_WIDGET_TARGET})
 else()
@@ -161,7 +161,7 @@ else()
 endif()
 
 # Pre-relocation Optimization
-add_executable(test_prerelo_opt test/test_prerelo_optimization.cpp src/PreReloOptimization.cpp src/FromOMPL.cpp)
+add_executable(test_prerelo_opt test/test_prerelo_optimization.cpp src/ReloPush/PreReloOptimization.cpp src/ReloPush/FromOMPL.cpp)
 if(APPLE)
     target_link_libraries(test_prerelo_opt Ceres::ceres ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib)
 else()
@@ -170,24 +170,24 @@ endif()
 
 add_executable(test_parse_instance
     test/test_parse_instance.cpp
-    src/GraphBuilder.cpp
-    src/InputParser.cpp
-    src/DubinsTools.cpp
-    src/FromOMPL.cpp
-    src/TfTools.cpp
-    src/params.cpp
-    src/PathPlanningTools.cpp
-    include/TaskAllocation.hpp
-    src/TaskAllocartion.cpp
-    src/PlanningContext.cpp
-    src/PreReloOptimization.cpp
-    src/PlanHybridAstar.cpp
-    src/Visualization/VisualizationWidget.cpp
-    src/Visualization/QtPathWindow.cpp
-    src/Visualization/QtPathManager.cpp
-    src/Visualization/QtMainControlWindow.cpp
-    src/PrintInColor.cpp
-    src/BatchInstanceParcer.cpp)
+    src/ReloPush/GraphBuilder.cpp
+    src/ReloPush/InputParser.cpp
+    src/ReloPush/DubinsTools.cpp
+    src/ReloPush/FromOMPL.cpp
+    src/ReloPush/TfTools.cpp
+    src/ReloPush/params.cpp
+    src/ReloPush/PathPlanningTools.cpp
+    include/ReloPush/TaskAllocation.hpp
+    src/ReloPush/TaskAllocartion.cpp
+    src/ReloPush/PlanningContext.cpp
+    src/ReloPush/PreReloOptimization.cpp
+    src/ReloPush/PlanHybridAstar.cpp
+    src/ReloPush/Visualization/VisualizationWidget.cpp
+    src/ReloPush/Visualization/QtPathWindow.cpp
+    src/ReloPush/Visualization/QtPathManager.cpp
+    src/ReloPush/Visualization/QtMainControlWindow.cpp
+    src/ReloPush/PrintInColor.cpp
+    src/ReloPush/BatchInstanceParcer.cpp)
 
 if(APPLE)
     target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${ODE_DIR}/lib/libode.dylib ${QT_WIDGET_TARGET} Ceres::ceres)
@@ -203,12 +203,17 @@ target_link_libraries(test_trajectory_vis ${Boost_LIBRARIES} ${Eigen_LIBRARIES} 
 
 
 # test ZeroMQ
-add_executable(test_zeromq test/test_zeromq.cpp src/BinaryString.cpp src/base64.cpp)
+add_executable(test_zeromq test/test_zeromq.cpp src/ReloPush/BinaryString.cpp src/ReloPush/base64.cpp)
 if(APPLE)
     target_link_libraries(test_zeromq ${ZMQ_LIB})
 else()
     target_link_libraries(test_zeromq ${ZeroMQ_LIBRARIES})
 endif()
+
+# test loading finalSequence from file
+add_executable(test_load_finalSequence test/test_load_finalSequence.cpp src/ReloPush/BinaryString.cpp src/ReloPush/base64.cpp src/ReloPush/PathPlanningTools.cpp)
+target_link_libraries(test_load_finalSequence ${Boost_LIBRARIES} ${OMPL_LIBRARIES})
+
 
 
 include(GNUInstallDirs)
@@ -237,6 +242,10 @@ install(TARGETS test_trajectory_gen
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(TARGETS test_zeromq
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS test_load_finalSequence
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

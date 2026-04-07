@@ -1,6 +1,6 @@
 #include <iostream>
 #include <cmath>
-//#include <GraphBuilder.hpp>
+//#include <ReloPush/GraphBuilder.hpp>
 #include "ceres/ceres.h"
 #ifdef __APPLE__
 // Include the glog header when compiling on MacOS.
@@ -19,8 +19,8 @@
 
 #include <ompl/geometric/planners/rrt/RRT.h>
 
-#include <FromOMPL_Ceres.hpp>
-#include <PreReloOptimization.hpp>
+#include <ReloPush/FromOMPL_Ceres.hpp>
+#include <ReloPush/PreReloOptimization.hpp>
 
 #include <chrono>
 

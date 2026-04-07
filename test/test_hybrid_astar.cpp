@@ -1,10 +1,10 @@
-#include <hybrid_astar.hpp>
-#include <PlanHybridAstar.hpp>
+#include <ReloPush/hybrid_astar.hpp>
+#include <ReloPush/PlanHybridAstar.hpp>
 //#include "temp_hastr.hpp"
 
 #include <QApplication>
 #include <QMainWindow>
-#include <Visualization/VisualizationWidget.h>
+#include <ReloPush/Visualization/VisualizationWidget.h>
 
 
 

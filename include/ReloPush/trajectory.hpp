@@ -1,11 +1,13 @@
+#ifndef TRAJECTORY_HPP
+#define TRAJECTORY_HPP
 
 #include <zmq.hpp>
 #include <iostream>
 #include <string>
 #include <memory>
-#include <thread>
 
 #include <ReloPush/BinaryString.h>
+#include <ReloPush/batchInstanceParcer.hpp>
 
 class zeromp_object{
 public:
@@ -23,27 +25,29 @@ public:
         socket.connect(ip_str);
     }
 
-    int send(std::string msg_str)
+    int send(std::string msg_str, bool print = false)
     {
         // Create a ZeroMQ message and copy the string data into it.
         zmq::message_t request(msg_str.size());
         memcpy(request.data(), msg_str.c_str(), msg_str.size());
 
-        std::cout << "Sending message: " << msg_str << std::endl;
+        if(print)
+            std::cout << "Sending message: " << msg_str << std::endl;
 
         // Send the message.
         socket.send(request, zmq::send_flags::none);
         // todo: handle exceptions
         return 0;
     }
-    std::string wait_for_response()
+    std::string wait_for_response(bool print = false)
     {
         // Wait for the reply from the server.
         zmq::message_t reply;
         socket.recv(reply, zmq::recv_flags::none);
         // Convert the reply to a std::string.
         std::string reply_str(static_cast<char*>(reply.data()), reply.size());
-        std::cout << "Received reply: " << reply_str << std::endl;
+        if(print)
+            std::cout << "Received reply: " << reply_str << std::endl;
 
         return reply_str;
     }
@@ -58,6 +62,7 @@ public:
 
 namespace ReloPush {
 
+/*
     ////////////////// String <-> Binary ////////////////
     std::string float2binarystr(float f_in)
     {
@@ -93,24 +98,7 @@ namespace ReloPush {
             //??????
         }
     }
-
-    /// Split a string by a delimiter
-    std::vector<std::string> split2(std::string s, std::string delimiter)
-    {
-        size_t pos_start = 0, pos_end, delim_len = delimiter.length();
-        std::string token;
-        std::vector<std::string> res;
-
-        while ((pos_end = s.find(delimiter, pos_start)) != std::string::npos)
-        {
-          token = s.substr(pos_start, pos_end - pos_start);
-          pos_start = pos_end + delim_len;
-          res.push_back(token);
-        }
-
-        res.push_back(s.substr(pos_start));
-        return res;
-    }
+    */
 
     class trajectory_elem
     {
@@ -119,23 +107,71 @@ namespace ReloPush {
         float y;
         float yaw;
         float ref_vel; //reference velocity
-        float time_ms;
+        float time;
         bool is_pushing;
 
         trajectory_elem()
-           {
-               x=0;
-               y=0;
-               yaw=0;
-               ref_vel=0;
-               time_ms=-1;
-               is_pushing = false;
-           }
+        {
+           x=0;
+           y=0;
+           yaw=0;
+           ref_vel=0;
+           time=-1;
+           is_pushing = false;
+        }
+        trajectory_elem(std::string& serialized_waypoint)
+        {
+            deserialize(serialized_waypoint);
+        }
 
 
-        trajectory_elem(float x_in, float y_in, float yaw_in, float ref_vel_in, float time_ms_in, bool is_pushing_in)
-            : x(x_in), y(y_in), yaw(yaw_in), ref_vel(ref_vel_in), time_ms(time_ms_in), is_pushing(is_pushing_in)
+        trajectory_elem(float x_in, float y_in, float yaw_in, float ref_vel_in, float time_in, bool is_pushing_in)
+            : x(x_in), y(y_in), yaw(yaw_in), ref_vel(ref_vel_in), time(time_in), is_pushing(is_pushing_in)
         {}
+
+        std::string serialize()
+        {
+            std::string var_delim = ",,,";
+            std::string temp_str=""; // string for one waypoint
+            temp_str += float2binarystr(x);
+            temp_str += var_delim;
+            temp_str += float2binarystr(y);
+            temp_str += var_delim;
+            temp_str += float2binarystr(yaw);
+            temp_str += var_delim;
+            temp_str += float2binarystr(ref_vel);
+            temp_str += var_delim;
+            temp_str += float2binarystr(time);
+            temp_str += var_delim;
+            temp_str += bool2binarystr(is_pushing);
+
+            return temp_str;
+        }
+
+        void deserialize(std::string& str_pose)
+        {
+            std::string header_delim = "!!!";
+            std::string elem_delim = ";$;";
+            std::string var_delim = ",,,";
+
+            // split variables
+            auto var_sp = split(str_pose,var_delim); // x y yaw vel time
+            if(var_sp.size()==6)
+            {
+                float x_in = binarystr2float(var_sp[0]);
+                float y_in = binarystr2float(var_sp[1]);
+                float yaw_in = binarystr2float(var_sp[2]);
+                float vel_in = binarystr2float(var_sp[3]);
+                float time_in = binarystr2float(var_sp[4]);
+                bool is_pushing_in = binarystr2bool(var_sp[5]);
+
+                x=x_in; y=y_in; yaw=yaw_in; ref_vel=vel_in; time=time_in; is_pushing=is_pushing_in;
+            }
+            else
+            {
+                std::cout << "Cannot deserialize" << std::endl;
+            }
+        }
 
         // Print function for trajectory_elem
         void print() const {
@@ -143,7 +179,7 @@ namespace ReloPush {
                       << ", y=" << y
                       << ", yaw=" << yaw
                       << ", ref_vel=" << ref_vel
-                      << ", time_ms=" << time_ms << ")";
+                      << ", time=" << time << ")";
         }
 
     };
@@ -152,9 +188,9 @@ namespace ReloPush {
     {
     public:
         float time_zero=0;
-        std::string header_delim = "!";
-        std::string elem_delim = ";";
-        std::string var_delim = ",";
+        std::string header_delim = "!!!";
+        std::string elem_delim = ";$;";
+        std::string var_delim = ",,,";
         std::string header = "t"; // header for trajectory
 
         std::shared_ptr<std::vector<trajectory_elem>> trajectory_points;
@@ -178,6 +214,25 @@ namespace ReloPush {
             trajectory_points->push_back(wpt);
         }
 
+        void augment_trajectory(trajectory traj_in)
+        {
+            if(trajectory_points->size()>0)
+            {
+                // todo: apply new velocity to the last existing waypoint
+                float time_off = trajectory_points->back().time; // todo: calculate time offset
+                for(size_t n=0; n<traj_in.trajectory_points->size(); n++)
+                {
+                    auto temp = traj_in.trajectory_points->at(n);
+                    temp.time += time_off; // apply time
+                    append_waypoint(temp);
+                }
+            }
+            else // current trajectory is empty
+            {
+                trajectory_points = traj_in.trajectory_points;
+            }
+        }
+
         std::string serialize()
         {
             // header!time_zero;x,y,yaw,vel,time,is_pushing;...;
@@ -195,7 +250,7 @@ namespace ReloPush {
                 temp_str += var_delim;
                 temp_str += float2binarystr(trajectory_points->at(n).ref_vel);
                 temp_str += var_delim;
-                temp_str += float2binarystr(trajectory_points->at(n).time_ms);
+                temp_str += float2binarystr(trajectory_points->at(n).time);
                 temp_str += var_delim;
                 temp_str += bool2binarystr(trajectory_points->at(n).is_pushing);
 
@@ -212,11 +267,11 @@ namespace ReloPush {
         void deserialize(std::string& str_traj)
         {
             // split header
-            auto header_sp = split2(str_traj,header_delim);
+            auto header_sp = split(str_traj,header_delim);
             if(header_sp[0] == "t") // trajectory
             {
                 // split elements
-                auto elem_sp = split2(header_sp[1],elem_delim);
+                auto elem_sp = split(header_sp[1],elem_delim);
                 // first elem is time_zero
                 auto time_zero_str = elem_sp[0];
                 time_zero = binarystr2float(time_zero_str);
@@ -226,7 +281,7 @@ namespace ReloPush {
                 for(size_t n=1; n<elem_size; n++)
                 {
                     // split variables
-                    auto var_sp = split2(elem_sp[n],var_delim); // x y yaw vel time
+                    auto var_sp = split(elem_sp[n],var_delim); // x y yaw vel time
                     float x_in = binarystr2float(var_sp[0]);
                     float y_in = binarystr2float(var_sp[1]);
                     float yaw_in = binarystr2float(var_sp[2]);
@@ -260,32 +315,4 @@ namespace ReloPush {
 }
 
 
-int main() {
-    zeromp_object mqClient;
-    #ifdef __APPLE__
-            // For macOS, initialize Google Logging with the program name.
-        mqClient.connect("tcp://192.168.1.13:5555");
-    std::cout << "APPLE" << std::endl;
-    #else
-            // For non-macOS systems, initialize Abseil Logging.
-        mqClient.connect();
-    #endif
-
-    // Allow time for the connection to establish.
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-    // test trajectory
-    ReloPush::trajectory test_traj;
-    test_traj.append_waypoint(ReloPush::trajectory_elem(0,0,0,3,0,true));
-    test_traj.append_waypoint(ReloPush::trajectory_elem(1.2,2.4,1,2,1.1,true));
-    test_traj.append_waypoint(ReloPush::trajectory_elem(3.7,4,1,5.3,2,false));
-
-    auto s = test_traj.serialize();
-    std::cout << s << std::endl;
-
-    auto res = mqClient.send_and_wait(s);
-
-    std::cout << res << std::endl;
-
-    return 0;
-}
+#endif // TRAJECTORY_HPP
