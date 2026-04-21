@@ -8,6 +8,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+include(CTest)
+
 # Add ZeroMQ cmake file
 if(UNIX)
     list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -132,6 +134,7 @@ add_executable(ReloPush-BOSS src/main.cpp
     include/ReloPush/Visualization/TrajectoryView.h
     src/ReloPush/BinaryString.cpp
     src/ReloPush/base64.cpp
+    src/ReloPush/FinalSequenceHandoff.cpp
 )
 if(APPLE)
     target_link_libraries(ReloPush-BOSS ${Boost_LIBRARIES} ${OMPL_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${ZMQ_LIB} Ceres::ceres ${ODE_DIR}/lib/libode.dylib)
@@ -214,7 +217,31 @@ endif()
 add_executable(test_load_finalSequence test/test_load_finalSequence.cpp src/ReloPush/BinaryString.cpp src/ReloPush/base64.cpp src/ReloPush/PathPlanningTools.cpp)
 target_link_libraries(test_load_finalSequence ${Boost_LIBRARIES} ${OMPL_LIBRARIES})
 
+add_executable(test_single_robot_planner_compare_vis
+    test/test_single_robot_planner_compare_vis.cpp
+    src/ReloPush/PlanHybridAstar.cpp
+    src/ReloPush/PathPlanningTools.cpp
+    src/ReloPush/FromOMPL.cpp
+)
+if(APPLE)
+    target_link_libraries(test_single_robot_planner_compare_vis
+        ${Boost_LIBRARIES}
+        ${OMPL_LIBRARIES}
+        ${Eigen_LIBRARIES}
+        ${QT_WIDGET_TARGET}
+        ${ODE_DIR}/lib/libode.dylib
+    )
+else()
+    target_link_libraries(test_single_robot_planner_compare_vis
+        ${Boost_LIBRARIES}
+        ${OMPL_LIBRARIES}
+        ${Eigen_LIBRARIES}
+        ${QT_WIDGET_TARGET}
+        absl::log_initialize
+    )
+endif()
 
+add_subdirectory(MARS)
 
 include(GNUInstallDirs)
 install(TARGETS ReloPush-BOSS
@@ -246,6 +273,10 @@ install(TARGETS test_zeromq
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(TARGETS test_load_finalSequence
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS test_single_robot_planner_compare_vis
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

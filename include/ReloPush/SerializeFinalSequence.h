@@ -25,7 +25,7 @@
 
 
 
-void dump_remaining(std::istream& is) {
+inline void dump_remaining(std::istream& is) {
     std::streampos current_pos = is.tellg();
     is.seekg(0, is.end);
     std::streampos end_pos = is.tellg();

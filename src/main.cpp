@@ -12,6 +12,7 @@
 #include <ReloPush/trajectory.hpp>
 #include <array>
 #include <SerializeFinalSequence.h>
+#include <ReloPush/FinalSequenceHandoff.h>
 
 #ifdef __APPLE__
 // Include the glog header when compiling on MacOS.
@@ -31,11 +32,57 @@ enum planningSimOrReal
     real
 };
 
+namespace
+{
+    struct MarsIntegrationOptions
+    {
+        bool enabled = false;
+        std::string endpoint = ReloPush::kDefaultMarsHandoffEndpoint;
+    };
+
+    bool is_option_arg(const char *arg)
+    {
+        return arg != nullptr && arg[0] == '-';
+    }
+
+    bool has_batch_instance_args(int argc, char *argv[])
+    {
+        return argc > 3 &&
+               !is_option_arg(argv[1]) &&
+               !is_option_arg(argv[2]) &&
+               !is_option_arg(argv[3]);
+    }
+
+    MarsIntegrationOptions parse_mars_integration_options(int argc, char *argv[])
+    {
+        MarsIntegrationOptions options;
+
+        for (int i = 1; i < argc; ++i)
+        {
+            const std::string arg = argv[i] ? argv[i] : "";
+            if (arg == "--integrated-mode" ||
+                arg == "--integrated-mars")
+            {
+                options.enabled = true;
+            }
+            else if (arg.rfind("--mars-endpoint=", 0) == 0)
+            {
+                options.endpoint = arg.substr(std::string("--mars-endpoint=").size());
+            }
+            else if (arg.rfind("--handoff-endpoint=", 0) == 0)
+            {
+                options.endpoint = arg.substr(std::string("--handoff-endpoint=").size());
+            }
+        }
+
+        return options;
+    }
+} // namespace
+
 // Function to save finalSequence to a file using base64-encoded binary data
 void saveFinalSequenceToFile(const std::vector<FinalAllocation> &finalSequence, const std::string &filename)
 {
-    std::string binaryData = serializeFinalSequence(finalSequence);
-    std::string base64Data = base64_encode(reinterpret_cast<const unsigned char *>(binaryData.data()), binaryData.size());
+    std::string base64Data = ReloPush::encodeFinalSequenceBase64(finalSequence);
     std::ofstream outFile(filename);
     if (outFile)
     {
@@ -159,9 +206,9 @@ int main(int argc, char *argv[])
 #endif
     QApplication app(argc, argv);
 
-    std::string filename = "ReloPush-BOSS_13_objects.txt";
+    std::string filename = "ReloPush-BOSS_10_objects.txt";
 
-    int instance_ind = 17; // 63 //6 //40 //8
+    int instance_ind = 0; // 32 // 63 //6 //40 //8
     bool use_opt = true;
     bool vis = true;
     bool no_init_guess = false;
@@ -170,6 +217,9 @@ int main(int argc, char *argv[])
 
     // bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
+    const MarsIntegrationOptions mars_integration =
+        parse_mars_integration_options(argc, argv);
+    ReloPush::HandoffInstanceInfo handoff_instance_info;
 
     // Data to parse
     WorkspaceBoundary boundary(4, 5.2); // todo: parse from file
@@ -178,14 +228,22 @@ int main(int argc, char *argv[])
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs;
     std::vector<ReloPush::State> robots;
 
-    if (argc > 3) // parse from arg
+    if (has_batch_instance_args(argc, argv)) // parse legacy positional batch args
     {
         handle_args(argc, argv, filename, instance_ind, use_opt, no_init_guess, use_dfs); // 3rd arg: mode. 'f'=ReloPush-F 'd' = ReloPush-D 'u'=no-init-opt 'o'=ReloPush
         vis = false;                                                                      // disable for evaluations
     }
 
+    if (mars_integration.enabled)
+    {
+        std::cout << "[Integration] MARS handoff enabled at "
+                  << mars_integration.endpoint << std::endl;
+    }
+
     Color::println("\n=== " + filename + " ind: " + std::to_string(instance_ind) + " ===", Color::GREEN);
     Color::println("Use Optimized PreRelocation? " + std::to_string(use_opt), Color::YELLOW);
+    handoff_instance_info.file_name = filename;
+    handoff_instance_info.instance_index = instance_ind;
 
     parse_instance_from_file(filename, instance_ind, objects, goals, robots, objGoalPairs);
 
@@ -397,6 +455,29 @@ int main(int argc, char *argv[])
     outfile << "pre_relocations:" << std::fixed << n_preRelo << "\n";
     outfile.close();
 
+    if (!ok)
+    {
+        if (mars_integration.enabled)
+        {
+            try
+            {
+                ReloPush::FinalSequenceHandoffClient handoff_client;
+                handoff_client.connect(mars_integration.endpoint);
+                const std::string reply = handoff_client.sendAbortAndWaitForReply(
+                    handoff_instance_info,
+                    "ReloPush planning failed before a final sequence was produced");
+                std::cout << "[Integration] MARS reply: " << reply << std::endl;
+            }
+            catch (const std::exception &ex)
+            {
+                std::cerr << "[Integration] Failed to notify MARS about the planning failure: "
+                          << ex.what() << std::endl;
+            }
+        }
+
+        return 1;
+    }
+
     // generate resulting trajectory
     auto finalTrajectory = FA2Trajectory(finalSequence);
 
@@ -415,14 +496,18 @@ int main(int argc, char *argv[])
     // save_actions_for_visualizer(finalSequence,std::string(CMAKE_SOURCE_DIR) + "/result_actions_" + filename);
 
     // QApplication app(argc, argv);
+    const bool show_trajectory_window = vis && !mars_integration.enabled;
     QMainWindow window;
-    window.setWindowTitle("Trajectory Visualization (Arrow Format)");
-    window.resize(800, 600);
+    if (show_trajectory_window)
+    {
+        window.setWindowTitle("Trajectory Visualization (Arrow Format)");
+        window.resize(800, 600);
 
-    TrajectoryView *view = new TrajectoryView();
-    window.setCentralWidget(view);
-    view->setTrajectory(finalTrajectory);
-    window.show();
+        TrajectoryView *view = new TrajectoryView();
+        window.setCentralWidget(view);
+        view->setTrajectory(finalTrajectory);
+        window.show();
+    }
 
     // Allow time for the previous request to end
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
@@ -438,9 +523,46 @@ int main(int argc, char *argv[])
         // std::cout << res << std::endl; // response from server
     }
 
-    // save the final results into a file
-    saveFinalSequenceToFile(finalSequence, std::string(CMAKE_SOURCE_DIR) + "/result_seq_" + filename + "_ind" + std::to_string(instance_ind) + ".b64");
+    if (mars_integration.enabled)
+    {
+        try
+        {
+            ReloPush::FinalSequenceHandoffClient handoff_client;
+            handoff_client.connect(mars_integration.endpoint);
+            std::cout << "[Integration] Sending final sequence to MARS at "
+                      << mars_integration.endpoint << std::endl;
 
-    return app.exec();
+            const std::string reply =
+                handoff_client.sendFinalSequenceAndWaitForReply(
+                    handoff_instance_info,
+                    finalSequence);
+            std::cout << "[Integration] MARS reply: " << reply << std::endl;
+
+            if (!ReloPush::isMarsSuccessReply(reply))
+            {
+                std::cerr << "[Integration] MARS reported a failure while processing the handed-off sequence."
+                          << std::endl;
+                return 1;
+            }
+        }
+        catch (const std::exception &ex)
+        {
+            std::cerr << "[Integration] Failed to hand off the final sequence to MARS: "
+                      << ex.what() << std::endl;
+            return 1;
+        }
+    }
+    else
+    {
+        saveFinalSequenceToFile(
+            finalSequence,
+            std::string(CMAKE_SOURCE_DIR) + "/result_seq_" + filename + "_ind" + std::to_string(instance_ind) + ".b64");
+    }
+
+    if (show_trajectory_window)
+    {
+        return app.exec();
+    }
+
     return 0;
 }
