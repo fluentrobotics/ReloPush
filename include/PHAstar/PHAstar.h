@@ -67,7 +67,7 @@ public:
     PlanningResult backup_result;
 
     // Search limits
-    int max_search_iterations = 1000;
+    int max_search_iterations = 20000;
 
     // For diagnostics
     double max_planning_time = 10.0; // [s] timeout threshold (tune via params if needed)
@@ -518,7 +518,7 @@ public:
         {
             if (ent == robot || ent == transferred || ent == ignored_entity)
                 continue;
-            double diag = std::sqrt((ent->size.front_length + ent->size.rear_length) * (ent->size.front_length + ent->size.rear_length) + ent->size.width * ent->size.width) / 2;
+            double diag = collision_origin_radius(ent->size);
             entity_diags.push_back(diag);
         }
 

@@ -17,7 +17,7 @@
 struct CollisionGeometry
 {
     Corners corners;        // Inflated corner positions
-    double diagonal_radius; // Diagonal radius for fast circle-based checks
+    double diagonal_radius; // Conservative origin-centered radius for fast pre-checks
 };
 
 // ==========================================
@@ -44,12 +44,31 @@ struct MultiEntityCollisionResult
 };
 
 /**
- * @brief Compute collision geometry (corners and diagonal radius) for an entity
+ * @brief Compute a conservative radius from the pose origin to the farthest corner
+ *
+ * Pose origins in this project are not guaranteed to sit at the rectangle center,
+ * so half of the rectangle diagonal is not a valid broad-phase radius. We instead
+ * bound the shape by the farthest corner distance from the actual pose origin.
+ */
+inline double collision_origin_radius(
+    const OccuRect &size,
+    double inflation_factor = 1.0)
+{
+    const double front_inf = size.front_length * inflation_factor;
+    const double rear_inf = size.rear_length * inflation_factor;
+    const double half_width_inf = size.width * inflation_factor / 2.0;
+    const double longitudinal = std::max(front_inf, rear_inf);
+    return std::sqrt(longitudinal * longitudinal +
+                     half_width_inf * half_width_inf);
+}
+
+/**
+ * @brief Compute collision geometry (corners and broad-phase radius) for an entity
  *
  * @param pose Entity pose (x, y, yaw)
  * @param size Entity size dimensions
  * @param inflation_factor Inflation multiplier for safety margins
- * @return CollisionGeometry containing corners and diagonal radius
+ * @return CollisionGeometry containing corners and an origin-centered radius
  */
 inline CollisionGeometry setup_collision_geometry(
     const Pose &pose,
@@ -63,9 +82,7 @@ inline CollisionGeometry setup_collision_geometry(
     double width_inf = size.width * inflation_factor;
 
     geom.corners = get_corners(pose.x, pose.y, pose.yaw, front_inf, rear_inf, width_inf);
-    geom.diagonal_radius = std::sqrt((front_inf + rear_inf) * (front_inf + rear_inf) +
-                                     width_inf * width_inf) /
-                           2.0;
+    geom.diagonal_radius = collision_origin_radius(size, inflation_factor);
 
     return geom;
 }
@@ -246,10 +263,7 @@ inline EntityCollisionResult check_entity_collision(
 
     const double other_inflation =
         collision_inflation_for_type(other_entity->type, params);
-    double other_diag = std::sqrt(
-                            std::pow(other_entity->size.front_length + other_entity->size.rear_length, 2) +
-                            std::pow(other_entity->size.width, 2)) /
-                        2.0 * other_inflation;
+    double other_diag = collision_origin_radius(other_entity->size, other_inflation);
 
     if (dist <= subject_geom.diagonal_radius + other_diag + params.safety_margin)
     {

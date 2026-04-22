@@ -190,6 +190,201 @@ std::string sanitize_filename_component(const std::string &label)
   return out;
 }
 
+bool poses_approximately_equal(const Pose &a, const Pose &b,
+                               double pos_tol = 1e-3,
+                               double yaw_tol = 1e-3)
+{
+  return std::hypot(a.x - b.x, a.y - b.y) <= pos_tol &&
+         std::abs(pi_2_pi(a.yaw - b.yaw)) <= yaw_tol;
+}
+
+std::string format_pose_compact(const Pose &pose)
+{
+  std::ostringstream oss;
+  oss << "("
+      << std::fixed << std::setprecision(2)
+      << pose.x << ", " << pose.y << ", " << pose.yaw << ")";
+  return oss.str();
+}
+
+std::string describe_entity_pose_context(const TimeTable &timetable,
+                                         EntityMeta *entity,
+                                         double t)
+{
+  std::ostringstream oss;
+  oss << std::fixed << std::setprecision(2);
+
+  if (!entity)
+  {
+    oss << "<null entity>";
+    return oss.str();
+  }
+
+  const Pose pose_at_t = timetable.get_pose(entity, t);
+  oss << entity->name << " @ t=" << t
+      << " pose=" << format_pose_compact(pose_at_t);
+
+  const auto &db = timetable.get_database();
+  auto ent_it = db.find(entity);
+  if (ent_it == db.end() || ent_it->second.empty())
+  {
+    oss << " | no timetable samples";
+    return oss.str();
+  }
+
+  const auto &samples = ent_it->second;
+  auto next_it = samples.lower_bound(t);
+
+  if (next_it != samples.begin())
+  {
+    auto prev_it = std::prev(next_it);
+    oss << " | prev=(" << prev_it->first << ", "
+        << format_pose_compact(prev_it->second) << ")";
+  }
+  else
+  {
+    oss << " | prev=(none)";
+  }
+
+  if (next_it != samples.end())
+  {
+    oss << " | next=(" << next_it->first << ", "
+        << format_pose_compact(next_it->second) << ")";
+  }
+  else
+  {
+    auto last_it = std::prev(samples.end());
+    oss << " | next=(end, " << last_it->first << ", "
+        << format_pose_compact(last_it->second) << ")";
+  }
+
+  if (next_it != samples.begin() && next_it != samples.end())
+  {
+    const auto prev_it = std::prev(next_it);
+    const double dt = next_it->first - prev_it->first;
+    const double dist = std::hypot(next_it->second.x - prev_it->second.x,
+                                   next_it->second.y - prev_it->second.y);
+    if (dt > 1e-6)
+    {
+      oss << " | local_dt=" << dt
+          << " | local_move=" << dist;
+    }
+
+    if (poses_approximately_equal(prev_it->second, next_it->second))
+    {
+      oss << " | stationary-window";
+    }
+  }
+
+  return oss.str();
+}
+
+std::string summarize_pair_collision_window(const TimeTable &timetable,
+                                            EntityMeta *entity_a,
+                                            EntityMeta *entity_b,
+                                            const Params &params,
+                                            double center_time,
+                                            double horizon = 2.0,
+                                            double step = 0.05)
+{
+  std::ostringstream oss;
+  oss << std::fixed << std::setprecision(2);
+
+  if (!entity_a || !entity_b)
+  {
+    oss << "pair window unavailable";
+    return oss.str();
+  }
+
+  const double start_t = std::max(0.0, center_time - horizon);
+  const double end_t = center_time + horizon;
+
+  bool in_collision = false;
+  double collision_start = -1.0;
+  double collision_end = -1.0;
+  int collision_samples = 0;
+
+  for (double t = start_t; t <= end_t + 1e-9; t += step)
+  {
+    const Pose pose_a = timetable.get_pose(entity_a, t);
+    const Pose pose_b = timetable.get_pose(entity_b, t);
+    const Corners corners_a =
+        get_collision_corners_for_type(pose_a, entity_a->type, entity_a->size, params);
+    const Corners corners_b =
+        get_collision_corners_for_type(pose_b, entity_b->type, entity_b->size, params);
+    const bool colliding = rectangles_intersect(corners_a, corners_b);
+
+    if (colliding)
+    {
+      if (!in_collision)
+      {
+        in_collision = true;
+        collision_start = t;
+      }
+      collision_end = t;
+      collision_samples += 1;
+    }
+    else if (in_collision)
+    {
+      break;
+    }
+  }
+
+  if (collision_samples == 0)
+  {
+    oss << "No repeated pair collision found in ["
+        << start_t << ", " << end_t << "]";
+    return oss.str();
+  }
+
+  oss << "Pair collision window ~[" << collision_start
+      << ", " << collision_end << "]"
+      << " sampled every " << step << "s"
+      << " (" << collision_samples << " samples)";
+  return oss.str();
+}
+
+std::string compare_pair_collision_checks(const TimeTable &timetable,
+                                          EntityMeta *entity_a,
+                                          EntityMeta *entity_b,
+                                          const Params &params,
+                                          double t)
+{
+  std::ostringstream oss;
+  oss << std::fixed << std::setprecision(4);
+
+  if (!entity_a || !entity_b)
+  {
+    oss << "pair check unavailable";
+    return oss.str();
+  }
+
+  const Pose pose_a = timetable.get_pose(entity_a, t);
+  const Pose pose_b = timetable.get_pose(entity_b, t);
+  const CollisionGeometry geom_a =
+      setup_collision_geometry_for_type(pose_a, entity_a->type, entity_a->size, params);
+  const auto fast_check = check_entity_collision(geom_a, pose_a, entity_b, pose_b, params);
+  const Corners corners_a =
+      get_collision_corners_for_type(pose_a, entity_a->type, entity_a->size, params);
+  const Corners corners_b =
+      get_collision_corners_for_type(pose_b, entity_b->type, entity_b->size, params);
+  const bool direct_overlap = rectangles_intersect(corners_a, corners_b);
+
+  const double dist = std::hypot(pose_a.x - pose_b.x, pose_a.y - pose_b.y);
+  const double other_inflation =
+      collision_inflation_for_type(entity_b->type, params);
+  const double other_diag =
+      collision_origin_radius(entity_b->size, other_inflation);
+  const double fast_threshold =
+      geom_a.diagonal_radius + other_diag + params.safety_margin;
+
+  oss << "pair direct_overlap=" << (direct_overlap ? "true" : "false")
+      << ", fast_check=" << (fast_check.has_collision ? "true" : "false")
+      << ", center_dist=" << dist
+      << ", fast_threshold=" << fast_threshold;
+  return oss.str();
+}
+
 void write_allocation_search_summary_csv(
     const std::string &csv_path,
     const std::vector<AllocationRunSummary> &summaries,
@@ -574,6 +769,8 @@ RobotMeta *find_resolvable_robot_blocker(
   return nullptr;
 }
 
+double shared_collision_check_step(const Params &params);
+
 TimeTableVerificationResult verify_timetable_collision_free(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
@@ -586,9 +783,7 @@ TimeTableVerificationResult verify_timetable_collision_free(
   double max_t = timetable.get_max_time();
   if (step <= 0.0)
   {
-    step = std::max(1e-3,
-                    params.time_step /
-                        static_cast<double>(std::max(1, params.collision_steps)));
+    step = shared_collision_check_step(params);
   }
 
   for (double t = from_time; t <= max_t + 1e-9; t += step)
@@ -615,14 +810,14 @@ TimeTableVerificationResult verify_timetable_collision_free(
     for (size_t i = 0; i < entries.size(); ++i)
     {
       auto [e1, p1] = entries[i];
-      Corners c1 = get_collision_corners_for_type(p1, e1->type, e1->size, params);
+      CollisionGeometry g1 =
+          setup_collision_geometry_for_type(p1, e1->type, e1->size, params);
 
       for (size_t j = i + 1; j < entries.size(); ++j)
       {
         auto [e2, p2] = entries[j];
-        Corners c2 = get_collision_corners_for_type(p2, e2->type, e2->size, params);
-
-        if (!rectangles_intersect(c1, c2))
+        auto collision = check_entity_collision(g1, p1, e2, p2, params);
+        if (!collision.has_collision)
           continue;
 
         if (has_active_transfer_contact(e1, e2, t, transfer_windows))
@@ -654,10 +849,20 @@ TimeTableVerificationResult verify_timetable_collision_free(
 // 1. HELPER & UTILITY FUNCTIONS
 // ==========================================
 
+namespace
+{
+  constexpr double kExperimentalCollisionInflation = 1.0;
+  constexpr double kExperimentalSafetyMargin = 0.03;
+  constexpr double kExperimentalRobotCollisionInflation = 1.005;
+}
+
 // --- Configuration & Initialization ---
 Params initialize_params(const std::vector<FinalAllocation> &loadedSequence)
 {
   Params params;
+  params.inflation = kExperimentalCollisionInflation;
+  params.safety_margin = kExperimentalSafetyMargin;
+  params.robot_collision_inflation = kExperimentalRobotCollisionInflation;
   // Set analytic expansion threshold
   params.analytic_threshold = 5.0 * params.max_steer;
   // params.analytic_threshold = std::hypot(params.max_x - params.min_x,
@@ -1656,6 +1861,15 @@ void append_transfer_window_if_needed(
   }
 }
 
+double shared_collision_check_step(const Params &params)
+{
+  const double planner_step =
+      params.time_step / static_cast<double>(std::max(1, params.collision_steps));
+  // Use a finer shared replay step so scheduling and post-validation sample the
+  // same motion densely enough to catch slight transient overlaps.
+  return std::max(1e-3, std::min(0.05, planner_step));
+}
+
 // ==========================================
 // Collision check helpers
 // ==========================================
@@ -1690,9 +1904,11 @@ double find_wait_only_start_time(
 double find_safe_start_time(Trajectory *traj, double earliest_start,
                             TimeTable &timetable, const Params &params,
                             const std::unordered_map<std::string, EntityMeta *> &entities,
+                            const RuntimeOptions &options,
                             double *out_wait_added,
                             CollisionInfo *out_last_collision = nullptr,
-                            double *out_last_check_time = nullptr);
+                            double *out_last_check_time = nullptr,
+                            bool allow_idle_blocker_relocation = true);
 
 bool check_collision_trajectory(const Trajectory &traj, double start_time,
                                 TimeTable &timetable, const Params &params,
@@ -1710,7 +1926,7 @@ CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double
   if (traj.waypoints.empty())
     return {true, "Empty Trajectory", "", start_time};
 
-  double dt = 0.1;
+  double dt = shared_collision_check_step(params);
   double duration = traj.waypoints.back().time;
 
   RobotMeta *robot = dynamic_cast<RobotMeta *>(traj.entity);
@@ -1800,7 +2016,7 @@ CollisionInfo check_collision_trajectory_against_entity(
   if (traj.waypoints.empty() || !other_entity)
     return {true, "Valid", "", start_time};
 
-  double dt = 0.1;
+  double dt = shared_collision_check_step(params);
   double duration = traj.waypoints.back().time;
 
   RobotMeta *robot = dynamic_cast<RobotMeta *>(traj.entity);
@@ -2056,6 +2272,45 @@ CollisionInfo check_stationary_pose_collision_at_time(EntityMeta *entity,
   return {true, "Valid", "", t};
 }
 
+CollisionInfo check_stationary_pose_collision_at_time_ignoring(
+    EntityMeta *entity,
+    const Pose &pose,
+    double t,
+    TimeTable &timetable,
+    const Params &params,
+    EntityMeta *ignored_entity)
+{
+  if (!entity)
+    return {false, "Invalid Entity", "", t};
+
+  CollisionGeometry geom = setup_collision_geometry_for_type(
+      pose, entity->type, entity->size, params);
+  CollisionGeometry geom_bounds = setup_collision_geometry(pose, entity->size, 1.0);
+  if (check_entity_bounds_collision(entity->type, pose, geom_bounds.corners, params))
+  {
+    return {false, "Boundary Collision", "Boundary", t};
+  }
+
+  auto poses = timetable.get_poses(t);
+  for (const auto &[ent, ent_pose] : poses)
+  {
+    if (ent == entity || ent == ignored_entity)
+      continue;
+
+    auto collision = check_entity_collision(geom, pose, ent, ent_pose, params);
+    if (collision.has_collision)
+    {
+      return {false,
+              std::string(ent->type == EntityType::ROBOT ? "Robot Collision"
+                                                         : "Object Collision"),
+              ent ? ent->name : "",
+              t};
+    }
+  }
+
+  return {true, "Valid", "", t};
+}
+
 CollisionInfo find_stationary_pose_conflict_until_last_timestamp(EntityMeta *entity,
                                                                  const Pose &pose,
                                                                  double from_t,
@@ -2072,6 +2327,86 @@ CollisionInfo find_stationary_pose_conflict_until_last_timestamp(EntityMeta *ent
       return info;
   }
   return {true, "Valid", "", from_t};
+}
+
+CollisionInfo find_stationary_pose_conflict_until_last_timestamp_ignoring(
+    EntityMeta *entity,
+    const Pose &pose,
+    double from_t,
+    TimeTable &timetable,
+    const Params &params,
+    double step,
+    EntityMeta *ignored_entity)
+{
+  double max_t = timetable.get_max_time();
+  for (double t = from_t; t <= max_t + 1e-9; t += step)
+  {
+    CollisionInfo info =
+        check_stationary_pose_collision_at_time_ignoring(
+            entity, pose, t, timetable, params, ignored_entity);
+    if (!info.is_valid)
+      return info;
+  }
+  return {true, "Valid", "", from_t};
+}
+
+CollisionInfo find_stationary_pose_conflict_over_interval(
+    EntityMeta *entity,
+    const Pose &pose,
+    double from_t,
+    double to_t,
+    TimeTable &timetable,
+    const Params &params,
+    double step = 0.5)
+{
+  if (to_t <= from_t + 1e-9)
+    return {true, "Valid", "", from_t};
+
+  for (double t = from_t; t <= to_t + 1e-9; t += step)
+  {
+    CollisionInfo info =
+        check_stationary_pose_collision_at_time(entity, pose, t, timetable, params);
+    if (!info.is_valid)
+      return info;
+  }
+
+  return {true, "Valid", "", from_t};
+}
+
+CollisionInfo find_stationary_pose_conflict_over_interval_ignoring(
+    EntityMeta *entity,
+    const Pose &pose,
+    double from_t,
+    double to_t,
+    TimeTable &timetable,
+    const Params &params,
+    double step,
+    EntityMeta *ignored_entity)
+{
+  if (to_t <= from_t + 1e-9)
+    return {true, "Valid", "", from_t};
+
+  for (double t = from_t; t <= to_t + 1e-9; t += step)
+  {
+    CollisionInfo info =
+        check_stationary_pose_collision_at_time_ignoring(
+            entity, pose, t, timetable, params, ignored_entity);
+    if (!info.is_valid)
+      return info;
+  }
+
+  return {true, "Valid", "", from_t};
+}
+
+double delayed_segment_start_after_stationary_conflict(
+    double current_start,
+    double segment_duration,
+    double conflict_time,
+    double step = 0.5)
+{
+  const double shift_from_conflict =
+      conflict_time - std::max(0.0, segment_duration) + step;
+  return std::max(current_start + step, shift_from_conflict);
 }
 
 struct ConnectedSafeParkingSearchResult
@@ -2521,6 +2856,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
                              TimeTable &timetable,
                              const Params &params,
                              const std::unordered_map<std::string, EntityMeta *> &entities,
+                             const RuntimeOptions &options,
                              const Trajectory *blocked_traj_hint = nullptr)
 {
   auto &recent_failed_relocations = recent_failed_relocation_cache();
@@ -2697,10 +3033,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
                         "", ready_time, "Safe parking relocation");
         planner.set_ignore_other_robots(true);
         planner.set_debug_popup_enabled(false);
-
-        // OPTIMIZATION: Set strict iteration limit for parking search.
-        // If a spot is hard to reach, it's likely bad. Fail fast and try next.
-        planner.max_search_iterations = 2000;
+        planner.max_search_iterations = options.max_search_iterations;
 
         res = planner.Planning_with_res(ready_time);
       }
@@ -2843,15 +3176,25 @@ bool plan_initial_transit(
     RobotMeta *robot, const Pose &target_pose, double start_time,
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
-    const Params &params)
+  const Params &params,
+  const RuntimeOptions &options,
+  double *out_abs_start_time = nullptr,
+  double *out_abs_end_time = nullptr)
 {
-  Pose current_pose = timetable.get_pose(robot, start_time);
+  if (out_abs_start_time)
+    *out_abs_start_time = -1.0;
+  if (out_abs_end_time)
+    *out_abs_end_time = -1.0;
+
+  double planning_start_time = start_time;
+  double chosen_start_time = planning_start_time;
+  Pose current_pose = timetable.get_pose(robot, planning_start_time);
   robot->initial_pose = current_pose; // Update meta for planner
 
   std::cout << "  [Transit] Planning " << robot->name << " -> Target ("
             << target_pose.x << ", " << target_pose.y << ", " << target_pose.yaw
             << ") from Start (" << current_pose.x << ", " << current_pose.y << ", " << current_pose.yaw
-            << ") at " << start_time << "s" << std::endl;
+            << ") at " << planning_start_time << "s" << std::endl;
 
   auto status_to_string = [](PlanningStatus status) -> const char *
   {
@@ -2914,8 +3257,6 @@ bool plan_initial_transit(
     return oss.str();
   };
 
-  double chosen_start_time = start_time;
-
   auto try_schedule_time_aware_path = [&](PlanningResult &candidate_res,
                                           const std::string &stage_label) -> bool
   {
@@ -2938,8 +3279,10 @@ bool plan_initial_transit(
     double last_check_time = candidate_start_time;
     double safe_start = find_safe_start_time(&candidate_traj, candidate_start_time,
                                              timetable, params, entities,
+                                             options,
                                              &wait_added, &last_collision,
-                                             &last_check_time);
+                                             &last_check_time,
+                                             false);
     if (safe_start < 0.0)
     {
       PlanningResult sched_fail;
@@ -2990,7 +3333,7 @@ bool plan_initial_transit(
   {
     Trajectory hint;
     hint.entity = robot;
-    hint.start_time = start_time;
+    hint.start_time = planning_start_time;
     hint.is_transfer = false;
 
     Waypoint wp;
@@ -3004,8 +3347,54 @@ bool plan_initial_transit(
     return hint;
   };
 
-  auto attempt_validation_blocker_relocation = [&](PlanningResult &res,
-                                                   const std::string &retry_stage) -> bool
+  auto replan_initial_transit = [&](const std::string &debug_label) -> PlanningResult
+  {
+    current_pose = timetable.get_pose(robot, planning_start_time);
+    robot->initial_pose = current_pose;
+    PHAStar retry_planner(robot, target_pose, &timetable, &entities, params,
+                          false, "", planning_start_time, debug_label);
+    retry_planner.set_debug_popup_enabled(false);
+    retry_planner.max_search_iterations = options.max_search_iterations;
+    return retry_planner.Planning_with_res(planning_start_time);
+  };
+
+  auto attempt_self_safe_parking = [&](PlanningResult &res,
+                                       const Trajectory &blocked_hint,
+                                       const std::string &reason_label,
+                                       const std::string &retry_stage) -> bool
+  {
+    std::cout << "  [Transit] Preserving earlier reserved occupancy while "
+              << robot->name << " adapts. " << reason_label
+              << " Trying self safe parking before replanning initial transit."
+              << std::endl;
+
+    if (!relocate_blocking_robot(robot, timetable, params, entities,
+                                 options, &blocked_hint))
+    {
+      std::cerr << "  [Transit] Self safe parking FAILED for " << robot->name
+                << "." << std::endl;
+      return false;
+    }
+
+    planning_start_time = timetable.get_entity_max_time(robot);
+    chosen_start_time = planning_start_time;
+    current_pose = timetable.get_pose(robot, planning_start_time);
+    robot->initial_pose = current_pose;
+
+    std::cout << "  [Transit] " << robot->name
+              << " parked safely. Replanning initial transit from ("
+              << std::fixed << std::setprecision(2)
+              << current_pose.x << ", " << current_pose.y << ", "
+              << current_pose.yaw << ") at t=" << planning_start_time
+              << "s." << std::endl;
+
+    res = replan_initial_transit("Initial transit after self safe parking");
+    append_attempt(retry_stage, res);
+    return true;
+  };
+
+  auto attempt_validation_blocker_recovery = [&](PlanningResult &res,
+                                                 const std::string &retry_stage) -> bool
   {
     if ((res.status != PlanningStatus::GOAL_INVALID_COLLISION &&
          res.status != PlanningStatus::START_INVALID_COLLISION) ||
@@ -3019,7 +3408,7 @@ bool plan_initial_transit(
     const Pose &blocked_pose = is_start_blocker ? current_pose : target_pose;
     const char *blocked_label = is_start_blocker ? "Start" : "Goal";
     const double blocker_time =
-        (res.failure_time > 1e-6) ? res.failure_time : start_time;
+        (res.failure_time > 1e-6) ? res.failure_time : planning_start_time;
 
     CollisionInfo blocker_info;
     blocker_info.is_valid = false;
@@ -3054,42 +3443,22 @@ bool plan_initial_transit(
     {
       std::cout << " (reported as " << res.colliding_entity << ")";
     }
-    std::cout << ". Attempting relocation..." << std::endl;
-
-    if (!relocate_blocking_robot(blocker, timetable, params, entities,
-                                 &blocked_pose_hint))
-    {
-      std::cerr << "  [Transit] " << blocked_label
-                << "-blocker relocation FAILED for " << blocker->name
-                << std::endl;
-      return false;
-    }
-
-    std::cout << "  [Transit] " << blocked_label
-              << "-blocker relocation successful. Retrying plan..."
-              << std::endl;
-    robot->initial_pose = timetable.get_pose(robot, start_time);
-    PHAStar retry_planner(robot, target_pose, &timetable, &entities, params,
-                          false, "", start_time, "Initial transit");
-    retry_planner.set_debug_popup_enabled(false);
-    retry_planner.max_search_iterations = 2000;
-    res = retry_planner.Planning_with_res(start_time);
-    append_attempt(retry_stage, res);
-    return true;
+    std::cout << ". Keeping earlier reservation priority." << std::endl;
+    return attempt_self_safe_parking(
+        res, blocked_pose_hint,
+        std::string(blocked_label) + " is occupied by higher-priority idle robot " +
+            blocker->name + ".",
+        retry_stage);
   };
 
-  PHAStar planner(robot, target_pose, &timetable, &entities, params, false,
-                  "", start_time, "Initial transit");
-  planner.set_debug_popup_enabled(false);
-  planner.max_search_iterations = 2000;
-  auto path_res = planner.Planning_with_res(start_time);
+  auto path_res = replan_initial_transit("Initial transit");
   append_attempt("primary planner", path_res);
 
   for (int relocation_attempt = 0; relocation_attempt < 3; ++relocation_attempt)
   {
-    if (!attempt_validation_blocker_relocation(
+    if (!attempt_validation_blocker_recovery(
             path_res,
-            "retry after validation-blocker relocation"))
+            "retry after self safe parking"))
     {
       break;
     }
@@ -3099,7 +3468,8 @@ bool plan_initial_transit(
   if (path_res.status == PlanningStatus::BLOCKED_BY_ROBOT)
   {
     std::cout << "  [Transit] Path blocked by robot " << path_res.colliding_entity
-              << ". Evaluating time-aware wait/relocation..." << std::endl;
+              << ". Evaluating delay-only recovery before any self safe parking..."
+              << std::endl;
 
     if (try_schedule_time_aware_path(path_res, "time-aware schedule of blocked path"))
     {
@@ -3108,26 +3478,24 @@ bool plan_initial_transit(
     else
     {
       std::cout << "  [Transit] Time-aware scheduling could not clear the blocked path. "
-                   "Trying relocation..."
+                   "Checking whether the later initial transit must adapt..."
                 << std::endl;
 
-      // We need a Trajectory object for relocate_blocking_robot
-      Trajectory ghost_traj;
-      ghost_traj.waypoints = path_res.waypoints;
-      ghost_traj.entity = robot; // FIX: Prevent segfault in collision check
+      Trajectory ghost_traj_abs;
+      ghost_traj_abs.waypoints = path_res.waypoints;
+      ghost_traj_abs.entity = robot;
 
-      if (ghost_traj.waypoints.empty())
+      if (ghost_traj_abs.waypoints.empty())
       {
         std::cerr << " [Error] Blocked path has no waypoints! Cannot relocate." << std::endl;
         path_res.status = PlanningStatus::NO_PATH_FOUND;
       }
       else
       {
-        // Need waypoints to be RELATIVE to 0 for check_collision... wait
-        // Actually relocate_blocking_robot and checking logic might prefer absolute?
-        // check_collision_trajectory_detailed uses relative times in waypoints.
+        Trajectory ghost_traj = ghost_traj_abs;
         double initial_t = ghost_traj.waypoints.front().time;
         ghost_traj.start_time = initial_t;
+        ghost_traj_abs.start_time = initial_t;
         for (auto &wp : ghost_traj.waypoints)
           wp.time -= initial_t;
 
@@ -3135,38 +3503,46 @@ bool plan_initial_transit(
 
         if (!col_info.is_valid && !col_info.entity_name.empty())
         {
-          RobotMeta *blocker = find_resolvable_robot_blocker(
-              col_info, timetable, entities);
-          if (blocker)
+          EntityMeta *collider = nullptr;
+          auto collider_it = entities.find(col_info.entity_name);
+          if (collider_it != entities.end())
+            collider = collider_it->second;
+
+          bool should_self_park = false;
+          std::string blocker_label = col_info.entity_name;
+
+          if (auto *blocking_robot = find_resolvable_robot_blocker(
+                  col_info, timetable, entities))
           {
-            if (relocate_blocking_robot(blocker, timetable, params, entities, &ghost_traj))
-            {
-              std::cout << "  [Transit] Relocation successful. Retrying plan..." << std::endl;
-              // Restore absolute times for planner if we use it again? No, we create a new one.
-              PHAStar retry_planner(robot, target_pose, &timetable, &entities,
-                                    params, false, "", start_time,
-                                    "Initial transit");
-              retry_planner.set_debug_popup_enabled(false);
-              retry_planner.max_search_iterations = 2000;
-              path_res = retry_planner.Planning_with_res(start_time);
-              append_attempt("retry after relocation", path_res);
-            }
-            else
-            {
-              std::cerr << "  [Transit] Relocation FAILED. Discarding blocked path." << std::endl;
-              path_res.waypoints.clear();
-              path_res.status = PlanningStatus::NO_PATH_FOUND;
-              path_res.failure_detail = "blocking robot relocation failed";
-              append_attempt("relocation", path_res);
-            }
+            should_self_park =
+                timetable.is_waiting(blocking_robot, col_info.time) ||
+                timetable.is_entity_static_after(col_info.time, blocking_robot);
+            blocker_label = blocking_robot->name;
+          }
+          else if (collider && collider->type == EntityType::OBJECT)
+          {
+            should_self_park = true;
+          }
+
+          if (should_self_park &&
+              attempt_self_safe_parking(
+                  path_res, ghost_traj_abs,
+                  "Higher-priority reserved occupancy from " + blocker_label +
+                      " remains on the initial-transit corridor after delay-only scheduling.",
+                  "retry after self safe parking from blocked path"))
+          {
+            std::cout << "  [Transit] Self safe parking recovery successful. Retrying plan..."
+                      << std::endl;
           }
           else
           {
-            std::cerr << "  [Transit] Blocked by unknown entity/boundary (" << col_info.entity_name << "). Cannot relocate." << std::endl;
+            std::cerr << "  [Transit] Preserved earlier reservation, but no self safe parking recovery was available."
+                      << std::endl;
             path_res.waypoints.clear();
             path_res.status = PlanningStatus::NO_PATH_FOUND;
-            path_res.failure_detail = "blocked by non-relocatable entity: " + col_info.entity_name;
-            append_attempt("blocked-path collision analysis", path_res);
+            path_res.failure_detail =
+                "delay-only scheduling failed and self safe parking recovery failed";
+            append_attempt("self safe parking recovery", path_res);
           }
         }
       }
@@ -3180,12 +3556,12 @@ bool plan_initial_transit(
 
     // 1. Attempt Ghost Planning (Ignore other robots)
     PHAStar ghost_planner(robot, target_pose, &timetable, &entities, params,
-                          false, "", start_time,
+                          false, "", planning_start_time,
                           "Initial transit ghost planning");
     ghost_planner.set_ignore_other_robots(true);
     ghost_planner.set_debug_popup_enabled(false);
-    ghost_planner.max_search_iterations = 2000;
-    auto ghost_res = ghost_planner.Planning_with_res(start_time);
+    ghost_planner.max_search_iterations = options.max_search_iterations;
+    auto ghost_res = ghost_planner.Planning_with_res(planning_start_time);
     append_attempt("ghost planner", ghost_res);
 
     if (ghost_res.status == PlanningStatus::SUCCESS)
@@ -3210,22 +3586,37 @@ bool plan_initial_transit(
         {
           RobotMeta *blocker = find_resolvable_robot_blocker(
               col_info, timetable, entities);
+          EntityMeta *collider = nullptr;
+          auto collider_it = entities.find(col_info.entity_name);
+          if (collider_it != entities.end())
+            collider = collider_it->second;
+
+          bool should_self_park = false;
+          std::string blocker_label = col_info.entity_name;
           if (blocker)
           {
-            // Restore absolute path for hint
-            shift_waypoint_times(ghost_traj.waypoints, initial_t);
+            should_self_park =
+                timetable.is_waiting(blocker, col_info.time) ||
+                timetable.is_entity_static_after(col_info.time, blocker);
+            blocker_label = blocker->name;
+          }
+          else if (collider && collider->type == EntityType::OBJECT)
+          {
+            should_self_park = true;
+          }
 
-            if (relocate_blocking_robot(blocker, timetable, params, entities, &ghost_traj))
-            {
-              std::cout << "  [Transit] Relocation successful. Retrying plan..." << std::endl;
-              PHAStar retry_planner(robot, target_pose, &timetable, &entities,
-                                    params, false, "", start_time,
-                                    "Initial transit");
-              retry_planner.set_debug_popup_enabled(false);
-              retry_planner.max_search_iterations = 2000;
-              path_res = retry_planner.Planning_with_res(start_time);
-              append_attempt("retry after ghost relocation", path_res);
-            }
+          shift_waypoint_times(ghost_traj.waypoints, initial_t);
+          ghost_traj.start_time = initial_t;
+
+          if (should_self_park &&
+              attempt_self_safe_parking(
+                  path_res, ghost_traj,
+                  "Ghost path shows higher-priority reserved occupancy from " +
+                      blocker_label + " that delay-only scheduling cannot clear.",
+                  "retry after self safe parking from ghost path"))
+          {
+            std::cout << "  [Transit] Self safe parking recovery successful on ghost path."
+                      << std::endl;
           }
           else
           {
@@ -3241,12 +3632,12 @@ bool plan_initial_transit(
     Params relaxed = make_relaxed_fallback_params(params);
 
     PHAStar geometry_planner(robot, target_pose, &timetable, &entities, relaxed,
-                             false, "", start_time,
+                             false, "", planning_start_time,
                              "Initial transit geometry fallback");
     geometry_planner.set_ignore_other_robots(true);
     geometry_planner.set_debug_popup_enabled(false);
-    geometry_planner.max_search_iterations = 2000;
-    auto geometry_res = geometry_planner.Planning_with_res(start_time);
+    geometry_planner.max_search_iterations = options.max_search_iterations;
+    auto geometry_res = geometry_planner.Planning_with_res(planning_start_time);
     append_attempt("geometry-first fallback", geometry_res);
 
     if (!geometry_res.waypoints.empty())
@@ -3254,16 +3645,17 @@ bool plan_initial_transit(
       Trajectory geom_traj;
       geom_traj.entity = robot;
       geom_traj.is_transfer = false;
-      geom_traj.start_time = start_time;
+      geom_traj.start_time = planning_start_time;
       geom_traj.waypoints = geometry_res.waypoints;
-      make_waypoint_times_relative(geom_traj.waypoints, start_time);
+      make_waypoint_times_relative(geom_traj.waypoints, planning_start_time);
 
       double wait_added = 0.0;
-      double safe_start = find_safe_start_time(&geom_traj, start_time, timetable,
-                                               params, entities, &wait_added);
+      double safe_start = find_safe_start_time(&geom_traj, planning_start_time, timetable,
+                                               params, entities, options, &wait_added,
+                                               nullptr, nullptr, false);
       if (safe_start >= 0.0)
       {
-        double delta = safe_start - start_time;
+        double delta = safe_start - planning_start_time;
         shift_waypoint_times(geometry_res.waypoints, delta);
         path_res = geometry_res;
         chosen_start_time = safe_start;
@@ -3285,7 +3677,7 @@ bool plan_initial_transit(
     {
       std::vector<Waypoint> rs_waypoints;
       rs_waypoints.reserve(rs_x.size());
-      double t_abs = start_time;
+      double t_abs = planning_start_time;
       for (size_t i = 0; i < rs_x.size(); ++i)
       {
         if (i > 0)
@@ -3306,17 +3698,21 @@ bool plan_initial_transit(
       Trajectory rs_traj;
       rs_traj.entity = robot;
       rs_traj.is_transfer = false;
-      rs_traj.start_time = start_time;
+      rs_traj.start_time = planning_start_time;
       rs_traj.waypoints = rs_waypoints;
-      make_waypoint_times_relative(rs_traj.waypoints, start_time);
+      make_waypoint_times_relative(rs_traj.waypoints, planning_start_time);
 
       double wait_added = 0.0;
-      double safe_start = find_safe_start_time(&rs_traj, start_time, timetable,
-                                               params, entities, &wait_added);
+      CollisionInfo last_collision;
+      double last_check_time = planning_start_time;
+      double safe_start = find_safe_start_time(&rs_traj, planning_start_time, timetable,
+                                               params, entities, options, &wait_added,
+                                               &last_collision, &last_check_time,
+                                               false);
       if (safe_start >= 0.0)
       {
         path_res.waypoints = rs_waypoints;
-        double delta = safe_start - start_time;
+        double delta = safe_start - planning_start_time;
         shift_waypoint_times(path_res.waypoints, delta);
         chosen_start_time = safe_start;
         path_res.status = PlanningStatus::SUCCESS;
@@ -3332,6 +3728,9 @@ bool plan_initial_transit(
         PlanningResult rs_fail;
         rs_fail.status = PlanningStatus::NO_PATH_FOUND;
         rs_fail.failure_detail = "RS fallback found path but no collision-free start slot";
+        rs_fail.waypoints = rs_waypoints;
+        rs_fail.failure_time = last_check_time;
+        rs_fail.colliding_entity = last_collision.entity_name;
         append_attempt("RS fallback", rs_fail);
       }
     }
@@ -3363,7 +3762,7 @@ bool plan_initial_transit(
     std::cerr << " [Error] Transit planning failed for " << robot->name
               << " - Status: " << static_cast<int>(path_res.status)
               << ", Detail: " << path_res.failure_detail << std::endl;
-    diagnose_planning_failure(robot, current_pose, target_pose, start_time, timetable, entities, params);
+    diagnose_planning_failure(robot, current_pose, target_pose, planning_start_time, timetable, entities, params);
     if (DEBUG_VIS)
     {
       if (!debug_attempts.empty())
@@ -3371,7 +3770,7 @@ bool plan_initial_transit(
         visualize_planning_attempt_debug(
             timetable,
             robot,
-            start_time,
+            planning_start_time,
             current_pose,
             target_pose,
             debug_attempts,
@@ -3384,7 +3783,7 @@ bool plan_initial_transit(
             timetable,
             robot,
             path_res,
-            start_time,
+            planning_start_time,
             current_pose,
             target_pose,
             params,
@@ -3404,7 +3803,7 @@ bool plan_initial_transit(
       visualize_planning_attempt_debug(
           timetable,
           robot,
-          start_time,
+          planning_start_time,
           current_pose,
           target_pose,
           debug_attempts,
@@ -3417,7 +3816,7 @@ bool plan_initial_transit(
           timetable,    // Global history/future of others
           robot,        // The robot executing this plan
           path_res,     // The output plan (waypoints)
-          start_time,   // Absolute start time for this plan
+          planning_start_time,   // Absolute start time for this plan
           current_pose, // Start
           target_pose,  // Goal
           params,
@@ -3465,6 +3864,16 @@ bool plan_initial_transit(
   transit_traj.waypoints = path_res.waypoints;
   transit_traj.is_transfer = false;
   timetable.add_trajectory(transit_traj);
+
+  if (out_abs_start_time)
+    *out_abs_start_time = chosen_start_time;
+  if (out_abs_end_time)
+  {
+    *out_abs_end_time =
+        path_res.waypoints.empty()
+            ? chosen_start_time
+            : (chosen_start_time + path_res.waypoints.back().time);
+  }
 
   return true;
 }
@@ -3548,9 +3957,11 @@ std::vector<std::pair<RobotMeta *, double>> get_sorted_candidate_robots(
 double find_safe_start_time(Trajectory *traj, double earliest_start,
                             TimeTable &timetable, const Params &params,
                             const std::unordered_map<std::string, EntityMeta *> &entities,
+                            const RuntimeOptions &options,
                             double *out_wait_added,
                             CollisionInfo *out_last_collision,
-                            double *out_last_check_time)
+                            double *out_last_check_time,
+                            bool allow_idle_blocker_relocation)
 {
   if (out_wait_added)
     *out_wait_added = 0.0;
@@ -3562,6 +3973,7 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
   double check_time = earliest_start;
   double step = 0.5;
   int max_retries = 200; // ~100 seconds wait limit
+  constexpr double kExtraDelayBuffer = 0.5;
 
   std::string last_relocated_robot = "";
   double last_relocation_time = -100.0;
@@ -3587,6 +3999,21 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
     if (col_info.is_valid)
     {
       double waited = std::max(0.0, check_time - earliest_start);
+
+      if (waited > 1e-9)
+      {
+        const double buffered_start = check_time + kExtraDelayBuffer;
+        CollisionInfo buffered_info =
+            check_collision_trajectory_detailed(*traj, buffered_start,
+                                                timetable, params, false);
+        if (buffered_info.is_valid)
+        {
+          check_time = buffered_start;
+          waited = std::max(0.0, check_time - earliest_start);
+          col_info = buffered_info;
+        }
+      }
+
       if (out_wait_added)
         *out_wait_added = waited;
       if (out_last_collision)
@@ -3594,7 +4021,7 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
       if (out_last_check_time)
         *out_last_check_time = check_time;
       if (i > 0)
-        std::cout << "  [Delay] Delayed " << (i * step) << "s for safety." << std::endl;
+        std::cout << "  [Delay] Delayed " << waited << "s for safety." << std::endl;
       return check_time;
     }
 
@@ -3614,6 +4041,12 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
       bool blocker_is_waiting = timetable.is_waiting(blocker, col_info.time);
       if (blocker_is_waiting)
       {
+        if (!allow_idle_blocker_relocation)
+        {
+          check_time += step;
+          continue;
+        }
+
         if (++relocate_attempt_count[blocker->name] > 3)
         {
           check_time += step;
@@ -3624,7 +4057,8 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
         if (blocker->name != last_relocated_robot || (check_time - last_relocation_time > 5.0))
         {
 
-          if (relocate_blocking_robot(blocker, timetable, params, entities, traj))
+          if (relocate_blocking_robot(blocker, timetable, params, entities,
+                                      options, traj))
           {
             last_relocated_robot = blocker->name;
             last_relocation_time = check_time;
@@ -3704,13 +4138,14 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
 bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
                        TimeTable &timetable, const Params &params,
                        const std::unordered_map<std::string, EntityMeta *> &entities,
+                       const RuntimeOptions &options,
                        TaskExecutionStats *stats = nullptr,
                        std::string *out_failure_reason = nullptr)
 {
   if (previous_traj.waypoints.empty())
     return true;
 
-  double retract_dist = 0.15; // Meters
+  double retract_dist = 0.1; // Meters
   double accumulated_dist = 0.0;
   size_t num_wp = previous_traj.waypoints.size();
   size_t start_idx = num_wp - 1;
@@ -3764,6 +4199,7 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
   double wait_added = 0.0;
   double safe_start = find_safe_start_time(&retract_traj, earliest_start,
                                            timetable, params, entities,
+                                           options,
                                            &wait_added);
   if (safe_start < 0.0)
   {
@@ -3790,7 +4226,8 @@ bool replan_transit_segment(
     RobotMeta *robot, const Pose &goal_pose, double start_time,
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
-    const Params &params,
+  const Params &params,
+  const RuntimeOptions &options,
     std::vector<Waypoint> &out_waypoints_rel)
 {
   Pose start_pose = timetable.get_pose(robot, start_time);
@@ -3850,7 +4287,7 @@ bool replan_transit_segment(
   };
 
   std::vector<Waypoint> candidate_rel;
-  if (try_plan(params, 2000, candidate_rel))
+  if (try_plan(params, options.max_search_iterations, candidate_rel))
   {
     out_waypoints_rel = candidate_rel;
     return true;
@@ -3858,7 +4295,7 @@ bool replan_transit_segment(
 
   Params relaxed = make_relaxed_fallback_params(params);
 
-  if (try_plan(relaxed, 2000, candidate_rel))
+  if (try_plan(relaxed, options.max_search_iterations, candidate_rel))
   {
     out_waypoints_rel = candidate_rel;
     return true;
@@ -3915,6 +4352,7 @@ bool prepare_segment_waypoints_for_scheduling(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
+  const RuntimeOptions &options,
     const std::string &fallback_message)
 {
   if (!traj)
@@ -3930,7 +4368,7 @@ bool prepare_segment_waypoints_for_scheduling(
     Pose segment_goal = traj->waypoints.back();
     std::vector<Waypoint> replanned_rel;
     if (!replan_transit_segment(robot, segment_goal, segment_ready_time,
-                                timetable, entities, params, replanned_rel))
+                                timetable, entities, params, options, replanned_rel))
     {
       traj->waypoints = original_waypoints;
       project_waypoints_inside_bounds(traj->waypoints, robot, params);
@@ -3951,14 +4389,246 @@ bool prepare_segment_waypoints_for_scheduling(
   return true;
 }
 
+bool reserve_and_commit_trajectory(
+    Trajectory *traj,
+    RobotMeta *robot,
+    double earliest_start,
+    TimeTable &timetable,
+    const Params &params,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const RuntimeOptions &options,
+    std::vector<TransferContactWindow> *transfer_windows = nullptr,
+    TaskExecutionStats *stats = nullptr,
+    std::string *out_failure_reason = nullptr,
+    CollisionInfo *out_last_collision = nullptr,
+    double *out_last_check_time = nullptr)
+{
+  if (out_last_collision)
+    *out_last_collision = CollisionInfo{true, "Not evaluated", "", earliest_start};
+  if (out_last_check_time)
+    *out_last_check_time = earliest_start;
+
+  if (traj->is_transfer && traj->transferred_object)
+  {
+    constexpr int kMaxTransferReservationRetries = 200;
+    constexpr double kTransferReservationStep = 0.5;
+
+    double candidate_earliest_start = earliest_start;
+    std::string transfer_failure_reason =
+        "failed to reserve parked transfer object against higher-priority traffic";
+
+    for (int retry_idx = 0; retry_idx < kMaxTransferReservationRetries; ++retry_idx)
+    {
+      TimeTable trial_timetable = timetable;
+
+      double wait_added = 0.0;
+      CollisionInfo last_schedule_collision;
+      double last_schedule_check_time = candidate_earliest_start;
+      double safe_start_time =
+          find_safe_start_time(traj, candidate_earliest_start,
+                               trial_timetable, params, entities, options,
+                               &wait_added, &last_schedule_collision,
+                               &last_schedule_check_time);
+      if (safe_start_time < 0.0)
+      {
+        if (out_last_collision)
+          *out_last_collision = last_schedule_collision;
+        if (out_last_check_time)
+          *out_last_check_time = last_schedule_check_time;
+
+        if (!last_schedule_collision.reason.empty() &&
+            last_schedule_collision.reason != "Not evaluated")
+        {
+          std::ostringstream oss;
+          oss << "failed to find safe start for transfer segment";
+          if (!last_schedule_collision.reason.empty())
+          {
+            oss << " (" << last_schedule_collision.reason;
+            if (!last_schedule_collision.entity_name.empty())
+              oss << " with " << last_schedule_collision.entity_name;
+            if (last_schedule_collision.time > 1e-6)
+              oss << " at t=" << std::fixed << std::setprecision(2)
+                  << last_schedule_collision.time;
+            oss << ")";
+          }
+          transfer_failure_reason = oss.str();
+        }
+        break;
+      }
+
+      traj->start_time = safe_start_time;
+      traj->CalcualteTimeStamps(robot);
+      trial_timetable.add_trajectory(*traj);
+
+      const double segment_duration =
+          traj->waypoints.empty() ? 0.0 : traj->waypoints.back().time;
+      const double arrival_time = safe_start_time + segment_duration;
+      const Pose parked_pose =
+          trial_timetable.get_pose(traj->transferred_object, arrival_time);
+
+      bool retry_with_delayed_start = false;
+      while (true)
+      {
+        CollisionInfo park_conflict =
+            find_stationary_pose_conflict_until_last_timestamp_ignoring(
+                traj->transferred_object, parked_pose, arrival_time,
+                trial_timetable, params, shared_collision_check_step(params),
+                robot);
+        if (park_conflict.is_valid)
+        {
+          accumulate_wait_stats(stats,
+                                std::max(0.0, safe_start_time - earliest_start));
+          if (out_last_collision)
+            *out_last_collision = park_conflict;
+          if (out_last_check_time)
+            *out_last_check_time = safe_start_time;
+          timetable = std::move(trial_timetable);
+          append_transfer_window_if_needed(*traj, transfer_windows);
+          return true;
+        }
+
+        if (out_last_collision)
+          *out_last_collision = park_conflict;
+        if (out_last_check_time)
+          *out_last_check_time = park_conflict.time;
+
+        EntityMeta *collider = nullptr;
+        auto collider_it = entities.find(park_conflict.entity_name);
+        if (collider_it != entities.end())
+          collider = collider_it->second;
+
+        if (auto *blocking_robot = dynamic_cast<RobotMeta *>(collider))
+        {
+          const bool blocker_waiting =
+              trial_timetable.is_waiting(blocking_robot, park_conflict.time);
+          const bool blocker_static_after =
+              trial_timetable.is_entity_static_after(park_conflict.time,
+                                                     blocking_robot);
+          if (blocker_waiting || blocker_static_after)
+          {
+            std::cout << "  [Segment] Parked "
+                      << traj->transferred_object->name
+                      << " conflicts with idle robot " << blocking_robot->name
+                      << ". Relocating blocker first." << std::endl;
+            if (relocate_blocking_robot(blocking_robot, trial_timetable, params,
+                                        entities, options))
+            {
+              continue;
+            }
+
+            std::ostringstream oss;
+            oss << "failed to relocate idle robot " << blocking_robot->name
+                << " blocking parked " << traj->transferred_object->name;
+            transfer_failure_reason = oss.str();
+            break;
+          }
+
+          const double delayed_start =
+              delayed_segment_start_after_stationary_conflict(
+                  safe_start_time, segment_duration, park_conflict.time,
+                  kTransferReservationStep);
+          std::cout << "  [Segment] Delaying transfer start by "
+                    << std::fixed << std::setprecision(2)
+                    << (delayed_start - safe_start_time)
+                    << "s so parked " << traj->transferred_object->name
+                    << " clears higher-priority " << blocking_robot->name
+                    << " at t=" << park_conflict.time << "s." << std::endl;
+          candidate_earliest_start = delayed_start;
+          retry_with_delayed_start = true;
+          break;
+        }
+
+        if (collider && collider->type == EntityType::OBJECT)
+        {
+          const bool collider_static_after =
+              trial_timetable.is_entity_static_after(park_conflict.time,
+                                                     collider);
+          if (!collider_static_after)
+          {
+            const double delayed_start =
+                delayed_segment_start_after_stationary_conflict(
+                    safe_start_time, segment_duration, park_conflict.time,
+                    kTransferReservationStep);
+            std::cout << "  [Segment] Delaying transfer start by "
+                      << std::fixed << std::setprecision(2)
+                      << (delayed_start - safe_start_time)
+                      << "s so parked " << traj->transferred_object->name
+                      << " clears higher-priority object " << collider->name
+                      << " at t=" << park_conflict.time << "s." << std::endl;
+            candidate_earliest_start = delayed_start;
+            retry_with_delayed_start = true;
+            break;
+          }
+
+          std::ostringstream oss;
+          oss << "parked " << traj->transferred_object->name
+              << " conflicts with reserved object " << collider->name;
+          transfer_failure_reason = oss.str();
+          break;
+        }
+
+        if (park_conflict.entity_name == "Boundary" ||
+            park_conflict.reason.find("Boundary") != std::string::npos)
+        {
+          transfer_failure_reason =
+              "parked transfer object would end up out of bounds";
+        }
+        else if (!park_conflict.entity_name.empty())
+        {
+          std::ostringstream oss;
+          oss << "parked " << traj->transferred_object->name
+              << " conflicts with reserved entity "
+              << park_conflict.entity_name;
+          transfer_failure_reason = oss.str();
+        }
+        break;
+      }
+
+      if (retry_with_delayed_start)
+        continue;
+
+      break;
+    }
+
+    if (out_failure_reason)
+      *out_failure_reason = transfer_failure_reason;
+    std::cerr << "  [Segment] Failed to reserve parked transfer object safely."
+              << std::endl;
+    return false;
+  }
+
+  double wait_added = 0.0;
+  double safe_start_time =
+      find_safe_start_time(traj, earliest_start, timetable, params, entities,
+                           options, &wait_added, out_last_collision,
+                           out_last_check_time);
+  accumulate_wait_stats(stats, wait_added);
+
+  if (safe_start_time < 0.0)
+  {
+    if (out_failure_reason)
+      *out_failure_reason = "failed to find safe start for scheduled segment";
+    std::cerr << "  [Segment] Failed to find safe start time for path segment."
+              << std::endl;
+    return false;
+  }
+
+  traj->start_time = safe_start_time;
+  timetable.add_trajectory(*traj);
+  append_transfer_window_if_needed(*traj, transfer_windows);
+  return true;
+}
+
 // Helper function to handle the scheduling of a single path segment
 bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
                            RobotMeta *robot, TimeTable &timetable,
                            const Params &params,
                            const std::unordered_map<std::string, EntityMeta *> &entities,
+                           const RuntimeOptions &options,
                            std::vector<TransferContactWindow> *transfer_windows = nullptr,
                            TaskExecutionStats *stats = nullptr,
-                           std::string *out_failure_reason = nullptr)
+                           std::string *out_failure_reason = nullptr,
+                           double *out_scheduled_start_time = nullptr)
 {
   // 1. Get current available time from the timetable
   double current_avail_time = timetable.get_entity_max_time(robot);
@@ -3970,6 +4640,7 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
 
   if (!prepare_segment_waypoints_for_scheduling(
           traj.get(), robot, current_avail_time, timetable, entities, params,
+      options,
           "  [Segment] Transit replanning failed; using original transit path with conflict-resolution scheduling."))
   {
     if (out_failure_reason)
@@ -3977,41 +4648,24 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
     return false;
   }
 
-  // 3. Find safe start time
-  double wait_added = 0.0;
-  double safe_start_time =
-      find_safe_start_time(traj.get(), current_avail_time, timetable, params, entities,
-                           &wait_added);
-  accumulate_wait_stats(stats, wait_added);
-
-  if (safe_start_time < 0.0)
-  {
-    if (out_failure_reason)
-      *out_failure_reason = "failed to find safe start for scheduled segment";
-    std::cerr << "  [Segment] Failed to find safe start time for path segment." << std::endl;
-    return false;
-  }
-
-  // 4. Update timestamps and add to timetable
-  traj->start_time = safe_start_time;
-  if (traj->is_transfer)
-  {
-    traj->CalcualteTimeStamps(robot);
-  }
-
-  timetable.add_trajectory(*traj);
-  append_transfer_window_if_needed(*traj, transfer_windows);
-
-  return true;
+  bool success = reserve_and_commit_trajectory(traj.get(), robot, current_avail_time,
+                                               timetable, params, entities, options,
+                                               transfer_windows, stats,
+                                               out_failure_reason);
+  if (success && out_scheduled_start_time)
+    *out_scheduled_start_time = traj->start_time;
+  return success;
 }
 
 bool process_task_execution(
     RobotMeta *robot, Task &task, TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
+  const RuntimeOptions &options,
     std::vector<TransferContactWindow> *transfer_windows = nullptr,
     TaskExecutionStats *out_stats = nullptr,
-    std::string *out_failure_reason = nullptr)
+    std::string *out_failure_reason = nullptr,
+    double task_start_delay = 0.0)
 {
   if (out_stats)
     *out_stats = TaskExecutionStats{};
@@ -4061,14 +4715,79 @@ bool process_task_execution(
   };
 
   // 1. Plan Transit to Task Start
-  double robot_avail_time = timetable.get_entity_max_time(robot);
+  double robot_avail_time = timetable.get_entity_max_time(robot) +
+                            std::max(0.0, task_start_delay);
+  if (out_stats && task_start_delay > 1e-9)
+  {
+    out_stats->total_waiting += task_start_delay;
+  }
+  double initial_transit_abs_start = -1.0;
+  double initial_transit_abs_end = -1.0;
   if (!plan_initial_transit(robot, task.TaskStartPoseRobot, robot_avail_time,
-                            timetable, entities, params))
+                            timetable, entities, params, options,
+                            &initial_transit_abs_start, &initial_transit_abs_end))
   {
     set_failure("initial transit planning failed");
     std::cerr << "Aborting task due to transit failure." << std::endl;
     return false;
   }
+  if (out_stats && initial_transit_abs_start >= 0.0)
+  {
+    out_stats->has_initial_transit = true;
+    out_stats->initial_transit_start_time = initial_transit_abs_start;
+    out_stats->initial_transit_end_time = initial_transit_abs_end;
+  }
+  const Pose initial_wait_pose = timetable.get_pose(robot, initial_transit_abs_end);
+  bool initial_wait_gap_checked = false;
+  auto validate_initial_wait_gap = [&](double next_segment_start_time,
+                                       const std::string &segment_label,
+                                       EntityMeta *ignored_entity = nullptr) -> bool
+  {
+    if (initial_wait_gap_checked)
+      return true;
+    initial_wait_gap_checked = true;
+
+    if (next_segment_start_time <= initial_transit_abs_end + 1e-9)
+      return true;
+
+    CollisionInfo wait_conflict =
+        ignored_entity
+            ? find_stationary_pose_conflict_over_interval_ignoring(
+                  robot, initial_wait_pose, initial_transit_abs_end,
+                  next_segment_start_time, timetable, params,
+                  shared_collision_check_step(params), ignored_entity)
+            : find_stationary_pose_conflict_over_interval(
+                  robot, initial_wait_pose, initial_transit_abs_end,
+                  next_segment_start_time, timetable, params,
+                  shared_collision_check_step(params));
+    if (wait_conflict.is_valid)
+      return true;
+
+    if (out_stats)
+    {
+      out_stats->has_initial_wait_conflict = true;
+      out_stats->initial_wait_pose = initial_wait_pose;
+      out_stats->initial_wait_conflict_time = wait_conflict.time;
+      out_stats->initial_wait_conflict_entity = wait_conflict.entity_name;
+    }
+
+    std::ostringstream oss;
+    oss << "initial transit waiting pose conflicts with reserved occupancy before "
+        << segment_label;
+    if (!wait_conflict.entity_name.empty())
+      oss << " (" << wait_conflict.entity_name << ")";
+    set_failure(oss.str());
+
+    std::cerr << "  [Transit] Waiting at the initial-transit goal is not safe until "
+              << segment_label << " starts. Conflict: " << wait_conflict.reason;
+    if (!wait_conflict.entity_name.empty())
+      std::cerr << " with " << wait_conflict.entity_name;
+    if (wait_conflict.time > 1e-6)
+      std::cerr << " at t=" << std::fixed << std::setprecision(2)
+                << wait_conflict.time;
+    std::cerr << std::endl;
+    return false;
+  };
 
   // 2. ObsRelo (if exists)
   if (task.vertexChain.size() > 2)
@@ -4089,18 +4808,26 @@ bool process_task_execution(
       if (task.obsReloPaths->size() > post_path_idx)
       {
         // Step A: Two-point push trajectory
+        double obs_push_start_time = -1.0;
         if (!schedule_path_segment(task.obsReloPaths->at(push_path_idx), obs_meta,
-                                   robot, timetable, params, entities,
+                                   robot, timetable, params, entities, options,
                                    transfer_windows,
-                                   out_stats, out_failure_reason))
+                                   out_stats, out_failure_reason,
+                                   &obs_push_start_time))
         {
           set_failure("obs relocation push segment failed");
+          return false;
+        }
+        if (!validate_initial_wait_gap(obs_push_start_time,
+                                       "obstacle relocation push",
+                                       obs_meta))
+        {
           return false;
         }
 
         // Step B: Schedule the "Post-Obs/Return" path
         if (!schedule_path_segment(task.obsReloPaths->at(post_path_idx), obs_meta,
-                                   robot, timetable, params, entities,
+                                   robot, timetable, params, entities, options,
                                    transfer_windows,
                                    out_stats, out_failure_reason))
         {
@@ -4131,7 +4858,7 @@ bool process_task_execution(
                  << "] Transit replanning failed; using original transit path with conflict-resolution scheduling.";
     if (!prepare_segment_waypoints_for_scheduling(path_ptr.get(), robot,
                                                   segment_ready_time, timetable,
-                                                  entities, params,
+                                                  entities, params, options,
                                                   fallback_msg.str()))
     {
       set_failure("empty edge transit segment");
@@ -4157,15 +4884,14 @@ bool process_task_execution(
     // B. Find Valid Start Time (Collision Delay)
     std::cout << "  [Segment " << segment_idx << "] Checking schedule..."
               << std::endl;
-    double wait_added = 0.0;
     CollisionInfo segment_failure_collision;
     double segment_failure_start = segment_ready_time;
-    double safe_start_time = find_safe_start_time(
-        path_ptr.get(), segment_ready_time, timetable, params, entities,
-        &wait_added, &segment_failure_collision, &segment_failure_start);
-    accumulate_wait_stats(out_stats, wait_added);
-    if (safe_start_time < 0)
-    { // Or if waypoints.empty() after any re-plan
+    if (!reserve_and_commit_trajectory(
+            path_ptr.get(), robot, segment_ready_time, timetable, params,
+            entities, options, transfer_windows, out_stats,
+            out_failure_reason, &segment_failure_collision,
+            &segment_failure_start))
+    {
       std::ostringstream oss;
       oss << "segment " << segment_idx << " failed (no safe start time)";
       set_failure(oss.str());
@@ -4193,19 +4919,21 @@ bool process_task_execution(
       }
       return false; // Break logic was here, now return false
     }
-
-    // C. Register Trajectory
-    path_ptr->start_time = safe_start_time;
-    path_ptr->transferred_object =
+    EntityMeta *allowed_contact_entity =
         path_ptr->is_transfer ? path_ptr->transferred_object : nullptr;
-    timetable.add_trajectory(*path_ptr);
-    append_transfer_window_if_needed(*path_ptr, transfer_windows);
+    if (!validate_initial_wait_gap(path_ptr->start_time,
+                                   "segment " + std::to_string(segment_idx),
+                                   allowed_contact_entity))
+    {
+      return false;
+    }
 
     // D. Handle Retraction (if this was a push)
     bool is_final_edge_segment = (segment_idx == static_cast<int>(task.EdgePaths.size()));
     if (path_ptr->is_transfer && is_final_edge_segment)
     {
       if (!append_retraction(robot, *path_ptr, timetable, params, entities,
+                             options,
                              out_stats, out_failure_reason))
       {
         std::cout << "  [Retract] Skipping retraction for this task (no collision-free slot)." << std::endl;
@@ -4233,7 +4961,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/MARS/result_seq_ReloPush-BOSS_10_objects.txt_ind0.b64";
+         "/result_seq_ReloPush-BOSS_10_objects.txt_ind8.b64";
 }
 
 bool load_data(
@@ -4403,6 +5131,19 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << "'. Keeping default." << std::endl;
       }
     }
+    else if (arg.rfind("--max-search-iters=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--max-search-iters=").size());
+      try
+      {
+        options.max_search_iterations = std::max(0, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --max-search-iters value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
     else if (arg.rfind("--assignment-search-iters=", 0) == 0)
     {
       std::string value = arg.substr(std::string("--assignment-search-iters=").size());
@@ -4531,6 +5272,8 @@ void print_runtime_options(const RuntimeOptions &options)
             << std::endl;
   std::cout << "[Config] Search threads: "
             << options.search_threads << std::endl;
+  std::cout << "[Config] Max search iterations: "
+            << options.max_search_iterations << std::endl;
   std::cout << "[Config] Parking candidate mode: "
             << parking_candidate_mode_name(options.parking_candidate_mode)
             << std::endl;
@@ -4587,6 +5330,12 @@ void initialize_environment(
     std::cout << "[Config] Parking RNG seed: " << parking_rng_seed() << std::endl;
     std::cout << "[Config] Parking candidate mode: "
               << parking_candidate_mode_name() << std::endl;
+    std::cout << "[Config] Collision tuning: inflation="
+              << params.inflation
+              << ", safety_margin=" << params.safety_margin
+              << ", robot_collision_inflation="
+              << params.robot_collision_inflation
+              << " (temporary experiment)" << std::endl;
   }
 
   entities = initialize_entities(loaded_sequence);
@@ -4747,6 +5496,7 @@ bool attempt_task_with_candidate(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
+  const RuntimeOptions &options,
     std::vector<TransferContactWindow> &transfer_windows,
     TaskCsvRow &row,
     std::string &last_failed_robot,
@@ -4754,73 +5504,270 @@ bool attempt_task_with_candidate(
 {
   TimeTable timetable_before_attempt = timetable;
   auto transfer_windows_before_attempt = transfer_windows;
+  TimeTable retry_base_timetable = timetable_before_attempt;
+  auto retry_base_transfer_windows = transfer_windows_before_attempt;
   task.assignedRobot = cand_robot;
   std::cout << "[Assign] Attempting " << cand_robot->name
             << " (Free at t=" << std::fixed << std::setprecision(2) << free_time << "s)" << std::endl;
 
-  TaskExecutionStats attempt_stats;
-  std::string attempt_failure_reason;
-  if (process_task_execution(cand_robot, task, timetable, entities, params,
-                             &transfer_windows,
-                             &attempt_stats, &attempt_failure_reason))
+  constexpr double kPostValidationRetryDelay = 0.5;
+  constexpr int kMaxPostValidationDelayRetries = 4;
+  double task_start_delay = 0.0;
+  bool self_safe_parking_retry_applied = false;
+
+  auto make_single_pose_hint = [&](const Pose &pose, double abs_time) -> Trajectory
   {
-    auto verify = verify_timetable_collision_free(timetable, entities, params,
-                                                  transfer_windows,
-                                                  0.0);
-    if (!verify.is_valid)
+    Trajectory hint;
+    hint.entity = cand_robot;
+    hint.start_time = abs_time;
+    hint.is_transfer = false;
+
+    Waypoint wp;
+    wp.x = pose.x;
+    wp.y = pose.y;
+    wp.yaw = pose.yaw;
+    wp.time = 0.0;
+    wp.linear_velocity = 0.0;
+    wp.steering_angle = 0.0;
+    hint.waypoints.push_back(wp);
+    return hint;
+  };
+
+  for (int retry_idx = 0; retry_idx <= kMaxPostValidationDelayRetries; ++retry_idx)
+  {
+    timetable = retry_base_timetable;
+    transfer_windows = retry_base_transfer_windows;
+
+    if (retry_idx > 0)
     {
-      std::ostringstream vmsg;
-      vmsg << "post-task verification collision at t="
-           << std::fixed << std::setprecision(2)
-           << verify.time << " between " << verify.entity_a
-           << " and " << verify.entity_b;
-      attempt_failure_reason = vmsg.str();
-      if (DEBUG_VIS)
-      {
-        std::ostringstream context;
-        context << "Task " << row.task_id;
-        if (task.targetObject)
-          context << " (" << task.targetObject->name << ")";
-        context << "\nCandidate robot: " << cand_robot->name;
-        context << "\nVerification result recorded after successful task execution";
-        visualize_post_task_verification_debug(
-            timetable, cand_robot, task.targetObject,
-            verify.time, verify.reason, verify.entity_a, verify.entity_b, params,
-            context.str());
-      }
-      timetable = timetable_before_attempt;
-      transfer_windows = transfer_windows_before_attempt;
-      last_failed_robot = cand_robot->name;
-      last_failure_reason = attempt_failure_reason;
-      std::cout << "[Assign] FAILED with " << cand_robot->name
-                << " (Post-Task Verification Failed) - Trying next..."
-                << std::endl;
-      std::cout << "         Verification: collision at t="
-                << std::fixed << std::setprecision(2) << verify.time
-                << " between " << verify.entity_a
-                << " and " << verify.entity_b << std::endl;
-      return false;
+      std::cout << "         Retrying " << cand_robot->name
+                << " with extra task-start delay of "
+                << std::fixed << std::setprecision(2)
+                << task_start_delay << "s." << std::endl;
     }
 
-    row.status = "SUCCESS";
-    row.robot_name = cand_robot->name;
-    row.start_time = free_time;
-    row.end_time = timetable.get_entity_max_time(cand_robot);
-    row.total_waiting = attempt_stats.total_waiting;
-    row.failure_reason = "";
-    std::cout << "[Assign] SUCCESS with " << cand_robot->name << std::endl;
-    return true;
+    TaskExecutionStats attempt_stats;
+    std::string attempt_failure_reason;
+    if (process_task_execution(cand_robot, task, timetable, entities, params,
+                               options,
+                               &transfer_windows,
+                               &attempt_stats, &attempt_failure_reason,
+                               task_start_delay))
+    {
+      auto verify = verify_timetable_collision_free(timetable, entities, params,
+                                                    transfer_windows,
+                                                    0.0);
+      if (!verify.is_valid)
+      {
+        std::ostringstream vmsg;
+        vmsg << "post-task verification collision at t="
+             << std::fixed << std::setprecision(2)
+             << verify.time << " between " << verify.entity_a
+             << " and " << verify.entity_b;
+        attempt_failure_reason = vmsg.str();
+
+        EntityMeta *entity_a = nullptr;
+        EntityMeta *entity_b = nullptr;
+        auto entity_a_it = entities.find(verify.entity_a);
+        if (entity_a_it != entities.end())
+          entity_a = entity_a_it->second;
+        auto entity_b_it = entities.find(verify.entity_b);
+        if (entity_b_it != entities.end())
+          entity_b = entity_b_it->second;
+
+        const bool candidate_involved =
+            (verify.entity_a == cand_robot->name ||
+             verify.entity_b == cand_robot->name);
+        const std::string other_entity_name =
+            (verify.entity_a == cand_robot->name)
+                ? verify.entity_b
+                : ((verify.entity_b == cand_robot->name) ? verify.entity_a
+                                                         : "");
+        const bool collision_during_initial_transit =
+            attempt_stats.has_initial_transit &&
+            candidate_involved &&
+            verify.time + 1e-6 >= attempt_stats.initial_transit_start_time &&
+            verify.time <= attempt_stats.initial_transit_end_time + 1e-6;
+        const bool later_transit_priority_inversion =
+            collision_during_initial_transit &&
+            !other_entity_name.empty() &&
+            (!task.targetObject || other_entity_name != task.targetObject->name);
+
+        std::cout << "         [VerifyDebug] "
+                  << describe_entity_pose_context(timetable, entity_a, verify.time)
+                  << std::endl;
+        std::cout << "         [VerifyDebug] "
+                  << describe_entity_pose_context(timetable, entity_b, verify.time)
+                  << std::endl;
+        std::cout << "         [VerifyDebug] "
+                  << summarize_pair_collision_window(timetable, entity_a, entity_b,
+                                                     params, verify.time)
+                  << std::endl;
+        std::cout << "         [VerifyDebug] "
+                  << compare_pair_collision_checks(timetable, entity_a, entity_b,
+                                                   params, verify.time)
+                  << std::endl;
+
+        if (DEBUG_VIS)
+        {
+          std::ostringstream context;
+          context << "Task " << row.task_id;
+          if (task.targetObject)
+            context << " (" << task.targetObject->name << ")";
+          context << "\nCandidate robot: " << cand_robot->name;
+          context << "\nVerification result recorded after successful task execution";
+          visualize_post_task_verification_debug(
+              timetable, cand_robot, task.targetObject,
+              verify.time, verify.reason, verify.entity_a, verify.entity_b, params,
+              context.str());
+        }
+
+        if (later_transit_priority_inversion &&
+            retry_idx < kMaxPostValidationDelayRetries)
+        {
+          task_start_delay += kPostValidationRetryDelay;
+          std::cout << "         Earlier reserved occupancy keeps priority over "
+                    << cand_robot->name
+                    << "'s later initial transit. Adding "
+                    << std::fixed << std::setprecision(2)
+                    << kPostValidationRetryDelay
+                    << "s task-start delay and retrying the same robot."
+                    << std::endl;
+          continue;
+        }
+
+        if (later_transit_priority_inversion &&
+            !self_safe_parking_retry_applied)
+        {
+          TimeTable self_park_base_timetable = retry_base_timetable;
+          auto self_park_base_transfer_windows = retry_base_transfer_windows;
+          Pose conflict_pose = timetable.get_pose(cand_robot, verify.time);
+          Trajectory blocked_hint = make_single_pose_hint(conflict_pose, verify.time);
+
+          std::cout << "         Earlier relocation kept priority after delay retries."
+                    << " Attempting self safe parking for " << cand_robot->name
+                    << " before replanning the task." << std::endl;
+
+          if (relocate_blocking_robot(cand_robot, self_park_base_timetable,
+                                      params, entities, options, &blocked_hint))
+          {
+            retry_base_timetable = std::move(self_park_base_timetable);
+            retry_base_transfer_windows = std::move(self_park_base_transfer_windows);
+            self_safe_parking_retry_applied = true;
+            task_start_delay = 0.0;
+            retry_idx = -1;
+            std::cout << "         " << cand_robot->name
+                      << " reached safe parking. Re-running the same task while preserving earlier reservations."
+                      << std::endl;
+            continue;
+          }
+
+          std::cout << "         Self safe parking retry failed for "
+                    << cand_robot->name << "." << std::endl;
+        }
+
+        if (!later_transit_priority_inversion &&
+            retry_idx < kMaxPostValidationDelayRetries)
+        {
+          task_start_delay += kPostValidationRetryDelay;
+          std::cout << "         Verification collision remained after planning."
+                    << " Adding " << std::fixed << std::setprecision(2)
+                    << kPostValidationRetryDelay
+                    << "s more task-start delay and retrying the same robot."
+                    << std::endl;
+          continue;
+        }
+
+        timetable = timetable_before_attempt;
+        transfer_windows = transfer_windows_before_attempt;
+        last_failed_robot = cand_robot->name;
+        last_failure_reason = attempt_failure_reason;
+        std::cout << "[Assign] FAILED with " << cand_robot->name
+                  << " (Post-Task Verification Failed) - Trying next..."
+                  << std::endl;
+        std::cout << "         Verification: collision at t="
+                  << std::fixed << std::setprecision(2) << verify.time
+                  << " between " << verify.entity_a
+                  << " and " << verify.entity_b << std::endl;
+        return false;
+      }
+
+      row.status = "SUCCESS";
+      row.robot_name = cand_robot->name;
+      row.start_time = attempt_stats.has_initial_transit
+                           ? attempt_stats.initial_transit_start_time
+                           : (free_time + task_start_delay);
+      row.end_time = timetable.get_entity_max_time(cand_robot);
+      row.total_waiting = attempt_stats.total_waiting;
+      row.failure_reason = "";
+      std::cout << "[Assign] SUCCESS with " << cand_robot->name << std::endl;
+      return true;
+    }
+
+    if (attempt_stats.has_initial_wait_conflict &&
+        retry_idx < kMaxPostValidationDelayRetries)
+    {
+      task_start_delay += kPostValidationRetryDelay;
+      std::cout << "         Initial-transit waiting pose conflicts with earlier reserved occupancy."
+                << " Adding " << std::fixed << std::setprecision(2)
+                << kPostValidationRetryDelay
+                << "s task-start delay and retrying the same robot."
+                << std::endl;
+      continue;
+    }
+
+    if (attempt_stats.has_initial_wait_conflict &&
+        !self_safe_parking_retry_applied)
+    {
+      TimeTable self_park_base_timetable = retry_base_timetable;
+      auto self_park_base_transfer_windows = retry_base_transfer_windows;
+      const double conflict_time =
+          attempt_stats.initial_wait_conflict_time > 0.0
+              ? attempt_stats.initial_wait_conflict_time
+              : attempt_stats.initial_transit_end_time;
+      Trajectory blocked_hint =
+          make_single_pose_hint(attempt_stats.initial_wait_pose, conflict_time);
+
+      std::cout << "         Delay retries exhausted while "
+                << cand_robot->name
+                << " waits at the initial-transit goal."
+                << " Attempting self safe parking before replanning the task."
+                << std::endl;
+
+      if (relocate_blocking_robot(cand_robot, self_park_base_timetable,
+                                  params, entities, options, &blocked_hint))
+      {
+        retry_base_timetable = std::move(self_park_base_timetable);
+        retry_base_transfer_windows = std::move(self_park_base_transfer_windows);
+        self_safe_parking_retry_applied = true;
+        task_start_delay = 0.0;
+        retry_idx = -1;
+        std::cout << "         " << cand_robot->name
+                  << " reached safe parking. Re-running the same task while preserving earlier reservations."
+                  << std::endl;
+        continue;
+      }
+
+      std::cout << "         Self safe parking retry failed for "
+                << cand_robot->name << "." << std::endl;
+    }
+
+    timetable = timetable_before_attempt;
+    transfer_windows = transfer_windows_before_attempt;
+    last_failed_robot = cand_robot->name;
+    last_failure_reason = attempt_failure_reason.empty() ? "task execution failed" : attempt_failure_reason;
+    std::cout << "[Assign] FAILED with " << cand_robot->name << " (Transit Blocked) - Trying next..." << std::endl;
+    if (!last_failure_reason.empty())
+    {
+      std::cout << "         Reason: " << last_failure_reason << std::endl;
+    }
+    return false;
   }
 
   timetable = timetable_before_attempt;
   transfer_windows = transfer_windows_before_attempt;
   last_failed_robot = cand_robot->name;
-  last_failure_reason = attempt_failure_reason.empty() ? "task execution failed" : attempt_failure_reason;
-  std::cout << "[Assign] FAILED with " << cand_robot->name << " (Transit Blocked) - Trying next..." << std::endl;
-  if (!last_failure_reason.empty())
-  {
-    std::cout << "         Reason: " << last_failure_reason << std::endl;
-  }
+  last_failure_reason = "unexpected exhausted retry loop";
   return false;
 }
 
@@ -4831,6 +5778,7 @@ TaskCsvRow execute_single_task_with_candidates(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
+  const RuntimeOptions &options,
     std::vector<TransferContactWindow> &transfer_windows)
 {
   std::cout << "\n=== Processing Task " << task_counter << " ("
@@ -4847,7 +5795,7 @@ TaskCsvRow execute_single_task_with_candidates(
   {
     row.attempts += 1;
     if (attempt_task_with_candidate(task, cand_robot, free_time,
-                                    timetable, entities, params,
+                                    timetable, entities, params, options,
                                     transfer_windows, row,
                                     last_failed_robot, last_failure_reason))
     {
@@ -4872,7 +5820,8 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     const std::vector<RobotMeta *> &all_robots,
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
-    const Params &params)
+  const Params &params,
+  const RuntimeOptions &options)
 {
   std::vector<TaskCsvRow> task_rows;
   std::vector<TransferContactWindow> transfer_windows;
@@ -4883,6 +5832,7 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     task_counter++;
     auto row = execute_single_task_with_candidates(
         task, task_counter, all_robots, timetable, entities, params,
+      options,
         transfer_windows);
     task_rows.push_back(std::move(row));
   }
@@ -4933,7 +5883,8 @@ ExecutedScenario execute_allocation_scenario(
   auto tasks = build_tasks_for_plan(loaded_sequence, executed.entities,
                                     all_robots, plan);
   auto task_rows = execute_task_allocation_loop(
-      tasks, all_robots, executed.timetable, executed.entities, executed.params);
+      tasks, all_robots, executed.timetable, executed.entities, executed.params,
+      options);
 
   executed.summary = summarize_run(label, plan, parking_seed, task_rows,
                                    executed.timetable);

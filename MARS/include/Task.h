@@ -3,14 +3,20 @@
 
 #include <PHAstar/Entities.h>
 #include <PHAstar/PHAstar.h>
+#include <PHAstar/Utils.h>
 #include <ReloPush.h>
+
+inline double NormalizeReloPushYaw(double yaw_in)
+{
+    return mod2pi(yaw_in);
+}
 
 Pose PoseFromReloPushState(const ReloPush::State& state_in)
 {
     Pose p;
     p.x = state_in.x;
     p.y = state_in.y;
-    p.yaw = state_in.yaw;
+    p.yaw = NormalizeReloPushYaw(state_in.yaw);
 
     return p;
 }
@@ -24,6 +30,50 @@ Waypoint WaypointFromReloPushState(const ReloPush::State& state_in)
     wp.linear_velocity = state_in.vel;
 
     return wp;
+}
+
+inline bool TryExtractEdgePathEndpointPose(const EdgePath& edge_path,
+                                           bool use_front,
+                                           Pose& out_pose)
+{
+    if (!std::holds_alternative<ReloPush::StatePathPtr>(edge_path.path)) {
+        return false;
+    }
+
+    const auto& path_ptr = std::get<ReloPush::StatePathPtr>(edge_path.path);
+    if (!path_ptr || path_ptr->empty()) {
+        return false;
+    }
+
+    out_pose = PoseFromReloPushState(use_front ? path_ptr->front() : path_ptr->back());
+    return true;
+}
+
+inline Pose DetermineTaskStartPoseRobot(const FinalAllocation& fa)
+{
+    Pose pose_out{};
+
+    if (fa.obsReloPaths) {
+        for (const auto& obs_path : *fa.obsReloPaths) {
+            if (TryExtractEdgePathEndpointPose(obs_path, true, pose_out)) {
+                return pose_out;
+            }
+        }
+    }
+
+    for (const auto& edge_group : fa.paths) {
+        for (const auto& path_ptr : edge_group.paths) {
+            if (path_ptr && TryExtractEdgePathEndpointPose(*path_ptr, true, pose_out)) {
+                return pose_out;
+            }
+        }
+    }
+
+    if (fa.firstApproachPath && !fa.firstApproachPath->empty()) {
+        return PoseFromReloPushState(fa.firstApproachPath->back());
+    }
+
+    return pose_out;
 }
 
 TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
@@ -87,12 +137,13 @@ public:
 
     // constructor without assigned robot
     Task(const FinalAllocation& fa, const std::unordered_map<std::string, EntityMeta*>& entities) {
-        StartPoseObj = {fa.startPose.x, fa.startPose.y, fa.startPose.yaw};
-        GoalPoseObj = {fa.goalPose.x, fa.goalPose.y, fa.goalPose.yaw};
+        StartPoseObj = {fa.startPose.x, fa.startPose.y, NormalizeReloPushYaw(fa.startPose.yaw)};
+        GoalPoseObj = {fa.goalPose.x, fa.goalPose.y, NormalizeReloPushYaw(fa.goalPose.yaw)};
         targetObject = dynamic_cast<ObjectMeta*>(entities.at(fa.object.name));
 
-        // Goal of first transit as the starting pose of the task
-        TaskStartPoseRobot = PoseFromReloPushState(fa.firstApproachPath->back());
+        // Use the first executable segment start so tasks with obstacle relocation
+        // do not inherit an unreachable or already-occupied standby goal.
+        TaskStartPoseRobot = DetermineTaskStartPoseRobot(fa);
 
 /////////////// need to verify ///////
         // obs relo path

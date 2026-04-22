@@ -21,6 +21,7 @@ struct RuntimeOptions
     bool has_fixed_random_seed = false;
     std::uint32_t base_random_seed = 0;
     int search_threads = 5;
+    int max_search_iterations = 50000;
     int assignment_search_iterations = 0;
     int local_sequence_search_iterations = 0;
     int shuffle_sequence_search_iterations = 0;

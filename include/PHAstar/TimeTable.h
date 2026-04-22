@@ -28,7 +28,7 @@ public:
     void add_trajectory(const Trajectory &traj)
     {
         EntityMeta *ent = traj.entity;
-        if (traj.waypoints.empty())
+        if (!ent || traj.waypoints.empty())
             return;
         double min_relative = traj.waypoints.front().time;
         double max_relative = traj.waypoints.back().time;
@@ -41,42 +41,53 @@ public:
         {
             initial_obj_yaw = get_pose(traj.transferred_object, absolute_min_t).yaw;
         }
-        for (double absolute_t = absolute_min_t; absolute_t <= absolute_max_t + time_increment; absolute_t += time_increment)
+
+        constexpr double kHoldSampleEps = 1e-4;
+        auto &entity_table = per_entity_table[ent];
+        auto next_it = entity_table.lower_bound(absolute_min_t);
+        if (next_it != entity_table.begin())
+        {
+            auto prev_it = std::prev(next_it);
+            if ((absolute_min_t - prev_it->first) > kHoldSampleEps)
+            {
+                const double hold_time = absolute_min_t - kHoldSampleEps;
+                entity_table[hold_time] = prev_it->second;
+                if (traj.is_transfer && traj.transferred_object)
+                {
+                    per_entity_table[traj.transferred_object][hold_time] =
+                        get_pose(traj.transferred_object, hold_time);
+                }
+            }
+        }
+
+        auto record_robot_pose = [&](double absolute_t, const Pose &p)
+        {
+            per_entity_table[ent][absolute_t] = p;
+            if (traj.is_transfer && traj.transferred_object)
+            {
+                Pose obj_p = compute_object_pose(p, ent->size, traj.transferred_object->size);
+                double delta_yaw = mod2pi(p.yaw - robot_start_yaw);
+                obj_p.yaw = mod2pi(initial_obj_yaw + delta_yaw);
+                per_entity_table[traj.transferred_object][absolute_t] = obj_p;
+            }
+        };
+
+        // Store the exact trajectory waypoints so later interpolation follows
+        // the same path that was collision-checked during scheduling.
+        for (const auto &wp : traj.waypoints)
+        {
+            record_robot_pose(offset + wp.time, wp);
+        }
+
+        // Also keep intermediate timetable samples for queries between waypoints.
+        for (double absolute_t = absolute_min_t; absolute_t <= absolute_max_t + 1e-9; absolute_t += time_increment)
         {
             double relative_t = absolute_t - offset;
             if (relative_t >= min_relative && relative_t <= max_relative)
             {
                 Pose p = interpolate_waypoints(traj.waypoints, relative_t);
-                per_entity_table[ent][absolute_t] = p;
-                if (traj.is_transfer && traj.transferred_object)
-                {
-                    Pose obj_p = compute_object_pose(p, ent->size, traj.transferred_object->size);
-                    double delta_yaw = mod2pi(p.yaw - robot_start_yaw);
-                    obj_p.yaw = mod2pi(initial_obj_yaw + delta_yaw);
-                    per_entity_table[traj.transferred_object][absolute_t] = obj_p;
-                }
+                record_robot_pose(absolute_t, p);
             }
-        }
-        // Explicitly add the first and last waypoints
-        double relative_min = min_relative;
-        Pose p_min = interpolate_waypoints(traj.waypoints, relative_min);
-        per_entity_table[ent][absolute_min_t] = p_min;
-        if (traj.is_transfer && traj.transferred_object)
-        {
-            Pose obj_p_min = compute_object_pose(p_min, ent->size, traj.transferred_object->size);
-            double delta_yaw = mod2pi(p_min.yaw - robot_start_yaw);
-            obj_p_min.yaw = mod2pi(initial_obj_yaw + delta_yaw);
-            per_entity_table[traj.transferred_object][absolute_min_t] = obj_p_min;
-        }
-        double relative_max = max_relative;
-        Pose p_max = interpolate_waypoints(traj.waypoints, relative_max);
-        per_entity_table[ent][absolute_max_t] = p_max;
-        if (traj.is_transfer && traj.transferred_object)
-        {
-            Pose obj_p_max = compute_object_pose(p_max, ent->size, traj.transferred_object->size);
-            double delta_yaw = mod2pi(p_max.yaw - robot_start_yaw);
-            obj_p_max.yaw = mod2pi(initial_obj_yaw + delta_yaw);
-            per_entity_table[traj.transferred_object][absolute_max_t] = obj_p_max;
         }
     }
 

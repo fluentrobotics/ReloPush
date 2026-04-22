@@ -17,6 +17,13 @@ struct TaskExecutionStats
 {
   double total_waiting = 0.0;
   int delayed_segments = 0;
+  bool has_initial_transit = false;
+  double initial_transit_start_time = -1.0;
+  double initial_transit_end_time = -1.0;
+  bool has_initial_wait_conflict = false;
+  Pose initial_wait_pose;
+  double initial_wait_conflict_time = -1.0;
+  std::string initial_wait_conflict_entity;
 };
 
 struct TimeTableVerificationResult
