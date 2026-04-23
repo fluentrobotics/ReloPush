@@ -40,6 +40,8 @@
 bool DEBUG_VIS = false;
 
 std::string default_sequence_path();
+std::string sanitize_filename_component(const std::string &label);
+double shared_collision_check_step(const Params &params);
 
 namespace
 {
@@ -164,6 +166,257 @@ void write_task_csv_log(const std::string &csv_path,
   }
 
   std::cout << "[Log] Wrote task execution CSV: " << csv_path << std::endl;
+}
+
+struct OrientationJumpRecord
+{
+  std::string scenario_label;
+  std::string source;
+  std::string robot_name;
+  double prev_time = 0.0;
+  double curr_time = 0.0;
+  Pose prev_pose;
+  Pose curr_pose;
+  double raw_yaw_delta = 0.0;
+  double wrapped_yaw_delta = 0.0;
+  double distance = 0.0;
+};
+
+void write_timetable_robot_pose_csv(const std::string &csv_path,
+                                    const std::string &scenario_label,
+                                    const TimeTable &timetable,
+                                    const std::unordered_map<std::string, EntityMeta *> &entities,
+                                    double sample_step)
+{
+  std::ofstream ofs(csv_path);
+  if (!ofs.is_open())
+  {
+    std::cerr << "[Log] Failed to open timetable pose CSV: "
+              << csv_path << std::endl;
+    return;
+  }
+
+  ofs << "scenario,robot,time,x,y,yaw,yaw_unwrapped\n";
+  ofs << std::fixed << std::setprecision(6);
+
+  const double max_t = timetable.get_max_time();
+  for (const auto &[name, entity] : entities)
+  {
+    if (!entity || entity->type != EntityType::ROBOT)
+      continue;
+
+    bool has_prev = false;
+    double yaw_unwrapped = 0.0;
+    Pose prev_pose{};
+
+    for (double t = 0.0; t <= max_t + 1e-9; t += sample_step)
+    {
+      Pose pose = timetable.get_pose(entity, t);
+      if (!has_prev)
+      {
+        yaw_unwrapped = pose.yaw;
+        has_prev = true;
+      }
+      else
+      {
+        yaw_unwrapped += pi_2_pi(pose.yaw - prev_pose.yaw);
+      }
+
+      ofs << csv_escape(scenario_label) << ","
+          << csv_escape(name) << ","
+          << t << ","
+          << pose.x << ","
+          << pose.y << ","
+          << pose.yaw << ","
+          << yaw_unwrapped << "\n";
+
+      prev_pose = pose;
+    }
+  }
+
+  std::cout << "[Log] Wrote timetable robot pose CSV: " << csv_path << std::endl;
+}
+
+void write_orientation_jump_csv(const std::string &csv_path,
+                                const std::vector<OrientationJumpRecord> &records)
+{
+  std::ofstream ofs(csv_path);
+  if (!ofs.is_open())
+  {
+    std::cerr << "[Log] Failed to open orientation jump CSV: "
+              << csv_path << std::endl;
+    return;
+  }
+
+  ofs << "scenario,source,robot,prev_time,curr_time,prev_x,prev_y,prev_yaw,curr_x,curr_y,curr_yaw,raw_yaw_delta,wrapped_yaw_delta,distance\n";
+  ofs << std::fixed << std::setprecision(6);
+
+  for (const auto &record : records)
+  {
+    ofs << csv_escape(record.scenario_label) << ","
+        << csv_escape(record.source) << ","
+        << csv_escape(record.robot_name) << ","
+        << record.prev_time << ","
+        << record.curr_time << ","
+        << record.prev_pose.x << ","
+        << record.prev_pose.y << ","
+        << record.prev_pose.yaw << ","
+        << record.curr_pose.x << ","
+        << record.curr_pose.y << ","
+        << record.curr_pose.yaw << ","
+        << record.raw_yaw_delta << ","
+        << record.wrapped_yaw_delta << ","
+        << record.distance << "\n";
+  }
+
+  std::cout << "[Log] Wrote orientation jump CSV: " << csv_path << std::endl;
+}
+
+std::vector<OrientationJumpRecord> collect_robot_orientation_jumps(
+    const std::string &scenario_label,
+    const TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    double dense_sample_step,
+    double wrapped_jump_threshold)
+{
+  std::vector<OrientationJumpRecord> out;
+  const double max_t = timetable.get_max_time();
+
+  auto maybe_append = [&](const std::string &source,
+                          const std::string &robot_name,
+                          double prev_time,
+                          const Pose &prev_pose,
+                          double curr_time,
+                          const Pose &curr_pose)
+  {
+    const double raw_yaw_delta = curr_pose.yaw - prev_pose.yaw;
+    const double wrapped_yaw_delta = pi_2_pi(raw_yaw_delta);
+    if (std::abs(wrapped_yaw_delta) < wrapped_jump_threshold)
+      return;
+
+    OrientationJumpRecord record;
+    record.scenario_label = scenario_label;
+    record.source = source;
+    record.robot_name = robot_name;
+    record.prev_time = prev_time;
+    record.curr_time = curr_time;
+    record.prev_pose = prev_pose;
+    record.curr_pose = curr_pose;
+    record.raw_yaw_delta = raw_yaw_delta;
+    record.wrapped_yaw_delta = wrapped_yaw_delta;
+    record.distance = std::hypot(curr_pose.x - prev_pose.x,
+                                 curr_pose.y - prev_pose.y);
+    out.push_back(record);
+  };
+
+  for (const auto &[name, entity] : entities)
+  {
+    if (!entity || entity->type != EntityType::ROBOT)
+      continue;
+
+    bool has_prev_dense = false;
+    double prev_dense_time = 0.0;
+    Pose prev_dense_pose{};
+    for (double t = 0.0; t <= max_t + 1e-9; t += dense_sample_step)
+    {
+      const Pose pose = timetable.get_pose(entity, t);
+      if (has_prev_dense)
+      {
+        maybe_append("dense-get-pose", name,
+                     prev_dense_time, prev_dense_pose,
+                     t, pose);
+      }
+      prev_dense_time = t;
+      prev_dense_pose = pose;
+      has_prev_dense = true;
+    }
+
+    const auto &db = timetable.get_database();
+    auto it = db.find(entity);
+    if (it == db.end())
+      continue;
+
+    bool has_prev_stored = false;
+    double prev_stored_time = 0.0;
+    Pose prev_stored_pose{};
+    for (const auto &[t, pose] : it->second)
+    {
+      if (has_prev_stored)
+      {
+        maybe_append("stored-samples", name,
+                     prev_stored_time, prev_stored_pose,
+                     t, pose);
+      }
+      prev_stored_time = t;
+      prev_stored_pose = pose;
+      has_prev_stored = true;
+    }
+  }
+
+  std::sort(out.begin(), out.end(),
+            [](const OrientationJumpRecord &a, const OrientationJumpRecord &b)
+            {
+              const double a_mag = std::abs(a.wrapped_yaw_delta);
+              const double b_mag = std::abs(b.wrapped_yaw_delta);
+              if (std::abs(a_mag - b_mag) > 1e-9)
+                return a_mag > b_mag;
+              if (std::abs(a.curr_time - b.curr_time) > 1e-9)
+                return a.curr_time < b.curr_time;
+              if (a.robot_name != b.robot_name)
+                return a.robot_name < b.robot_name;
+              return a.source < b.source;
+            });
+  return out;
+}
+
+void log_timetable_orientation_diagnostics(
+    const std::string &scenario_label,
+    const TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params)
+{
+  const std::string label_slug = sanitize_filename_component(scenario_label);
+  const std::string pose_csv =
+      std::string(CMAKE_SOURCE_DIR) + "/timetable_robot_pose_log_" +
+      label_slug + ".csv";
+  const std::string jump_csv =
+      std::string(CMAKE_SOURCE_DIR) + "/timetable_robot_yaw_jumps_" +
+      label_slug + ".csv";
+
+  const double sample_step = std::max(1e-3, std::min(0.05, shared_collision_check_step(params)));
+  const double jump_threshold = std::max(0.75, params.yaw_resolution * 2.0);
+
+  write_timetable_robot_pose_csv(pose_csv, scenario_label, timetable, entities,
+                                 sample_step);
+  auto jump_records =
+      collect_robot_orientation_jumps(scenario_label, timetable, entities,
+                                      sample_step, jump_threshold);
+  write_orientation_jump_csv(jump_csv, jump_records);
+
+  if (jump_records.empty())
+  {
+    std::cout << "[Diag] No suspicious robot yaw jumps found in scenario "
+              << scenario_label << " using threshold "
+              << std::fixed << std::setprecision(2)
+              << jump_threshold << " rad." << std::endl;
+    return;
+  }
+
+  std::cout << "[Diag] Found " << jump_records.size()
+            << " suspicious robot yaw jumps in scenario "
+            << scenario_label << "." << std::endl;
+  const std::size_t preview_count = std::min<std::size_t>(5, jump_records.size());
+  for (std::size_t i = 0; i < preview_count; ++i)
+  {
+    const auto &record = jump_records[i];
+    std::cout << "        [" << record.source << "] "
+              << record.robot_name << " t=" << std::fixed << std::setprecision(2)
+              << record.prev_time << " -> " << record.curr_time
+              << " yaw=" << record.prev_pose.yaw << " -> " << record.curr_pose.yaw
+              << " wrapped_delta=" << record.wrapped_yaw_delta
+              << " raw_delta=" << record.raw_yaw_delta
+              << " distance=" << record.distance << std::endl;
+  }
 }
 
 std::string sanitize_filename_component(const std::string &label)
@@ -888,18 +1141,26 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
 {
   std::unordered_map<std::string, EntityMeta *> entities;
 
+  double common_front_length = 0.36;
+  double common_rear_length = 0.12;
+  double common_width = 0.275;
+  double common_min_turning_radius = 1.43;
+  double common_wheel_base = 0.29;
+  double common_speed_transit = 0.2;
+  double common_speed_transfer = 0.15;
+
   // Robot 1
   RobotMeta *robot1 = new RobotMeta;
   robot1->name = "robot1";
   robot1->type = EntityType::ROBOT;
   robot1->initial_pose = {0.5, 0.45, 0.0};
-  robot1->size.front_length = 0.37;
-  robot1->size.rear_length = 0.12;
-  robot1->size.width = 0.285;
-  robot1->min_turning_radius = 1.43;
-  robot1->wheel_base = 0.29;
-  robot1->speed_transit = 0.2;
-  robot1->speed_transfer = 0.15;
+  robot1->size.front_length = common_front_length;
+  robot1->size.rear_length = common_rear_length;
+  robot1->size.width = common_width;
+  robot1->min_turning_radius = common_min_turning_radius;
+  robot1->wheel_base = common_wheel_base;
+  robot1->speed_transit = common_speed_transit;
+  robot1->speed_transfer = common_speed_transfer;
   entities["robot1"] = robot1;
 
   // Robot 2
@@ -907,13 +1168,13 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
   robot2->name = "robot2";
   robot2->type = EntityType::ROBOT;
   robot2->initial_pose = {0.5, 3.0, 0.0};
-  robot2->size.front_length = 0.37;
-  robot2->size.rear_length = 0.12;
-  robot2->size.width = 0.285;
-  robot2->min_turning_radius = 1.43;
-  robot2->wheel_base = 0.29;
-  robot2->speed_transit = 0.2;
-  robot2->speed_transfer = 0.15;
+  robot2->size.front_length = common_front_length;
+  robot2->size.rear_length = common_rear_length;
+  robot2->size.width = common_width;
+  robot2->min_turning_radius = common_min_turning_radius;
+  robot2->wheel_base = common_wheel_base;
+  robot2->speed_transit = common_speed_transit;
+  robot2->speed_transfer = common_speed_transfer;
   entities["robot2"] = robot2;
 
   // Robot 3
@@ -921,13 +1182,13 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
   robot3->name = "robot3";
   robot3->type = EntityType::ROBOT;
   robot3->initial_pose = {0.5, 4.5, 0.0};
-  robot3->size.front_length = 0.37;
-  robot3->size.rear_length = 0.12;
-  robot3->size.width = 0.285;
-  robot3->min_turning_radius = 1.43;
-  robot3->wheel_base = 0.29;
-  robot3->speed_transit = 0.2;
-  robot3->speed_transfer = 0.15;
+  robot3->size.front_length = common_front_length;
+  robot3->size.rear_length = common_rear_length;
+  robot3->size.width = common_width;
+  robot3->min_turning_radius = common_min_turning_radius;
+  robot3->wheel_base = common_wheel_base;
+  robot3->speed_transit = common_speed_transit;
+  robot3->speed_transfer = common_speed_transfer;
   entities["robot3"] = robot3;
 
   // Parse Objects
@@ -958,6 +1219,92 @@ Pose calcRobotPoseFromObj(const Pose &obj_pose, const OccuRect &robot_size,
   robot_pose.y = obj_pose.y - offset * std::sin(obj_pose.yaw);
   robot_pose.yaw = obj_pose.yaw;
   return robot_pose;
+}
+
+double contact_offset_for_object(const RobotMeta *robot,
+                                 const EntityMeta *object,
+                                 double extra_clearance = 0.0)
+{
+  if (!robot || !object)
+    return extra_clearance;
+
+  return robot->size.front_length + object->size.rear_length + extra_clearance;
+}
+
+Pose recover_object_centric_pose_from_raw_terminal(const Pose &raw_terminal_pose,
+                                                   double source_pre_push_distance)
+{
+  ReloPush::State raw_state(raw_terminal_pose.x, raw_terminal_pose.y,
+                            mod2pi(raw_terminal_pose.yaw));
+  return PoseFromReloPushState(raw_state.get_postPush(source_pre_push_distance));
+}
+
+Pose compute_adjusted_prepush_goal(const Pose &object_pose,
+                                   double pushing_yaw,
+                                   const RobotMeta *robot,
+                                   const EntityMeta *object,
+                                   double extra_clearance)
+{
+  if (!robot || !object)
+  {
+    Pose fallback = object_pose;
+    fallback.yaw = mod2pi(pushing_yaw);
+    return fallback;
+  }
+
+  ReloPush::State object_centric_pose(object_pose.x, object_pose.y,
+                                      mod2pi(pushing_yaw));
+  const double pre_push_distance =
+      contact_offset_for_object(robot, object, extra_clearance);
+  return PoseFromReloPushState(
+      object_centric_pose.get_prePush(pre_push_distance));
+}
+
+Pose compute_adjusted_task_start_pose(const Task &task,
+                                      const RobotMeta *robot,
+                                      double query_time,
+                                      const TimeTable &timetable)
+{
+  Pose fallback = task.TaskStartPoseRobot;
+  if (!robot || !task.initialApproachEntity)
+    return fallback;
+
+  const Pose object_pose =
+      timetable.get_pose(task.initialApproachEntity, query_time);
+  return compute_adjusted_prepush_goal(
+      object_pose, fallback.yaw, robot, task.initialApproachEntity, 0.01);
+}
+
+bool rewrite_transfer_terminal_pose(Trajectory *traj, RobotMeta *robot)
+{
+  if (!traj || !traj->is_transfer || !robot || !traj->transferred_object ||
+      traj->waypoints.empty())
+  {
+    return false;
+  }
+
+  const double source_pre_push_distance =
+      (traj->source_pre_push_distance > 1e-9)
+          ? traj->source_pre_push_distance
+          : contact_offset_for_object(robot, traj->transferred_object, 0.01);
+
+  const Pose raw_terminal_pose = traj->waypoints.back();
+  const Pose object_goal_pose = recover_object_centric_pose_from_raw_terminal(
+      raw_terminal_pose, source_pre_push_distance);
+
+  // Keep transfer endpoints at exact contact distance. Adding extra gap here
+  // can be a problem if the robot is too short because retraction happens
+  // after the push segment is committed.
+  const Pose adjusted_terminal_pose = compute_adjusted_prepush_goal(
+      object_goal_pose, raw_terminal_pose.yaw, robot, traj->transferred_object,
+      0.0);
+
+  Waypoint &last_waypoint = traj->waypoints.back();
+  last_waypoint.x = adjusted_terminal_pose.x;
+  last_waypoint.y = adjusted_terminal_pose.y;
+  last_waypoint.yaw = adjusted_terminal_pose.yaw;
+  traj->CalcualteTimeStamps(robot);
+  return true;
 }
 
 // --- Collision & Blocking Checkers (Preserved from original) ---
@@ -3176,10 +3523,10 @@ bool plan_initial_transit(
     RobotMeta *robot, const Pose &target_pose, double start_time,
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
-  const Params &params,
-  const RuntimeOptions &options,
-  double *out_abs_start_time = nullptr,
-  double *out_abs_end_time = nullptr)
+    const Params &params,
+    const RuntimeOptions &options,
+    double *out_abs_start_time = nullptr,
+    double *out_abs_end_time = nullptr)
 {
   if (out_abs_start_time)
     *out_abs_start_time = -1.0;
@@ -3813,12 +4160,12 @@ bool plan_initial_transit(
     else
     {
       visualize_planning_debug(
-          timetable,    // Global history/future of others
-          robot,        // The robot executing this plan
-          path_res,     // The output plan (waypoints)
-          planning_start_time,   // Absolute start time for this plan
-          current_pose, // Start
-          target_pose,  // Goal
+          timetable,           // Global history/future of others
+          robot,               // The robot executing this plan
+          path_res,            // The output plan (waypoints)
+          planning_start_time, // Absolute start time for this plan
+          current_pose,        // Start
+          target_pose,         // Goal
           params,
           attempt_trace,
           "Initial transit");
@@ -3905,7 +4252,7 @@ RobotMeta *find_earliest_robot(const std::vector<RobotMeta *> &robots,
 std::vector<std::pair<RobotMeta *, double>> get_sorted_candidate_robots(
     const std::vector<RobotMeta *> &robots,
     TimeTable &timetable,
-    const Pose &task_start_pose,
+    const Task &task,
     const Params &params)
 {
   std::vector<std::pair<RobotMeta *, double>> candidates;
@@ -3918,6 +4265,8 @@ std::vector<std::pair<RobotMeta *, double>> get_sorted_candidate_robots(
   auto rs_length_to_task = [&](RobotMeta *robot, double free_time)
   {
     Pose start_pose = timetable.get_pose(robot, free_time);
+    Pose task_start_pose =
+        compute_adjusted_task_start_pose(task, robot, free_time, timetable);
     double maxc = 1.0 / robot->min_turning_radius;
     double step_size = params.rs_step_size;
     auto [xs, ys, yaws, ctypes, lengths, steers, directions] =
@@ -4226,8 +4575,8 @@ bool replan_transit_segment(
     RobotMeta *robot, const Pose &goal_pose, double start_time,
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
-  const Params &params,
-  const RuntimeOptions &options,
+    const Params &params,
+    const RuntimeOptions &options,
     std::vector<Waypoint> &out_waypoints_rel)
 {
   Pose start_pose = timetable.get_pose(robot, start_time);
@@ -4352,7 +4701,7 @@ bool prepare_segment_waypoints_for_scheduling(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-  const RuntimeOptions &options,
+    const RuntimeOptions &options,
     const std::string &fallback_message)
 {
   if (!traj)
@@ -4366,6 +4715,14 @@ bool prepare_segment_waypoints_for_scheduling(
 
     auto original_waypoints = traj->waypoints;
     Pose segment_goal = traj->waypoints.back();
+    if (robot && traj->transferred_object)
+    {
+      const Pose live_object_pose =
+          timetable.get_pose(traj->transferred_object, segment_ready_time);
+      segment_goal = compute_adjusted_prepush_goal(
+          live_object_pose, segment_goal.yaw, robot, traj->transferred_object,
+          0.01);
+    }
     std::vector<Waypoint> replanned_rel;
     if (!replan_transit_segment(robot, segment_goal, segment_ready_time,
                                 timetable, entities, params, options, replanned_rel))
@@ -4383,6 +4740,7 @@ bool prepare_segment_waypoints_for_scheduling(
   }
   else
   {
+    rewrite_transfer_terminal_pose(traj, robot);
     traj->CalcualteTimeStamps(robot);
   }
 
@@ -4625,6 +4983,7 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
                            const Params &params,
                            const std::unordered_map<std::string, EntityMeta *> &entities,
                            const RuntimeOptions &options,
+                           double source_pre_push_distance = 0.0,
                            std::vector<TransferContactWindow> *transfer_windows = nullptr,
                            TaskExecutionStats *stats = nullptr,
                            std::string *out_failure_reason = nullptr,
@@ -4636,11 +4995,12 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
   // 2. Convert EdgePath to Trajectory
   // ReloPushPath2TrajPtr is defined in Task.h
   TrajectoryPtr traj =
-      ReloPushPath2TrajPtr(edge_path, robot, obj_meta, current_avail_time);
+      ReloPushPath2TrajPtr(edge_path, robot, obj_meta, current_avail_time,
+                           source_pre_push_distance);
 
   if (!prepare_segment_waypoints_for_scheduling(
           traj.get(), robot, current_avail_time, timetable, entities, params,
-      options,
+          options,
           "  [Segment] Transit replanning failed; using original transit path with conflict-resolution scheduling."))
   {
     if (out_failure_reason)
@@ -4661,7 +5021,7 @@ bool process_task_execution(
     RobotMeta *robot, Task &task, TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-  const RuntimeOptions &options,
+    const RuntimeOptions &options,
     std::vector<TransferContactWindow> *transfer_windows = nullptr,
     TaskExecutionStats *out_stats = nullptr,
     std::string *out_failure_reason = nullptr,
@@ -4721,6 +5081,8 @@ bool process_task_execution(
   {
     out_stats->total_waiting += task_start_delay;
   }
+  task.TaskStartPoseRobot =
+      compute_adjusted_task_start_pose(task, robot, robot_avail_time, timetable);
   double initial_transit_abs_start = -1.0;
   double initial_transit_abs_end = -1.0;
   if (!plan_initial_transit(robot, task.TaskStartPoseRobot, robot_avail_time,
@@ -4811,6 +5173,7 @@ bool process_task_execution(
         double obs_push_start_time = -1.0;
         if (!schedule_path_segment(task.obsReloPaths->at(push_path_idx), obs_meta,
                                    robot, timetable, params, entities, options,
+                                   task.sourcePrePushDistance,
                                    transfer_windows,
                                    out_stats, out_failure_reason,
                                    &obs_push_start_time))
@@ -4828,6 +5191,7 @@ bool process_task_execution(
         // Step B: Schedule the "Post-Obs/Return" path
         if (!schedule_path_segment(task.obsReloPaths->at(post_path_idx), obs_meta,
                                    robot, timetable, params, entities, options,
+                                   task.sourcePrePushDistance,
                                    transfer_windows,
                                    out_stats, out_failure_reason))
         {
@@ -5455,7 +5819,7 @@ prepare_task_candidates(Task &task,
                         const Params &params)
 {
   auto candidates =
-      get_sorted_candidate_robots(all_robots, timetable, task.TaskStartPoseRobot, params);
+      get_sorted_candidate_robots(all_robots, timetable, task, params);
 
   if (task.assignedRobot)
   {
@@ -5496,7 +5860,7 @@ bool attempt_task_with_candidate(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-  const RuntimeOptions &options,
+    const RuntimeOptions &options,
     std::vector<TransferContactWindow> &transfer_windows,
     TaskCsvRow &row,
     std::string &last_failed_robot,
@@ -5778,7 +6142,7 @@ TaskCsvRow execute_single_task_with_candidates(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-  const RuntimeOptions &options,
+    const RuntimeOptions &options,
     std::vector<TransferContactWindow> &transfer_windows)
 {
   std::cout << "\n=== Processing Task " << task_counter << " ("
@@ -5820,8 +6184,8 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     const std::vector<RobotMeta *> &all_robots,
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
-  const Params &params,
-  const RuntimeOptions &options)
+    const Params &params,
+    const RuntimeOptions &options)
 {
   std::vector<TaskCsvRow> task_rows;
   std::vector<TransferContactWindow> transfer_windows;
@@ -5832,7 +6196,7 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     task_counter++;
     auto row = execute_single_task_with_candidates(
         task, task_counter, all_robots, timetable, entities, params,
-      options,
+        options,
         transfer_windows);
     task_rows.push_back(std::move(row));
   }
@@ -7517,6 +7881,10 @@ int phastar_push_demo_main(int argc, char **argv)
 
     std::string csv_path = std::string(CMAKE_SOURCE_DIR) + "/task_execution_log.csv";
     write_task_csv_log(csv_path, greedy_summary.task_rows);
+    log_timetable_orientation_diagnostics(greedy_summary.label,
+                                          greedy_executed.timetable,
+                                          greedy_executed.entities,
+                                          greedy_executed.params);
 
     std::string comparison_csv =
         std::string(CMAKE_SOURCE_DIR) + "/allocation_search_summary.csv";
@@ -8287,6 +8655,10 @@ int phastar_push_demo_main(int argc, char **argv)
 
   std::string csv_path = std::string(CMAKE_SOURCE_DIR) + "/task_execution_log.csv";
   write_task_csv_log(csv_path, best_executed.summary.task_rows);
+  log_timetable_orientation_diagnostics(best_executed.summary.label,
+                                        best_executed.timetable,
+                                        best_executed.entities,
+                                        best_executed.params);
 
   notify_relopush_if_needed(
       best_executed.summary.all_tasks_succeeded,

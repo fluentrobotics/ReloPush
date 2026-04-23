@@ -78,12 +78,14 @@ inline Pose DetermineTaskStartPoseRobot(const FinalAllocation& fa)
 
 TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
                                    RobotMeta* robot_in=nullptr, EntityMeta* transferred_obj=nullptr,
-                                   double start_time = 0.0) {
+                                   double start_time = 0.0,
+                                   double source_pre_push_distance = 0.0) {
     Trajectory traj;
     traj.entity = robot_in;
     traj.transferred_object = transferred_obj;
     traj.start_time = start_time;
     traj.is_transfer = edgePath->is_pushing;
+    traj.source_pre_push_distance = source_pre_push_distance;
 
     if (!std::holds_alternative<ReloPush::StatePathPtr>(edgePath->path)) {
         return std::make_shared<Trajectory>(traj); // Empty if not StatePath
@@ -105,9 +107,12 @@ TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
 
 TrajectoryPtr ReloPushPath2TrajPtr(const EdgePath edgePath,
                                    RobotMeta* robot_in=nullptr, EntityMeta* transferred_obj=nullptr,
-                                   double start_time = 0.0)
+                                   double start_time = 0.0,
+                                   double source_pre_push_distance = 0.0)
 {
-    return ReloPushPath2TrajPtr(std::make_shared<EdgePath>(edgePath),robot_in,transferred_obj,start_time);
+    return ReloPushPath2TrajPtr(std::make_shared<EdgePath>(edgePath),robot_in,
+                                transferred_obj,start_time,
+                                source_pre_push_distance);
 }
 
 enum DependType { TRANSIT, TRANSFER };
@@ -127,6 +132,8 @@ public:
     std::pair<Task*, DependType> transitDepend;
     RobotMeta* assignedRobot = nullptr;
     ObjectMeta* targetObject = nullptr;
+    EntityMeta* initialApproachEntity = nullptr;
+    double sourcePrePushDistance = 0.0;
 
     ////// added to handle obsRelo (need to verify)
     ReloPush::StatePathPtr firstApproachPath;
@@ -140,6 +147,7 @@ public:
         StartPoseObj = {fa.startPose.x, fa.startPose.y, NormalizeReloPushYaw(fa.startPose.yaw)};
         GoalPoseObj = {fa.goalPose.x, fa.goalPose.y, NormalizeReloPushYaw(fa.goalPose.yaw)};
         targetObject = dynamic_cast<ObjectMeta*>(entities.at(fa.object.name));
+        sourcePrePushDistance = fa.snapshot.parameters.PrePush_dist;
 
         // Use the first executable segment start so tasks with obstacle relocation
         // do not inherit an unreachable or already-occupied standby goal.
@@ -151,6 +159,16 @@ public:
         obsReloPaths = fa.obsReloPaths;
         obsReloUpdate = fa.obsReloUpdate;
         vertexChain = fa.vertexChain;
+
+        if (obsReloPaths && !obsReloPaths->empty() && vertexChain.size() > 2) {
+            auto it = entities.find(vertexChain[1].name);
+            if (it != entities.end()) {
+                initialApproachEntity = it->second;
+            }
+        }
+        if (!initialApproachEntity) {
+            initialApproachEntity = targetObject;
+        }
 
         // Extract obs sequence from vertexChain (objects before target)
         std::vector<std::string> obs_sequence; // todo: where to save this?
@@ -168,8 +186,8 @@ public:
             // trajectory (normal: one transfer, prerelo: transfer-transit-transfer)
             for(auto& path : epath.paths)
             {
-                auto traj_in = ReloPushPath2TrajPtr(path);
-                traj_in->transferred_object = targetObject; // assume task target is always the object to transer
+                auto traj_in = ReloPushPath2TrajPtr(path, nullptr, targetObject,
+                                                    0.0, sourcePrePushDistance);
                 EdgePaths.emplace_back(traj_in); // time not assigned yet (needs robot first)
             }
         }

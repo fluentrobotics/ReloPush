@@ -57,6 +57,10 @@ struct Trajectory {
     double start_time = 0.0;
     std::vector<Waypoint> waypoints;
     bool is_transfer = false;
+    // Legacy terminal offset encoded in serialized ReloPush paths. We keep it
+    // so MARS can recover the intended object-centric endpoint before
+    // remapping it to the current robot geometry.
+    double source_pre_push_distance = 0.0;
 
     Trajectory(){}
     Trajectory(RobotMeta* robot_in, ObjectMeta* object_in,
