@@ -42,6 +42,7 @@ bool DEBUG_VIS = false;
 std::string default_sequence_path();
 std::string sanitize_filename_component(const std::string &label);
 double shared_collision_check_step(const Params &params);
+Params initialize_params(const std::vector<FinalAllocation> &loadedSequence);
 
 namespace
 {
@@ -882,6 +883,261 @@ double compute_relopush_single_robot_makespan(
   }
 
   return total_duration;
+}
+
+RobotMeta *make_relopush_robot()
+{
+  RobotMeta *robot = new RobotMeta;
+  robot->name = "ReloPush-BOSS single robot";
+  robot->type = EntityType::ROBOT;
+  robot->size.front_length = 0.36;
+  robot->size.rear_length = 0.12;
+  robot->size.width = 0.275;
+  robot->min_turning_radius = 1.43;
+  robot->wheel_base = 0.29;
+  robot->speed_transit = 0.2;
+  robot->speed_transfer = 0.15;
+  return robot;
+}
+
+bool find_first_relopush_robot_pose(const std::vector<FinalAllocation> &loaded_sequence,
+                                    Pose &out_pose)
+{
+  for (const auto &allocation : loaded_sequence)
+  {
+    if (allocation.firstApproachPath && !allocation.firstApproachPath->empty())
+    {
+      out_pose = PoseFromReloPushState(allocation.firstApproachPath->front());
+      return true;
+    }
+
+    if (allocation.obsReloPaths)
+    {
+      for (const auto &obs_path : *allocation.obsReloPaths)
+      {
+        auto path = obs_path.toStatePath();
+        if (path && !path->empty())
+        {
+          out_pose = PoseFromReloPushState(path->front());
+          return true;
+        }
+      }
+    }
+
+    for (const auto &edge_group : allocation.paths)
+    {
+      for (const auto &edge_path : edge_group.paths)
+      {
+        if (!edge_path)
+          continue;
+        auto path = edge_path->toStatePath();
+        if (path && !path->empty())
+        {
+          out_pose = PoseFromReloPushState(path->front());
+          return true;
+        }
+      }
+    }
+
+    for (const auto &path : allocation.edgeTransitPaths)
+    {
+      if (path && !path->empty())
+      {
+        out_pose = PoseFromReloPushState(path->front());
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+Trajectory make_relopush_trajectory(const ReloPush::StatePathPtr &path,
+                                    bool is_transfer,
+                                    RobotMeta *robot,
+                                    EntityMeta *transferred_object,
+                                    double start_time)
+{
+  Trajectory traj;
+  traj.entity = robot;
+  traj.transferred_object = transferred_object;
+  traj.start_time = start_time;
+  traj.is_transfer = is_transfer;
+
+  if (!path || path->empty())
+    return traj;
+
+  traj.waypoints.reserve(path->size());
+  for (const auto &state : *path)
+  {
+    Waypoint wp = WaypointFromReloPushState(state);
+    wp.time = 0.0;
+    wp.linear_velocity = is_transfer ? robot->speed_transfer
+                                     : robot->speed_transit;
+    traj.waypoints.push_back(wp);
+  }
+
+  traj.CalcualteTimeStamps(robot);
+  return traj;
+}
+
+void append_relopush_trajectory(TimeTable &timetable,
+                                RobotMeta *robot,
+                                EntityMeta *transferred_object,
+                                const ReloPush::StatePathPtr &path,
+                                bool is_transfer,
+                                double &current_time)
+{
+  Trajectory traj = make_relopush_trajectory(
+      path, is_transfer, robot, transferred_object, current_time);
+  if (traj.waypoints.empty())
+    return;
+
+  timetable.add_trajectory(traj);
+  current_time += traj.waypoints.back().time;
+}
+
+void append_relopush_edge_path(TimeTable &timetable,
+                               RobotMeta *robot,
+                               EntityMeta *transferred_object,
+                               const EdgePath &edge_path,
+                               double &current_time)
+{
+  append_relopush_trajectory(timetable, robot, transferred_object,
+                             edge_path.toStatePath(),
+                             edge_path.is_pushing,
+                             current_time);
+}
+
+void visualize_relopush_plan(
+    const std::vector<FinalAllocation> &loaded_sequence,
+    const ReloPush::HandoffInstanceInfo &instance_info)
+{
+  if (loaded_sequence.empty())
+    return;
+
+  std::vector<std::unique_ptr<EntityMeta>> entity_storage;
+  std::unordered_map<std::string, EntityMeta *> entities;
+
+  RobotMeta *robot = make_relopush_robot();
+  Pose first_robot_pose{};
+  if (find_first_relopush_robot_pose(loaded_sequence, first_robot_pose))
+    robot->initial_pose = first_robot_pose;
+  entity_storage.emplace_back(robot);
+  entities[robot->name] = robot;
+
+  for (const auto &[name, info] : loaded_sequence.front().snapshot.mo_list)
+  {
+    ObjectMeta *obj = new ObjectMeta;
+    obj->name = name;
+    obj->type = EntityType::OBJECT;
+    obj->initial_pose = {info.x, info.y, NormalizeReloPushYaw(info.nominalOrientation)};
+    obj->size.front_length = 0.075;
+    obj->size.rear_length = 0.075;
+    obj->size.width = 0.15;
+    entity_storage.emplace_back(obj);
+    entities[name] = obj;
+  }
+
+  TimeTable timetable;
+  timetable.add_initial(entities);
+
+  double current_time = 0.0;
+  for (const auto &allocation : loaded_sequence)
+  {
+    append_relopush_trajectory(timetable, robot, nullptr,
+                               allocation.firstApproachPath,
+                               false, current_time);
+
+    if (allocation.obsReloPaths)
+    {
+      std::size_t obs_path_base_idx = 0;
+      for (std::size_t obs_ind = 1;
+           obs_ind + 1 < allocation.vertexChain.size();
+           ++obs_ind)
+      {
+        const auto obs_it = entities.find(allocation.vertexChain[obs_ind].name);
+        EntityMeta *obs_entity =
+            (obs_it != entities.end()) ? obs_it->second : nullptr;
+
+        const std::size_t push_path_idx = obs_path_base_idx;
+        const std::size_t post_path_idx = obs_path_base_idx + 1;
+        if (allocation.obsReloPaths->size() > push_path_idx)
+        {
+          append_relopush_edge_path(
+              timetable, robot, obs_entity,
+              allocation.obsReloPaths->at(push_path_idx), current_time);
+        }
+        if (allocation.obsReloPaths->size() > post_path_idx)
+        {
+          append_relopush_edge_path(
+              timetable, robot, obs_entity,
+              allocation.obsReloPaths->at(post_path_idx), current_time);
+        }
+        obs_path_base_idx += 2;
+      }
+    }
+
+    for (std::size_t edge_idx = 0; edge_idx < allocation.paths.size(); ++edge_idx)
+    {
+      const auto &edge_group = allocation.paths[edge_idx];
+      EntityMeta *edge_object = nullptr;
+      auto edge_object_it = entities.find(edge_group.srcVertexData.name);
+      if (edge_object_it != entities.end())
+      {
+        edge_object = edge_object_it->second;
+      }
+      else
+      {
+        auto target_it = entities.find(allocation.object.name);
+        if (target_it != entities.end())
+          edge_object = target_it->second;
+      }
+
+      for (std::size_t path_idx = 0; path_idx < edge_group.paths.size(); ++path_idx)
+      {
+        if (!edge_group.paths[path_idx])
+          continue;
+
+        auto edge_path = edge_group.paths[path_idx]->toStatePath();
+        if (edge_path && !edge_path->empty() &&
+            edge_group.paths.size() > 1 && path_idx == 0)
+        {
+          edge_path->push_back(
+              edge_path->back().get_postPush(Constants::additional_push_dist));
+        }
+
+        append_relopush_trajectory(
+            timetable, robot, edge_object, edge_path,
+            edge_group.paths[path_idx]->is_pushing, current_time);
+      }
+
+      if (allocation.edgeTransitPaths.size() > edge_idx &&
+          allocation.edgeTransitPaths[edge_idx])
+      {
+        append_relopush_trajectory(
+            timetable, robot, nullptr,
+            allocation.edgeTransitPaths[edge_idx],
+            false, current_time);
+      }
+    }
+  }
+
+  Params params = initialize_params(loaded_sequence);
+  std::ostringstream context;
+  context << "ReloPush-BOSS single-robot plan replay"
+          << "\nInstance: " << instance_info.file_name
+          << "\nIndex: " << instance_info.instance_index
+          << "\nRobot dimensions: front=0.36, rear=0.12, width=0.275"
+          << "\nSpeeds: transit=0.20, transfer=0.15";
+
+  std::cout << "[Debug] Visualizing ReloPush-BOSS single-robot plan "
+            << "before multi-robot allocation. Replay makespan="
+            << std::fixed << std::setprecision(2)
+            << timetable.get_max_time() << "s" << std::endl;
+  visualize_current_state(timetable, entities, params, 0.0,
+                          robot->initial_pose, {}, nullptr, 0.0,
+                          nullptr, context.str());
 }
 
 ReloPush::HandoffInstanceInfo default_instance_info(const RuntimeOptions &options)
@@ -5583,6 +5839,15 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     {
       options.enable_visualization = false;
     }
+    else if (arg == "--visualize-relopush-plan" ||
+             arg == "--debug-relopush-plan")
+    {
+      options.visualize_relopush_plan = true;
+    }
+    else if (arg == "--no-visualize-relopush-plan")
+    {
+      options.visualize_relopush_plan = false;
+    }
     else if (arg == "--integrated-mode" ||
              arg == "--integrated")
     {
@@ -5654,6 +5919,9 @@ void print_runtime_options(const RuntimeOptions &options)
             << options.lns_iterations << std::endl;
   std::cout << "[Config] Visualization: "
             << (options.enable_visualization ? "enabled" : "disabled")
+            << std::endl;
+  std::cout << "[Config] ReloPush plan replay visualization: "
+            << (options.visualize_relopush_plan ? "enabled" : "disabled")
             << std::endl;
   std::cout << "[Config] Input mode: "
             << (options.integrated_mode ? "integrated-handoff" : "sequence-file")
@@ -7844,6 +8112,11 @@ int phastar_push_demo_main(int argc, char **argv)
   std::cout << "[Config] ReloPush single-robot makespan: "
             << std::fixed << std::setprecision(2)
             << relopush_single_robot_makespan << "s" << std::endl;
+
+  if (runtime_options.visualize_relopush_plan)
+  {
+    visualize_relopush_plan(loadedSequence, instance_info);
+  }
 
   AllocationScenarioPlan greedy_plan = make_identity_plan(loadedSequence.size());
   const std::string greedy_label = "greedy";

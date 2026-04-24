@@ -27,6 +27,7 @@ struct RuntimeOptions
     int shuffle_sequence_search_iterations = 0;
     int lns_iterations = 0;
     bool enable_visualization = true;
+    bool visualize_relopush_plan = false;
     bool integrated_mode = false;
     std::string handoff_endpoint = "tcp://127.0.0.1:5566";
     std::string input_sequence_path;
