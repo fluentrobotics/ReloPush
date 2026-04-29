@@ -642,7 +642,7 @@ StateValidity addEdgePrerelocation_Optimization(
 
     // for debug
     bool deb = false;
-    if (data1.name == "b3" && data2.name == "d3" && data1.orientationIndex == 3 && data2.orientationIndex == 2)
+    if (data1.name == "b9" && data2.name == "d9" && data1.orientationIndex == 3 && data2.orientationIndex == 2)
         deb = true;
 
     // for debug
@@ -884,7 +884,7 @@ bool addEdge(Graph &g, Vertex v1, Vertex v2, PlanningContext &ctx)
 
     // for debug only
     bool deb = false;
-    if (data1.name == "box1" && data2.name == "goal2")
+    if (data1.name == "b9" && data2.name == "d9")
         deb = true;
 
     if (data1.name != data2.name)

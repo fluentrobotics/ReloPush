@@ -26,9 +26,31 @@ struct EntityMeta {
 
 struct RobotMeta : public EntityMeta {
     double min_turning_radius = 0.0;
+    double min_turning_radius_transit = 0.0;
+    double min_turning_radius_transfer = 0.0;
     double wheel_base = 0.0;
     double speed_transit = 0.0;
     double speed_transfer = 0.0;
+
+    double transit_turning_radius() const
+    {
+        return min_turning_radius_transit > 0.0
+                   ? min_turning_radius_transit
+                   : min_turning_radius;
+    }
+
+    double transfer_turning_radius() const
+    {
+        return min_turning_radius_transfer > 0.0
+                   ? min_turning_radius_transfer
+                   : min_turning_radius;
+    }
+
+    double turning_radius_for_mode(bool is_transfer_mode) const
+    {
+        return is_transfer_mode ? transfer_turning_radius()
+                                : transit_turning_radius();
+    }
 };
 
 struct ObjectMeta : public EntityMeta {
@@ -54,6 +76,9 @@ typedef std::vector<Waypoint> WaypointPath;
 struct Trajectory {
     EntityMeta* entity = nullptr;
     EntityMeta* transferred_object = nullptr;
+    // For non-transfer segments, this is the object whose live pose should be
+    // used when remapping the transit endpoint to the robot-sized pre-push pose.
+    EntityMeta* approach_goal_entity = nullptr;
     double start_time = 0.0;
     std::vector<Waypoint> waypoints;
     bool is_transfer = false;
@@ -65,8 +90,10 @@ struct Trajectory {
     Trajectory(){}
     Trajectory(RobotMeta* robot_in, ObjectMeta* object_in,
                double time_start, WaypointPath path_in, bool is_transfer_in)
-        : entity(robot_in), transferred_object(object_in), start_time(time_start),
-            waypoints(path_in), is_transfer(is_transfer_in)
+        : entity(robot_in),
+            transferred_object(is_transfer_in ? object_in : nullptr),
+            approach_goal_entity(is_transfer_in ? nullptr : object_in),
+            start_time(time_start), waypoints(path_in), is_transfer(is_transfer_in)
     {}
 
     // assign timestamp to each waypoints based on velocity

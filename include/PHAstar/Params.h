@@ -20,6 +20,7 @@ struct Params
     double wait_penalty = 10.0;
     double max_time = 1000.0;
     int collision_steps = 3;
+    double collision_check_time_step = 0.05;
     double analytic_threshold = 5.0;
     double rs_step_size = 0.2;
     double inflation = 1.0;

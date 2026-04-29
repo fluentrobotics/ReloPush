@@ -5,6 +5,7 @@
 #include <PHAstar/Entities.h>
 #include <vector>
 #include <string>
+#include <limits>
 #include <PHAstar/Node.h>
 
 enum class PlanningStatus
@@ -21,6 +22,29 @@ enum class PlanningStatus
     INTERNAL_ERROR           // Generic (e.g., empty graph)
 };
 
+struct PlanningDebugStats
+{
+    std::size_t iterations = 0;
+    std::size_t generated_nodes = 0;
+    std::size_t accepted_nodes = 0;
+    std::size_t closed_nodes = 0;
+    std::size_t peak_open_size = 0;
+    std::size_t reject_collision = 0;
+    std::size_t reject_closed = 0;
+    std::size_t reject_worse_g = 0;
+    std::size_t analytic_collision = 0;
+    std::size_t analytic_post_arrival_collision = 0;
+    double best_dist = std::numeric_limits<double>::infinity();
+    double best_yaw_error = std::numeric_limits<double>::infinity();
+    Pose best_pose;
+    int planner_expansion_threads = 1;
+    double analytic_validation_time_sec = 0.0;
+    double primitive_collision_time_sec = 0.0;
+    double heuristic_time_sec = 0.0;
+    double serial_merge_time_sec = 0.0;
+    std::string final_failure_reason;
+};
+
 struct PlanningResult
 {
     std::vector<Waypoint> waypoints;
@@ -29,6 +53,7 @@ struct PlanningResult
     std::string colliding_entity = ""; // Name of entity causing collision (if applicable)
     double failure_time = 0.0;         // Timestamp where collision/failure occurred (if relevant)
     std::vector<Node> explored_nodes;
+    PlanningDebugStats debug_stats;
 };
 
 struct CollisionInfo {

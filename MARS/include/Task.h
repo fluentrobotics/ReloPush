@@ -79,12 +79,17 @@ inline Pose DetermineTaskStartPoseRobot(const FinalAllocation& fa)
 TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
                                    RobotMeta* robot_in=nullptr, EntityMeta* transferred_obj=nullptr,
                                    double start_time = 0.0,
-                                   double source_pre_push_distance = 0.0) {
+                                   double source_pre_push_distance = 0.0,
+                                   EntityMeta* approach_goal_entity=nullptr) {
     Trajectory traj;
     traj.entity = robot_in;
-    traj.transferred_object = transferred_obj;
     traj.start_time = start_time;
     traj.is_transfer = edgePath->is_pushing;
+    traj.transferred_object = traj.is_transfer ? transferred_obj : nullptr;
+    traj.approach_goal_entity =
+        traj.is_transfer ? nullptr
+                         : (approach_goal_entity ? approach_goal_entity
+                                                 : transferred_obj);
     traj.source_pre_push_distance = source_pre_push_distance;
 
     if (!std::holds_alternative<ReloPush::StatePathPtr>(edgePath->path)) {
@@ -108,11 +113,13 @@ TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
 TrajectoryPtr ReloPushPath2TrajPtr(const EdgePath edgePath,
                                    RobotMeta* robot_in=nullptr, EntityMeta* transferred_obj=nullptr,
                                    double start_time = 0.0,
-                                   double source_pre_push_distance = 0.0)
+                                   double source_pre_push_distance = 0.0,
+                                   EntityMeta* approach_goal_entity=nullptr)
 {
     return ReloPushPath2TrajPtr(std::make_shared<EdgePath>(edgePath),robot_in,
                                 transferred_obj,start_time,
-                                source_pre_push_distance);
+                                source_pre_push_distance,
+                                approach_goal_entity);
 }
 
 enum DependType { TRANSIT, TRANSFER };
@@ -187,7 +194,8 @@ public:
             for(auto& path : epath.paths)
             {
                 auto traj_in = ReloPushPath2TrajPtr(path, nullptr, targetObject,
-                                                    0.0, sourcePrePushDistance);
+                                                    0.0, sourcePrePushDistance,
+                                                    targetObject);
                 EdgePaths.emplace_back(traj_in); // time not assigned yet (needs robot first)
             }
         }

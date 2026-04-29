@@ -18,6 +18,7 @@
 #include <ReloPush/config.h>
 #include <ReloPush/TaskAllocation.hpp>
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -42,7 +43,8 @@ bool DEBUG_VIS = false;
 std::string default_sequence_path();
 std::string sanitize_filename_component(const std::string &label);
 double shared_collision_check_step(const Params &params);
-Params initialize_params(const std::vector<FinalAllocation> &loadedSequence);
+Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
+                         const RuntimeOptions &options);
 
 namespace
 {
@@ -138,6 +140,34 @@ std::string csv_escape(const std::string &value)
   }
   escaped += "\"";
   return escaped;
+}
+
+const char *planning_status_name(PlanningStatus status)
+{
+  switch (status)
+  {
+  case PlanningStatus::SUCCESS:
+    return "SUCCESS";
+  case PlanningStatus::START_INVALID_COLLISION:
+    return "START_INVALID_COLLISION";
+  case PlanningStatus::START_OUT_OF_BOUNDS:
+    return "START_OUT_OF_BOUNDS";
+  case PlanningStatus::GOAL_INVALID_COLLISION:
+    return "GOAL_INVALID_COLLISION";
+  case PlanningStatus::GOAL_OUT_OF_BOUNDS:
+    return "GOAL_OUT_OF_BOUNDS";
+  case PlanningStatus::NO_PATH_FOUND:
+    return "NO_PATH_FOUND";
+  case PlanningStatus::TIMEOUT_EXCEEDED:
+    return "TIMEOUT_EXCEEDED";
+  case PlanningStatus::HIGH_COST_UNFEASIBLE:
+    return "HIGH_COST_UNFEASIBLE";
+  case PlanningStatus::BLOCKED_BY_ROBOT:
+    return "BLOCKED_BY_ROBOT";
+  case PlanningStatus::INTERNAL_ERROR:
+  default:
+    return "INTERNAL_ERROR";
+  }
 }
 
 void write_task_csv_log(const std::string &csv_path,
@@ -894,6 +924,8 @@ RobotMeta *make_relopush_robot()
   robot->size.rear_length = 0.12;
   robot->size.width = 0.275;
   robot->min_turning_radius = 1.43;
+  robot->min_turning_radius_transit = 1.02;
+  robot->min_turning_radius_transfer = 1.43;
   robot->wheel_base = 0.29;
   robot->speed_transit = 0.2;
   robot->speed_transfer = 0.15;
@@ -1010,8 +1042,11 @@ void append_relopush_edge_path(TimeTable &timetable,
 }
 
 void visualize_relopush_plan(
+    int argc,
+    char **argv,
     const std::vector<FinalAllocation> &loaded_sequence,
-    const ReloPush::HandoffInstanceInfo &instance_info)
+    const ReloPush::HandoffInstanceInfo &instance_info,
+    const RuntimeOptions &options)
 {
   if (loaded_sequence.empty())
     return;
@@ -1071,7 +1106,7 @@ void visualize_relopush_plan(
         if (allocation.obsReloPaths->size() > post_path_idx)
         {
           append_relopush_edge_path(
-              timetable, robot, obs_entity,
+              timetable, robot, nullptr,
               allocation.obsReloPaths->at(post_path_idx), current_time);
         }
         obs_path_base_idx += 2;
@@ -1082,16 +1117,10 @@ void visualize_relopush_plan(
     {
       const auto &edge_group = allocation.paths[edge_idx];
       EntityMeta *edge_object = nullptr;
-      auto edge_object_it = entities.find(edge_group.srcVertexData.name);
+      auto edge_object_it = entities.find(allocation.object.name);
       if (edge_object_it != entities.end())
       {
         edge_object = edge_object_it->second;
-      }
-      else
-      {
-        auto target_it = entities.find(allocation.object.name);
-        if (target_it != entities.end())
-          edge_object = target_it->second;
       }
 
       for (std::size_t path_idx = 0; path_idx < edge_group.paths.size(); ++path_idx)
@@ -1123,7 +1152,7 @@ void visualize_relopush_plan(
     }
   }
 
-  Params params = initialize_params(loaded_sequence);
+  Params params = initialize_params(loaded_sequence, options);
   std::ostringstream context;
   context << "ReloPush-BOSS single-robot plan replay"
           << "\nInstance: " << instance_info.file_name
@@ -1135,9 +1164,7 @@ void visualize_relopush_plan(
             << "before multi-robot allocation. Replay makespan="
             << std::fixed << std::setprecision(2)
             << timetable.get_max_time() << "s" << std::endl;
-  visualize_current_state(timetable, entities, params, 0.0,
-                          robot->initial_pose, {}, nullptr, 0.0,
-                          nullptr, context.str());
+  show_results(argc, argv, timetable, entities, params);
 }
 
 ReloPush::HandoffInstanceInfo default_instance_info(const RuntimeOptions &options)
@@ -1191,6 +1218,13 @@ bool is_valid_transfer_contact(EntityMeta *e1, const Pose &p1,
 
   return true;
 }
+
+std::string find_valid_start_contact_entity(
+    RobotMeta *robot,
+    const Pose &start_pose,
+    double start_time,
+    TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities);
 
 bool has_active_transfer_contact(EntityMeta *e1, EntityMeta *e2, double t,
                                  const std::vector<TransferContactWindow> &windows)
@@ -1360,20 +1394,47 @@ TimeTableVerificationResult verify_timetable_collision_free(
 
 namespace
 {
-  constexpr double kExperimentalCollisionInflation = 1.0;
-  constexpr double kExperimentalSafetyMargin = 0.03;
-  constexpr double kExperimentalRobotCollisionInflation = 1.005;
+  double positive_or(double value, double fallback)
+  {
+    return value > 0.0 ? value : fallback;
+  }
+
+  int positive_or(int value, int fallback)
+  {
+    return value > 0 ? value : fallback;
+  }
 }
 
 // --- Configuration & Initialization ---
-Params initialize_params(const std::vector<FinalAllocation> &loadedSequence)
+Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
+                         const RuntimeOptions &options)
 {
   Params params;
-  params.inflation = kExperimentalCollisionInflation;
-  params.safety_margin = kExperimentalSafetyMargin;
-  params.robot_collision_inflation = kExperimentalRobotCollisionInflation;
-  // Set analytic expansion threshold
-  params.analytic_threshold = 5.0 * params.max_steer;
+
+  params.xy_resolution = positive_or(options.default_xy_resolution, params.xy_resolution);
+  params.yaw_resolution = positive_or(options.default_yaw_resolution, params.yaw_resolution);
+  params.time_step = positive_or(options.default_time_step, params.time_step);
+  params.time_resolution = params.time_step;
+  params.rs_step_size = positive_or(options.default_rs_step_size, params.rs_step_size);
+  params.collision_steps = positive_or(options.default_collision_steps, params.collision_steps);
+  params.collision_check_time_step =
+      positive_or(options.default_collision_check_time_step, params.collision_check_time_step);
+  params.max_steer = positive_or(options.default_max_steer, params.max_steer);
+  params.turn_penalty = positive_or(options.default_turn_penalty, params.turn_penalty);
+  params.reverse_penalty = positive_or(options.default_reverse_penalty, params.reverse_penalty);
+  params.switch_penalty = positive_or(options.default_switch_penalty, params.switch_penalty);
+  params.wait_penalty = positive_or(options.default_wait_penalty, params.wait_penalty);
+  params.max_time = positive_or(options.default_max_time, params.max_time);
+  params.final_push_distance =
+      positive_or(options.default_final_push_distance, params.final_push_distance);
+  params.inflation = positive_or(options.default_inflation, params.inflation);
+  params.safety_margin = std::max(0.0, options.default_safety_margin);
+  params.robot_collision_inflation =
+      positive_or(options.default_robot_collision_inflation, params.robot_collision_inflation);
+
+  // Keep the MARS analytic expansion threshold expressed relative to max steer.
+  params.analytic_threshold =
+      positive_or(options.default_analytic_threshold_scale, 5.0) * params.max_steer;
   // params.analytic_threshold = std::hypot(params.max_x - params.min_x,
   // params.max_y - params.min_y) * 2.0;
 
@@ -1400,7 +1461,8 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
   double common_front_length = 0.36;
   double common_rear_length = 0.12;
   double common_width = 0.275;
-  double common_min_turning_radius = 1.43;
+  double common_min_turning_radius_transit = 1.02;
+  double common_min_turning_radius_transfer = 1.43;
   double common_wheel_base = 0.29;
   double common_speed_transit = 0.2;
   double common_speed_transfer = 0.15;
@@ -1413,7 +1475,9 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
   robot1->size.front_length = common_front_length;
   robot1->size.rear_length = common_rear_length;
   robot1->size.width = common_width;
-  robot1->min_turning_radius = common_min_turning_radius;
+  robot1->min_turning_radius = common_min_turning_radius_transfer;
+  robot1->min_turning_radius_transit = common_min_turning_radius_transit;
+  robot1->min_turning_radius_transfer = common_min_turning_radius_transfer;
   robot1->wheel_base = common_wheel_base;
   robot1->speed_transit = common_speed_transit;
   robot1->speed_transfer = common_speed_transfer;
@@ -1427,7 +1491,9 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
   robot2->size.front_length = common_front_length;
   robot2->size.rear_length = common_rear_length;
   robot2->size.width = common_width;
-  robot2->min_turning_radius = common_min_turning_radius;
+  robot2->min_turning_radius = common_min_turning_radius_transfer;
+  robot2->min_turning_radius_transit = common_min_turning_radius_transit;
+  robot2->min_turning_radius_transfer = common_min_turning_radius_transfer;
   robot2->wheel_base = common_wheel_base;
   robot2->speed_transit = common_speed_transit;
   robot2->speed_transfer = common_speed_transfer;
@@ -1441,7 +1507,9 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
   robot3->size.front_length = common_front_length;
   robot3->size.rear_length = common_rear_length;
   robot3->size.width = common_width;
-  robot3->min_turning_radius = common_min_turning_radius;
+  robot3->min_turning_radius = common_min_turning_radius_transfer;
+  robot3->min_turning_radius_transit = common_min_turning_radius_transit;
+  robot3->min_turning_radius_transfer = common_min_turning_radius_transfer;
   robot3->wheel_base = common_wheel_base;
   robot3->speed_transit = common_speed_transit;
   robot3->speed_transfer = common_speed_transfer;
@@ -1762,7 +1830,7 @@ generate_parking_candidates_randomized(const Pose &current_pose,
 {
   std::vector<ParkingCandidate> candidates;
 
-  double maxc = 1.0 / robot->min_turning_radius;
+  double maxc = 1.0 / std::max(robot->transit_turning_radius(), 1e-6);
   double step_size = 0.2; // Can be coarse; only used for discretization (we
                           // ignore the full path)
   double wb = robot->wheel_base;
@@ -1909,7 +1977,8 @@ generate_parking_candidates_expand_primitives(const Pose &current_pose,
   constexpr size_t kMaxCandidates = 300;
   constexpr double kMinParkingDisplacement = 0.25;
 
-  const double max_curvature = 1.0 / std::max(robot->min_turning_radius, 1e-6);
+  const double max_curvature =
+      1.0 / std::max(robot->transit_turning_radius(), 1e-6);
   const double max_steer = std::atan(robot->wheel_base * max_curvature);
   const std::vector<std::pair<int, double>> primitives = {
       {1, 0.0},
@@ -2086,7 +2155,9 @@ generate_parking_candidates_connected_primitives(
         ParkingCandidate candidate;
         candidate.pose = current_node_pose;
         candidate.estimated_rs_length = current->cost;
-        candidate.connected_waypoints = planner.extract_path(current, {});
+        candidate.connected_waypoints =
+            planner.extract_path(
+                current, std::vector<std::tuple<double, double, double>>{});
         candidates.push_back(std::move(candidate));
       }
     }
@@ -2442,6 +2513,29 @@ Params make_relaxed_fallback_params(const Params &params)
   return relaxed;
 }
 
+Params make_fine_segment_params(const Params &params,
+                                const RuntimeOptions &options)
+{
+  Params fine = params;
+  fine.xy_resolution = std::min(params.xy_resolution,
+                                std::max(1e-6, options.fine_segment_xy_resolution));
+  fine.yaw_resolution = std::min(params.yaw_resolution,
+                                 std::max(1e-6, options.fine_segment_yaw_resolution));
+  fine.time_step = std::min(params.time_step,
+                            std::max(1e-6, options.fine_segment_time_step));
+  fine.time_resolution = fine.time_step;
+  fine.rs_step_size = std::min(params.rs_step_size,
+                               std::max(1e-6, options.fine_segment_rs_step_size));
+  fine.collision_check_time_step =
+      std::min(params.collision_check_time_step,
+               std::max(1e-6, options.fine_segment_collision_check_time_step));
+  fine.collision_steps = std::max(
+      params.collision_steps,
+      static_cast<int>(std::ceil(fine.time_step /
+                                 std::max(1e-3, fine.collision_check_time_step))));
+  return fine;
+}
+
 void accumulate_wait_stats(TaskExecutionStats *stats, double wait_added)
 {
   if (stats && wait_added > 1e-9)
@@ -2470,8 +2564,16 @@ double shared_collision_check_step(const Params &params)
       params.time_step / static_cast<double>(std::max(1, params.collision_steps));
   // Use a finer shared replay step so scheduling and post-validation sample the
   // same motion densely enough to catch slight transient overlaps.
-  return std::max(1e-3, std::min(0.05, planner_step));
+  return std::max(1e-3, std::min(params.collision_check_time_step,
+                                 planner_step));
 }
+
+enum class IdleBlockerRelocationPolicy
+{
+  RelocateAnyIdle,
+  WaitOnly,
+  RelocateIfBecameIdleDuringAttempt,
+};
 
 // ==========================================
 // Collision check helpers
@@ -2511,7 +2613,8 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
                             double *out_wait_added,
                             CollisionInfo *out_last_collision = nullptr,
                             double *out_last_check_time = nullptr,
-                            bool allow_idle_blocker_relocation = true);
+                            IdleBlockerRelocationPolicy idle_blocker_policy =
+                                IdleBlockerRelocationPolicy::RelocateAnyIdle);
 
 bool check_collision_trajectory(const Trajectory &traj, double start_time,
                                 TimeTable &timetable, const Params &params,
@@ -3001,6 +3104,44 @@ CollisionInfo find_stationary_pose_conflict_over_interval_ignoring(
   return {true, "Valid", "", from_t};
 }
 
+CollisionInfo find_robot_waiting_pose_conflict_over_interval(
+    RobotMeta *robot,
+    const Pose &wait_pose,
+    double from_t,
+    double to_t,
+    TimeTable &timetable,
+    const Params &params,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    EntityMeta *preferred_ignored_entity = nullptr)
+{
+  if (!robot || to_t <= from_t + 1e-9)
+    return {true, "Valid", "", from_t};
+
+  EntityMeta *ignored_entity = preferred_ignored_entity;
+  if (!ignored_entity)
+  {
+    std::string contact_name = find_valid_start_contact_entity(
+        robot, wait_pose, from_t, timetable, entities);
+    if (!contact_name.empty())
+    {
+      auto it = entities.find(contact_name);
+      if (it != entities.end())
+        ignored_entity = it->second;
+    }
+  }
+
+  const double step = shared_collision_check_step(params);
+  if (ignored_entity)
+  {
+    return find_stationary_pose_conflict_over_interval_ignoring(
+        robot, wait_pose, from_t, to_t, timetable, params, step,
+        ignored_entity);
+  }
+
+  return find_stationary_pose_conflict_over_interval(
+      robot, wait_pose, from_t, to_t, timetable, params, step);
+}
+
 double delayed_segment_start_after_stationary_conflict(
     double current_start,
     double segment_duration,
@@ -3285,7 +3426,9 @@ ConnectedSafeParkingSearchResult search_safe_parking_connected_search(
       {
         PlanningResult trial_res;
         trial_res.status = PlanningStatus::SUCCESS;
-        trial_res.waypoints = planner.extract_path(current, {});
+        trial_res.waypoints =
+            planner.extract_path(
+                current, std::vector<std::tuple<double, double, double>>{});
         trial_res.failure_detail = use_histogram
                                        ? "Histogram-guided connected parking candidate"
                                        : "Connected primitive parking candidate";
@@ -3637,6 +3780,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
         planner.set_ignore_other_robots(true);
         planner.set_debug_popup_enabled(false);
         planner.max_search_iterations = options.max_search_iterations;
+        planner.set_planner_expansion_threads(options.planner_expansion_threads);
 
         res = planner.Planning_with_res(ready_time);
       }
@@ -3885,7 +4029,7 @@ bool plan_initial_transit(
                                              options,
                                              &wait_added, &last_collision,
                                              &last_check_time,
-                                             false);
+                                             IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt);
     if (safe_start < 0.0)
     {
       PlanningResult sched_fail;
@@ -3958,6 +4102,7 @@ bool plan_initial_transit(
                           false, "", planning_start_time, debug_label);
     retry_planner.set_debug_popup_enabled(false);
     retry_planner.max_search_iterations = options.max_search_iterations;
+    retry_planner.set_planner_expansion_threads(options.planner_expansion_threads);
     return retry_planner.Planning_with_res(planning_start_time);
   };
 
@@ -4152,8 +4297,16 @@ bool plan_initial_transit(
     }
   }
 
+  if (path_res.waypoints.empty() && !options.enable_initial_transit_fallbacks)
+  {
+    PlanningResult disabled_res;
+    disabled_res.status = PlanningStatus::NO_PATH_FOUND;
+    disabled_res.failure_detail = "initial-transit fallbacks disabled";
+    append_attempt("initial-transit fallbacks disabled", disabled_res);
+  }
+
   // Fallback for cases where standard planning finds nothing (Search exhausted)
-  if (path_res.waypoints.empty())
+  if (path_res.waypoints.empty() && options.enable_initial_transit_fallbacks)
   {
     std::cerr << " [Transit] Standard planning failed. Attempting to resolve blocking robots with full Ghost Planning..." << std::endl;
 
@@ -4164,6 +4317,7 @@ bool plan_initial_transit(
     ghost_planner.set_ignore_other_robots(true);
     ghost_planner.set_debug_popup_enabled(false);
     ghost_planner.max_search_iterations = options.max_search_iterations;
+    ghost_planner.set_planner_expansion_threads(options.planner_expansion_threads);
     auto ghost_res = ghost_planner.Planning_with_res(planning_start_time);
     append_attempt("ghost planner", ghost_res);
 
@@ -4230,7 +4384,7 @@ bool plan_initial_transit(
     }
   }
 
-  if (path_res.waypoints.empty())
+  if (path_res.waypoints.empty() && options.enable_initial_transit_fallbacks)
   {
     Params relaxed = make_relaxed_fallback_params(params);
 
@@ -4240,6 +4394,7 @@ bool plan_initial_transit(
     geometry_planner.set_ignore_other_robots(true);
     geometry_planner.set_debug_popup_enabled(false);
     geometry_planner.max_search_iterations = options.max_search_iterations;
+    geometry_planner.set_planner_expansion_threads(options.planner_expansion_threads);
     auto geometry_res = geometry_planner.Planning_with_res(planning_start_time);
     append_attempt("geometry-first fallback", geometry_res);
 
@@ -4255,7 +4410,8 @@ bool plan_initial_transit(
       double wait_added = 0.0;
       double safe_start = find_safe_start_time(&geom_traj, planning_start_time, timetable,
                                                params, entities, options, &wait_added,
-                                               nullptr, nullptr, false);
+                                               nullptr, nullptr,
+                                               IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt);
       if (safe_start >= 0.0)
       {
         double delta = safe_start - planning_start_time;
@@ -4268,9 +4424,9 @@ bool plan_initial_transit(
     }
   }
 
-  if (path_res.waypoints.empty())
+  if (path_res.waypoints.empty() && options.enable_initial_transit_fallbacks)
   {
-    double maxc = 1.0 / robot->min_turning_radius;
+    double maxc = 1.0 / std::max(robot->transit_turning_radius(), 1e-6);
     auto [rs_x, rs_y, rs_yaw, rs_ctypes, rs_lengths, rs_steers, rs_dirs] =
         ReedShepp::reeds_shepp_path_planning(current_pose.x, current_pose.y, current_pose.yaw,
                                              target_pose.x, target_pose.y, target_pose.yaw,
@@ -4311,7 +4467,7 @@ bool plan_initial_transit(
       double safe_start = find_safe_start_time(&rs_traj, planning_start_time, timetable,
                                                params, entities, options, &wait_added,
                                                &last_collision, &last_check_time,
-                                               false);
+                                               IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt);
       if (safe_start >= 0.0)
       {
         path_res.waypoints = rs_waypoints;
@@ -4428,36 +4584,6 @@ bool plan_initial_transit(
     }
   }
 
-  // add final push
-  double delta_t = params.final_push_distance / robot->speed_transit;
-  auto final_push_pose =
-      offsetPose(path_res.waypoints.back(), params.final_push_distance);
-  auto final_push_wpt = Waypoint(final_push_pose);
-  final_push_wpt.time = path_res.waypoints.back().time + delta_t;
-  final_push_wpt.linear_velocity = path_res.waypoints.back().linear_velocity;
-
-  std::vector<Waypoint> with_push = path_res.waypoints;
-  with_push.push_back(final_push_wpt);
-
-  Trajectory push_check;
-  push_check.entity = robot;
-  push_check.is_transfer = false;
-  push_check.start_time = chosen_start_time;
-  push_check.waypoints = with_push;
-  make_waypoint_times_relative(push_check.waypoints, chosen_start_time);
-
-  auto push_info = check_collision_trajectory_detailed(push_check, chosen_start_time,
-                                                       timetable, params, false);
-  if (push_info.is_valid)
-  {
-    path_res.waypoints = std::move(with_push);
-  }
-  else
-  {
-    std::cout << "  [Transit] Skipping final push due to "
-              << push_info.reason << " with " << push_info.entity_name << std::endl;
-  }
-
   // Adjust relative time and register
   make_waypoint_times_relative(path_res.waypoints, chosen_start_time);
 
@@ -4523,7 +4649,7 @@ std::vector<std::pair<RobotMeta *, double>> get_sorted_candidate_robots(
     Pose start_pose = timetable.get_pose(robot, free_time);
     Pose task_start_pose =
         compute_adjusted_task_start_pose(task, robot, free_time, timetable);
-    double maxc = 1.0 / robot->min_turning_radius;
+    double maxc = 1.0 / std::max(robot->transit_turning_radius(), 1e-6);
     double step_size = params.rs_step_size;
     auto [xs, ys, yaws, ctypes, lengths, steers, directions] =
         ReedShepp::reeds_shepp_path_planning(start_pose.x, start_pose.y, start_pose.yaw,
@@ -4566,7 +4692,7 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
                             double *out_wait_added,
                             CollisionInfo *out_last_collision,
                             double *out_last_check_time,
-                            bool allow_idle_blocker_relocation)
+                            IdleBlockerRelocationPolicy idle_blocker_policy)
 {
   if (out_wait_added)
     *out_wait_added = 0.0;
@@ -4643,10 +4769,39 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
     if (resolvable_robot)
     {
       RobotMeta *blocker = resolvable_robot;
-      bool blocker_is_waiting = timetable.is_waiting(blocker, col_info.time);
-      if (blocker_is_waiting)
+      const bool blocker_is_waiting = timetable.is_waiting(blocker, col_info.time);
+      const bool blocker_static_after =
+          timetable.is_entity_static_after(col_info.time, blocker);
+      if (blocker_is_waiting || blocker_static_after)
       {
-        if (!allow_idle_blocker_relocation)
+        bool should_relocate_idle_blocker =
+            idle_blocker_policy == IdleBlockerRelocationPolicy::RelocateAnyIdle;
+
+        if (idle_blocker_policy ==
+            IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt)
+        {
+          const bool blocker_waiting_at_attempt_start =
+              timetable.is_waiting(blocker, earliest_start);
+          const bool blocker_static_after_attempt_start =
+              timetable.is_entity_static_after(earliest_start, blocker);
+          const bool blocker_was_scheduled_to_move_at_attempt_start =
+              !blocker_waiting_at_attempt_start &&
+              !blocker_static_after_attempt_start;
+
+          if (blocker_was_scheduled_to_move_at_attempt_start)
+          {
+            should_relocate_idle_blocker = true;
+            std::cout << "  [Delay] " << blocker->name
+                      << " was higher-priority traffic at candidate start t="
+                      << std::fixed << std::setprecision(2) << earliest_start
+                      << "s and became idle/static on "
+                      << (traj && traj->entity ? traj->entity->name : "the trajectory")
+                      << "'s corridor at t=" << col_info.time
+                      << "s." << std::endl;
+          }
+        }
+
+        if (!should_relocate_idle_blocker)
         {
           check_time += step;
           continue;
@@ -4661,12 +4816,27 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
         // Blocker is stationary/idle. Move it.
         if (blocker->name != last_relocated_robot || (check_time - last_relocation_time > 5.0))
         {
+          if (idle_blocker_policy ==
+              IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt)
+          {
+            std::cout << "  [Delay] Safe-parking became-idle blocker "
+                      << blocker->name
+                      << " before retrying "
+                      << (traj && traj->entity ? traj->entity->name : "the trajectory")
+                      << "'s initial-transit schedule." << std::endl;
+          }
 
           if (relocate_blocking_robot(blocker, timetable, params, entities,
                                       options, traj))
           {
             last_relocated_robot = blocker->name;
             last_relocation_time = check_time;
+            if (idle_blocker_policy ==
+                IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt)
+            {
+              std::cout << "  [Delay] Retrying initial-transit scheduling after parking "
+                        << blocker->name << "." << std::endl;
+            }
             // Retry this time step (decrement so next loop increment checks same time)
             check_time -= step;
           }
@@ -4747,40 +4917,51 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
                        TaskExecutionStats *stats = nullptr,
                        std::string *out_failure_reason = nullptr)
 {
-  if (previous_traj.waypoints.empty())
+  if (!robot || previous_traj.waypoints.size() < 2)
     return true;
 
-  double retract_dist = 0.1; // Meters
-  double accumulated_dist = 0.0;
-  size_t num_wp = previous_traj.waypoints.size();
-  size_t start_idx = num_wp - 1;
+  const double retract_dist = 0.1; // Meters
+  const double speed = std::max(robot->speed_transit, 1e-3);
+  const size_t num_wp = previous_traj.waypoints.size();
+  double actual_retract_dist = 0.0;
 
-  // 1. Calculate how many waypoints to backtrack
-  for (int i = static_cast<int>(num_wp) - 2; i >= 0; --i)
-  {
-    double d = std::hypot(
-        previous_traj.waypoints[i + 1].x - previous_traj.waypoints[i].x,
-        previous_traj.waypoints[i + 1].y - previous_traj.waypoints[i].y);
-    accumulated_dist += d;
-    if (accumulated_dist >= retract_dist)
-    {
-      start_idx = i + 1;
-      break;
-    }
-  }
-
-  if (start_idx >= num_wp)
-    return true;
-
-  // 2. Create reversed waypoints
+  // Backtrack along the just-executed push path. The previous implementation
+  // often kept only the terminal waypoint, producing a 0s "retraction".
   std::vector<Waypoint> retract_wp;
-  for (int i = num_wp - 1; i >= static_cast<int>(start_idx); --i)
+  retract_wp.reserve(num_wp);
+  Waypoint start_wp = previous_traj.waypoints.back();
+  start_wp.time = 0.0;
+  start_wp.linear_velocity = 0.0;
+  retract_wp.push_back(start_wp);
+
+  for (int i = static_cast<int>(num_wp) - 2;
+       i >= 0 && actual_retract_dist < retract_dist - 1e-9;
+       --i)
   {
-    Waypoint wp = previous_traj.waypoints[i];
-    wp.linear_velocity = -std::abs(wp.linear_velocity); // Reverse gear
-    wp.steering_angle = -wp.steering_angle;             // Reverse curve
+    const Waypoint &toward_start = previous_traj.waypoints[i];
+    const Waypoint &toward_end = previous_traj.waypoints[i + 1];
+    const double dx = toward_start.x - toward_end.x;
+    const double dy = toward_start.y - toward_end.y;
+    const double segment_dist = std::hypot(dx, dy);
+    if (segment_dist <= 1e-9)
+      continue;
+
+    const double remaining_dist = retract_dist - actual_retract_dist;
+    const double frac = std::min(1.0, remaining_dist / segment_dist);
+
+    Waypoint wp = toward_end;
+    wp.x = toward_end.x + frac * dx;
+    wp.y = toward_end.y + frac * dy;
+    wp.yaw = mod2pi(toward_end.yaw +
+                    frac * pi_2_pi(toward_start.yaw - toward_end.yaw));
+    wp.linear_velocity = -speed;
+    wp.steering_angle = -toward_end.steering_angle;
     retract_wp.push_back(wp);
+    actual_retract_dist += frac * segment_dist;
   }
+
+  if (retract_wp.size() < 2 || actual_retract_dist <= 1e-6)
+    return true;
 
   // 3. Recalculate timing (assume transit speed)
   double current_time = 0.0;
@@ -4789,7 +4970,7 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
   {
     double d = std::hypot(retract_wp[i].x - retract_wp[i - 1].x,
                           retract_wp[i].y - retract_wp[i - 1].y);
-    current_time += (d / robot->speed_transit);
+    current_time += (d / speed);
     retract_wp[i].time = current_time;
   }
 
@@ -4800,6 +4981,8 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
   retract_traj.start_time = earliest_start;
   retract_traj.waypoints = retract_wp;
   retract_traj.is_transfer = false;
+  retract_traj.transferred_object = nullptr;
+  retract_traj.approach_goal_entity = nullptr;
 
   double wait_added = 0.0;
   double safe_start = find_safe_start_time(&retract_traj, earliest_start,
@@ -4822,9 +5005,389 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
   }
 
   timetable.add_trajectory(retract_traj);
-  std::cout << "  [Retract] Backing up " << retract_dist << "m ("
-            << current_time << "s)." << std::endl;
+  std::ostringstream retract_msg;
+  retract_msg << "  [Retract] Backing up " << std::fixed
+              << std::setprecision(2) << actual_retract_dist << "m ("
+              << current_time << "s).";
+  std::cout << retract_msg.str() << std::endl;
   return true;
+}
+
+struct SegmentCandidateValidation
+{
+  bool hard_valid = false;
+  bool has_soft_robot_conflict = false;
+  CollisionInfo first_hard_collision;
+  CollisionInfo first_soft_robot_collision;
+};
+
+struct SegmentCandidateReport
+{
+  std::string stage;
+  PlanningResult planning;
+  SegmentCandidateValidation validation;
+  bool candidate_tested = false;
+  bool accepted_for_scheduling = false;
+  bool selected = false;
+};
+
+struct SegmentReplanContext
+{
+  int task_id = -1;
+  int segment_id = -1;
+  std::string object_name;
+  std::string start_contact_entity;
+  bool tight_or_contact_case = false;
+};
+
+bool is_soft_robot_collision(const CollisionInfo &info,
+                             const std::unordered_map<std::string, EntityMeta *> &entities)
+{
+  auto it = entities.find(info.entity_name);
+  if (it == entities.end() || !it->second)
+    return false;
+  return it->second->type == EntityType::ROBOT &&
+         info.entity_name != "Boundary" &&
+         info.reason.find("Boundary") == std::string::npos;
+}
+
+std::string find_valid_start_contact_entity(
+    RobotMeta *robot,
+    const Pose &start_pose,
+    double start_time,
+    TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities)
+{
+  auto poses = timetable.get_poses(start_time);
+  for (const auto &[name, entity] : entities)
+  {
+    if (!entity || entity->type != EntityType::OBJECT)
+      continue;
+
+    auto pose_it = poses.find(entity);
+    if (pose_it == poses.end())
+      continue;
+
+    if (is_valid_transfer_contact(robot, start_pose, entity, pose_it->second))
+      return name;
+  }
+  return "";
+}
+
+SegmentCandidateValidation validate_segment_candidate(
+    const std::vector<Waypoint> &candidate_rel,
+    RobotMeta *robot,
+    double start_time,
+    TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params)
+{
+  SegmentCandidateValidation validation;
+  validation.first_hard_collision = {true, "Valid", "", start_time};
+  validation.first_soft_robot_collision = {true, "Valid", "", start_time};
+
+  if (candidate_rel.empty() || !robot)
+  {
+    validation.first_hard_collision =
+        {false, "Empty or invalid candidate", "", start_time};
+    return validation;
+  }
+
+  const double duration = std::max(0.0, candidate_rel.back().time);
+  const double dt = shared_collision_check_step(params);
+
+  auto validate_sample = [&](double rel_t) -> bool
+  {
+    const double abs_t = start_time + rel_t;
+    auto pose_tuple = interpolate_timed_path(candidate_rel, rel_t);
+    Pose robot_pose = {std::get<0>(pose_tuple), std::get<1>(pose_tuple),
+                       std::get<2>(pose_tuple)};
+
+    CollisionGeometry robot_geom = setup_collision_geometry_for_type(
+        robot_pose, EntityType::ROBOT, robot->size, params);
+    CollisionGeometry robot_bounds_geom =
+        setup_collision_geometry(robot_pose, robot->size, 1.0);
+
+    if (check_robot_bounds_collision(robot_pose, robot_bounds_geom.corners,
+                                     params))
+    {
+      validation.first_hard_collision =
+          {false, "Boundary Collision", "Boundary", abs_t};
+      return false;
+    }
+
+    auto others = timetable.get_poses(abs_t);
+    auto collision_result = check_multiple_entities_collision(
+        robot_geom, robot_pose,
+        nullptr, nullptr,
+        others,
+        params,
+        robot,
+        nullptr,
+        nullptr);
+
+    if (!collision_result.has_collision)
+      return true;
+
+    EntityMeta *collider = collision_result.colliding_entity;
+    const std::string collider_name = collider ? collider->name : "";
+    if (rel_t <= 0.3 && collider && collider->type == EntityType::OBJECT)
+    {
+      auto it = others.find(collider);
+      if (it != others.end() &&
+          is_valid_transfer_contact(robot, robot_pose, collider, it->second))
+      {
+        return true;
+      }
+    }
+
+    CollisionInfo info{false, collision_result.collision_type + " Collision",
+                       collider_name, abs_t};
+    if (collider && collider->type == EntityType::ROBOT)
+    {
+      if (!validation.has_soft_robot_conflict)
+      {
+        validation.has_soft_robot_conflict = true;
+        validation.first_soft_robot_collision = info;
+      }
+      return true;
+    }
+
+    validation.first_hard_collision = info;
+    return false;
+  };
+
+  double rel_t = 0.0;
+  while (rel_t < duration)
+  {
+    if (!validate_sample(rel_t))
+      return validation;
+    rel_t += dt;
+  }
+  if (!validate_sample(duration))
+    return validation;
+
+  validation.hard_valid = true;
+  return validation;
+}
+
+std::vector<Waypoint> waypoints_from_rs_path(const ReedShepp::Path &path,
+                                             RobotMeta *robot)
+{
+  std::vector<Waypoint> rel;
+  rel.reserve(path.x.size());
+  double t_rel = 0.0;
+  for (std::size_t i = 0; i < path.x.size(); ++i)
+  {
+    if (i > 0)
+    {
+      const double d = std::hypot(path.x[i] - path.x[i - 1],
+                                  path.y[i] - path.y[i - 1]);
+      t_rel += d / std::max(robot->speed_transit, 1e-3);
+    }
+
+    Waypoint wp;
+    wp.x = path.x[i];
+    wp.y = path.y[i];
+    wp.yaw = mod2pi(path.yaw[i]);
+    wp.time = t_rel;
+    const int direction = (i < path.directions.size()) ? path.directions[i] : 1;
+    wp.linear_velocity = static_cast<double>(direction) * robot->speed_transit;
+    wp.steering_angle = (i < path.steers.size()) ? path.steers[i] : 0.0;
+    rel.push_back(wp);
+  }
+  return rel;
+}
+
+std::vector<Waypoint> make_reverse_escape_prefix(const Pose &start_pose,
+                                                 RobotMeta *robot,
+                                                 double steer,
+                                                 double escape_distance)
+{
+  std::vector<Waypoint> prefix;
+  if (!robot || escape_distance <= 1e-9)
+    return prefix;
+
+  constexpr int kEscapeSamples = 4;
+  const double speed = std::max(robot->speed_transit, 1e-3);
+  for (int i = 0; i <= kEscapeSamples; ++i)
+  {
+    const double frac = static_cast<double>(i) / kEscapeSamples;
+    const double d = -escape_distance * frac;
+    double x = start_pose.x;
+    double y = start_pose.y;
+    double yaw = start_pose.yaw;
+    const double steer_adjusted = -steer;
+    if (std::abs(steer_adjusted) < 1e-5)
+    {
+      x += d * std::cos(yaw);
+      y += d * std::sin(yaw);
+    }
+    else
+    {
+      const double R = robot->wheel_base / std::tan(steer_adjusted);
+      const double beta = d / R;
+      x += R * (std::sin(yaw + beta) - std::sin(yaw));
+      y += R * (std::cos(yaw) - std::cos(yaw + beta));
+      yaw = mod2pi(yaw + beta);
+    }
+
+    Waypoint wp;
+    wp.x = x;
+    wp.y = y;
+    wp.yaw = mod2pi(yaw);
+    wp.time = escape_distance * frac / speed;
+    wp.linear_velocity = (i == 0) ? 0.0 : -speed;
+    wp.steering_angle = steer;
+    prefix.push_back(wp);
+  }
+  return prefix;
+}
+
+std::vector<Waypoint> combine_prefix_and_tail(
+    const std::vector<Waypoint> &prefix_rel,
+    std::vector<Waypoint> tail_abs,
+    double original_start_time)
+{
+  std::vector<Waypoint> combined = prefix_rel;
+  make_waypoint_times_relative(tail_abs, original_start_time);
+  for (std::size_t i = 0; i < tail_abs.size(); ++i)
+  {
+    if (!combined.empty() && i == 0)
+      continue;
+    combined.push_back(tail_abs[i]);
+  }
+  return combined;
+}
+
+std::string format_planner_stats(const PlanningDebugStats &stats)
+{
+  std::ostringstream oss;
+  oss << "iterations=" << stats.iterations
+      << ", generated=" << stats.generated_nodes
+      << ", accepted=" << stats.accepted_nodes
+      << ", closed=" << stats.closed_nodes
+      << ", peak_open=" << stats.peak_open_size
+      << ", reject_collision=" << stats.reject_collision
+      << ", reject_closed=" << stats.reject_closed
+      << ", reject_worse_g=" << stats.reject_worse_g
+      << ", analytic_collision=" << stats.analytic_collision
+      << ", analytic_post_arrival_collision="
+      << stats.analytic_post_arrival_collision
+      << ", expansion_threads=" << stats.planner_expansion_threads
+      << ", analytic_validation_time="
+      << std::fixed << std::setprecision(4)
+      << stats.analytic_validation_time_sec
+      << "s, primitive_collision_time="
+      << stats.primitive_collision_time_sec
+      << "s, heuristic_time=" << stats.heuristic_time_sec
+      << "s, serial_merge_time=" << stats.serial_merge_time_sec << "s";
+  if (std::isfinite(stats.best_dist))
+  {
+    oss << ", best_dist=" << std::fixed << std::setprecision(3)
+        << stats.best_dist
+        << ", best_yaw_error=" << stats.best_yaw_error
+        << ", best_pose=(" << stats.best_pose.x << ", "
+        << stats.best_pose.y << ", " << stats.best_pose.yaw << ")";
+  }
+  if (!stats.final_failure_reason.empty())
+    oss << ", final_failure=" << stats.final_failure_reason;
+  return oss.str();
+}
+
+void write_segment_replan_diagnostics(
+    const SegmentReplanContext &context,
+    RobotMeta *robot,
+    const Pose &start_pose,
+    const Pose &goal_pose,
+    double start_time,
+    const std::vector<SegmentCandidateReport> &reports,
+    bool success,
+    const std::string &selected_stage)
+{
+  std::filesystem::create_directories(std::string(CMAKE_SOURCE_DIR) + "/results");
+  std::ostringstream filename;
+  filename << std::string(CMAKE_SOURCE_DIR) << "/results/planner_diagnostics_task"
+           << context.task_id << "_" << sanitize_filename_component(context.object_name)
+           << "_segment" << context.segment_id << "_"
+           << sanitize_filename_component(robot ? robot->name : "unknown")
+           << ".txt";
+
+  std::ofstream ofs(filename.str());
+  if (!ofs.is_open())
+  {
+    std::cerr << "[PlannerDiag] Failed to write " << filename.str() << std::endl;
+    return;
+  }
+
+  ofs << "[PlannerDiag] Segment transit diagnostics\n";
+  ofs << "[PlannerDiag] Result: " << (success ? "SUCCESS" : "FAILED") << "\n";
+  ofs << "[PlannerDiag] Selected stage: " << selected_stage << "\n";
+  ofs << "[PlannerDiag] Task: " << context.task_id
+      << ", object: " << context.object_name
+      << ", segment: " << context.segment_id << "\n";
+  ofs << "[PlannerDiag] Robot: " << (robot ? robot->name : "unknown") << "\n";
+  ofs << std::fixed << std::setprecision(3);
+  if (robot)
+  {
+    ofs << "[PlannerDiag] Planner mode: transit, turning_radius="
+        << robot->transit_turning_radius()
+        << "m, transfer_turning_radius="
+        << robot->transfer_turning_radius()
+        << "m, legacy_radius=" << robot->min_turning_radius << "m\n";
+  }
+  ofs << "[PlannerDiag] Start: (" << start_pose.x << ", " << start_pose.y
+      << ", " << start_pose.yaw << ") at t=" << start_time << "\n";
+  ofs << "[PlannerDiag] Goal:  (" << goal_pose.x << ", " << goal_pose.y
+      << ", " << goal_pose.yaw << ")\n";
+  ofs << "[PlannerDiag] Start contact entity: "
+      << (context.start_contact_entity.empty() ? "none"
+                                               : context.start_contact_entity)
+      << "\n";
+
+  for (const auto &report : reports)
+  {
+    ofs << "[PlannerDiag] " << report.stage << ": "
+        << planning_status_name(report.planning.status)
+        << ", waypoints=" << report.planning.waypoints.size();
+    if (!report.planning.failure_detail.empty())
+      ofs << ", detail=" << report.planning.failure_detail;
+    if (!report.planning.colliding_entity.empty())
+      ofs << ", blocker=" << report.planning.colliding_entity;
+    ofs << ", accepted_for_scheduling="
+        << (report.accepted_for_scheduling ? "true" : "false")
+        << ", selected=" << (report.selected ? "true" : "false")
+        << "\n";
+    ofs << "[PlannerDiag] " << report.stage
+        << " stats: " << format_planner_stats(report.planning.debug_stats)
+        << "\n";
+    if (report.candidate_tested)
+    {
+      ofs << "[PlannerDiag] " << report.stage
+          << " validation: hard_valid="
+          << (report.validation.hard_valid ? "true" : "false")
+          << ", soft_robot="
+          << (report.validation.has_soft_robot_conflict ? "true" : "false");
+      if (!report.validation.first_soft_robot_collision.is_valid)
+      {
+        ofs << ", first_soft="
+            << report.validation.first_soft_robot_collision.reason << " with "
+            << report.validation.first_soft_robot_collision.entity_name
+            << " at t=" << report.validation.first_soft_robot_collision.time;
+      }
+      if (!report.validation.first_hard_collision.is_valid)
+      {
+        ofs << ", first_hard="
+            << report.validation.first_hard_collision.reason << " with "
+            << report.validation.first_hard_collision.entity_name
+            << " at t=" << report.validation.first_hard_collision.time;
+      }
+      ofs << "\n";
+    }
+  }
+
+  std::cout << "[PlannerDiag] Wrote segment diagnostics: "
+            << filename.str() << std::endl;
 }
 
 bool replan_transit_segment(
@@ -4833,116 +5396,241 @@ bool replan_transit_segment(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const RuntimeOptions &options,
-    std::vector<Waypoint> &out_waypoints_rel)
+    std::vector<Waypoint> &out_waypoints_rel,
+    const SegmentReplanContext &context = SegmentReplanContext{})
 {
   Pose start_pose = timetable.get_pose(robot, start_time);
   robot->initial_pose = start_pose;
+  SegmentReplanContext diag_context = context;
+  diag_context.start_contact_entity = find_valid_start_contact_entity(
+      robot, start_pose, start_time, timetable, entities);
+  const double start_goal_dist =
+      std::hypot(goal_pose.x - start_pose.x, goal_pose.y - start_pose.y);
+  const double start_goal_yaw =
+      std::fabs(pi_2_pi(goal_pose.yaw - start_pose.yaw));
+  diag_context.tight_or_contact_case =
+      !diag_context.start_contact_entity.empty() ||
+      (start_goal_dist < 1.5 && start_goal_yaw > M_PI / 2.0);
 
-  auto is_candidate_valid = [&](const std::vector<Waypoint> &candidate_rel) -> bool
+  std::vector<SegmentCandidateReport> reports;
+  std::string selected_stage;
+
+  auto evaluate_candidate = [&](const std::string &stage,
+                                PlanningResult planning,
+                                std::vector<Waypoint> candidate_rel) -> bool
   {
+    SegmentCandidateReport report;
+    report.stage = stage;
+    report.planning = std::move(planning);
+
     if (candidate_rel.empty())
+    {
+      reports.push_back(std::move(report));
       return false;
-
-    Trajectory check_traj;
-    check_traj.entity = robot;
-    check_traj.transferred_object = nullptr;
-    check_traj.is_transfer = false;
-    check_traj.waypoints = candidate_rel;
-    check_traj.start_time = start_time;
-    auto col_info =
-        check_collision_trajectory_detailed(check_traj, start_time, timetable,
-                                            params, false);
-    return col_info.is_valid;
-  };
-
-  auto try_plan = [&](const Params &plan_params, int max_iter,
-                      std::vector<Waypoint> &candidate_rel) -> bool
-  {
-    auto run_plan = [&](const std::string &ignored_entity_name) -> PlanningResult
-    {
-      PHAStar planner(robot, goal_pose, &timetable, &entities, plan_params,
-                      false, ignored_entity_name, start_time,
-                      "Segment transit replanning");
-      planner.set_ignore_other_robots(true);
-      planner.max_search_iterations = max_iter;
-      return planner.Planning_with_res(start_time);
-    };
-
-    auto res = run_plan("");
-
-    if (res.waypoints.empty() &&
-        res.status == PlanningStatus::START_INVALID_COLLISION &&
-        !res.colliding_entity.empty())
-    {
-      auto res_ignore_start_contact = run_plan(res.colliding_entity);
-      if (!res_ignore_start_contact.waypoints.empty())
-      {
-        res = std::move(res_ignore_start_contact);
-      }
     }
 
+    report.candidate_tested = true;
+    report.validation = validate_segment_candidate(
+        candidate_rel, robot, start_time, timetable, entities, params);
+    report.accepted_for_scheduling = report.validation.hard_valid;
+    if (!report.validation.hard_valid)
+    {
+      reports.push_back(std::move(report));
+      return false;
+    }
+
+    out_waypoints_rel = std::move(candidate_rel);
+    selected_stage = stage;
+    report.selected = true;
+    reports.push_back(std::move(report));
+    return true;
+  };
+
+  auto run_hybrid_plan = [&](const Pose &plan_start_pose,
+                             double plan_start_time,
+                             const Params &plan_params,
+                             int max_iter,
+                             const std::string &stage) -> PlanningResult
+  {
+    robot->initial_pose = plan_start_pose;
+    PHAStar planner(robot, goal_pose, &timetable, &entities, plan_params,
+                    false, "", plan_start_time, stage);
+    planner.set_ignore_other_robots(true);
+    planner.max_search_iterations = max_iter;
+    planner.set_planner_expansion_threads(options.planner_expansion_threads);
+    return planner.Planning_with_res(plan_start_time);
+  };
+
+  auto evaluate_hybrid_stage = [&](const std::string &stage,
+                                   const Pose &plan_start_pose,
+                                   double plan_start_time,
+                                   const Params &plan_params,
+                                   int max_iter,
+                                   const std::vector<Waypoint> *prefix = nullptr) -> bool
+  {
+    PlanningResult res = run_hybrid_plan(plan_start_pose, plan_start_time,
+                                         plan_params, max_iter, stage);
     if (res.waypoints.empty())
-    {
-      return false;
-    }
+      return evaluate_candidate(stage, res, {});
 
-    candidate_rel = res.waypoints;
-    make_waypoint_times_relative(candidate_rel, start_time);
-    return is_candidate_valid(candidate_rel);
+    std::vector<Waypoint> candidate_rel;
+    if (prefix)
+      candidate_rel = combine_prefix_and_tail(*prefix, res.waypoints, start_time);
+    else
+    {
+      candidate_rel = res.waypoints;
+      make_waypoint_times_relative(candidate_rel, start_time);
+    }
+    return evaluate_candidate(stage, res, std::move(candidate_rel));
   };
 
-  std::vector<Waypoint> candidate_rel;
-  if (try_plan(params, options.max_search_iterations, candidate_rel))
+  if (evaluate_hybrid_stage("primary Hybrid A*", start_pose, start_time,
+                            params, options.max_search_iterations))
   {
-    out_waypoints_rel = candidate_rel;
+    if (diag_context.tight_or_contact_case)
+      write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                       goal_pose, start_time, reports, true,
+                                       selected_stage);
     return true;
   }
 
-  Params relaxed = make_relaxed_fallback_params(params);
-
-  if (try_plan(relaxed, options.max_search_iterations, candidate_rel))
+  if (options.enable_fine_segment_retry)
   {
-    out_waypoints_rel = candidate_rel;
-    return true;
-  }
-
-  double maxc = 1.0 / robot->min_turning_radius;
-  auto [rs_x, rs_y, rs_yaw, rs_ctypes, rs_lengths, rs_steers, rs_dirs] =
-      ReedShepp::reeds_shepp_path_planning(start_pose.x, start_pose.y, start_pose.yaw,
-                                           goal_pose.x, goal_pose.y, goal_pose.yaw,
-                                           maxc, std::max(params.rs_step_size, 0.25),
-                                           robot->wheel_base);
-
-  if (!rs_x.empty())
-  {
-    std::vector<Waypoint> rs_rel;
-    rs_rel.reserve(rs_x.size());
-    double t_rel = 0.0;
-    for (size_t i = 0; i < rs_x.size(); ++i)
+    Params fine_params = make_fine_segment_params(params, options);
+    const int fine_max_iter = std::max(
+        options.max_search_iterations,
+        options.fine_segment_max_search_iterations);
+    if (diag_context.tight_or_contact_case &&
+        evaluate_hybrid_stage("fine Hybrid A*", start_pose, start_time,
+                              fine_params, fine_max_iter))
     {
-      if (i > 0)
-      {
-        double d = std::hypot(rs_x[i] - rs_x[i - 1], rs_y[i] - rs_y[i - 1]);
-        t_rel += d / std::max(robot->speed_transit, 1e-3);
-      }
-
-      Waypoint wp;
-      wp.x = rs_x[i];
-      wp.y = rs_y[i];
-      wp.yaw = rs_yaw[i];
-      wp.time = t_rel;
-      wp.linear_velocity = (rs_dirs.empty() ? 1.0 : static_cast<double>(rs_dirs[i])) * robot->speed_transit;
-      wp.steering_angle = rs_steers.empty() ? 0.0 : rs_steers[i];
-      rs_rel.push_back(wp);
-    }
-
-    if (is_candidate_valid(rs_rel))
-    {
-      out_waypoints_rel = rs_rel;
+      write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                       goal_pose, start_time, reports, true,
+                                       selected_stage);
       return true;
     }
+
+    if (!diag_context.start_contact_entity.empty())
+    {
+      const double escape_distance = 0.12;
+      const double escape_steer =
+          robot->transit_turning_radius() > 1e-9
+              ? std::atan(robot->wheel_base / robot->transit_turning_radius())
+              : 0.0;
+      const std::vector<std::pair<std::string, double>> escape_stages = {
+          {"reverse-straight escape + fine Hybrid A*", 0.0},
+          {"reverse-left escape + fine Hybrid A*", escape_steer},
+          {"reverse-right escape + fine Hybrid A*", -escape_steer}};
+
+      for (const auto &[stage, steer_angle] : escape_stages)
+      {
+        auto prefix = make_reverse_escape_prefix(start_pose, robot,
+                                                 steer_angle, escape_distance);
+        if (prefix.empty())
+          continue;
+        const Waypoint &escape_end = prefix.back();
+        Pose escape_pose{escape_end.x, escape_end.y, escape_end.yaw};
+        const double escape_abs_time = start_time + escape_end.time;
+        if (evaluate_hybrid_stage(stage, escape_pose, escape_abs_time,
+                                  fine_params, fine_max_iter, &prefix))
+        {
+          write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                           goal_pose, start_time, reports, true,
+                                           selected_stage);
+          return true;
+        }
+      }
+    }
+
+    auto evaluate_rs_candidates = [&](const Pose &rs_start_pose,
+                                      double rs_start_time,
+                                      const Params &rs_params,
+                                      const std::string &stage_prefix,
+                                      const std::vector<Waypoint> *prefix = nullptr) -> bool
+    {
+      const double maxc =
+          1.0 / std::max(robot->transit_turning_radius(), 1e-6);
+      auto paths = ReedShepp::calc_paths(rs_start_pose.x, rs_start_pose.y,
+                                         rs_start_pose.yaw,
+                                         goal_pose.x, goal_pose.y, goal_pose.yaw,
+                                         maxc, rs_params.rs_step_size,
+                                         robot->wheel_base);
+      std::sort(paths.begin(), paths.end(),
+                [](const ReedShepp::Path &a, const ReedShepp::Path &b)
+                { return a.L < b.L; });
+
+      for (std::size_t i = 0; i < paths.size(); ++i)
+      {
+        PlanningResult rs_res;
+        rs_res.status = PlanningStatus::SUCCESS;
+        rs_res.waypoints = waypoints_from_rs_path(paths[i], robot);
+        shift_waypoint_times(rs_res.waypoints, rs_start_time);
+
+        std::vector<Waypoint> candidate_rel;
+        if (prefix)
+          candidate_rel = combine_prefix_and_tail(*prefix, rs_res.waypoints,
+                                                  start_time);
+        else
+        {
+          candidate_rel = rs_res.waypoints;
+          make_waypoint_times_relative(candidate_rel, start_time);
+        }
+
+        std::ostringstream stage;
+        stage << stage_prefix << " RS candidate " << i << " "
+              << paths[i].ctypes << " L=" << std::fixed << std::setprecision(3)
+              << paths[i].L;
+        if (evaluate_candidate(stage.str(), rs_res, std::move(candidate_rel)))
+          return true;
+      }
+      return false;
+    };
+
+    if (evaluate_rs_candidates(start_pose, start_time, fine_params,
+                               "all-candidate"))
+    {
+      write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                       goal_pose, start_time, reports, true,
+                                       selected_stage);
+      return true;
+    }
+
+    if (!diag_context.start_contact_entity.empty())
+    {
+      const double escape_distance = 0.12;
+      const double escape_steer =
+          robot->transit_turning_radius() > 1e-9
+              ? std::atan(robot->wheel_base / robot->transit_turning_radius())
+              : 0.0;
+      const std::vector<std::pair<std::string, double>> escape_stages = {
+          {"reverse-straight escape", 0.0},
+          {"reverse-left escape", escape_steer},
+          {"reverse-right escape", -escape_steer}};
+      for (const auto &[stage, steer_angle] : escape_stages)
+      {
+        auto prefix = make_reverse_escape_prefix(start_pose, robot,
+                                                 steer_angle, escape_distance);
+        if (prefix.empty())
+          continue;
+        const Waypoint &escape_end = prefix.back();
+        Pose escape_pose{escape_end.x, escape_end.y, escape_end.yaw};
+        const double escape_abs_time = start_time + escape_end.time;
+        if (evaluate_rs_candidates(escape_pose, escape_abs_time, fine_params,
+                                   stage, &prefix))
+        {
+          write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                           goal_pose, start_time, reports, true,
+                                           selected_stage);
+          return true;
+        }
+      }
+    }
   }
 
+  write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                   goal_pose, start_time, reports, false,
+                                   selected_stage.empty() ? "none"
+                                                          : selected_stage);
   return false;
 }
 
@@ -4958,7 +5646,8 @@ bool prepare_segment_waypoints_for_scheduling(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const RuntimeOptions &options,
-    const std::string &fallback_message)
+    const std::string &fallback_message,
+    const SegmentReplanContext &replan_context = SegmentReplanContext{})
 {
   if (!traj)
     return false;
@@ -4971,22 +5660,23 @@ bool prepare_segment_waypoints_for_scheduling(
 
     auto original_waypoints = traj->waypoints;
     Pose segment_goal = traj->waypoints.back();
-    if (robot && traj->transferred_object)
+    EntityMeta *approach_goal_entity = traj->approach_goal_entity;
+    if (robot && approach_goal_entity)
     {
       const Pose live_object_pose =
-          timetable.get_pose(traj->transferred_object, segment_ready_time);
+          timetable.get_pose(approach_goal_entity, segment_ready_time);
       segment_goal = compute_adjusted_prepush_goal(
-          live_object_pose, segment_goal.yaw, robot, traj->transferred_object,
+          live_object_pose, segment_goal.yaw, robot, approach_goal_entity,
           0.01);
     }
     std::vector<Waypoint> replanned_rel;
     if (!replan_transit_segment(robot, segment_goal, segment_ready_time,
-                                timetable, entities, params, options, replanned_rel))
+                                timetable, entities, params, options, replanned_rel,
+                                replan_context))
     {
-      traj->waypoints = original_waypoints;
-      project_waypoints_inside_bounds(traj->waypoints, robot, params);
-      traj->CalcualteTimeStamps(robot);
       std::cout << fallback_message << std::endl;
+      traj->waypoints = original_waypoints;
+      return false;
     }
     else
     {
@@ -5240,10 +5930,12 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
                            const std::unordered_map<std::string, EntityMeta *> &entities,
                            const RuntimeOptions &options,
                            double source_pre_push_distance = 0.0,
+                           EntityMeta *approach_goal_entity = nullptr,
                            std::vector<TransferContactWindow> *transfer_windows = nullptr,
                            TaskExecutionStats *stats = nullptr,
                            std::string *out_failure_reason = nullptr,
-                           double *out_scheduled_start_time = nullptr)
+                           double *out_scheduled_start_time = nullptr,
+                           Trajectory *out_scheduled_trajectory = nullptr)
 {
   // 1. Get current available time from the timetable
   double current_avail_time = timetable.get_entity_max_time(robot);
@@ -5252,7 +5944,7 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
   // ReloPushPath2TrajPtr is defined in Task.h
   TrajectoryPtr traj =
       ReloPushPath2TrajPtr(edge_path, robot, obj_meta, current_avail_time,
-                           source_pre_push_distance);
+                           source_pre_push_distance, approach_goal_entity);
 
   if (!prepare_segment_waypoints_for_scheduling(
           traj.get(), robot, current_avail_time, timetable, entities, params,
@@ -5268,8 +5960,13 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
                                                timetable, params, entities, options,
                                                transfer_windows, stats,
                                                out_failure_reason);
-  if (success && out_scheduled_start_time)
-    *out_scheduled_start_time = traj->start_time;
+  if (success)
+  {
+    if (out_scheduled_start_time)
+      *out_scheduled_start_time = traj->start_time;
+    if (out_scheduled_trajectory)
+      *out_scheduled_trajectory = *traj;
+  }
   return success;
 }
 
@@ -5281,7 +5978,8 @@ bool process_task_execution(
     std::vector<TransferContactWindow> *transfer_windows = nullptr,
     TaskExecutionStats *out_stats = nullptr,
     std::string *out_failure_reason = nullptr,
-    double task_start_delay = 0.0)
+    double task_start_delay = 0.0,
+    int task_id = -1)
 {
   if (out_stats)
     *out_stats = TaskExecutionStats{};
@@ -5357,6 +6055,65 @@ bool process_task_execution(
   }
   const Pose initial_wait_pose = timetable.get_pose(robot, initial_transit_abs_end);
   bool initial_wait_gap_checked = false;
+  auto record_waiting_pose_conflict = [&](const Pose &wait_pose,
+                                          const CollisionInfo &wait_conflict,
+                                          const std::string &stage_label,
+                                          bool mark_as_initial_gap) -> void
+  {
+    if (out_stats)
+    {
+      out_stats->has_waiting_pose_conflict = true;
+      out_stats->waiting_pose = wait_pose;
+      out_stats->waiting_conflict_time = wait_conflict.time;
+      out_stats->waiting_conflict_entity = wait_conflict.entity_name;
+      out_stats->waiting_conflict_stage = stage_label;
+      if (mark_as_initial_gap)
+      {
+        out_stats->has_initial_wait_conflict = true;
+        out_stats->initial_wait_pose = wait_pose;
+        out_stats->initial_wait_conflict_time = wait_conflict.time;
+        out_stats->initial_wait_conflict_entity = wait_conflict.entity_name;
+      }
+    }
+  };
+
+  auto validate_wait_gap = [&](const Pose &wait_pose,
+                               double from_t,
+                               double to_t,
+                               const std::string &segment_label,
+                               EntityMeta *ignored_entity = nullptr,
+                               bool mark_as_initial_gap = false) -> bool
+  {
+    if (to_t <= from_t + 1e-9)
+      return true;
+
+    CollisionInfo wait_conflict = find_robot_waiting_pose_conflict_over_interval(
+        robot, wait_pose, from_t, to_t, timetable, params, entities,
+        ignored_entity);
+    if (wait_conflict.is_valid)
+      return true;
+
+    record_waiting_pose_conflict(wait_pose, wait_conflict, segment_label,
+                                 mark_as_initial_gap);
+
+    std::ostringstream oss;
+    oss << "waiting pose conflicts with reserved occupancy before "
+        << segment_label;
+    if (!wait_conflict.entity_name.empty())
+      oss << " (" << wait_conflict.entity_name << ")";
+    set_failure(oss.str());
+
+    std::cerr << "  [Wait] Waiting pose is not safe before "
+              << segment_label << ". Conflict: " << wait_conflict.reason;
+    if (!wait_conflict.entity_name.empty())
+      std::cerr << " with " << wait_conflict.entity_name;
+    if (wait_conflict.time > 1e-6)
+      std::cerr << " at t=" << std::fixed << std::setprecision(2)
+                << wait_conflict.time;
+    std::cerr << std::endl;
+    return false;
+  };
+
   auto validate_initial_wait_gap = [&](double next_segment_start_time,
                                        const std::string &segment_label,
                                        EntityMeta *ignored_entity = nullptr) -> bool
@@ -5368,43 +6125,10 @@ bool process_task_execution(
     if (next_segment_start_time <= initial_transit_abs_end + 1e-9)
       return true;
 
-    CollisionInfo wait_conflict =
-        ignored_entity
-            ? find_stationary_pose_conflict_over_interval_ignoring(
-                  robot, initial_wait_pose, initial_transit_abs_end,
-                  next_segment_start_time, timetable, params,
-                  shared_collision_check_step(params), ignored_entity)
-            : find_stationary_pose_conflict_over_interval(
-                  robot, initial_wait_pose, initial_transit_abs_end,
-                  next_segment_start_time, timetable, params,
-                  shared_collision_check_step(params));
-    if (wait_conflict.is_valid)
-      return true;
-
-    if (out_stats)
-    {
-      out_stats->has_initial_wait_conflict = true;
-      out_stats->initial_wait_pose = initial_wait_pose;
-      out_stats->initial_wait_conflict_time = wait_conflict.time;
-      out_stats->initial_wait_conflict_entity = wait_conflict.entity_name;
-    }
-
-    std::ostringstream oss;
-    oss << "initial transit waiting pose conflicts with reserved occupancy before "
-        << segment_label;
-    if (!wait_conflict.entity_name.empty())
-      oss << " (" << wait_conflict.entity_name << ")";
-    set_failure(oss.str());
-
-    std::cerr << "  [Transit] Waiting at the initial-transit goal is not safe until "
-              << segment_label << " starts. Conflict: " << wait_conflict.reason;
-    if (!wait_conflict.entity_name.empty())
-      std::cerr << " with " << wait_conflict.entity_name;
-    if (wait_conflict.time > 1e-6)
-      std::cerr << " at t=" << std::fixed << std::setprecision(2)
-                << wait_conflict.time;
-    std::cerr << std::endl;
-    return false;
+    return validate_wait_gap(initial_wait_pose, initial_transit_abs_end,
+                             next_segment_start_time,
+                             "initial transit -> " + segment_label,
+                             ignored_entity, true);
   };
 
   // 2. ObsRelo (if exists)
@@ -5426,13 +6150,20 @@ bool process_task_execution(
       if (task.obsReloPaths->size() > post_path_idx)
       {
         // Step A: Two-point push trajectory
+        const double obs_push_wait_start_time =
+            timetable.get_entity_max_time(robot, 0.0);
+        const Pose obs_push_wait_pose =
+            timetable.get_pose(robot, obs_push_wait_start_time);
         double obs_push_start_time = -1.0;
+        Trajectory obs_push_traj;
         if (!schedule_path_segment(task.obsReloPaths->at(push_path_idx), obs_meta,
                                    robot, timetable, params, entities, options,
                                    task.sourcePrePushDistance,
+                                   nullptr,
                                    transfer_windows,
                                    out_stats, out_failure_reason,
-                                   &obs_push_start_time))
+                                   &obs_push_start_time,
+                                   &obs_push_traj))
         {
           set_failure("obs relocation push segment failed");
           return false;
@@ -5443,15 +6174,50 @@ bool process_task_execution(
         {
           return false;
         }
+        if (!validate_wait_gap(obs_push_wait_pose, obs_push_wait_start_time,
+                               obs_push_start_time,
+                               "obstacle relocation push", obs_meta))
+        {
+          return false;
+        }
+
+        if (!append_retraction(robot, obs_push_traj, timetable, params,
+                               entities, options, out_stats,
+                               out_failure_reason))
+        {
+          std::cout << "  [Retract] Skipping retraction after obstacle relocation push "
+                    << "(no collision-free slot)." << std::endl;
+        }
 
         // Step B: Schedule the "Post-Obs/Return" path
-        if (!schedule_path_segment(task.obsReloPaths->at(post_path_idx), obs_meta,
+        EntityMeta *return_approach_entity = task.targetObject;
+        if (obs_ind + 1 < task.vertexChain.size() - 1)
+        {
+          auto next_obs_it = entities.find(task.vertexChain[obs_ind + 1].name);
+          if (next_obs_it != entities.end())
+            return_approach_entity = next_obs_it->second;
+        }
+
+        const double obs_return_wait_start_time =
+            timetable.get_entity_max_time(robot, 0.0);
+        const Pose obs_return_wait_pose =
+            timetable.get_pose(robot, obs_return_wait_start_time);
+        double obs_return_start_time = -1.0;
+        if (!schedule_path_segment(task.obsReloPaths->at(post_path_idx), nullptr,
                                    robot, timetable, params, entities, options,
                                    task.sourcePrePushDistance,
+                                   return_approach_entity,
                                    transfer_windows,
-                                   out_stats, out_failure_reason))
+                                   out_stats, out_failure_reason,
+                                   &obs_return_start_time))
         {
           set_failure("obs relocation return segment failed");
+          return false;
+        }
+        if (!validate_wait_gap(obs_return_wait_pose, obs_return_wait_start_time,
+                               obs_return_start_time,
+                               "obstacle relocation return"))
+        {
           return false;
         }
         obs_path_base_idx += 2;
@@ -5471,18 +6237,27 @@ bool process_task_execution(
   {
     segment_idx++;
     double segment_ready_time = timetable.get_entity_max_time(robot);
+    double segment_wait_start_time = timetable.get_entity_max_time(robot, 0.0);
+    Pose segment_wait_pose = timetable.get_pose(robot, segment_wait_start_time);
 
     // Prepare Trajectory Object
     std::ostringstream fallback_msg;
     fallback_msg << "  [Segment " << segment_idx
-                 << "] Transit replanning failed; using original transit path with conflict-resolution scheduling.";
+                 << "] Transit replanning failed; no MARS-generated segment path accepted.";
+    SegmentReplanContext replan_context;
+    replan_context.task_id = task_id;
+    replan_context.segment_id = segment_idx;
+    replan_context.object_name =
+        task.targetObject ? task.targetObject->name : "unknown";
     if (!prepare_segment_waypoints_for_scheduling(path_ptr.get(), robot,
                                                   segment_ready_time, timetable,
                                                   entities, params, options,
-                                                  fallback_msg.str()))
+                                                  fallback_msg.str(),
+                                                  replan_context))
     {
-      set_failure("empty edge transit segment");
-      std::cerr << " [Error] Segment " << segment_idx << " has empty path." << std::endl;
+      set_failure("segment transit replanning failed");
+      std::cerr << " [Error] Segment " << segment_idx
+                << " transit replanning failed." << std::endl;
       if (DEBUG_VIS)
       {
         Pose start_pose = timetable.get_pose(robot, segment_ready_time);
@@ -5547,16 +6322,23 @@ bool process_task_execution(
     {
       return false;
     }
+    if (!validate_wait_gap(segment_wait_pose, segment_wait_start_time,
+                           path_ptr->start_time,
+                           "segment " + std::to_string(segment_idx),
+                           allowed_contact_entity))
+    {
+      return false;
+    }
 
     // D. Handle Retraction (if this was a push)
-    bool is_final_edge_segment = (segment_idx == static_cast<int>(task.EdgePaths.size()));
-    if (path_ptr->is_transfer && is_final_edge_segment)
+    if (path_ptr->is_transfer)
     {
       if (!append_retraction(robot, *path_ptr, timetable, params, entities,
                              options,
                              out_stats, out_failure_reason))
       {
-        std::cout << "  [Retract] Skipping retraction for this task (no collision-free slot)." << std::endl;
+        std::cout << "  [Retract] Skipping retraction after segment "
+                  << segment_idx << " (no collision-free slot)." << std::endl;
       }
     }
   }
@@ -5581,7 +6363,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/result_seq_ReloPush-BOSS_10_objects.txt_ind8.b64";
+         "/result_seq_ReloPush-BOSS_8_objects.txt_ind2.b64";
 }
 
 bool load_data(
@@ -5738,16 +6520,29 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << "'. Falling back to non-deterministic seed." << std::endl;
       }
     }
-    else if (arg.rfind("--search-threads=", 0) == 0)
+    else if (arg.rfind("--lns-threads=", 0) == 0)
     {
-      std::string value = arg.substr(std::string("--search-threads=").size());
+      std::string value = arg.substr(std::string("--lns-threads=").size());
       try
       {
-        options.search_threads = std::max(1, std::stoi(value));
+        options.lns_threads = std::max(1, std::stoi(value));
       }
       catch (...)
       {
-        std::cerr << "[Warn] Invalid --search-threads value: '" << value
+        std::cerr << "[Warn] Invalid --lns-threads value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--planner-expansion-threads=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--planner-expansion-threads=").size());
+      try
+      {
+        options.planner_expansion_threads = std::max(1, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --planner-expansion-threads value: '" << value
                   << "'. Keeping default." << std::endl;
       }
     }
@@ -5831,6 +6626,22 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << "'. Keeping default." << std::endl;
       }
     }
+    else if (arg == "--lns-fine-segment-retry")
+    {
+      options.enable_lns_fine_segment_retry = true;
+    }
+    else if (arg == "--no-lns-fine-segment-retry")
+    {
+      options.enable_lns_fine_segment_retry = false;
+    }
+    else if (arg == "--initial-transit-fallbacks")
+    {
+      options.enable_initial_transit_fallbacks = true;
+    }
+    else if (arg == "--no-initial-transit-fallbacks")
+    {
+      options.enable_initial_transit_fallbacks = false;
+    }
     else if (arg == "--visualize" || arg == "--visualization")
     {
       options.enable_visualization = true;
@@ -5899,10 +6710,45 @@ void print_runtime_options(const RuntimeOptions &options)
   std::cout << "[Config] Base RNG seed: " << options.base_random_seed
             << (options.has_fixed_random_seed ? " (fixed)" : " (randomized)")
             << std::endl;
-  std::cout << "[Config] Search threads: "
-            << options.search_threads << std::endl;
+  std::cout << "[Config] LNS threads: "
+            << options.lns_threads << std::endl;
+  std::cout << "[Config] Planner expansion threads: "
+            << options.planner_expansion_threads << std::endl;
+  if (options.lns_threads > 1 && options.planner_expansion_threads > 1)
+  {
+    std::cout << "[Config] Planner expansion threads are disabled inside "
+                 "parallel LNS/search batches to avoid nested oversubscription."
+              << std::endl;
+  }
   std::cout << "[Config] Max search iterations: "
             << options.max_search_iterations << std::endl;
+  std::cout << "[Config] Default search params: "
+            << "xy=" << options.default_xy_resolution
+            << ", yaw=" << options.default_yaw_resolution
+            << ", time_step=" << options.default_time_step
+            << ", rs_step=" << options.default_rs_step_size
+            << ", collision_steps=" << options.default_collision_steps
+            << ", collision_step="
+            << options.default_collision_check_time_step
+            << ", analytic_scale="
+            << options.default_analytic_threshold_scale << std::endl;
+  std::cout << "[Config] Default search costs/collision: "
+            << "turn_penalty=" << options.default_turn_penalty
+            << ", reverse_penalty=" << options.default_reverse_penalty
+            << ", switch_penalty=" << options.default_switch_penalty
+            << ", wait_penalty=" << options.default_wait_penalty
+            << ", inflation=" << options.default_inflation
+            << ", safety_margin=" << options.default_safety_margin
+            << ", robot_collision_inflation="
+            << options.default_robot_collision_inflation << std::endl;
+  std::cout << "[Config] Fine segment retry params: "
+            << "max_iter=" << options.fine_segment_max_search_iterations
+            << ", xy=" << options.fine_segment_xy_resolution
+            << ", yaw=" << options.fine_segment_yaw_resolution
+            << ", time_step=" << options.fine_segment_time_step
+            << ", rs_step=" << options.fine_segment_rs_step_size
+            << ", collision_step="
+            << options.fine_segment_collision_check_time_step << std::endl;
   std::cout << "[Config] Parking candidate mode: "
             << parking_candidate_mode_name(options.parking_candidate_mode)
             << std::endl;
@@ -5917,6 +6763,12 @@ void print_runtime_options(const RuntimeOptions &options)
             << options.shuffle_sequence_search_iterations << std::endl;
   std::cout << "[Config] LNS iterations: "
             << options.lns_iterations << std::endl;
+  std::cout << "[Config] LNS fine segment retry: "
+            << (options.enable_lns_fine_segment_retry ? "enabled" : "disabled")
+            << std::endl;
+  std::cout << "[Config] Initial transit fallbacks: "
+            << (options.enable_initial_transit_fallbacks ? "enabled" : "disabled")
+            << std::endl;
   std::cout << "[Config] Visualization: "
             << (options.enable_visualization ? "enabled" : "disabled")
             << std::endl;
@@ -5952,7 +6804,7 @@ void initialize_environment(
     bool verbose)
 {
   reset_thread_local_planning_state();
-  params = initialize_params(loaded_sequence);
+  params = initialize_params(loaded_sequence, options);
   params.robot_boundary_origin_only = options.robot_boundary_origin_only;
   g_parking_candidate_mode = options.parking_candidate_mode;
   initialize_parking_rng(true, parking_seed);
@@ -5962,12 +6814,15 @@ void initialize_environment(
     std::cout << "[Config] Parking RNG seed: " << parking_rng_seed() << std::endl;
     std::cout << "[Config] Parking candidate mode: "
               << parking_candidate_mode_name() << std::endl;
-    std::cout << "[Config] Collision tuning: inflation="
-              << params.inflation
-              << ", safety_margin=" << params.safety_margin
-              << ", robot_collision_inflation="
-              << params.robot_collision_inflation
-              << " (temporary experiment)" << std::endl;
+    std::ostringstream collision_tuning;
+    collision_tuning << std::fixed << std::setprecision(3)
+                     << "[Config] Collision tuning: inflation="
+                     << params.inflation
+                     << ", safety_margin=" << params.safety_margin
+                     << ", robot_collision_inflation="
+                     << params.robot_collision_inflation
+                     << " (temporary experiment)";
+    std::cout << collision_tuning.str() << std::endl;
   }
 
   entities = initialize_entities(loaded_sequence);
@@ -5984,6 +6839,16 @@ void initialize_environment(
             {
               return a->name < b->name;
             });
+  if (verbose && !all_robots.empty())
+  {
+    const RobotMeta *sample_robot = all_robots.front();
+    std::cout << std::fixed << std::setprecision(3)
+              << "[Config] Robot turning radii: transit="
+              << sample_robot->transit_turning_radius()
+              << "m, transfer="
+              << sample_robot->transfer_turning_radius()
+              << "m" << std::endl;
+  }
 }
 
 std::vector<Task> initialize_tasks(
@@ -6184,7 +7049,7 @@ bool attempt_task_with_candidate(
                                options,
                                &transfer_windows,
                                &attempt_stats, &attempt_failure_reason,
-                               task_start_delay))
+                               task_start_delay, row.task_id))
     {
       auto verify = verify_timetable_collision_free(timetable, entities, params,
                                                     transfer_windows,
@@ -6336,11 +7201,15 @@ bool attempt_task_with_candidate(
       return true;
     }
 
-    if (attempt_stats.has_initial_wait_conflict &&
+    if (attempt_stats.has_waiting_pose_conflict &&
         retry_idx < kMaxPostValidationDelayRetries)
     {
       task_start_delay += kPostValidationRetryDelay;
-      std::cout << "         Initial-transit waiting pose conflicts with earlier reserved occupancy."
+      std::cout << "         Waiting pose conflicts with earlier reserved occupancy";
+      if (!attempt_stats.waiting_conflict_stage.empty())
+        std::cout << " before " << attempt_stats.waiting_conflict_stage;
+      std::cout
+                << "."
                 << " Adding " << std::fixed << std::setprecision(2)
                 << kPostValidationRetryDelay
                 << "s task-start delay and retrying the same robot."
@@ -6348,21 +7217,25 @@ bool attempt_task_with_candidate(
       continue;
     }
 
-    if (attempt_stats.has_initial_wait_conflict &&
+    if (attempt_stats.has_waiting_pose_conflict &&
         !self_safe_parking_retry_applied)
     {
       TimeTable self_park_base_timetable = retry_base_timetable;
       auto self_park_base_transfer_windows = retry_base_transfer_windows;
       const double conflict_time =
-          attempt_stats.initial_wait_conflict_time > 0.0
-              ? attempt_stats.initial_wait_conflict_time
+          attempt_stats.waiting_conflict_time > 0.0
+              ? attempt_stats.waiting_conflict_time
               : attempt_stats.initial_transit_end_time;
       Trajectory blocked_hint =
-          make_single_pose_hint(attempt_stats.initial_wait_pose, conflict_time);
+          make_single_pose_hint(attempt_stats.waiting_pose, conflict_time);
 
       std::cout << "         Delay retries exhausted while "
                 << cand_robot->name
-                << " waits at the initial-transit goal."
+                << " waits before continuing the task."
+                << (attempt_stats.waiting_conflict_stage.empty()
+                        ? ""
+                        : (" Problem stage: " +
+                           attempt_stats.waiting_conflict_stage + "."))
                 << " Attempting self safe parking before replanning the task."
                 << std::endl;
 
@@ -6534,7 +7407,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
 
   std::size_t worker_count = std::min<std::size_t>(
       requests.size(),
-      static_cast<std::size_t>(std::max(1, options.search_threads)));
+      static_cast<std::size_t>(std::max(1, options.lns_threads)));
 
   if (worker_count <= 1)
   {
@@ -6549,6 +7422,8 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
   }
 
   ScopedGlobalStreamSilencer silencer(true);
+  RuntimeOptions worker_options = options;
+  worker_options.planner_expansion_threads = 1;
   std::atomic<std::size_t> next_index{0};
   std::vector<std::thread> workers;
   workers.reserve(worker_count);
@@ -6556,7 +7431,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
   for (std::size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx)
   {
     workers.emplace_back(
-        [&loaded_sequence, &options, &requests, &results, &next_index]()
+        [&loaded_sequence, &worker_options, &requests, &results, &next_index]()
         {
           while (true)
           {
@@ -6565,7 +7440,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
               break;
 
             auto executed = execute_allocation_scenario(
-                loaded_sequence, options, requests[idx].plan, requests[idx].label,
+                loaded_sequence, worker_options, requests[idx].plan, requests[idx].label,
                 requests[idx].parking_seed, true);
             results[idx].summary = std::move(executed.summary);
           }
@@ -6611,7 +7486,7 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
 
   std::size_t worker_count = std::min<std::size_t>(
       candidates.size(),
-      static_cast<std::size_t>(std::max(1, options.search_threads)));
+      static_cast<std::size_t>(std::max(1, options.lns_threads)));
 
   if (worker_count <= 1)
   {
@@ -6626,6 +7501,8 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
   }
 
   ScopedGlobalStreamSilencer silencer(true);
+  RuntimeOptions worker_options = options;
+  worker_options.planner_expansion_threads = 1;
   std::atomic<std::size_t> next_index{0};
   std::vector<std::thread> workers;
   workers.reserve(worker_count);
@@ -6633,7 +7510,7 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
   for (std::size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx)
   {
     workers.emplace_back(
-        [&loaded_sequence, &options, &base_plan, &base_summary, &constraints,
+        [&loaded_sequence, &worker_options, &base_plan, &base_summary, &constraints,
          &candidates, &results, &robot_names, &label, &next_index]()
         {
           while (true)
@@ -6643,7 +7520,7 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
               break;
 
             results[idx] = repair_destroyed_tasks_with_sampled_insertion(
-                loaded_sequence, options, base_plan, base_summary, constraints,
+                loaded_sequence, worker_options, base_plan, base_summary, constraints,
                 candidates[idx].destroyed_tasks, robot_names,
                 candidates[idx].destroy_scores, candidates[idx].parking_seed,
                 candidates[idx].repair_seed, label, true);
@@ -7763,6 +8640,10 @@ AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
     bool disable_local_silencer)
 {
   std::mt19937 rng(repair_seed);
+  RuntimeOptions lns_options = options;
+  if (!lns_options.enable_lns_fine_segment_retry)
+    lns_options.enable_fine_segment_retry = false;
+
   std::size_t task_count = loaded_sequence.size();
   AllocationScenarioPlan partial_plan =
       remove_tasks_from_plan(base_plan, destroyed_tasks, task_count);
@@ -7891,7 +8772,7 @@ AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
       partial_plan, task_count, constraints);
 
   auto repaired = execute_allocation_scenario(
-      loaded_sequence, options, partial_plan, label,
+      loaded_sequence, lns_options, partial_plan, label,
       parking_seed, disable_local_silencer);
   repaired.summary.label = label;
 
@@ -7948,7 +8829,7 @@ AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
         candidate_plan, task_count, constraints);
 
     auto refined = execute_allocation_scenario(
-        loaded_sequence, options, candidate_plan, label,
+        loaded_sequence, lns_options, candidate_plan, label,
         parking_seed, disable_local_silencer);
     if (is_preferred_search_result(refined.summary, repaired.summary))
     {
@@ -8115,7 +8996,7 @@ int phastar_push_demo_main(int argc, char **argv)
 
   if (runtime_options.visualize_relopush_plan)
   {
-    visualize_relopush_plan(loadedSequence, instance_info);
+    visualize_relopush_plan(argc, argv, loadedSequence, instance_info, runtime_options);
   }
 
   AllocationScenarioPlan greedy_plan = make_identity_plan(loadedSequence.size());
@@ -8204,7 +9085,7 @@ int phastar_push_demo_main(int argc, char **argv)
       loadedSequence, runtime_options);
   std::mt19937 search_rng(
       mix_seed(runtime_options.base_random_seed, 0x51A7BEEFu));
-  const int search_batch_size = std::max(1, runtime_options.search_threads);
+  const int lns_batch_size = std::max(1, runtime_options.lns_threads);
 
   AllocationScenarioPlan greedy_assignment_plan =
       make_assignment_plan_from_greedy(greedy_summary);
@@ -8228,11 +9109,11 @@ int phastar_push_demo_main(int argc, char **argv)
       AllocationScenarioPlan batch_base_plan = assignment_current_plan;
       std::vector<AssignmentSearchCandidate> batch_candidates;
       std::vector<ScenarioEvaluationRequest> batch_requests;
-      batch_candidates.reserve(static_cast<std::size_t>(search_batch_size));
-      batch_requests.reserve(static_cast<std::size_t>(search_batch_size));
+      batch_candidates.reserve(static_cast<std::size_t>(lns_batch_size));
+      batch_requests.reserve(static_cast<std::size_t>(lns_batch_size));
 
       int batch_end = std::min(runtime_options.assignment_search_iterations,
-                               iter + search_batch_size);
+                               iter + lns_batch_size);
       for (; iter < batch_end; ++iter)
       {
         AssignmentSearchCandidate candidate;
@@ -8372,10 +9253,10 @@ int phastar_push_demo_main(int argc, char **argv)
     {
       std::vector<SequenceSearchCandidate> batch_candidates;
       std::vector<ScenarioEvaluationRequest> batch_requests;
-      batch_candidates.reserve(static_cast<std::size_t>(search_batch_size));
-      batch_requests.reserve(static_cast<std::size_t>(search_batch_size));
+      batch_candidates.reserve(static_cast<std::size_t>(lns_batch_size));
+      batch_requests.reserve(static_cast<std::size_t>(lns_batch_size));
 
-      int batch_end = std::min(iterations, iter + search_batch_size);
+      int batch_end = std::min(iterations, iter + lns_batch_size);
       for (; iter < batch_end; ++iter)
       {
         AllocationScenarioPlan candidate_plan;
@@ -8599,10 +9480,10 @@ int phastar_push_demo_main(int argc, char **argv)
           compute_task_destroy_scores(batch_base_summary, loadedSequence);
 
       std::vector<LnsSearchCandidate> batch_candidates;
-      batch_candidates.reserve(static_cast<std::size_t>(search_batch_size));
+      batch_candidates.reserve(static_cast<std::size_t>(lns_batch_size));
 
       int batch_end = std::min(runtime_options.lns_iterations,
-                               iter + search_batch_size);
+                               iter + lns_batch_size);
       for (; iter < batch_end; ++iter)
       {
         LnsSearchCandidate candidate_info;
@@ -8656,7 +9537,7 @@ int phastar_push_demo_main(int argc, char **argv)
                   << "op=" << candidate_info.destroy_operator
                   << " k=" << candidate_info.destroyed_tasks.size()
                   << " seed=" << candidate_info.parking_seed;
-        if (runtime_options.search_threads > 1)
+        if (runtime_options.lns_threads > 1)
         {
           std::cout << " queued";
         }
@@ -8770,7 +9651,7 @@ int phastar_push_demo_main(int argc, char **argv)
           std::cout << " cur=" << std::fixed << std::setprecision(2)
                     << lns_current.makespan << "s";
         }
-        if (runtime_options.search_threads > 1)
+        if (runtime_options.lns_threads > 1)
         {
           std::cout << " batch=" << batch_candidates.size();
         }

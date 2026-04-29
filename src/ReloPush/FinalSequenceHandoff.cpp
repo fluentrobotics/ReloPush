@@ -4,13 +4,48 @@
 #include <ReloPush/base64.h>
 #include <zmq.hpp>
 
+#include <chrono>
+#include <csignal>
 #include <stdexcept>
+#include <thread>
+#include <mutex>
 #include <utility>
 
 namespace ReloPush
 {
 namespace
 {
+constexpr int kHandoffRetryDelayMs = 50;
+
+std::sig_atomic_t g_interrupted = 0;
+std::once_flag g_signal_install_once;
+
+void handleSignal(int)
+{
+    g_interrupted = 1;
+}
+
+void installSignalHandlersOnce()
+{
+    std::call_once(g_signal_install_once, []() {
+        std::signal(SIGINT, handleSignal);
+        std::signal(SIGTERM, handleSignal);
+    });
+}
+
+bool interruptionRequested()
+{
+    return g_interrupted != 0;
+}
+
+void throwIfInterrupted(const char *message)
+{
+    if (interruptionRequested())
+    {
+        throw std::runtime_error(message);
+    }
+}
+
 std::vector<std::string> splitMessageParts(
     const std::string &text,
     char delimiter)
@@ -125,6 +160,8 @@ struct FinalSequenceHandoffClient::Impl
     Impl()
     {
         socket.set(zmq::sockopt::linger, 0);
+        socket.set(zmq::sockopt::rcvtimeo, kHandoffRetryDelayMs);
+        socket.set(zmq::sockopt::sndtimeo, kHandoffRetryDelayMs);
     }
 };
 
@@ -138,6 +175,8 @@ struct FinalSequenceHandoffServer::Impl
     Impl()
     {
         socket.set(zmq::sockopt::linger, 0);
+        socket.set(zmq::sockopt::rcvtimeo, kHandoffRetryDelayMs);
+        socket.set(zmq::sockopt::sndtimeo, kHandoffRetryDelayMs);
     }
 };
 
@@ -288,6 +327,7 @@ bool isMarsSuccessReply(const std::string &reply_message)
 FinalSequenceHandoffClient::FinalSequenceHandoffClient()
     : impl_(std::make_unique<Impl>())
 {
+    installSignalHandlersOnce();
 }
 
 FinalSequenceHandoffClient::~FinalSequenceHandoffClient() = default;
@@ -317,18 +357,32 @@ std::string FinalSequenceHandoffClient::sendRequestAndWaitForReply(
         throw std::runtime_error("FinalSequenceHandoffClient must connect before sending");
     }
 
-    const auto send_result =
-        impl_->socket.send(zmq::buffer(request_message), zmq::send_flags::none);
-    if (!send_result)
+    while (true)
     {
-        throw std::runtime_error("failed to send request to MARS");
+        throwIfInterrupted("handoff interrupted while sending request to MARS");
+
+        const auto send_result =
+            impl_->socket.send(zmq::buffer(request_message), zmq::send_flags::none);
+        if (send_result)
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(kHandoffRetryDelayMs));
     }
 
     zmq::message_t reply;
-    const auto recv_result = impl_->socket.recv(reply, zmq::recv_flags::none);
-    if (!recv_result)
+    while (true)
     {
-        throw std::runtime_error("failed to receive reply from MARS");
+        throwIfInterrupted("handoff interrupted while waiting for reply from MARS");
+
+        const auto recv_result = impl_->socket.recv(reply, zmq::recv_flags::none);
+        if (recv_result)
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(kHandoffRetryDelayMs));
     }
 
     return std::string(
@@ -354,6 +408,7 @@ std::string FinalSequenceHandoffClient::sendAbortAndWaitForReply(
 FinalSequenceHandoffServer::FinalSequenceHandoffServer()
     : impl_(std::make_unique<Impl>())
 {
+    installSignalHandlersOnce();
 }
 
 FinalSequenceHandoffServer::~FinalSequenceHandoffServer() = default;
@@ -383,10 +438,17 @@ std::string FinalSequenceHandoffServer::waitForRequest()
     }
 
     zmq::message_t request;
-    const auto recv_result = impl_->socket.recv(request, zmq::recv_flags::none);
-    if (!recv_result)
+    while (true)
     {
-        throw std::runtime_error("failed to receive request from ReloPush");
+        throwIfInterrupted("handoff interrupted while waiting for request from ReloPush");
+
+        const auto recv_result = impl_->socket.recv(request, zmq::recv_flags::none);
+        if (recv_result)
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(kHandoffRetryDelayMs));
     }
 
     impl_->pending_request = true;

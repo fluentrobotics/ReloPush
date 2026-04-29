@@ -381,7 +381,7 @@ namespace ReedShepp
             double last_y = path.y.back();
             double last_yaw = mod2pi(path.yaw.back());
             double goal_yaw = mod2pi(gyaw);
-            if (std::hypot(last_x - gx, last_y - gy) > 1e-5 || std::fabs(mod2pi(last_yaw - goal_yaw)) > 1e-5) {
+            if (std::hypot(last_x - gx, last_y - gy) > 1e-5 || std::fabs(pi_2_pi(last_yaw - goal_yaw)) > 1e-5) {
                 continue;  // Skip invalid due to FP
             }
             valid_paths.push_back(path);
