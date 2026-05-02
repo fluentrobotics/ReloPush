@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 enum class ParkingCandidateMode
 {
@@ -14,7 +15,7 @@ enum class ParkingCandidateMode
 
 struct RuntimeOptions
 {
-    bool debug_vis = false;
+    bool debug_vis = true;
     bool robot_boundary_origin_only = true;
     ParkingCandidateMode parking_candidate_mode = ParkingCandidateMode::REVERSE_RECENT;
     bool enable_order_constraint_learning = true;
@@ -58,6 +59,17 @@ struct RuntimeOptions
     bool enable_lns_fine_segment_retry = true;
     bool enable_visualization = true;
     bool visualize_relopush_plan = false;
+    bool enable_result_summary_figure = true;
+    std::string result_summary_output_path;
+    double result_summary_subplot_gap = 36.0;
+    std::vector<std::string> robot_trace_colors = {
+        "#70A288",
+        "#DAB785",
+        "#D5896F",
+        "#CC79A7",
+        "#E69F00",
+        "#56B4E9",
+    };
     bool integrated_mode = false;
     std::string handoff_endpoint = "tcp://127.0.0.1:5566";
     std::string input_sequence_path;
