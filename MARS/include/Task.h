@@ -80,16 +80,22 @@ TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
                                    RobotMeta* robot_in=nullptr, EntityMeta* transferred_obj=nullptr,
                                    double start_time = 0.0,
                                    double source_pre_push_distance = 0.0,
-                                   EntityMeta* approach_goal_entity=nullptr) {
+                                   EntityMeta* approach_goal_entity=nullptr,
+                                   bool default_approach_to_transferred_object=true) {
     Trajectory traj;
     traj.entity = robot_in;
     traj.start_time = start_time;
     traj.is_transfer = edgePath->is_pushing;
+    traj.kind = traj.is_transfer ? TrajectoryKind::TRANSFER
+                                 : TrajectoryKind::TRANSIT;
     traj.transferred_object = traj.is_transfer ? transferred_obj : nullptr;
     traj.approach_goal_entity =
         traj.is_transfer ? nullptr
-                         : (approach_goal_entity ? approach_goal_entity
-                                                 : transferred_obj);
+                         : (approach_goal_entity
+                                ? approach_goal_entity
+                                : (default_approach_to_transferred_object
+                                       ? transferred_obj
+                                       : nullptr));
     traj.source_pre_push_distance = source_pre_push_distance;
 
     if (!std::holds_alternative<ReloPush::StatePathPtr>(edgePath->path)) {
@@ -114,12 +120,14 @@ TrajectoryPtr ReloPushPath2TrajPtr(const EdgePath edgePath,
                                    RobotMeta* robot_in=nullptr, EntityMeta* transferred_obj=nullptr,
                                    double start_time = 0.0,
                                    double source_pre_push_distance = 0.0,
-                                   EntityMeta* approach_goal_entity=nullptr)
+                                   EntityMeta* approach_goal_entity=nullptr,
+                                   bool default_approach_to_transferred_object=true)
 {
     return ReloPushPath2TrajPtr(std::make_shared<EdgePath>(edgePath),robot_in,
                                 transferred_obj,start_time,
                                 source_pre_push_distance,
-                                approach_goal_entity);
+                                approach_goal_entity,
+                                default_approach_to_transferred_object);
 }
 
 enum DependType { TRANSIT, TRANSFER };
@@ -193,9 +201,18 @@ public:
             // trajectory (normal: one transfer, prerelo: transfer-transit-transfer)
             for(auto& path : epath.paths)
             {
+                // PRE_RELOCATION middle transit endpoints already encode the
+                // intended repositioning goal. Remapping them around the live
+                // target object can put the goal inside that object.
+                const bool preserve_raw_transit_goal =
+                    epath.mode == ConnectionMode::PRE_RELOCATION &&
+                    path && !path->is_pushing;
+                EntityMeta* approach_goal_entity =
+                    preserve_raw_transit_goal ? nullptr : targetObject;
                 auto traj_in = ReloPushPath2TrajPtr(path, nullptr, targetObject,
                                                     0.0, sourcePrePushDistance,
-                                                    targetObject);
+                                                    approach_goal_entity,
+                                                    !preserve_raw_transit_goal);
                 EdgePaths.emplace_back(traj_in); // time not assigned yet (needs robot first)
             }
         }

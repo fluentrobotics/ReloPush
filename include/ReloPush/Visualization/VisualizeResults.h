@@ -31,8 +31,9 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
     // Custom colors (example)
     QColor customInitialColor   = QColor(70, 130, 180,127);   // Steel Blue
     QColor customGoalColor      = QColor(34, 139, 34,127);    // Forest Green
-    QColor customPathColor      = QColor(220, 20, 60);    // Crimson
-    QColor customPathArrowColor = QColor(178, 34, 34);    // Firebrick
+    QColor customTransitPathColor  = QColor("#DC143C");   // Crimson
+    QColor customTransferPathColor = QColor("#2ECC71");   // Green
+    QColor customPathArrowColor = QColor("#B22222");   // Firebrick
 
     // Define workspace size (example)
     float workspace_width  = 4.0f;
@@ -54,22 +55,30 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
 
         // 2) Create a new VisualizationWidget for this final allocation
         auto viz = new VisualizationWidget(nullptr,
-                                           customInitialColor,
-                                           customGoalColor,
-                                           customPathColor,
-                                           customPathArrowColor);
+                           customInitialColor,
+                           customGoalColor,
+                           customTransitPathColor,
+                           customPathArrowColor);
+        viz->setSegmentTypeColors(customTransitPathColor, customTransferPathColor);
+        viz->setRobotFootprintDimensions(finalSequence[i].snapshot.parameters.car_width,
+                         finalSequence[i].snapshot.parameters.LF_nonpush,
+                         finalSequence[i].snapshot.parameters.LF_push,
+                         finalSequence[i].snapshot.parameters.LB);
 
         // 3) Define the path to visualize
         //    (Here we assume toSinglePathPtr() gives you the entire path as a vector.)
-        auto pathPtr_pair = finalSequence[i].toSinglePathPtr();
-        if (!pathPtr_pair.first->empty())
+        auto pathPtr_tuple = finalSequence[i].toSinglePathPtrWithTypes();
+        auto &pathPtr = std::get<0>(pathPtr_tuple);
+        auto &path_segment_lengths = std::get<1>(pathPtr_tuple);
+        auto &path_segment_is_transfer = std::get<2>(pathPtr_tuple);
+        if (pathPtr && !pathPtr->empty())
         {
             viz->setWorkspace(workspace_width, workspace_height);
 
             // The first and last states in the path define the initial/goal poses
-            viz->setInitialPose(pathPtr_pair.first->front());
-            viz->setGoalPose(pathPtr_pair.first->back());
-            viz->setPath(*pathPtr_pair.first, pathPtr_pair.second);
+            viz->setInitialPose(pathPtr->front());
+            viz->setGoalPose(pathPtr->back());
+            viz->setPath(*pathPtr, path_segment_lengths, path_segment_is_transfer);
         }
         else
         {

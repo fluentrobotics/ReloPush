@@ -14,6 +14,7 @@
 
 #include <string>
 #include <memory>
+#include <tuple>
 
 const auto ReloPushInf = std::numeric_limits<double>::infinity();
 
@@ -167,6 +168,8 @@ struct FinalAllocation
     std::unordered_map<std::string,ReloPush::State> obsReloUpdate;
 
     std::pair<ReloPush::StatePathPtr,std::vector<size_t>> toSinglePathPtr(double interpolation_resolution = 0.1);
+    std::tuple<ReloPush::StatePathPtr, std::vector<size_t>, std::vector<bool>>
+        toSinglePathPtrWithTypes(double interpolation_resolution = 0.1);
 
     int countObsRelo();
     int countPreRelo();

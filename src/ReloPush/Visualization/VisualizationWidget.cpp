@@ -2,6 +2,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QToolTip>
+#include <algorithm>
 #include <cmath>
 
 // Define PI if not defined
@@ -25,8 +26,14 @@ VisualizationWidget::VisualizationWidget(QWidget *parent,
     goal_pose_color(goalPoseColor),
     path_color(pathColor_),
     path_arrow_color(pathArrowColor_),
+    transit_path_color(pathColor_),
+    transfer_path_color(QColor("#2ECC71")),
     obstacle_color(obstacleColor_),
-    goals_color(goalsColor_)
+    goals_color(goalsColor_),
+    robot_car_width(0.0f),
+    robot_LF_transit(0.0f),
+    robot_LF_transfer(0.0f),
+    robot_LB(0.0f)
 {
     setMouseTracking(true); // Enable mouse tracking without pressing buttons
 }
@@ -61,6 +68,8 @@ void VisualizationWidget::setGoalPose(const ReloPush::State& state)
 void VisualizationWidget::setPath(const std::vector<ReloPush::State>& path_)
 {
     path = path_;
+    path_segment_lengths.clear();
+    path_segment_is_transfer.clear();
     // Normalize yaw for all states
     for(auto &state : path){
         state.yaw = normalizeYaw(state.yaw);
@@ -72,6 +81,21 @@ void VisualizationWidget::setPath(const std::vector<ReloPush::State>& path_, con
 {
     path = path_;
     path_segment_lengths = path_segment_lengths_;
+    path_segment_is_transfer.clear();
+    // Normalize yaw for all states
+    for(auto &state : path){
+        state.yaw = normalizeYaw(state.yaw);
+    }
+    update();
+}
+
+void VisualizationWidget::setPath(const std::vector<ReloPush::State>& path_,
+                                  const std::vector<size_t>& path_segment_lengths_,
+                                  const std::vector<bool>& path_segment_is_transfer_)
+{
+    path = path_;
+    path_segment_lengths = path_segment_lengths_;
+    path_segment_is_transfer = path_segment_is_transfer_;
     // Normalize yaw for all states
     for(auto &state : path){
         state.yaw = normalizeYaw(state.yaw);
@@ -119,6 +143,22 @@ void VisualizationWidget::setPathColor(const QColor& color)
 void VisualizationWidget::setPathArrowColor(const QColor& color)
 {
     path_arrow_color = color;
+    update();
+}
+
+void VisualizationWidget::setSegmentTypeColors(const QColor& transit_color, const QColor& transfer_color)
+{
+    transit_path_color = transit_color;
+    transfer_path_color = transfer_color;
+    update();
+}
+
+void VisualizationWidget::setRobotFootprintDimensions(float car_width, float lf_transit, float lf_transfer, float lb)
+{
+    robot_car_width = car_width;
+    robot_LF_transit = lf_transit;
+    robot_LF_transfer = lf_transfer;
+    robot_LB = lb;
     update();
 }
 
@@ -198,19 +238,77 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
         return QPointF(widget_x, widget_y);
     };
 
+    auto drawFootprintAtState = [&](const ReloPush::State &state, float lf, float lb, const QColor &base_color)
+    {
+        if (robot_car_width <= 0.0f || lf <= 0.0f || lb <= 0.0f)
+        {
+            return;
+        }
+
+        const float half_width = robot_car_width * 0.5f;
+        const float cos_yaw = std::cos(state.yaw);
+        const float sin_yaw = std::sin(state.yaw);
+
+        auto toWorld = [&](float x_local, float y_local) -> QPointF
+        {
+            float xw = state.x + x_local * cos_yaw - y_local * sin_yaw;
+            float yw = state.y + x_local * sin_yaw + y_local * cos_yaw;
+            return mapCoord(xw, yw);
+        };
+
+        QPolygonF footprint;
+        footprint << toWorld(lf, half_width)
+                  << toWorld(lf, -half_width)
+                  << toWorld(-lb, -half_width)
+                  << toWorld(-lb, half_width);
+
+        QColor fill_color = base_color;
+        fill_color.setAlpha(60);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(fill_color);
+        painter.drawPolygon(footprint);
+    };
+
     // --- Your drawing code for paths, segments, goals, obstacles, etc. remains below ---
     // (For example, your code for drawing the segmented path goes here.)
 
     if (path.size() >= 2) {
+        const size_t footprint_stride = std::max<size_t>(1, path.size() / 200);
         size_t total = std::accumulate(path_segment_lengths.begin(), path_segment_lengths.end(), size_t(0));
         if (!path_segment_lengths.empty() && total == path.size()) {
             size_t index = 0;
-            // Predefined list of segment colors (customize as needed)
+            bool has_types = path_segment_lengths.size() == path_segment_is_transfer.size();
+            // Predefined list of segment colors (used when types are not provided).
             std::vector<QColor> segmentColors = { QColor("#FCD0A1"), QColor("#E07A5F"),
                                                  QColor("#798086"), QColor("#81B29A"), Qt::darkCyan ,Qt::black, Qt::darkGreen};
             for (size_t seg = 0; seg < path_segment_lengths.size(); seg++) {
                 size_t segLength = path_segment_lengths[seg];
-                QColor segColor = segmentColors[seg % segmentColors.size()];
+                QColor segColor = has_types
+                                      ? (path_segment_is_transfer[seg] ? transfer_path_color : transit_path_color)
+                                      : segmentColors[seg % segmentColors.size()];
+                float lf = 0.0f;
+                if (has_types)
+                {
+                    lf = path_segment_is_transfer[seg] ? robot_LF_transfer : robot_LF_transit;
+                }
+                else
+                {
+                    lf = (robot_LF_transit > 0.0f) ? robot_LF_transit : robot_LF_transfer;
+                }
+
+                if (lf > 0.0f && robot_car_width > 0.0f && robot_LB > 0.0f)
+                {
+                    size_t end = index + segLength;
+                    for (size_t i = index; i < end; i += footprint_stride)
+                    {
+                        drawFootprintAtState(path[i], lf, robot_LB, segColor);
+                    }
+                    if (end > index && ((end - 1 - index) % footprint_stride) != 0)
+                    {
+                        drawFootprintAtState(path[end - 1], lf, robot_LB, segColor);
+                    }
+                }
+
                 QPen segPen(segColor, 2);
                 painter.setPen(segPen);
                 for (size_t i = index + 1; i < index + segLength; i++) {
@@ -229,6 +327,19 @@ void VisualizationWidget::paintEvent(QPaintEvent * /* event */)
             }
         } else {
             // Fallback: draw entire path in global path_color as before.
+            float lf = (robot_LF_transit > 0.0f) ? robot_LF_transit : robot_LF_transfer;
+            if (lf > 0.0f && robot_car_width > 0.0f && robot_LB > 0.0f)
+            {
+                for (size_t i = 0; i < path.size(); i += footprint_stride)
+                {
+                    drawFootprintAtState(path[i], lf, robot_LB, path_color);
+                }
+                if ((path.size() - 1) % footprint_stride != 0)
+                {
+                    drawFootprintAtState(path.back(), lf, robot_LB, path_color);
+                }
+            }
+
             QPen path_pen(path_color, 2);
             painter.setPen(path_pen);
             for (size_t i = 1; i < path.size(); ++i) {

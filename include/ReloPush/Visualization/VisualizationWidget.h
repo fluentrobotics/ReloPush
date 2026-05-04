@@ -31,6 +31,9 @@ public:
     // Set path
     void setPath(const std::vector<ReloPush::State>& path);
     void setPath(const std::vector<ReloPush::State>& path_, const std::vector<size_t>& path_segment_lengths_);
+    void setPath(const std::vector<ReloPush::State>& path_,
+                 const std::vector<size_t>& path_segment_lengths_,
+                 const std::vector<bool>& path_segment_is_transfer_);
 
     // Set obstacles
     void setObstacles(const std::vector<ObjectInfo> &obstacles);
@@ -45,6 +48,8 @@ public:
     void setGoalPoseColor(const QColor& color);
     void setPathColor(const QColor& color);
     void setPathArrowColor(const QColor& color);
+    void setSegmentTypeColors(const QColor& transit_color, const QColor& transfer_color);
+    void setRobotFootprintDimensions(float car_width, float lf_transit, float lf_transfer, float lb);
     void setObstacleColor(const QColor &color);
     void setGoalsColor(const QColor &color);
 
@@ -63,6 +68,7 @@ private:
     std::vector<ObjectInfo> obstacles;
     std::vector<ReloPush::State> prerelocations;
     std::vector<size_t> path_segment_lengths;
+    std::vector<bool> path_segment_is_transfer;
     GoalMap goals;
 
     QString mouse_coord_text;
@@ -72,8 +78,15 @@ private:
     QColor goal_pose_color;
     QColor path_color;
     QColor path_arrow_color;
+    QColor transit_path_color;
+    QColor transfer_path_color;
     QColor obstacle_color;
     QColor goals_color;
+
+    float robot_car_width;
+    float robot_LF_transit;
+    float robot_LF_transfer;
+    float robot_LB;
 
     // Obstacle parameters
     const float obstacle_radius = 0.075f;

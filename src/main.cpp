@@ -206,9 +206,9 @@ int main(int argc, char *argv[])
 #endif
     QApplication app(argc, argv);
 
-    std::string filename = "ReloPush-BOSS_12_objects.txt";
+    std::string filename = "ReloPush-BOSS_8_objects.txt";
 
-    int instance_ind = 63; // 32 // 63 //6 //40 //8
+    int instance_ind = 5; // 32 // 63 //6 //40 //8
     bool use_opt = true;
     bool vis = true;
     bool no_init_guess = false;

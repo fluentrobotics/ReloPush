@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <map>
 #include <unordered_map>
+#include <vector>
 
 #include <PHAstar/Entities.h>
 #include <PHAstar/Utils.h> // Added for mod2pi
@@ -13,6 +14,16 @@
 class TimeTable
 {
 public:
+    struct TrajectorySpan
+    {
+        EntityMeta *entity = nullptr;
+        EntityMeta *transferred_object = nullptr;
+        double start_time = 0.0;
+        double end_time = 0.0;
+        bool is_transfer = false;
+        TrajectoryKind kind = TrajectoryKind::TRANSIT;
+    };
+
     double time_increment = 0.5;
 
     TimeTable(double inc = 0.5) : time_increment(inc) {}
@@ -35,6 +46,11 @@ public:
         double offset = traj.start_time;
         double absolute_min_t = offset + min_relative;
         double absolute_max_t = offset + max_relative;
+        TrajectoryKind effective_kind =
+            traj.is_transfer ? TrajectoryKind::TRANSFER : traj.kind;
+        trajectory_spans.push_back({ent, traj.transferred_object,
+                                    absolute_min_t, absolute_max_t,
+                                    traj.is_transfer, effective_kind});
         double initial_obj_yaw = 0.0;
         double robot_start_yaw = traj.waypoints.front().yaw;
         if (traj.is_transfer && traj.transferred_object)
@@ -146,6 +162,11 @@ public:
     const std::unordered_map<EntityMeta *, std::map<double, Pose>> &get_database() const
     {
         return per_entity_table;
+    }
+
+    const std::vector<TrajectorySpan> &get_trajectory_spans() const
+    {
+        return trajectory_spans;
     }
 
     double get_max_time() const
@@ -291,6 +312,7 @@ public:
 
 private:
     std::unordered_map<EntityMeta *, std::map<double, Pose>> per_entity_table;
+    std::vector<TrajectorySpan> trajectory_spans;
 
     static Pose interpolate_pose(const Pose &p1, double t1, const Pose &p2, double t2, double t)
     {

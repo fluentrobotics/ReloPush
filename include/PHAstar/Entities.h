@@ -70,6 +70,12 @@ struct Waypoint : public Pose {
 
 typedef std::vector<Waypoint> WaypointPath;
 
+enum class TrajectoryKind {
+    TRANSIT,
+    TRANSFER,
+    RETRACTION,
+};
+
 /*
      * Robot, object, time_start, path, is_transfer
      */
@@ -82,6 +88,7 @@ struct Trajectory {
     double start_time = 0.0;
     std::vector<Waypoint> waypoints;
     bool is_transfer = false;
+    TrajectoryKind kind = TrajectoryKind::TRANSIT;
     // Legacy terminal offset encoded in serialized ReloPush paths. We keep it
     // so MARS can recover the intended object-centric endpoint before
     // remapping it to the current robot geometry.
@@ -93,7 +100,8 @@ struct Trajectory {
         : entity(robot_in),
             transferred_object(is_transfer_in ? object_in : nullptr),
             approach_goal_entity(is_transfer_in ? nullptr : object_in),
-            start_time(time_start), waypoints(path_in), is_transfer(is_transfer_in)
+            start_time(time_start), waypoints(path_in), is_transfer(is_transfer_in),
+            kind(is_transfer_in ? TrajectoryKind::TRANSFER : TrajectoryKind::TRANSIT)
     {}
 
     // assign timestamp to each waypoints based on velocity

@@ -18,6 +18,7 @@
 #include <PHAstar/PlanningResult.h>
 #include <PHAstar/CollisionUtils.h>
 
+#include <algorithm>
 #include <condition_variable>
 #include <exception>
 #include <functional>
@@ -27,6 +28,30 @@
 // PHA* Implementation
 
 extern bool DEBUG_VIS;
+
+struct ReferenceExperienceGraphOptions
+{
+    bool enabled = false;
+    double epsilon = 10.0;
+    double waypoint_spacing = 0.10;
+    double snap_radius = 0.25;
+    double snap_yaw = M_PI / 3.0;
+    int successor_lookahead = 3;
+    int max_nodes = 120;
+};
+
+struct ReferenceExperienceNode
+{
+    Pose pose;
+    double suffix_cost = 0.0;
+};
+
+struct ReferenceExperienceGraph
+{
+    bool enabled = false;
+    ReferenceExperienceGraphOptions options;
+    std::vector<ReferenceExperienceNode> nodes;
+};
 
 class PHAStarExpansionWorkerPool
 {
@@ -225,6 +250,7 @@ public:
     Params params;
     int x_width, y_width, theta_width, time_width;
     std::vector<double> entity_diags;
+    ReferenceExperienceGraph reference_egraph;
 
     // Backup path (valid geometry but blocked by relocatable robot)
     PlanningResult backup_result;
@@ -261,6 +287,97 @@ public:
     {
         const double step = std::max(1e-3, params.collision_check_time_step);
         return std::max(1, static_cast<int>(std::ceil(duration / step)));
+    }
+
+    double pose_distance(const Pose &a, const Pose &b) const
+    {
+        return std::hypot(a.x - b.x, a.y - b.y);
+    }
+
+    double yaw_distance(double a, double b) const
+    {
+        return std::fabs(pi_2_pi(a - b));
+    }
+
+    double reference_transition_cost(const Pose &from, const Pose &to) const
+    {
+        return pose_distance(from, to) +
+               0.1 * min_turn_radius * yaw_distance(from.yaw, to.yaw);
+    }
+
+    void rebuild_reference_suffix_costs()
+    {
+        if (reference_egraph.nodes.empty())
+            return;
+
+        reference_egraph.nodes.back().suffix_cost = 0.0;
+        for (std::size_t idx = reference_egraph.nodes.size() - 1; idx > 0; --idx)
+        {
+            const Pose &from = reference_egraph.nodes[idx - 1].pose;
+            const Pose &to = reference_egraph.nodes[idx].pose;
+            reference_egraph.nodes[idx - 1].suffix_cost =
+                reference_egraph.nodes[idx].suffix_cost +
+                reference_transition_cost(from, to);
+        }
+    }
+
+    void build_reference_egraph(const std::vector<Waypoint> &reference_waypoints,
+                                const ReferenceExperienceGraphOptions &options)
+    {
+        reference_egraph = ReferenceExperienceGraph{};
+        reference_egraph.options = options;
+        if (is_transfer || !options.enabled || reference_waypoints.size() < 2)
+            return;
+
+        const int max_nodes = std::max(2, options.max_nodes);
+        const double spacing = std::max(1e-6, options.waypoint_spacing);
+        reference_egraph.nodes.reserve(
+            std::min<std::size_t>(reference_waypoints.size(),
+                                  static_cast<std::size_t>(max_nodes)));
+
+        auto push_pose = [&](const Waypoint &wp)
+        {
+            ReferenceExperienceNode node;
+            node.pose = Pose(wp.x, wp.y, mod2pi(wp.yaw));
+            reference_egraph.nodes.push_back(node);
+        };
+
+        push_pose(reference_waypoints.front());
+        Pose last_pose(reference_waypoints.front().x,
+                       reference_waypoints.front().y,
+                       mod2pi(reference_waypoints.front().yaw));
+        double accumulated = 0.0;
+
+        for (std::size_t i = 1; i < reference_waypoints.size(); ++i)
+        {
+            Pose pose(reference_waypoints[i].x, reference_waypoints[i].y,
+                      mod2pi(reference_waypoints[i].yaw));
+            accumulated += pose_distance(last_pose, pose);
+            const bool is_last = (i + 1 == reference_waypoints.size());
+            if ((accumulated >= spacing || is_last) &&
+                reference_egraph.nodes.size() <
+                    static_cast<std::size_t>(max_nodes))
+            {
+                push_pose(reference_waypoints[i]);
+                accumulated = 0.0;
+            }
+            last_pose = pose;
+        }
+
+        const Waypoint &last_wp = reference_waypoints.back();
+        const Pose endpoint(last_wp.x, last_wp.y, mod2pi(last_wp.yaw));
+        const Pose stored_endpoint = reference_egraph.nodes.back().pose;
+        if (pose_distance(endpoint, stored_endpoint) > 1e-6 ||
+            yaw_distance(endpoint.yaw, stored_endpoint.yaw) > 1e-6)
+        {
+            if (reference_egraph.nodes.size() >= static_cast<std::size_t>(max_nodes))
+                reference_egraph.nodes.back().pose = endpoint;
+            else
+                push_pose(last_wp);
+        }
+
+        rebuild_reference_suffix_costs();
+        reference_egraph.enabled = reference_egraph.nodes.size() >= 2;
     }
 
     std::vector<std::unique_ptr<Node>> all_nodes; // To manage memory
@@ -458,6 +575,33 @@ public:
         return true;
     }
 
+    bool check_collision_along_reference_edge(const Node *current,
+                                              const Node *target)
+    {
+        const double time_inc = std::max(0.0, target->t - current->t);
+        const int samples = std::max(params.collision_steps,
+                                     collision_samples_for_duration(time_inc));
+
+        for (int i = 1; i <= samples; ++i)
+        {
+            const double frac = static_cast<double>(i) / samples;
+            const double x = current->x + frac * (target->x - current->x);
+            const double y = current->y + frac * (target->y - current->y);
+            double dyaw = target->yaw - current->yaw;
+            while (dyaw > M_PI)
+                dyaw -= 2.0 * M_PI;
+            while (dyaw < -M_PI)
+                dyaw += 2.0 * M_PI;
+            const double yaw = mod2pi(current->yaw + frac * dyaw);
+            const double t = current->t + frac * time_inc;
+            Node sample(x, y, yaw, t, 0.0, 0.0, nullptr, 1);
+            CollisionInfo info = check_collision_at(&sample);
+            if (!info.is_valid)
+                return false;
+        }
+        return true;
+    }
+
     std::pair<std::vector<std::tuple<double, double, double>>, double> analytic_expand(Node *node)
     {
         double dx = goal->x - node->x;
@@ -494,6 +638,12 @@ public:
                   {
                       return std::abs(a.L) < std::abs(b.L);
                   });
+        paths.erase(std::remove_if(paths.begin(), paths.end(),
+                                   [&](const ReedShepp::Path &path)
+                                   {
+                                       return !analytic_path_allowed_for_mode(path);
+                                   }),
+                    paths.end());
         return paths;
     }
 
@@ -506,6 +656,26 @@ public:
             points.emplace_back(path.x[i], path.y[i], path.yaw[i]);
         }
         return points;
+    }
+
+    bool analytic_path_allowed_for_mode(const ReedShepp::Path &path) const
+    {
+        if (!is_transfer)
+            return true;
+
+        // Transfer mode pushes an object, so analytic shortcuts must not use
+        // reverse motion even though Reed-Shepp can generate it.
+        for (int direction : path.directions)
+        {
+            if (direction < 0)
+                return false;
+        }
+        for (double length : path.lengths)
+        {
+            if (length < -1e-9)
+                return false;
+        }
+        return true;
     }
 
     double rs_arrival_time(const Node *node, const ReedShepp::Path &rs_path) const
@@ -648,16 +818,122 @@ public:
         return node->cost + calc_heuristic(node);
     }
 
-    double calc_heuristic(Node *node)
+    double calc_base_heuristic_to_pose(const Node *node, const Pose &target) const
     {
-        auto [_, __, ___, ____, lengths, _____, ______] = ReedShepp::reeds_shepp_path_planning(
-            node->x, node->y, node->yaw, goal->x, goal->y, goal->yaw, max_curvature, params.rs_step_size * 10, wheel_base);
+        auto [_, __, ___, ____, lengths, _____, ______] =
+            ReedShepp::reeds_shepp_path_planning(
+                node->x, node->y, node->yaw, target.x, target.y, target.yaw,
+                max_curvature, params.rs_step_size * 10, wheel_base);
         if (lengths.empty())
             return std::numeric_limits<double>::infinity();
+
         double h = 0.0;
         for (double l : lengths)
             h += std::abs(l);
         return h;
+    }
+
+    double calc_heuristic(Node *node)
+    {
+        const Pose goal_pose(goal->x, goal->y, goal->yaw);
+        const double base_h = calc_base_heuristic_to_pose(node, goal_pose);
+        if (!reference_egraph.enabled || reference_egraph.nodes.empty())
+            return base_h;
+
+        const double epsilon = std::max(1.0, reference_egraph.options.epsilon);
+        double best_h = std::isfinite(base_h)
+                            ? epsilon * base_h
+                            : std::numeric_limits<double>::infinity();
+
+        for (const auto &ref_node : reference_egraph.nodes)
+        {
+            const double h_to_ref =
+                calc_base_heuristic_to_pose(node, ref_node.pose);
+            if (!std::isfinite(h_to_ref))
+                continue;
+
+            const double h = epsilon * h_to_ref + ref_node.suffix_cost;
+            if (h < best_h)
+                best_h = h;
+        }
+
+        return best_h;
+    }
+
+    int nearest_reference_index(const Node *node) const
+    {
+        if (!reference_egraph.enabled)
+            return -1;
+
+        const double max_dist = std::max(0.0, reference_egraph.options.snap_radius);
+        const double max_yaw = std::max(0.0, reference_egraph.options.snap_yaw);
+        int best_idx = -1;
+        double best_score = std::numeric_limits<double>::infinity();
+        for (std::size_t i = 0; i < reference_egraph.nodes.size(); ++i)
+        {
+            const Pose &pose = reference_egraph.nodes[i].pose;
+            const double dist = std::hypot(node->x - pose.x, node->y - pose.y);
+            if (dist > max_dist)
+                continue;
+            const double yaw_err = yaw_distance(node->yaw, pose.yaw);
+            if (yaw_err > max_yaw)
+                continue;
+            const double score = dist + 0.1 * min_turn_radius * yaw_err;
+            if (score < best_score)
+            {
+                best_score = score;
+                best_idx = static_cast<int>(i);
+            }
+        }
+        return best_idx;
+    }
+
+    std::vector<std::pair<Node, bool>> generate_reference_successor_candidates(
+        Node *current)
+    {
+        std::vector<std::pair<Node, bool>> candidates;
+        const int nearest_idx = nearest_reference_index(current);
+        if (nearest_idx < 0)
+            return candidates;
+
+        const int lookahead =
+            std::max(1, reference_egraph.options.successor_lookahead);
+
+        auto append_candidate = [&](int ref_idx, bool is_snap)
+        {
+            if (ref_idx < 0 ||
+                ref_idx >= static_cast<int>(reference_egraph.nodes.size()))
+                return;
+
+            const Pose &target = reference_egraph.nodes[ref_idx].pose;
+            const double distance =
+                std::hypot(target.x - current->x, target.y - current->y);
+            if (yaw_distance(target.yaw, current->yaw) >
+                std::max(0.0, reference_egraph.options.snap_yaw))
+                return;
+            if (distance < 1e-6 &&
+                yaw_distance(target.yaw, current->yaw) < 1e-6)
+                return;
+
+            const double duration =
+                distance / std::max(speed, 1e-6);
+            const double t = current->t + duration;
+            if (t > params.max_time)
+                return;
+
+            const double edge_cost =
+                reference_transition_cost(Pose(current->x, current->y, current->yaw),
+                                          target);
+            Node candidate(target.x, target.y, target.yaw, t,
+                           current->cost + edge_cost, 0.0, current, 1);
+            candidates.emplace_back(candidate, is_snap);
+        };
+
+        append_candidate(nearest_idx, true);
+        for (int step = 1; step <= lookahead; ++step)
+            append_candidate(nearest_idx + step, false);
+
+        return candidates;
     }
 
     std::vector<Waypoint> extract_path(Node *node, const std::vector<std::tuple<double, double, double>> &rs_path)
@@ -802,6 +1078,18 @@ public:
         start_clock = std::chrono::high_resolution_clock::now();
     }
 
+    void set_reference_experience_graph(
+        const std::vector<Waypoint> &reference_waypoints,
+        const ReferenceExperienceGraphOptions &options)
+    {
+        build_reference_egraph(reference_waypoints, options);
+    }
+
+    bool has_reference_experience_graph() const
+    {
+        return reference_egraph.enabled;
+    }
+
     // Check if a pose collides with any entity at given time (returns colliding entity name or "")
     std::string check_pose_collision(const Pose &pose, double check_time, bool include_transferred = false)
     {
@@ -809,8 +1097,9 @@ public:
             pose.x, pose.y, pose.yaw,
             robot->size.front_length, robot->size.rear_length, robot->size.width);
 
-        // Check bounds first
-        if (!is_in_bounds(pose_bounds_corners, params.min_x, params.max_x, params.min_y, params.max_y))
+        // Check robot bounds using the configured boundary policy. Entity
+        // collision checks below still use the full collision geometry.
+        if (check_robot_bounds_collision(pose, pose_bounds_corners, params))
         {
             return "map_bounds";
         }
@@ -824,6 +1113,8 @@ public:
         {
             if (ent == robot)
                 continue; // Skip self
+            if (ignore_other_robots && ent->type == EntityType::ROBOT)
+                continue;
             if (!include_transferred && ent == transferred)
                 continue; // Skip object if pushing
 
@@ -917,7 +1208,7 @@ public:
         // Goal validation (dynamic-aware): enforce bounds, reject only static occupancy.
         Corners goal_corners = get_corners(goal_pose.x, goal_pose.y, goal_pose.yaw,
                                            robot->size.front_length, robot->size.rear_length, robot->size.width);
-        if (!is_in_bounds(goal_corners, params.min_x, params.max_x, params.min_y, params.max_y))
+        if (check_robot_bounds_collision(goal_pose, goal_corners, params))
         {
             res.status = PlanningStatus::GOAL_OUT_OF_BOUNDS;
             res.failure_detail = "Goal pose out of map bounds";
@@ -952,6 +1243,9 @@ public:
         PlanningResult res;
         PlanningDebugStats stats;
         stats.planner_expansion_threads = std::max(1, planner_expansion_threads);
+        stats.reference_egraph_nodes = reference_egraph.enabled
+                                           ? reference_egraph.nodes.size()
+                                           : 0;
         PHAStarExpansionWorkerPool expansion_pool(stats.planner_expansion_threads);
         using PlannerClock = std::chrono::steady_clock;
         auto add_elapsed = [](double &target, const PlannerClock::time_point &start_time)
@@ -1385,6 +1679,73 @@ public:
                 stats.peak_open_size = std::max<std::size_t>(stats.peak_open_size, open_set.size());
             };
 
+            auto merge_reference_successors = [&]()
+            {
+                if (!reference_egraph.enabled)
+                    return;
+
+                auto ref_candidates =
+                    generate_reference_successor_candidates(current);
+                for (const auto &[candidate, is_snap] : ref_candidates)
+                {
+                    stats.generated_nodes++;
+                    if (!check_collision_along_reference_edge(current,
+                                                              &candidate))
+                    {
+                        stats.reject_collision++;
+                        if (is_snap)
+                            stats.reference_egraph_snap_rejected++;
+                        else
+                            stats.reference_egraph_successor_rejected++;
+                        continue;
+                    }
+
+                    size_t new_id = calc_grid_index(&candidate);
+                    if (closed_set.count(new_id))
+                    {
+                        stats.reject_closed++;
+                        if (is_snap)
+                            stats.reference_egraph_snap_rejected++;
+                        else
+                            stats.reference_egraph_successor_rejected++;
+                        continue;
+                    }
+
+                    double new_g = candidate.cost;
+                    auto it = g_costs.find(new_id);
+                    if (it != g_costs.end() && new_g >= it->second)
+                    {
+                        stats.reject_worse_g++;
+                        if (is_snap)
+                            stats.reference_egraph_snap_rejected++;
+                        else
+                            stats.reference_egraph_successor_rejected++;
+                        continue;
+                    }
+
+                    g_costs[new_id] = new_g;
+                    auto heuristic_start = PlannerClock::now();
+                    double heuristic = calc_heuristic(
+                        const_cast<Node *>(&candidate));
+                    add_elapsed(stats.heuristic_time_sec, heuristic_start);
+
+                    Node *accepted_node = this->new_node(
+                        candidate.x, candidate.y, candidate.yaw, candidate.t,
+                        candidate.cost, candidate.steer, current,
+                        candidate.direction);
+                    open_set.emplace(new_g + heuristic, node_id++,
+                                     accepted_node);
+                    stats.accepted_nodes++;
+                    if (is_snap)
+                        stats.reference_egraph_snap_accepted++;
+                    else
+                        stats.reference_egraph_successor_accepted++;
+                    stats.peak_open_size =
+                        std::max<std::size_t>(stats.peak_open_size,
+                                              open_set.size());
+                }
+            };
+
             if (expansion_pool.parallel_enabled(motion_primitives.size()))
             {
                 std::vector<PrimitiveCandidateEval> primitive_evals(motion_primitives.size());
@@ -1446,6 +1807,10 @@ public:
                     stats.peak_open_size = std::max<std::size_t>(stats.peak_open_size, open_set.size());
                 }
             }
+
+            auto reference_merge_start = PlannerClock::now();
+            merge_reference_successors();
+            add_elapsed(stats.serial_merge_time_sec, reference_merge_start);
         }
 
         if (backup_result.status == PlanningStatus::BLOCKED_BY_ROBOT)
@@ -1677,6 +2042,7 @@ std::vector<Trajectory> perform_planning(
             traj.start_time = current_start_t;
             traj.waypoints = waypoints;
             traj.is_transfer = trans;
+            traj.kind = trans ? TrajectoryKind::TRANSFER : TrajectoryKind::TRANSIT;
             traj.transferred_object = trans ? entities.at(obj_name) : nullptr;
             all_trajectories.push_back(traj);
             timetable.add_trajectory(traj);

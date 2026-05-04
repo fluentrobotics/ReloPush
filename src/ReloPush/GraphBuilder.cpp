@@ -768,34 +768,34 @@ StateValidity addEdgePrerelocation_Optimization(
         {
             auto temp_opt = ReloPush::OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
 
-            // auto start_pivot = ReloPush::State(startPose.x,startPose.y,sideAngle);
-            // auto startPrepush = find_pre_push(start_pivot,ctx.parameters.PrePush_dist);
-            //  object PreRelo
-            // auto obj_prerelo = ReloPush::revert_pre_push(robot_prerelo,ctx.parameters.PrePush_dist);
             auto obj_prerelo = ReloPush::State(relocationX, relocationY, relocationYaw);
-            bestPreRelo_object = obj_prerelo;
 
-            bestPreRelo_robot = find_pre_push(obj_prerelo, ctx.parameters.PrePush_dist);
-            bestDubins_prerelo = findDubins(startPose_prepush, bestPreRelo_robot, ctx.parameters.turning_rad_pair.push);
+            // Use local candidate variables — only commit to "best" after all checks pass
+            auto candidatePreRelo_robot = find_pre_push(obj_prerelo, ctx.parameters.PrePush_dist);
+            auto candidateDubins_prerelo = findDubins(startPose_prepush, candidatePreRelo_robot, ctx.parameters.turning_rad_pair.push);
 
-            auto pre_relo_path_valid = isDubinsValid(bestDubins_prerelo, ctx);
-            if (isDubinsValid(bestDubins_prerelo, ctx) != StateValidity::valid)
+            if (isDubinsValid(candidateDubins_prerelo, ctx) != StateValidity::valid)
                 continue;
 
             double final_push_orientation = startPose.yaw + temp_opt.change_in_yaw;
-            bestPreRelo_orientation = movingObject.getNominalPose().yaw + temp_opt.change_in_yaw;
+            double candidatePreRelo_orientation = movingObject.getNominalPose().yaw + temp_opt.change_in_yaw;
             auto final_push_pose = ReloPush::State(obj_prerelo.x, obj_prerelo.y, final_push_orientation);
 
-            bestDubins_final = findDubins(find_pre_push(final_push_pose, ctx.parameters.PrePush_dist), find_pre_push(goalPose, ctx.parameters.PrePush_dist), ctx.parameters.turning_rad_pair.push);
-            auto final_path_valid = isDubinsValid(bestDubins_final, ctx);
-            if (isDubinsValid(bestDubins_final, ctx) != StateValidity::valid)
+            auto candidateDubins_final = findDubins(find_pre_push(final_push_pose, ctx.parameters.PrePush_dist), find_pre_push(goalPose, ctx.parameters.PrePush_dist), ctx.parameters.turning_rad_pair.push);
+            if (isDubinsValid(candidateDubins_final, ctx) != StateValidity::valid)
                 continue;
 
+            // All checks passed — commit this candidate as the new best
             foundAny = true;
             bestCost = totalCost;
             bestOpt = ReloPush::OptResult(relocationX, relocationY, relocationYaw, costOpt, delta_yaw);
             bestOrientationIndex = i;
-            bestExtraCost = bestDubins_prerelo.lengthCost();
+            bestPreRelo_object = obj_prerelo;
+            bestPreRelo_robot = candidatePreRelo_robot;
+            bestDubins_prerelo = candidateDubins_prerelo;
+            bestPreRelo_orientation = candidatePreRelo_orientation;
+            bestDubins_final = candidateDubins_final;
+            bestExtraCost = candidateDubins_prerelo.lengthCost();
         }
     } // end for each orientation axis
 

@@ -34,6 +34,11 @@ struct PlanningDebugStats
     std::size_t reject_worse_g = 0;
     std::size_t analytic_collision = 0;
     std::size_t analytic_post_arrival_collision = 0;
+    std::size_t reference_egraph_nodes = 0;
+    std::size_t reference_egraph_snap_accepted = 0;
+    std::size_t reference_egraph_snap_rejected = 0;
+    std::size_t reference_egraph_successor_accepted = 0;
+    std::size_t reference_egraph_successor_rejected = 0;
     double best_dist = std::numeric_limits<double>::infinity();
     double best_yaw_error = std::numeric_limits<double>::infinity();
     Pose best_pose;

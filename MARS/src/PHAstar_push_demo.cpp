@@ -17,12 +17,14 @@
 #include <ReloPush/FinalSequenceHandoff.h>
 #include <ReloPush/config.h>
 #include <ReloPush/TaskAllocation.hpp>
+#include <ReloPush/PrintInColor.hpp>
 #include <QFont>
 #include <QImage>
 #include <QPainterPath>
 #include <QPen>
 #include <fstream>
 #include <filesystem>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -50,6 +52,9 @@ double shared_collision_check_step(const Params &params);
 Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
                          const RuntimeOptions &options);
 
+ReferenceExperienceGraphOptions reference_egraph_options_from_runtime(
+    const RuntimeOptions &options);
+
 namespace
 {
   thread_local std::mt19937 g_parking_rng;
@@ -64,6 +69,8 @@ namespace
     {
     case ParkingCandidateMode::REVERSE_RECENT:
       return "reverse-recent-path";
+    case ParkingCandidateMode::REVERSE_RECENT_SHORTER:
+      return "reverse-recent-shorter";
     case ParkingCandidateMode::CONNECTED_VFH:
       return "connected-vfh";
     case ParkingCandidateMode::CONNECTED:
@@ -1310,6 +1317,7 @@ Trajectory make_relopush_trajectory(const ReloPush::StatePathPtr &path,
   traj.transferred_object = transferred_object;
   traj.start_time = start_time;
   traj.is_transfer = is_transfer;
+  traj.kind = is_transfer ? TrajectoryKind::TRANSFER : TrajectoryKind::TRANSIT;
 
   if (!path || path->empty())
     return traj;
@@ -2557,30 +2565,155 @@ generate_parking_candidates_reverse_recent_path(
   if (db_it == database.end() || db_it->second.size() < 2)
     return candidates;
 
+  const double max_gap = std::max(0.75, timetable.time_increment * 1.5);
   const auto &timeline = db_it->second;
-  auto latest_after = timeline.upper_bound(start_time);
-  if (latest_after == timeline.begin())
+  const auto &spans = timetable.get_trajectory_spans();
+
+  auto find_latest_span_before = [&]() -> std::pair<const TimeTable::TrajectorySpan *, std::size_t>
+  {
+    const TimeTable::TrajectorySpan *latest_span = nullptr;
+    std::size_t latest_span_index = 0;
+    for (std::size_t i = 0; i < spans.size(); ++i)
+    {
+      const auto &span = spans[i];
+      if (span.entity != robot)
+        continue;
+      if (span.end_time > start_time + 1e-6)
+        continue;
+      if (!latest_span || span.end_time > latest_span->end_time)
+      {
+        latest_span = &span;
+        latest_span_index = i;
+      }
+    }
+    return {latest_span, latest_span_index};
+  };
+
+  auto find_previous_non_retraction_span =
+      [&](std::size_t before_index) -> const TimeTable::TrajectorySpan *
+  {
+    for (std::size_t i = before_index; i-- > 0;)
+    {
+      if (spans[i].entity != robot)
+        continue;
+      if (spans[i].kind != TrajectoryKind::RETRACTION)
+        return &spans[i];
+    }
+    return nullptr;
+  };
+
+  auto collect_span_states =
+      [&](double span_start, double span_end,
+          bool exclude_terminal) -> std::vector<std::pair<double, Pose>>
+  {
+    std::vector<std::pair<double, Pose>> states;
+    double query_end = span_end + 1e-6;
+    if (exclude_terminal)
+      query_end = span_end - 1e-6;
+
+    auto latest_after = timeline.upper_bound(query_end);
+    if (latest_after == timeline.begin())
+      return states;
+
+    auto latest_it = std::prev(latest_after);
+    if (latest_it->first < span_start - 1e-6)
+      return states;
+
+    states.reserve(std::min<std::size_t>(timeline.size(), kMaxReverseStates));
+    states.push_back(*latest_it);
+
+    auto it = latest_it;
+    while (it != timeline.begin() && states.size() < kMaxReverseStates)
+    {
+      auto older_it = std::prev(it);
+      if (older_it->first < span_start - 1e-6)
+        break;
+      if ((it->first - older_it->first) > max_gap)
+        break;
+      states.push_back(*older_it);
+      it = older_it;
+    }
+    return states;
+  };
+
+  auto [latest_span, latest_span_index] = find_latest_span_before();
+  if (!latest_span)
     return candidates;
 
-  auto latest_it = std::prev(latest_after);
-  const double max_gap = std::max(0.75, timetable.time_increment * 1.5);
+  double source_start_time = latest_span->start_time;
+  double source_end_time = latest_span->end_time;
+  bool use_connected_waypoints = latest_span->kind == TrajectoryKind::TRANSIT;
+  bool exclude_terminal_state = latest_span->kind != TrajectoryKind::TRANSIT;
 
-  std::vector<std::pair<double, Pose>> source_states;
-  source_states.reserve(std::min<std::size_t>(timeline.size(), kMaxReverseStates));
-  source_states.push_back(*latest_it);
-
-  auto it = latest_it;
-  while (it != timeline.begin() && source_states.size() < kMaxReverseStates)
+  if (latest_span->kind == TrajectoryKind::RETRACTION)
   {
-    auto older_it = std::prev(it);
-    if ((it->first - older_it->first) > max_gap)
-      break;
-    source_states.push_back(*older_it);
-    it = older_it;
+    const auto *previous_non_retraction =
+        find_previous_non_retraction_span(latest_span_index);
+    if (!previous_non_retraction)
+      return candidates;
+    source_start_time = previous_non_retraction->start_time;
+    source_end_time = previous_non_retraction->end_time;
+    use_connected_waypoints = false;
+    exclude_terminal_state = true;
   }
+
+  if (use_connected_waypoints)
+  {
+    std::size_t scan_index = latest_span_index;
+    while (scan_index > 0)
+    {
+      const TimeTable::TrajectorySpan *previous_span = nullptr;
+      std::size_t previous_index = 0;
+      for (std::size_t i = scan_index; i-- > 0;)
+      {
+        if (spans[i].entity == robot)
+        {
+          previous_span = &spans[i];
+          previous_index = i;
+          break;
+        }
+      }
+
+      if (!previous_span || previous_span->kind != TrajectoryKind::TRANSIT)
+        break;
+      if ((source_start_time - previous_span->end_time) > max_gap)
+        break;
+
+      source_start_time = previous_span->start_time;
+      scan_index = previous_index;
+    }
+  }
+
+  std::vector<std::pair<double, Pose>> source_states =
+      collect_span_states(source_start_time, source_end_time,
+                          exclude_terminal_state);
 
   if (source_states.size() < 2)
     return candidates;
+
+  if (!use_connected_waypoints)
+  {
+    std::unordered_set<std::string> emitted_candidate_keys;
+    for (const auto &[source_time, source_pose] : source_states)
+    {
+      const Pose candidate_pose{source_pose.x, source_pose.y, source_pose.yaw};
+      const double displacement = std::hypot(candidate_pose.x - current_pose.x,
+                                             candidate_pose.y - current_pose.y);
+      if (displacement < kMinParkingDisplacement)
+        continue;
+      if (!emitted_candidate_keys.insert(pose_key(candidate_pose)).second)
+        continue;
+
+      ParkingCandidate candidate;
+      candidate.pose = candidate_pose;
+      candidate.estimated_rs_length = displacement;
+      candidates.push_back(std::move(candidate));
+      if (candidates.size() >= kMaxCandidates)
+        break;
+    }
+
+    return candidates;
+  }
 
   std::vector<Waypoint> reverse_path;
   reverse_path.reserve(source_states.size() + 1);
@@ -2651,7 +2784,8 @@ generate_parking_candidates(const Pose &current_pose, RobotMeta *robot,
                             const std::unordered_map<std::string, EntityMeta *> *entities = nullptr,
                             double start_time = 0.0)
 {
-  if (g_parking_candidate_mode == ParkingCandidateMode::REVERSE_RECENT)
+  if (g_parking_candidate_mode == ParkingCandidateMode::REVERSE_RECENT ||
+      g_parking_candidate_mode == ParkingCandidateMode::REVERSE_RECENT_SHORTER)
   {
     if (!timetable)
       return {};
@@ -2684,7 +2818,8 @@ generate_parking_candidates_for_mode(const Pose &current_pose,
                                      const std::unordered_map<std::string, EntityMeta *> *entities = nullptr,
                                      double start_time = 0.0)
 {
-  if (mode == ParkingCandidateMode::REVERSE_RECENT)
+  if (mode == ParkingCandidateMode::REVERSE_RECENT ||
+      mode == ParkingCandidateMode::REVERSE_RECENT_SHORTER)
   {
     if (!timetable)
       return {};
@@ -2849,6 +2984,34 @@ Params make_fine_segment_params(const Params &params,
       static_cast<int>(std::ceil(fine.time_step /
                                  std::max(1e-3, fine.collision_check_time_step))));
   return fine;
+}
+
+ReferenceExperienceGraphOptions reference_egraph_options_from_runtime(
+    const RuntimeOptions &options)
+{
+  ReferenceExperienceGraphOptions egraph_options;
+  egraph_options.enabled = options.enable_reference_egraph_transit;
+  egraph_options.epsilon = options.reference_egraph_epsilon;
+  egraph_options.waypoint_spacing = options.reference_egraph_waypoint_spacing;
+  egraph_options.snap_radius = options.reference_egraph_snap_radius;
+  egraph_options.snap_yaw = options.reference_egraph_snap_yaw;
+  egraph_options.successor_lookahead =
+      options.reference_egraph_successor_lookahead;
+  egraph_options.max_nodes = options.reference_egraph_max_nodes;
+  return egraph_options;
+}
+
+std::vector<Waypoint> waypoints_from_relopush_state_path(
+    const ReloPush::StatePathPtr &path)
+{
+  std::vector<Waypoint> waypoints;
+  if (!path)
+    return waypoints;
+
+  waypoints.reserve(path->size());
+  for (const auto &state : *path)
+    waypoints.push_back(WaypointFromReloPushState(state));
+  return waypoints;
 }
 
 void accumulate_wait_stats(TaskExecutionStats *stats, double wait_added)
@@ -3985,7 +4148,8 @@ bool relocate_blocking_robot(RobotMeta *blocker,
     }
   };
   append_mode_once(g_parking_candidate_mode);
-  if (g_parking_candidate_mode == ParkingCandidateMode::REVERSE_RECENT)
+  if (g_parking_candidate_mode == ParkingCandidateMode::REVERSE_RECENT ||
+      g_parking_candidate_mode == ParkingCandidateMode::REVERSE_RECENT_SHORTER)
   {
     append_mode_once(ParkingCandidateMode::CONNECTED_VFH);
     append_mode_once(ParkingCandidateMode::CONNECTED);
@@ -4018,6 +4182,109 @@ bool relocate_blocking_robot(RobotMeta *blocker,
     int yi = static_cast<int>(std::round(p.y * 10.0));
     int ai = static_cast<int>(std::round(mod2pi(p.yaw) * 10.0));
     return std::to_string(xi) + ":" + std::to_string(yi) + ":" + std::to_string(ai);
+  };
+
+  struct ParkingPathRefinement
+  {
+    bool found = false;
+    Pose parking_pose;
+    Trajectory trajectory;
+    TimeTable committed_timetable;
+    PlanningResult result;
+  };
+
+  auto try_shorten_reverse_recent_path =
+      [&](const PlanningResult &scheduled_res) -> ParkingPathRefinement
+  {
+    ParkingPathRefinement refinement;
+    if (scheduled_res.waypoints.size() < 3)
+      return refinement;
+
+    std::unordered_set<std::string> tested_prefix_poses;
+    for (std::size_t i = 1; i + 1 < scheduled_res.waypoints.size(); ++i)
+    {
+      const auto &candidate_wp = scheduled_res.waypoints[i];
+      Pose prefix_pose{candidate_wp.x, candidate_wp.y, candidate_wp.yaw};
+      if (std::hypot(prefix_pose.x - start_pose.x,
+                     prefix_pose.y - start_pose.y) < 0.25)
+      {
+        continue;
+      }
+
+      std::string key = pose_key(prefix_pose);
+      if (!tested_prefix_poses.insert(key).second)
+        continue;
+
+      if (parking_pose_conflicts_with_blocked_hint(prefix_pose, blocker,
+                                                   blocked_traj_hint))
+      {
+        continue;
+      }
+
+      std::vector<Waypoint> prefix_waypoints(
+          scheduled_res.waypoints.begin(),
+          scheduled_res.waypoints.begin() + static_cast<std::ptrdiff_t>(i + 1));
+      const double original_abs_start = prefix_waypoints.front().time;
+      make_waypoint_times_relative(prefix_waypoints, original_abs_start);
+
+      Trajectory prefix_traj;
+      prefix_traj.entity = blocker;
+      prefix_traj.start_time = ready_time;
+      prefix_traj.waypoints = prefix_waypoints;
+      prefix_traj.is_transfer = false;
+      prefix_traj.kind = TrajectoryKind::TRANSIT;
+      prefix_traj.transferred_object = nullptr;
+      prefix_traj.approach_goal_entity = nullptr;
+
+      CollisionInfo last_collision;
+      double last_check_time = ready_time;
+      double prefix_safe_start = find_wait_only_start_time(
+          prefix_traj, ready_time, timetable, params,
+          &last_collision, &last_check_time);
+      if (prefix_safe_start < 0.0)
+        continue;
+
+      prefix_traj.start_time = prefix_safe_start;
+      const double arrival_time =
+          prefix_safe_start +
+          (prefix_traj.waypoints.empty() ? 0.0
+                                         : prefix_traj.waypoints.back().time);
+
+      CollisionInfo park_conflict =
+          find_stationary_pose_conflict_until_last_timestamp(
+              blocker, prefix_pose, arrival_time, timetable, params);
+      if (!park_conflict.is_valid)
+        continue;
+
+      TimeTable prefix_timetable = timetable;
+      prefix_timetable.add_trajectory(prefix_traj);
+
+      CollisionInfo blocked_hint_collision;
+      double blocked_hint_check_time = ready_time;
+      if (!parking_candidate_clears_blocked_hint(
+              blocked_traj_hint, blocker, prefix_timetable, params,
+              &blocked_hint_collision, &blocked_hint_check_time))
+      {
+        continue;
+      }
+
+      PlanningResult prefix_result = scheduled_res;
+      prefix_result.waypoints = prefix_waypoints;
+      shift_waypoint_times(prefix_result.waypoints, prefix_safe_start);
+      prefix_result.failure_detail =
+          "Selected shorter reverse-recent parking candidate";
+      prefix_result.colliding_entity.clear();
+      prefix_result.failure_time = 0.0;
+
+      refinement.found = true;
+      refinement.parking_pose = prefix_pose;
+      refinement.trajectory = std::move(prefix_traj);
+      refinement.committed_timetable = std::move(prefix_timetable);
+      refinement.result = std::move(prefix_result);
+      return refinement;
+    }
+
+    return refinement;
   };
 
   for (std::size_t mode_index = 0; mode_index < candidate_modes.size(); ++mode_index)
@@ -4110,6 +4377,10 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       relo_traj.entity = blocker;
       relo_traj.start_time = ready_time;
       relo_traj.waypoints = res.waypoints;
+      relo_traj.is_transfer = false;
+      relo_traj.kind = TrajectoryKind::TRANSIT;
+      relo_traj.transferred_object = nullptr;
+      relo_traj.approach_goal_entity = nullptr;
       for (auto &wp : relo_traj.waypoints)
         wp.time -= ready_time;
 
@@ -4176,6 +4447,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       }
 
       PlanningResult success_res = res;
+      Pose selected_parking_pose = cand.pose;
       TimeTable committed_timetable = timetable;
       committed_timetable.add_trajectory(relo_traj);
 
@@ -4210,18 +4482,36 @@ bool relocate_blocking_robot(RobotMeta *blocker,
         continue;
       }
 
+      if (candidate_mode == ParkingCandidateMode::REVERSE_RECENT_SHORTER)
+      {
+        ParkingPathRefinement refinement =
+            try_shorten_reverse_recent_path(res);
+        if (refinement.found)
+        {
+          selected_parking_pose = refinement.parking_pose;
+          success_res = std::move(refinement.result);
+          committed_timetable = std::move(refinement.committed_timetable);
+          std::cout << "  [Relocate] Shortened reverse-recent parking from ("
+                    << std::fixed << std::setprecision(2)
+                    << cand.pose.x << ", " << cand.pose.y
+                    << ") to (" << selected_parking_pose.x << ", "
+                    << selected_parking_pose.y << ")." << std::endl;
+        }
+      }
+
       if (success_res.failure_detail.empty())
       {
         success_res.failure_detail = "Selected safe parking candidate";
       }
-      record_debug_trial(candidate_mode, cand.pose, success_res,
+      record_debug_trial(candidate_mode, selected_parking_pose, success_res,
                          &committed_timetable);
       show_debug_trials();
 
       timetable = std::move(committed_timetable);
       recent_failed_relocations.erase(fail_key);
       std::cout << "  [Relocate] SUCCESS: Moved " << blocker->name
-                << " to (" << cand.pose.x << ", " << cand.pose.y << ")" << std::endl;
+                << " to (" << selected_parking_pose.x << ", "
+                << selected_parking_pose.y << ")" << std::endl;
       return true;
     }
   }
@@ -4241,7 +4531,9 @@ bool plan_initial_transit(
     const Params &params,
     const RuntimeOptions &options,
     double *out_abs_start_time = nullptr,
-    double *out_abs_end_time = nullptr)
+    double *out_abs_end_time = nullptr,
+    const std::function<Pose(double)> &target_pose_provider = {},
+    const std::vector<Waypoint> *reference_waypoints = nullptr)
 {
   if (out_abs_start_time)
     *out_abs_start_time = -1.0;
@@ -4250,11 +4542,12 @@ bool plan_initial_transit(
 
   double planning_start_time = start_time;
   double chosen_start_time = planning_start_time;
+  Pose active_target_pose = target_pose;
   Pose current_pose = timetable.get_pose(robot, planning_start_time);
   robot->initial_pose = current_pose; // Update meta for planner
 
   std::cout << "  [Transit] Planning " << robot->name << " -> Target ("
-            << target_pose.x << ", " << target_pose.y << ", " << target_pose.yaw
+            << active_target_pose.x << ", " << active_target_pose.y << ", " << active_target_pose.yaw
             << ") from Start (" << current_pose.x << ", " << current_pose.y << ", " << current_pose.yaw
             << ") at " << planning_start_time << "s" << std::endl;
 
@@ -4319,8 +4612,62 @@ bool plan_initial_transit(
     return oss.str();
   };
 
-  auto try_schedule_time_aware_path = [&](PlanningResult &candidate_res,
-                                          const std::string &stage_label) -> bool
+  auto refresh_target_pose = [&](double query_time,
+                                 const std::string &reason_label) -> bool
+  {
+    if (!target_pose_provider)
+      return false;
+
+    const Pose refreshed = target_pose_provider(query_time);
+    const double position_delta =
+        std::hypot(refreshed.x - active_target_pose.x,
+                   refreshed.y - active_target_pose.y);
+    const double yaw_delta =
+        std::abs(pi_2_pi(refreshed.yaw - active_target_pose.yaw));
+    if (position_delta < 1e-3 && yaw_delta < 1e-3)
+      return false;
+
+    std::cout << "  [Transit] Refreshing initial transit target after "
+              << reason_label << ": ("
+              << std::fixed << std::setprecision(2)
+              << active_target_pose.x << ", " << active_target_pose.y
+              << ", " << active_target_pose.yaw << ") -> ("
+              << refreshed.x << ", " << refreshed.y << ", "
+              << refreshed.yaw << ") at t=" << query_time << "s."
+              << std::endl;
+    active_target_pose = refreshed;
+    return true;
+  };
+
+  auto replan_initial_transit = [&](const std::string &debug_label) -> PlanningResult
+  {
+    current_pose = timetable.get_pose(robot, planning_start_time);
+    robot->initial_pose = current_pose;
+    PHAStar retry_planner(robot, active_target_pose, &timetable, &entities,
+                          params, false, "", planning_start_time, debug_label);
+    retry_planner.set_debug_popup_enabled(false);
+    retry_planner.max_search_iterations = options.max_search_iterations;
+    retry_planner.set_planner_expansion_threads(options.planner_expansion_threads);
+    if (options.enable_reference_egraph_transit && reference_waypoints &&
+        reference_waypoints->size() >= 2)
+    {
+      retry_planner.set_reference_experience_graph(
+          *reference_waypoints, reference_egraph_options_from_runtime(options));
+      if (retry_planner.has_reference_experience_graph())
+      {
+        std::cout << "  [Transit] Reference E-Graph guide active for "
+                  << debug_label << " (input waypoints="
+                  << reference_waypoints->size() << ")." << std::endl;
+      }
+    }
+    return retry_planner.Planning_with_res(planning_start_time);
+  };
+
+  std::function<bool(PlanningResult &, const std::string &, bool)>
+      try_schedule_time_aware_path =
+          [&](PlanningResult &candidate_res,
+              const std::string &stage_label,
+              bool allow_target_refresh) -> bool
   {
     if (candidate_res.waypoints.empty())
     {
@@ -4368,6 +4715,36 @@ bool plan_initial_transit(
     }
 
     const double delta = safe_start - candidate_start_time;
+
+    const double candidate_duration =
+        candidate_res.waypoints.back().time - candidate_start_time;
+    const double refreshed_target_query_time =
+        safe_start + std::max(0.0, candidate_duration);
+    if (allow_target_refresh && delta > 1e-6 &&
+        refresh_target_pose(refreshed_target_query_time,
+                            "delay recovery predicted arrival"))
+    {
+      planning_start_time = safe_start;
+      chosen_start_time = safe_start;
+
+      PlanningResult refreshed_res =
+          replan_initial_transit("Initial transit after delay target refresh");
+      append_attempt("replan after delayed target refresh", refreshed_res);
+
+      if (!refreshed_res.waypoints.empty() &&
+          try_schedule_time_aware_path(
+              refreshed_res,
+              "time-aware schedule of refreshed delayed path",
+              false))
+      {
+        candidate_res = refreshed_res;
+        return true;
+      }
+
+      candidate_res = refreshed_res;
+      return false;
+    }
+
     shift_waypoint_times(candidate_res.waypoints, delta);
     chosen_start_time = safe_start;
     candidate_res.status = PlanningStatus::SUCCESS;
@@ -4409,18 +4786,6 @@ bool plan_initial_transit(
     return hint;
   };
 
-  auto replan_initial_transit = [&](const std::string &debug_label) -> PlanningResult
-  {
-    current_pose = timetable.get_pose(robot, planning_start_time);
-    robot->initial_pose = current_pose;
-    PHAStar retry_planner(robot, target_pose, &timetable, &entities, params,
-                          false, "", planning_start_time, debug_label);
-    retry_planner.set_debug_popup_enabled(false);
-    retry_planner.max_search_iterations = options.max_search_iterations;
-    retry_planner.set_planner_expansion_threads(options.planner_expansion_threads);
-    return retry_planner.Planning_with_res(planning_start_time);
-  };
-
   auto attempt_self_safe_parking = [&](PlanningResult &res,
                                        const Trajectory &blocked_hint,
                                        const std::string &reason_label,
@@ -4443,6 +4808,7 @@ bool plan_initial_transit(
     chosen_start_time = planning_start_time;
     current_pose = timetable.get_pose(robot, planning_start_time);
     robot->initial_pose = current_pose;
+    refresh_target_pose(planning_start_time, "self safe parking");
 
     std::cout << "  [Transit] " << robot->name
               << " parked safely. Replanning initial transit from ("
@@ -4534,7 +4900,9 @@ bool plan_initial_transit(
               << ". Evaluating delay-only recovery before any self safe parking..."
               << std::endl;
 
-    if (try_schedule_time_aware_path(path_res, "time-aware schedule of blocked path"))
+    if (try_schedule_time_aware_path(path_res,
+                                     "time-aware schedule of blocked path",
+                                     true))
     {
       // Waiting already resolved the moving blocker, or the scheduler handled an idle blocker.
     }
@@ -4638,7 +5006,9 @@ bool plan_initial_transit(
 
     if (ghost_res.status == PlanningStatus::SUCCESS)
     {
-      if (try_schedule_time_aware_path(ghost_res, "time-aware schedule of ghost path"))
+      if (try_schedule_time_aware_path(ghost_res,
+                                       "time-aware schedule of ghost path",
+                                       true))
       {
         path_res = ghost_res;
       }
@@ -5296,6 +5666,7 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
   retract_traj.start_time = earliest_start;
   retract_traj.waypoints = retract_wp;
   retract_traj.is_transfer = false;
+  retract_traj.kind = TrajectoryKind::RETRACTION;
   retract_traj.transferred_object = nullptr;
   retract_traj.approach_goal_entity = nullptr;
 
@@ -5589,6 +5960,11 @@ std::string format_planner_stats(const PlanningDebugStats &stats)
       << ", analytic_collision=" << stats.analytic_collision
       << ", analytic_post_arrival_collision="
       << stats.analytic_post_arrival_collision
+      << ", egraph_nodes=" << stats.reference_egraph_nodes
+      << ", egraph_snap_acc=" << stats.reference_egraph_snap_accepted
+      << ", egraph_snap_rej=" << stats.reference_egraph_snap_rejected
+      << ", egraph_succ_acc=" << stats.reference_egraph_successor_accepted
+      << ", egraph_succ_rej=" << stats.reference_egraph_successor_rejected
       << ", expansion_threads=" << stats.planner_expansion_threads
       << ", analytic_validation_time="
       << std::fixed << std::setprecision(4)
@@ -5712,7 +6088,8 @@ bool replan_transit_segment(
     const Params &params,
     const RuntimeOptions &options,
     std::vector<Waypoint> &out_waypoints_rel,
-    const SegmentReplanContext &context = SegmentReplanContext{})
+    const SegmentReplanContext &context = SegmentReplanContext{},
+    const std::vector<Waypoint> *reference_waypoints = nullptr)
 {
   Pose start_pose = timetable.get_pose(robot, start_time);
   robot->initial_pose = start_pose;
@@ -5767,12 +6144,25 @@ bool replan_transit_segment(
                              int max_iter,
                              const std::string &stage) -> PlanningResult
   {
+    Color::println("[PHAStar] Attempting search method: " + stage, Color::CYAN);
     robot->initial_pose = plan_start_pose;
     PHAStar planner(robot, goal_pose, &timetable, &entities, plan_params,
                     false, "", plan_start_time, stage);
     planner.set_ignore_other_robots(true);
     planner.max_search_iterations = max_iter;
     planner.set_planner_expansion_threads(options.planner_expansion_threads);
+    if (options.enable_reference_egraph_transit && reference_waypoints &&
+        reference_waypoints->size() >= 2)
+    {
+      planner.set_reference_experience_graph(
+          *reference_waypoints, reference_egraph_options_from_runtime(options));
+      if (planner.has_reference_experience_graph())
+      {
+        std::cout << "[PHAStar] Reference E-Graph guide active for "
+                  << stage << " (input waypoints="
+                  << reference_waypoints->size() << ")." << std::endl;
+      }
+    }
     return planner.Planning_with_res(plan_start_time);
   };
 
@@ -5863,6 +6253,7 @@ bool replan_transit_segment(
                                       const std::string &stage_prefix,
                                       const std::vector<Waypoint> *prefix = nullptr) -> bool
     {
+      Color::println("[PHAStar] Attempting search method: " + stage_prefix, Color::CYAN);
       const double maxc =
           1.0 / std::max(robot->transit_turning_radius(), 1e-6);
       auto paths = ReedShepp::calc_paths(rs_start_pose.x, rs_start_pose.y,
@@ -5974,6 +6365,7 @@ bool prepare_segment_waypoints_for_scheduling(
       return false;
 
     auto original_waypoints = traj->waypoints;
+    Pose start_pose = timetable.get_pose(robot, segment_ready_time);
     Pose segment_goal = traj->waypoints.back();
     EntityMeta *approach_goal_entity = traj->approach_goal_entity;
     if (robot && approach_goal_entity)
@@ -5984,10 +6376,21 @@ bool prepare_segment_waypoints_for_scheduling(
           live_object_pose, segment_goal.yaw, robot, approach_goal_entity,
           0.01);
     }
+    std::vector<Waypoint> reference_waypoints = original_waypoints;
+    if (!reference_waypoints.empty())
+    {
+      reference_waypoints.front().x = start_pose.x;
+      reference_waypoints.front().y = start_pose.y;
+      reference_waypoints.front().yaw = start_pose.yaw;
+      reference_waypoints.back().x = segment_goal.x;
+      reference_waypoints.back().y = segment_goal.y;
+      reference_waypoints.back().yaw = segment_goal.yaw;
+    }
     std::vector<Waypoint> replanned_rel;
     if (!replan_transit_segment(robot, segment_goal, segment_ready_time,
                                 timetable, entities, params, options, replanned_rel,
-                                replan_context))
+                                replan_context,
+                                &reference_waypoints))
     {
       std::cout << fallback_message << std::endl;
       traj->waypoints = original_waypoints;
@@ -6005,6 +6408,67 @@ bool prepare_segment_waypoints_for_scheduling(
     traj->CalcualteTimeStamps(robot);
   }
 
+  return true;
+}
+
+bool replan_transfer_segment_after_failed_schedule(
+    Trajectory *traj,
+    RobotMeta *robot,
+    double segment_ready_time,
+    TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params,
+    const RuntimeOptions &options,
+    std::string *out_failure_reason = nullptr)
+{
+  if (!traj || !robot || !traj->is_transfer || !traj->transferred_object ||
+      traj->waypoints.empty())
+  {
+    if (out_failure_reason)
+      *out_failure_reason = "transfer replanning skipped: invalid segment";
+    return false;
+  }
+
+  const Pose start_pose = timetable.get_pose(robot, segment_ready_time);
+  const Pose goal_pose = traj->waypoints.back();
+  robot->initial_pose = start_pose;
+
+  std::cout << "  [Segment] Given transfer path is not schedulable; "
+            << "attempting forward-only transfer replanning for "
+            << traj->transferred_object->name << "." << std::endl;
+
+  PHAStar planner(robot, goal_pose, &timetable, &entities, params,
+                  true, traj->transferred_object->name, segment_ready_time,
+                  "Transfer recovery");
+  planner.max_search_iterations = options.max_search_iterations;
+  planner.set_planner_expansion_threads(options.planner_expansion_threads);
+
+  PlanningResult replanned = planner.Planning_with_res(segment_ready_time);
+  if (replanned.status != PlanningStatus::SUCCESS ||
+      replanned.waypoints.empty())
+  {
+    if (out_failure_reason)
+    {
+      std::ostringstream oss;
+      oss << "transfer replanning failed: "
+          << planning_status_name(replanned.status);
+      if (!replanned.failure_detail.empty())
+        oss << " (" << replanned.failure_detail << ")";
+      *out_failure_reason = oss.str();
+    }
+    std::cerr << "  [Segment] Transfer replanning failed." << std::endl;
+    return false;
+  }
+
+  make_waypoint_times_relative(replanned.waypoints, segment_ready_time);
+  traj->waypoints = std::move(replanned.waypoints);
+  traj->start_time = segment_ready_time;
+  traj->kind = TrajectoryKind::TRANSFER;
+  traj->is_transfer = true;
+
+  std::cout << "  [Segment] Transfer replanning produced "
+            << traj->waypoints.size()
+            << " forward-only waypoints; retrying scheduling." << std::endl;
   return true;
 }
 
@@ -6026,6 +6490,8 @@ bool reserve_and_commit_trajectory(
     *out_last_collision = CollisionInfo{true, "Not evaluated", "", earliest_start};
   if (out_last_check_time)
     *out_last_check_time = earliest_start;
+
+  traj->kind = traj->is_transfer ? TrajectoryKind::TRANSFER : traj->kind;
 
   if (traj->is_transfer && traj->transferred_object)
   {
@@ -6271,10 +6737,31 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
     return false;
   }
 
-  bool success = reserve_and_commit_trajectory(traj.get(), robot, current_avail_time,
-                                               timetable, params, entities, options,
-                                               transfer_windows, stats,
-                                               out_failure_reason);
+  CollisionInfo segment_failure_collision;
+  double segment_failure_start = current_avail_time;
+  bool success = reserve_and_commit_trajectory(
+      traj.get(), robot, current_avail_time, timetable, params, entities,
+      options, transfer_windows, stats, out_failure_reason,
+      &segment_failure_collision, &segment_failure_start);
+
+  if (!success && traj->is_transfer && traj->transferred_object)
+  {
+    std::string transfer_replan_failure;
+    if (replan_transfer_segment_after_failed_schedule(
+            traj.get(), robot, current_avail_time, timetable, entities,
+            params, options, &transfer_replan_failure))
+    {
+      success = reserve_and_commit_trajectory(
+          traj.get(), robot, current_avail_time, timetable, params, entities,
+          options, transfer_windows, stats, out_failure_reason,
+          &segment_failure_collision, &segment_failure_start);
+    }
+    else if (out_failure_reason && !transfer_replan_failure.empty())
+    {
+      *out_failure_reason = transfer_replan_failure;
+    }
+  }
+
   if (success)
   {
     if (out_scheduled_start_time)
@@ -6352,11 +6839,19 @@ bool process_task_execution(
   }
   task.TaskStartPoseRobot =
       compute_adjusted_task_start_pose(task, robot, robot_avail_time, timetable);
+  std::vector<Waypoint> initial_transit_reference =
+      waypoints_from_relopush_state_path(task.firstApproachPath);
   double initial_transit_abs_start = -1.0;
   double initial_transit_abs_end = -1.0;
   if (!plan_initial_transit(robot, task.TaskStartPoseRobot, robot_avail_time,
                             timetable, entities, params, options,
-                            &initial_transit_abs_start, &initial_transit_abs_end))
+                            &initial_transit_abs_start, &initial_transit_abs_end,
+                            [&](double query_time)
+                            {
+                              return compute_adjusted_task_start_pose(
+                                  task, robot, query_time, timetable);
+                            },
+                            &initial_transit_reference))
   {
     set_failure("initial transit planning failed");
     std::cerr << "Aborting task due to transit failure." << std::endl;
@@ -6596,11 +7091,36 @@ bool process_task_execution(
               << std::endl;
     CollisionInfo segment_failure_collision;
     double segment_failure_start = segment_ready_time;
-    if (!reserve_and_commit_trajectory(
+    bool segment_committed = reserve_and_commit_trajectory(
+        path_ptr.get(), robot, segment_ready_time, timetable, params,
+        entities, options, transfer_windows, out_stats,
+        out_failure_reason, &segment_failure_collision,
+        &segment_failure_start);
+
+    if (!segment_committed && path_ptr->is_transfer &&
+        path_ptr->transferred_object)
+    {
+      std::string transfer_replan_failure;
+      if (replan_transfer_segment_after_failed_schedule(
+              path_ptr.get(), robot, segment_ready_time, timetable, entities,
+              params, options, &transfer_replan_failure))
+      {
+        segment_failure_collision =
+            CollisionInfo{true, "Not evaluated", "", segment_ready_time};
+        segment_failure_start = segment_ready_time;
+        segment_committed = reserve_and_commit_trajectory(
             path_ptr.get(), robot, segment_ready_time, timetable, params,
             entities, options, transfer_windows, out_stats,
             out_failure_reason, &segment_failure_collision,
-            &segment_failure_start))
+            &segment_failure_start);
+      }
+      else if (out_failure_reason && !transfer_replan_failure.empty())
+      {
+        *out_failure_reason = transfer_replan_failure;
+      }
+    }
+
+    if (!segment_committed)
     {
       std::ostringstream oss;
       oss << "segment " << segment_idx << " failed (no safe start time)";
@@ -6678,7 +7198,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/result_seq_ReloPush-BOSS_10_objects.txt_ind8.b64";
+         "/result_seq_ReloPush-BOSS_8_objects.txt_ind5.b64";
 }
 
 bool load_data(
@@ -6805,6 +7325,13 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
              arg == "--parking-candidate-mode=retrace")
     {
       options.parking_candidate_mode = ParkingCandidateMode::REVERSE_RECENT;
+    }
+    else if (arg == "--parking-candidate-mode=reverse-recent-shorter" ||
+             arg == "--parking-candidate-mode=reverse-recent-refined" ||
+             arg == "--parking-candidate-mode=reverse-shorter" ||
+             arg == "--parking-candidate-mode=retrace-shorter")
+    {
+      options.parking_candidate_mode = ParkingCandidateMode::REVERSE_RECENT_SHORTER;
     }
     else if (arg == "--parking-candidate-mode=random")
     {
@@ -6956,6 +7483,14 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     else if (arg == "--no-initial-transit-fallbacks")
     {
       options.enable_initial_transit_fallbacks = false;
+    }
+    else if (arg == "--reference-egraph-transit")
+    {
+      options.enable_reference_egraph_transit = true;
+    }
+    else if (arg == "--no-reference-egraph-transit")
+    {
+      options.enable_reference_egraph_transit = false;
     }
     else if (arg == "--visualize" || arg == "--visualization")
     {
@@ -7134,6 +7669,15 @@ void print_runtime_options(const RuntimeOptions &options)
             << std::endl;
   std::cout << "[Config] Initial transit fallbacks: "
             << (options.enable_initial_transit_fallbacks ? "enabled" : "disabled")
+            << std::endl;
+  std::cout << "[Config] Reference E-Graph transit: "
+            << (options.enable_reference_egraph_transit ? "enabled" : "disabled")
+            << ", epsilon=" << options.reference_egraph_epsilon
+            << ", spacing=" << options.reference_egraph_waypoint_spacing
+            << ", snap_radius=" << options.reference_egraph_snap_radius
+            << ", snap_yaw=" << options.reference_egraph_snap_yaw
+            << ", lookahead=" << options.reference_egraph_successor_lookahead
+            << ", max_nodes=" << options.reference_egraph_max_nodes
             << std::endl;
   std::cout << "[Config] Visualization: "
             << (options.enable_visualization ? "enabled" : "disabled")

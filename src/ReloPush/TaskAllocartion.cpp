@@ -154,6 +154,52 @@ std::pair<ReloPush::StatePathPtr,std::vector<size_t>> FinalAllocation::toSingleP
     return std::make_pair(std::make_shared<ReloPush::StatePath>(combined), path_sizes);
 }
 
+std::tuple<ReloPush::StatePathPtr, std::vector<size_t>, std::vector<bool>>
+FinalAllocation::toSinglePathPtrWithTypes(double interpolation_resolution)
+{
+    ReloPush::StatePath combined;
+    std::vector<size_t> path_sizes;
+    std::vector<bool> path_is_transfer;
+
+    auto append_segment = [&](const ReloPush::StatePathPtr &segment, bool is_transfer)
+    {
+        if (!segment || segment->empty())
+        {
+            return;
+        }
+
+        combined.insert(combined.end(), segment->begin(), segment->end());
+        path_sizes.push_back(segment->size());
+        path_is_transfer.push_back(is_transfer);
+    };
+
+    append_segment(firstApproachPath, false);
+
+    if (obsReloPaths)
+    {
+        for (const auto &obs_path : *obsReloPaths)
+        {
+            auto state_path = obs_path.toStatePath(0.2);
+            append_segment(state_path, obs_path.is_pushing);
+        }
+    }
+
+    for (auto &edge : paths)
+    {
+        for (const auto &edge_path : edge.paths)
+        {
+            if (!edge_path)
+            {
+                continue;
+            }
+            auto state_path = edge_path->toStatePath(interpolation_resolution);
+            append_segment(state_path, edge_path->is_pushing);
+        }
+    }
+
+    return std::make_tuple(std::make_shared<ReloPush::StatePath>(combined), path_sizes, path_is_transfer);
+}
+
 int FinalAllocation::countObsRelo()
 {
     return obsReloUpdate.size();
