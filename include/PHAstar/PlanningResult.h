@@ -39,6 +39,10 @@ struct PlanningDebugStats
     std::size_t reference_egraph_snap_rejected = 0;
     std::size_t reference_egraph_successor_accepted = 0;
     std::size_t reference_egraph_successor_rejected = 0;
+    std::size_t mha_anchor_expansions = 0;
+    std::size_t mha_reference_expansions = 0;
+    std::size_t mha_reference_queued = 0;
+    std::size_t mha_reference_skipped_far = 0;
     double best_dist = std::numeric_limits<double>::infinity();
     double best_yaw_error = std::numeric_limits<double>::infinity();
     Pose best_pose;

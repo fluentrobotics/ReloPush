@@ -60,9 +60,12 @@ void visualizeResults(std::vector<FinalAllocation> &finalSequence,
                            customTransitPathColor,
                            customPathArrowColor);
         viz->setSegmentTypeColors(customTransitPathColor, customTransferPathColor);
+        // LF_push includes the pushed object's radius for planning/contact checks.
+        // For visualization, draw the physical robot body so push segments do not
+        // appear to extend one object-radius farther than transit segments.
         viz->setRobotFootprintDimensions(finalSequence[i].snapshot.parameters.car_width,
                          finalSequence[i].snapshot.parameters.LF_nonpush,
-                         finalSequence[i].snapshot.parameters.LF_push,
+                         finalSequence[i].snapshot.parameters.LF_nonpush,
                          finalSequence[i].snapshot.parameters.LB);
 
         // 3) Define the path to visualize

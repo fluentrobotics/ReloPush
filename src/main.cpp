@@ -496,7 +496,8 @@ int main(int argc, char *argv[])
     // save_actions_for_visualizer(finalSequence,std::string(CMAKE_SOURCE_DIR) + "/result_actions_" + filename);
 
     // QApplication app(argc, argv);
-    const bool show_trajectory_window = vis && !mars_integration.enabled;
+    const bool show_trajectory_window = false; // vis && !mars_integration.enabled;
+
     QMainWindow window;
     if (show_trajectory_window)
     {

@@ -11,11 +11,12 @@ struct WorkspaceBoundary
     double yMax = 5.0;
 
     WorkspaceBoundary()
-    {}
+    {
+    }
 
     WorkspaceBoundary(double xMax_in, double yMax_in) : xMax(xMax_in), yMax(yMax_in)
-    {}
-
+    {
+    }
 };
 
 struct TurningRadiusPair
@@ -42,8 +43,8 @@ struct PlanningParameters
     float LF_push;
     float LF_nonpush;
     float LB;
-    double PrePush_dist = 0.54;//0.47; //0.54
-    double push_more = 0.14;
+    double PrePush_dist = 0.54; // 0.47; //0.54
+    // double push_more = 0;       // 0.14
 
     // Possibly other fields:
     // double normalModeThreshold;
@@ -70,7 +71,7 @@ namespace params
     // may change multiple times while running
     extern bool is_pushing;
 
-    extern bool use_mocap; //todo: parse as a parameter
+    extern bool use_mocap; // todo: parse as a parameter
 
     extern const bool reset_robot_pose;
 

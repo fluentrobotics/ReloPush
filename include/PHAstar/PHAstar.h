@@ -442,6 +442,132 @@ public:
                         generated.direction);
     }
 
+    Waypoint waypoint_from_node(const Node *node) const
+    {
+        Waypoint w;
+        w.time = node->t;
+        w.x = node->x;
+        w.y = node->y;
+        w.yaw = node->yaw;
+        w.linear_velocity = node->direction * speed;
+        w.steering_angle = node->steer;
+        return w;
+    }
+
+    void append_waypoint_if_distinct(std::vector<Waypoint> &waypoints,
+                                     const Waypoint &w) const
+    {
+        if (!waypoints.empty())
+        {
+            const Waypoint &last = waypoints.back();
+            if (std::abs(last.time - w.time) < 1e-9 &&
+                std::hypot(last.x - w.x, last.y - w.y) < 1e-9 &&
+                yaw_distance(last.yaw, w.yaw) < 1e-9)
+            {
+                return;
+            }
+        }
+        waypoints.push_back(w);
+    }
+
+    bool is_motion_primitive_link(const Node *parent, const Node *child) const
+    {
+        if (!parent || !child)
+            return false;
+        const double dt = child->t - parent->t;
+        if (dt <= 1e-9)
+            return false;
+        return std::abs(dt - params.time_step) <=
+               std::max(1e-6, params.time_step * 1e-6);
+    }
+
+    void append_sampled_motion_primitive(std::vector<Waypoint> &waypoints,
+                                         const Node *parent,
+                                         const Node *child) const
+    {
+        if (!parent || !child)
+            return;
+
+        const double dt = std::max(0.0, child->t - parent->t);
+        if (dt <= 1e-9)
+            return;
+
+        const int direction = child->direction;
+        const double steer = child->steer;
+        if (direction == 0)
+        {
+            append_waypoint_if_distinct(waypoints, waypoint_from_node(child));
+            return;
+        }
+
+        const int samples = std::max(params.collision_steps,
+                                     collision_samples_for_duration(dt));
+
+        for (int i = 1; i <= samples; ++i)
+        {
+            const double frac = static_cast<double>(i) / samples;
+            double x_i = parent->x;
+            double y_i = parent->y;
+            double yaw_i = parent->yaw;
+
+            {
+                const double steer_adjusted = (direction > 0) ? steer : -steer;
+                const double d = direction * (frac * std::abs(speed * dt));
+                if (std::abs(steer_adjusted) < 1e-5)
+                {
+                    x_i += d * std::cos(yaw_i);
+                    y_i += d * std::sin(yaw_i);
+                }
+                else
+                {
+                    const double R = wheel_base / std::tan(steer_adjusted);
+                    const double beta = d / R;
+                    x_i += R * (std::sin(yaw_i + beta) - std::sin(yaw_i));
+                    y_i += R * (std::cos(yaw_i) - std::cos(yaw_i + beta));
+                    yaw_i = mod2pi(yaw_i + beta);
+                }
+            }
+
+            Waypoint w;
+            w.time = parent->t + frac * dt;
+            w.x = x_i;
+            w.y = y_i;
+            w.yaw = mod2pi(yaw_i);
+            w.linear_velocity = direction * speed;
+            w.steering_angle = steer;
+            append_waypoint_if_distinct(waypoints, w);
+        }
+    }
+
+    std::vector<Waypoint> extract_parent_chain_path(Node *node) const
+    {
+        std::vector<Node *> chain;
+        for (Node *current = node; current; current = current->parent)
+            chain.push_back(current);
+        std::reverse(chain.begin(), chain.end());
+
+        std::vector<Waypoint> waypoints;
+        if (chain.empty())
+            return waypoints;
+
+        waypoints.reserve(chain.size());
+        append_waypoint_if_distinct(waypoints, waypoint_from_node(chain.front()));
+        for (std::size_t i = 1; i < chain.size(); ++i)
+        {
+            Node *parent = chain[i - 1];
+            Node *child = chain[i];
+            if (is_motion_primitive_link(parent, child))
+            {
+                append_sampled_motion_primitive(waypoints, parent, child);
+            }
+            else
+            {
+                append_waypoint_if_distinct(waypoints, waypoint_from_node(child));
+            }
+        }
+        return waypoints;
+    }
+
     CollisionInfo check_collision_at(const Node *node)
     {
         CollisionInfo result;
@@ -571,33 +697,6 @@ public:
             {
                 return false;
             }
-        }
-        return true;
-    }
-
-    bool check_collision_along_reference_edge(const Node *current,
-                                              const Node *target)
-    {
-        const double time_inc = std::max(0.0, target->t - current->t);
-        const int samples = std::max(params.collision_steps,
-                                     collision_samples_for_duration(time_inc));
-
-        for (int i = 1; i <= samples; ++i)
-        {
-            const double frac = static_cast<double>(i) / samples;
-            const double x = current->x + frac * (target->x - current->x);
-            const double y = current->y + frac * (target->y - current->y);
-            double dyaw = target->yaw - current->yaw;
-            while (dyaw > M_PI)
-                dyaw -= 2.0 * M_PI;
-            while (dyaw < -M_PI)
-                dyaw += 2.0 * M_PI;
-            const double yaw = mod2pi(current->yaw + frac * dyaw);
-            const double t = current->t + frac * time_inc;
-            Node sample(x, y, yaw, t, 0.0, 0.0, nullptr, 1);
-            CollisionInfo info = check_collision_at(&sample);
-            if (!info.is_valid)
-                return false;
         }
         return true;
     }
@@ -833,10 +932,16 @@ public:
         return h;
     }
 
-    double calc_heuristic(Node *node)
+    double calc_anchor_heuristic(Node *node) const
     {
         const Pose goal_pose(goal->x, goal->y, goal->yaw);
-        const double base_h = calc_base_heuristic_to_pose(node, goal_pose);
+        return calc_base_heuristic_to_pose(node, goal_pose);
+    }
+
+    double calc_reference_egraph_heuristic(Node *node) const
+    {
+        const Pose goal_pose(goal->x, goal->y, goal->yaw);
+        const double base_h = calc_anchor_heuristic(node);
         if (!reference_egraph.enabled || reference_egraph.nodes.empty())
             return base_h;
 
@@ -845,8 +950,38 @@ public:
                             ? epsilon * base_h
                             : std::numeric_limits<double>::infinity();
 
-        for (const auto &ref_node : reference_egraph.nodes)
+        std::vector<std::pair<double, std::size_t>> ranked_refs;
+        ranked_refs.reserve(reference_egraph.nodes.size());
+        for (std::size_t idx = 0; idx < reference_egraph.nodes.size(); ++idx)
         {
+            const Pose &pose = reference_egraph.nodes[idx].pose;
+            const double dist = std::hypot(node->x - pose.x, node->y - pose.y);
+            const double yaw_err = yaw_distance(node->yaw, pose.yaw);
+            ranked_refs.emplace_back(dist + 0.1 * min_turn_radius * yaw_err,
+                                     idx);
+        }
+
+        constexpr std::size_t kMaxReferenceHeuristicTargets = 8;
+        const std::size_t eval_count =
+            std::min(kMaxReferenceHeuristicTargets, ranked_refs.size());
+        if (ranked_refs.size() > eval_count)
+        {
+            std::partial_sort(
+                ranked_refs.begin(), ranked_refs.begin() + eval_count,
+                ranked_refs.end(),
+                [](const auto &a, const auto &b)
+                { return a.first < b.first; });
+        }
+        else
+        {
+            std::sort(ranked_refs.begin(), ranked_refs.end(),
+                      [](const auto &a, const auto &b)
+                      { return a.first < b.first; });
+        }
+
+        for (std::size_t rank = 0; rank < eval_count; ++rank)
+        {
+            const auto &ref_node = reference_egraph.nodes[ranked_refs[rank].second];
             const double h_to_ref =
                 calc_base_heuristic_to_pose(node, ref_node.pose);
             if (!std::isfinite(h_to_ref))
@@ -860,13 +995,26 @@ public:
         return best_h;
     }
 
-    int nearest_reference_index(const Node *node) const
+    double calc_heuristic(Node *node) const
+    {
+        return calc_anchor_heuristic(node);
+    }
+
+    int nearest_reference_index(const Node *node,
+                                double radius_override = -1.0,
+                                double yaw_override = -1.0) const
     {
         if (!reference_egraph.enabled)
             return -1;
 
-        const double max_dist = std::max(0.0, reference_egraph.options.snap_radius);
-        const double max_yaw = std::max(0.0, reference_egraph.options.snap_yaw);
+        const double max_dist =
+            std::max(0.0, radius_override >= 0.0
+                              ? radius_override
+                              : reference_egraph.options.snap_radius);
+        const double max_yaw =
+            std::max(0.0, yaw_override >= 0.0
+                              ? yaw_override
+                              : reference_egraph.options.snap_yaw);
         int best_idx = -1;
         double best_score = std::numeric_limits<double>::infinity();
         for (std::size_t i = 0; i < reference_egraph.nodes.size(); ++i)
@@ -888,10 +1036,17 @@ public:
         return best_idx;
     }
 
-    std::vector<std::pair<Node, bool>> generate_reference_successor_candidates(
+    struct ReferenceSuccessorCandidate
+    {
+        Node node;
+        bool is_snap = false;
+        ReedShepp::Path local_path;
+    };
+
+    std::vector<ReferenceSuccessorCandidate> generate_reference_successor_candidates(
         Node *current)
     {
-        std::vector<std::pair<Node, bool>> candidates;
+        std::vector<ReferenceSuccessorCandidate> candidates;
         const int nearest_idx = nearest_reference_index(current);
         if (nearest_idx < 0)
             return candidates;
@@ -899,6 +1054,7 @@ public:
         const int lookahead =
             std::max(1, reference_egraph.options.successor_lookahead);
 
+        const double maxc = 1.0 / std::max(min_turn_radius, 1e-6);
         auto append_candidate = [&](int ref_idx, bool is_snap)
         {
             if (ref_idx < 0 ||
@@ -915,18 +1071,44 @@ public:
                 yaw_distance(target.yaw, current->yaw) < 1e-6)
                 return;
 
-            const double duration =
-                distance / std::max(speed, 1e-6);
-            const double t = current->t + duration;
+            auto paths = ReedShepp::calc_paths(current->x, current->y,
+                                               current->yaw,
+                                               target.x, target.y,
+                                               target.yaw,
+                                               maxc,
+                                               params.rs_step_size,
+                                               wheel_base);
+            if (paths.empty())
+                return;
+            paths.erase(std::remove_if(paths.begin(), paths.end(),
+                                       [&](const ReedShepp::Path &path)
+                                       {
+                                           return !analytic_path_allowed_for_mode(path);
+                                       }),
+                        paths.end());
+            if (paths.empty())
+                return;
+            std::sort(paths.begin(), paths.end(),
+                      [](const ReedShepp::Path &a, const ReedShepp::Path &b)
+                      { return std::abs(a.L) < std::abs(b.L); });
+
+            const ReedShepp::Path &path = paths.front();
+            const double t = rs_arrival_time(current, path);
             if (t > params.max_time)
                 return;
 
             const double edge_cost =
-                reference_transition_cost(Pose(current->x, current->y, current->yaw),
-                                          target);
+                std::abs(path.L) +
+                0.1 * reference_transition_cost(
+                          Pose(current->x, current->y, current->yaw),
+                          target);
             Node candidate(target.x, target.y, target.yaw, t,
                            current->cost + edge_cost, 0.0, current, 1);
-            candidates.emplace_back(candidate, is_snap);
+            ReferenceSuccessorCandidate ref_candidate;
+            ref_candidate.node = candidate;
+            ref_candidate.is_snap = is_snap;
+            ref_candidate.local_path = path;
+            candidates.push_back(std::move(ref_candidate));
         };
 
         append_candidate(nearest_idx, true);
@@ -938,21 +1120,7 @@ public:
 
     std::vector<Waypoint> extract_path(Node *node, const std::vector<std::tuple<double, double, double>> &rs_path)
     {
-        std::vector<Waypoint> waypoints;
-        Node *current = node;
-        while (current)
-        {
-            Waypoint w;
-            w.time = current->t;
-            w.x = current->x;
-            w.y = current->y;
-            w.yaw = current->yaw;
-            w.linear_velocity = current->direction * speed;
-            w.steering_angle = current->steer;
-            waypoints.push_back(w);
-            current = current->parent;
-        }
-        std::reverse(waypoints.begin(), waypoints.end());
+        std::vector<Waypoint> waypoints = extract_parent_chain_path(node);
         if (!rs_path.empty())
         {
             double rs_t = waypoints.back().time;
@@ -969,7 +1137,7 @@ public:
                 w.yaw = mod2pi(yaw);
                 w.linear_velocity = speed;
                 w.steering_angle = 0.0;
-                waypoints.push_back(w);
+                append_waypoint_if_distinct(waypoints, w);
             }
         }
         return waypoints;
@@ -977,21 +1145,7 @@ public:
 
     std::vector<Waypoint> extract_path(Node *node, const ReedShepp::Path &rs_path)
     {
-        std::vector<Waypoint> waypoints;
-        Node *current = node;
-        while (current)
-        {
-            Waypoint w;
-            w.time = current->t;
-            w.x = current->x;
-            w.y = current->y;
-            w.yaw = current->yaw;
-            w.linear_velocity = current->direction * speed;
-            w.steering_angle = current->steer;
-            waypoints.push_back(w);
-            current = current->parent;
-        }
-        std::reverse(waypoints.begin(), waypoints.end());
+        std::vector<Waypoint> waypoints = extract_parent_chain_path(node);
 
         double rs_t = waypoints.empty() ? node->t : waypoints.back().time;
         for (size_t i = 1; i < rs_path.x.size(); ++i)
@@ -1008,7 +1162,7 @@ public:
             const int direction = (i < rs_path.directions.size()) ? rs_path.directions[i] : 1;
             w.linear_velocity = direction * speed;
             w.steering_angle = (i < rs_path.steers.size()) ? rs_path.steers[i] : 0.0;
-            waypoints.push_back(w);
+            append_waypoint_if_distinct(waypoints, w);
         }
 
         return waypoints;
@@ -1322,15 +1476,84 @@ public:
         using PQElem = std::tuple<double, uint64_t, Node *>;
         auto cmp = [](const PQElem &a, const PQElem &b)
         { return std::get<0>(a) > std::get<0>(b) || (std::get<0>(a) == std::get<0>(b) && std::get<1>(a) > std::get<1>(b)); };
-        std::priority_queue<PQElem, std::vector<PQElem>, decltype(cmp)> open_set(cmp);
+        std::priority_queue<PQElem, std::vector<PQElem>, decltype(cmp)> anchor_open_set(cmp);
+        std::priority_queue<PQElem, std::vector<PQElem>, decltype(cmp)> reference_open_set(cmp);
+        const bool use_reference_mha = reference_egraph.enabled && !is_transfer;
+        const double mha_selection_inflation =
+            std::max(1.5, reference_egraph.options.epsilon);
+        const double reference_aux_radius =
+            std::max(reference_egraph.options.snap_radius * 2.0,
+                     params.xy_resolution * 3.0);
+        const double reference_aux_yaw =
+            std::max(reference_egraph.options.snap_yaw,
+                     params.yaw_resolution * 2.0);
         uint64_t node_id = 0;
         size_t start_id = calc_grid_index(start.get());
         std::unordered_map<size_t, double> g_costs;
         g_costs[start_id] = 0.0;
-        open_set.emplace(calc_f(start.get()), node_id++, start.get());
+        auto open_size = [&]() -> std::size_t
+        {
+            return anchor_open_set.size() + reference_open_set.size();
+        };
+        auto is_reference_aux_relevant = [&](const Node *node) -> bool
+        {
+            return use_reference_mha &&
+                   nearest_reference_index(node, reference_aux_radius,
+                                           reference_aux_yaw) >= 0;
+        };
+        auto enqueue_reference_aux = [&](Node *node, bool force_reference)
+        {
+            if (!use_reference_mha)
+                return;
+            if (!force_reference && !is_reference_aux_relevant(node))
+            {
+                stats.mha_reference_skipped_far++;
+                return;
+            }
+
+            auto heuristic_start = PlannerClock::now();
+            double reference_h = calc_reference_egraph_heuristic(node);
+            add_elapsed(stats.heuristic_time_sec, heuristic_start);
+            if (!std::isfinite(reference_h))
+                return;
+
+            reference_open_set.emplace(node->cost + reference_h,
+                                       node_id++, node);
+            stats.mha_reference_queued++;
+        };
+        auto enqueue_node = [&](Node *node,
+                                double anchor_heuristic,
+                                bool force_reference = false)
+        {
+            anchor_open_set.emplace(node->cost + anchor_heuristic,
+                                    node_id++, node);
+            enqueue_reference_aux(node, force_reference);
+            stats.peak_open_size =
+                std::max<std::size_t>(stats.peak_open_size, open_size());
+        };
+
+        enqueue_node(start.get(), calc_anchor_heuristic(start.get()), true);
         stats.accepted_nodes = 1;
-        stats.peak_open_size = std::max<std::size_t>(stats.peak_open_size, open_set.size());
         std::unordered_set<size_t> closed_set;
+
+        auto discard_stale_entries =
+            [&](std::priority_queue<PQElem, std::vector<PQElem>, decltype(cmp)> &queue)
+        {
+            while (!queue.empty())
+            {
+                Node *node = std::get<2>(queue.top());
+                const size_t id = calc_grid_index(node);
+                auto g_it = g_costs.find(id);
+                if (closed_set.count(id) ||
+                    g_it == g_costs.end() ||
+                    node->cost > g_it->second)
+                {
+                    queue.pop();
+                    continue;
+                }
+                break;
+            }
+        };
 
         size_t iteration = 0; // for debug
 
@@ -1338,14 +1561,33 @@ public:
         backup_result.status = PlanningStatus::INTERNAL_ERROR;
         backup_result.waypoints.clear();
 
-        while (!open_set.empty())
+        while (!anchor_open_set.empty() ||
+               (use_reference_mha && !reference_open_set.empty()))
         {
+            discard_stale_entries(anchor_open_set);
+            if (use_reference_mha)
+                discard_stale_entries(reference_open_set);
+            if (anchor_open_set.empty() &&
+                (!use_reference_mha || reference_open_set.empty()))
+                break;
+
             iteration++;
             stats.iterations = iteration;
             if (iteration % 1000 == 0)
             {
-                std::cout << "A* iteration: " << iteration << ", open_set size: " << open_set.size()
-                          << ", current f-cost: " << std::get<0>(open_set.top()) << std::endl;
+                const double anchor_key = anchor_open_set.empty()
+                                              ? std::numeric_limits<double>::infinity()
+                                              : std::get<0>(anchor_open_set.top());
+                const double reference_key =
+                    (!use_reference_mha || reference_open_set.empty())
+                        ? std::numeric_limits<double>::infinity()
+                        : std::get<0>(reference_open_set.top());
+                std::cout << "A* iteration: " << iteration
+                          << ", anchor_open size: " << anchor_open_set.size()
+                          << ", reference_open size: " << reference_open_set.size()
+                          << ", anchor f-cost: " << anchor_key
+                          << ", reference f-cost: " << reference_key
+                          << std::endl;
             }
 
             // Early exit if search is taking too long
@@ -1366,9 +1608,30 @@ public:
                 }
             }
 
-            auto open_entry = open_set.top();
+            bool expand_reference_queue = false;
+            if (use_reference_mha && !reference_open_set.empty())
+            {
+                expand_reference_queue =
+                    anchor_open_set.empty() ||
+                    std::get<0>(reference_open_set.top()) <=
+                        mha_selection_inflation *
+                            std::get<0>(anchor_open_set.top());
+            }
+
+            PQElem open_entry =
+                expand_reference_queue ? reference_open_set.top()
+                                       : anchor_open_set.top();
             Node *current = std::get<2>(open_entry);
-            open_set.pop();
+            if (expand_reference_queue)
+            {
+                reference_open_set.pop();
+                stats.mha_reference_expansions++;
+            }
+            else
+            {
+                anchor_open_set.pop();
+                stats.mha_anchor_expansions++;
+            }
             // for debug
             local_explored.push_back(*current);
 
@@ -1636,7 +1899,7 @@ public:
                     return eval;
 
                 auto heuristic_start = PlannerClock::now();
-                eval.heuristic = calc_heuristic(&eval.node);
+                eval.heuristic = calc_anchor_heuristic(&eval.node);
                 add_elapsed(eval.heuristic_time_sec, heuristic_start);
                 return eval;
             };
@@ -1674,9 +1937,8 @@ public:
                     eval.node.x, eval.node.y, eval.node.yaw, eval.node.t,
                     eval.node.cost, eval.node.steer, current,
                     eval.node.direction);
-                open_set.emplace(new_g + eval.heuristic, node_id++, accepted_node);
+                enqueue_node(accepted_node, eval.heuristic);
                 stats.accepted_nodes++;
-                stats.peak_open_size = std::max<std::size_t>(stats.peak_open_size, open_set.size());
             };
 
             auto merge_reference_successors = [&]()
@@ -1686,11 +1948,17 @@ public:
 
                 auto ref_candidates =
                     generate_reference_successor_candidates(current);
-                for (const auto &[candidate, is_snap] : ref_candidates)
+                for (const auto &ref_candidate : ref_candidates)
                 {
+                    const Node &candidate = ref_candidate.node;
+                    const bool is_snap = ref_candidate.is_snap;
                     stats.generated_nodes++;
-                    if (!check_collision_along_reference_edge(current,
-                                                              &candidate))
+                    auto collision_start = PlannerClock::now();
+                    CollisionInfo rs_info = check_collision_along_rs(
+                        rs_points(ref_candidate.local_path), current->t);
+                    add_elapsed(stats.primitive_collision_time_sec,
+                                collision_start);
+                    if (!rs_info.is_valid)
                     {
                         stats.reject_collision++;
                         if (is_snap)
@@ -1725,24 +1993,53 @@ public:
 
                     g_costs[new_id] = new_g;
                     auto heuristic_start = PlannerClock::now();
-                    double heuristic = calc_heuristic(
+                    double heuristic = calc_anchor_heuristic(
                         const_cast<Node *>(&candidate));
                     add_elapsed(stats.heuristic_time_sec, heuristic_start);
 
-                    Node *accepted_node = this->new_node(
-                        candidate.x, candidate.y, candidate.yaw, candidate.t,
-                        candidate.cost, candidate.steer, current,
-                        candidate.direction);
-                    open_set.emplace(new_g + heuristic, node_id++,
-                                     accepted_node);
+                    Node *chain_parent = current;
+                    double chain_time = current->t;
+                    double chain_cost = current->cost;
+                    for (std::size_t i = 1;
+                         i < ref_candidate.local_path.x.size(); ++i)
+                    {
+                        const double dist = std::hypot(
+                            ref_candidate.local_path.x[i] -
+                                ref_candidate.local_path.x[i - 1],
+                            ref_candidate.local_path.y[i] -
+                                ref_candidate.local_path.y[i - 1]);
+                        chain_time += dist / std::max(speed, 1e-6);
+                        const int direction =
+                            (i < ref_candidate.local_path.directions.size())
+                                ? ref_candidate.local_path.directions[i]
+                                : 1;
+                        const double steer =
+                            (i < ref_candidate.local_path.steers.size())
+                                ? ref_candidate.local_path.steers[i]
+                                : 0.0;
+                        chain_cost += std::abs(dist);
+
+                        chain_parent = this->new_node(
+                            ref_candidate.local_path.x[i],
+                            ref_candidate.local_path.y[i],
+                            mod2pi(ref_candidate.local_path.yaw[i]),
+                            chain_time,
+                            chain_cost,
+                            steer,
+                            chain_parent,
+                            direction);
+                    }
+
+                    if (!chain_parent || chain_parent == current)
+                        continue;
+                    chain_parent->cost = candidate.cost;
+                    chain_parent->t = candidate.t;
+                    enqueue_node(chain_parent, heuristic, true);
                     stats.accepted_nodes++;
                     if (is_snap)
                         stats.reference_egraph_snap_accepted++;
                     else
                         stats.reference_egraph_successor_accepted++;
-                    stats.peak_open_size =
-                        std::max<std::size_t>(stats.peak_open_size,
-                                              open_set.size());
                 }
             };
 
@@ -1800,11 +2097,10 @@ public:
                     add_elapsed(stats.serial_merge_time_sec, merge_start);
 
                     auto heuristic_start = PlannerClock::now();
-                    double heuristic = calc_heuristic(new_node);
+                    double heuristic = calc_anchor_heuristic(new_node);
                     add_elapsed(stats.heuristic_time_sec, heuristic_start);
-                    open_set.emplace(new_g + heuristic, node_id++, new_node);
+                    enqueue_node(new_node, heuristic);
                     stats.accepted_nodes++;
-                    stats.peak_open_size = std::max<std::size_t>(stats.peak_open_size, open_set.size());
                 }
             }
 

@@ -196,8 +196,9 @@ public:
         EdgePaths.clear();
         // parse trajectories
         //  each edge-path
-        for(auto& epath : fa.paths)
+        for(size_t edge_idx = 0; edge_idx < fa.paths.size(); ++edge_idx)
         {
+            auto& epath = fa.paths[edge_idx];
             // trajectory (normal: one transfer, prerelo: transfer-transit-transfer)
             for(auto& path : epath.paths)
             {
@@ -214,6 +215,21 @@ public:
                                                     approach_goal_entity,
                                                     !preserve_raw_transit_goal);
                 EdgePaths.emplace_back(traj_in); // time not assigned yet (needs robot first)
+            }
+
+            // Transit paths between edge groups are stored separately from
+            // EdgeData::paths. They are required to connect the end of one
+            // edge group to the start of the next without teleporting.
+            if (edge_idx < fa.edgeTransitPaths.size() &&
+                fa.edgeTransitPaths[edge_idx] &&
+                !fa.edgeTransitPaths[edge_idx]->empty())
+            {
+                auto connector_path = std::make_shared<EdgePath>(
+                    false, fa.edgeTransitPaths[edge_idx]);
+                auto connector_traj = ReloPushPath2TrajPtr(
+                    connector_path, nullptr, nullptr, 0.0,
+                    sourcePrePushDistance, nullptr, false);
+                EdgePaths.emplace_back(connector_traj);
             }
         }
     }
