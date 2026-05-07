@@ -2897,13 +2897,49 @@ bool is_parking_pose_safe_until_last_timestamp(EntityMeta *entity,
 
 void project_waypoints_inside_bounds(std::vector<Waypoint> &waypoints,
                                      RobotMeta *robot,
-                                     const Params &params)
+                                     const Params &params,
+                                     EntityMeta *transferred_object = nullptr)
 {
   if (!robot)
     return;
 
   for (auto &wp : waypoints)
   {
+    if (params.robot_boundary_origin_only)
+    {
+      double lower_dx = params.min_x - wp.x;
+      double upper_dx = params.max_x - wp.x;
+      double lower_dy = params.min_y - wp.y;
+      double upper_dy = params.max_y - wp.y;
+
+      if (transferred_object)
+      {
+        const Pose object_pose =
+            TimeTable::compute_object_pose(wp, robot->size,
+                                           transferred_object->size);
+        lower_dx = std::max(lower_dx, params.min_x - object_pose.x);
+        upper_dx = std::min(upper_dx, params.max_x - object_pose.x);
+        lower_dy = std::max(lower_dy, params.min_y - object_pose.y);
+        upper_dy = std::min(upper_dy, params.max_y - object_pose.y);
+      }
+
+      if (lower_dx <= upper_dx)
+      {
+        if (lower_dx > 0.0)
+          wp.x += lower_dx;
+        else if (upper_dx < 0.0)
+          wp.x += upper_dx;
+      }
+      if (lower_dy <= upper_dy)
+      {
+        if (lower_dy > 0.0)
+          wp.y += lower_dy;
+        else if (upper_dy < 0.0)
+          wp.y += upper_dy;
+      }
+      continue;
+    }
+
     Corners corners = get_corners(wp.x, wp.y, wp.yaw,
                                   robot->size.front_length,
                                   robot->size.rear_length,
@@ -5771,7 +5807,8 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
         if (traj_robot && !traj->waypoints.empty())
         {
           auto projected = traj->waypoints;
-          project_waypoints_inside_bounds(projected, traj_robot, params);
+          project_waypoints_inside_bounds(projected, traj_robot, params,
+                                          traj->transferred_object);
 
           double max_shift = 0.0;
           for (size_t k = 0; k < projected.size(); ++k)
@@ -7424,7 +7461,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/result_seq_ReloPush-BOSS_8_objects.txt_ind10.b64";
+         "/result_seq_ReloPush-BOSS_8_objects.txt_ind28.b64";
 }
 
 bool load_data(
