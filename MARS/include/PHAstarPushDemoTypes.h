@@ -18,8 +18,12 @@ struct TaskExecutionStats
   double total_waiting = 0.0;
   int delayed_segments = 0;
   bool has_initial_transit = false;
+  Pose initial_transit_start_pose;
+  Pose initial_transit_target_pose;
+  double initial_transit_requested_start_time = -1.0;
   double initial_transit_start_time = -1.0;
   double initial_transit_end_time = -1.0;
+  bool initial_transit_delay_scheduled = false;
   bool has_waiting_pose_conflict = false;
   Pose waiting_pose;
   double waiting_conflict_time = -1.0;

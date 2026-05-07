@@ -7064,6 +7064,8 @@ bool process_task_execution(
   }
   task.TaskStartPoseRobot =
       compute_adjusted_task_start_pose(task, robot, robot_avail_time, timetable);
+  const Pose initial_transit_start_pose = timetable.get_pose(robot, robot_avail_time);
+  const Pose initial_transit_target_pose = task.TaskStartPoseRobot;
   std::vector<Waypoint> initial_transit_reference =
       waypoints_from_relopush_state_path(task.firstApproachPath);
   double initial_transit_abs_start = -1.0;
@@ -7079,8 +7081,13 @@ bool process_task_execution(
   if (out_stats && initial_transit_abs_start >= 0.0)
   {
     out_stats->has_initial_transit = true;
+    out_stats->initial_transit_start_pose = initial_transit_start_pose;
+    out_stats->initial_transit_target_pose = initial_transit_target_pose;
+    out_stats->initial_transit_requested_start_time = robot_avail_time;
     out_stats->initial_transit_start_time = initial_transit_abs_start;
     out_stats->initial_transit_end_time = initial_transit_abs_end;
+    out_stats->initial_transit_delay_scheduled =
+        initial_transit_abs_start > robot_avail_time + 1e-6;
   }
   const Pose initial_wait_pose = timetable.get_pose(robot, initial_transit_abs_end);
   bool initial_wait_gap_checked = false;
@@ -7417,7 +7424,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/result_seq_ReloPush-BOSS_8_objects.txt_ind5.b64";
+         "/result_seq_ReloPush-BOSS_8_objects.txt_ind10.b64";
 }
 
 bool load_data(
@@ -8339,20 +8346,25 @@ bool attempt_task_with_candidate(
       return true;
     }
 
-    if (attempt_stats.has_waiting_pose_conflict &&
-        retry_idx < kMaxPostValidationDelayRetries)
+    if (attempt_stats.has_waiting_pose_conflict)
     {
-      task_start_delay += kPostValidationRetryDelay;
-      std::cout << "         Waiting pose conflicts with earlier reserved occupancy";
+      const bool delay_only_recovery_was_used =
+          attempt_stats.initial_transit_delay_scheduled ||
+          attempt_stats.delayed_segments > 0;
+
+      if (delay_only_recovery_was_used)
+      {
+        std::cout << "         Reusing delayed initial transit; no full PHAStar rerun.";
+      }
+      else
+      {
+        std::cout << "         No reusable delayed initial transit was recorded; "
+                  << "using self safe parking rather than small delay retries.";
+      }
+
       if (!attempt_stats.waiting_conflict_stage.empty())
-        std::cout << " before " << attempt_stats.waiting_conflict_stage;
-      std::cout
-          << "."
-          << " Adding " << std::fixed << std::setprecision(2)
-          << kPostValidationRetryDelay
-          << "s task-start delay and retrying the same robot."
-          << std::endl;
-      continue;
+        std::cout << " Conflict before " << attempt_stats.waiting_conflict_stage;
+      std::cout << "." << std::endl;
     }
 
     if (attempt_stats.has_waiting_pose_conflict &&
@@ -8367,7 +8379,8 @@ bool attempt_task_with_candidate(
       Trajectory blocked_hint =
           make_single_pose_hint(attempt_stats.waiting_pose, conflict_time);
 
-      std::cout << "         Delay retries exhausted while "
+      std::cout << "         Repeated waiting conflict after reuse; switching to self safe parking. "
+                << "Delay-only scheduling already reached the conflicting wait pose while "
                 << cand_robot->name
                 << " waits before continuing the task."
                 << (attempt_stats.waiting_conflict_stage.empty()
