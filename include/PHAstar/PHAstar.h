@@ -243,6 +243,7 @@ public:
     const std::unordered_map<std::string, EntityMeta *> *entities;
     ObjectMeta *transferred = nullptr;
     EntityMeta *ignored_entity = nullptr;
+    EntityMeta *terminal_contact_entity = nullptr;
     bool is_transfer;
     bool ignore_other_robots = false; // New flag for ghost planning
     bool suppress_debug_popup = false;
@@ -644,6 +645,13 @@ public:
                     is_valid_transfer_contact_pose(robot_pose,
                                                    dynamic_cast<ObjectMeta *>(collision_result.colliding_entity),
                                                    it_pose->second))
+                {
+                    return {true, "Valid", "", t};
+                }
+                if (it_pose != poses.end() &&
+                    is_terminal_approach_contact_pose(
+                        robot_pose, collision_result.colliding_entity,
+                        it_pose->second))
                 {
                     return {true, "Valid", "", t};
                 }
@@ -1172,7 +1180,7 @@ public:
     // robot, goal, timetable, entities, params, is_transfer, obj_name, start_time
     PHAStar(RobotMeta *r, const Pose &goal_pose, TimeTable *tt, const std::unordered_map<std::string, EntityMeta *> *ents,
             const Params &p, bool trans = false, const std::string &obj_name = "", double start_t = 0.0,
-            const std::string &debug_kind = "")
+            const std::string &debug_kind = "", const std::string &terminal_contact_name = "")
         : robot(r), timetable(tt), entities(ents), is_transfer(trans), debug_plan_kind(debug_kind), params(p)
     {
         // Update initial pose if chaining (but for now, assume caller updates r->initial_pose if needed)
@@ -1192,6 +1200,14 @@ public:
             if (!obj_name.empty() && it != entities->end())
             {
                 ignored_entity = it->second;
+            }
+        }
+        if (!terminal_contact_name.empty())
+        {
+            auto terminal_it = entities->find(terminal_contact_name);
+            if (terminal_it != entities->end())
+            {
+                terminal_contact_entity = terminal_it->second;
             }
         }
 
@@ -1330,6 +1346,32 @@ public:
                                               pose_it->second);
     }
 
+    bool is_terminal_approach_contact_pose(const Pose &robot_pose,
+                                           EntityMeta *entity,
+                                           const Pose &entity_pose) const
+    {
+        if (is_transfer || !terminal_contact_entity ||
+            entity != terminal_contact_entity || !entity ||
+            entity->type != EntityType::OBJECT)
+        {
+            return false;
+        }
+
+        const double goal_dist =
+            std::hypot(robot_pose.x - goal->x, robot_pose.y - goal->y);
+        const double goal_yaw =
+            std::abs(pi_2_pi(robot_pose.yaw - goal->yaw));
+        const double dist_tol = std::max(0.05, params.xy_resolution);
+        const double yaw_tol = std::max(0.20, params.yaw_resolution);
+        if (goal_dist > dist_tol || goal_yaw > yaw_tol)
+        {
+            return false;
+        }
+
+        return is_valid_transfer_contact_pose(
+            robot_pose, dynamic_cast<ObjectMeta *>(entity), entity_pose);
+    }
+
     // Validate start/goal and return detailed result
     PlanningResult validate_start_goal(double start_t, const Pose &goal_pose)
     {
@@ -1376,6 +1418,15 @@ public:
             if (ent_it != entities->end())
             {
                 EntityMeta *coll_ent = ent_it->second;
+                auto poses = timetable->get_poses(start_t);
+                auto pose_it = poses.find(coll_ent);
+                if (pose_it != poses.end() &&
+                    is_terminal_approach_contact_pose(goal_pose, coll_ent,
+                                                      pose_it->second))
+                {
+                    res.status = PlanningStatus::SUCCESS;
+                    return res;
+                }
                 // If the blocker is dynamic, let conflict resolution handle it (wait/relocate/detour).
                 if (timetable->is_entity_static_after(start_t, coll_ent))
                 {

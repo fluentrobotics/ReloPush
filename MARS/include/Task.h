@@ -202,14 +202,14 @@ public:
             // trajectory (normal: one transfer, prerelo: transfer-transit-transfer)
             for(auto& path : epath.paths)
             {
-                // PRE_RELOCATION middle transit endpoints already encode the
-                // intended repositioning goal. Remapping them around the live
-                // target object can put the goal inside that object.
+                // PRE_RELOCATION middle transits keep the serialized endpoint
+                // orientation, but still approach the target object so MARS can
+                // recompute the goal offset from the live object pose and robot
+                // dimensions.
                 const bool preserve_raw_transit_goal =
                     epath.mode == ConnectionMode::PRE_RELOCATION &&
                     path && !path->is_pushing;
-                EntityMeta* approach_goal_entity =
-                    preserve_raw_transit_goal ? nullptr : targetObject;
+                EntityMeta* approach_goal_entity = targetObject;
                 auto traj_in = ReloPushPath2TrajPtr(path, nullptr, targetObject,
                                                     0.0, sourcePrePushDistance,
                                                     approach_goal_entity,

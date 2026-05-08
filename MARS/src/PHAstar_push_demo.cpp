@@ -1643,16 +1643,27 @@ TimeTableVerificationResult verify_timetable_collision_free(
     const Params &params,
     const std::vector<TransferContactWindow> &transfer_windows,
     double from_time = 0.0,
+    double to_time = -1.0,
     double step = -1.0)
 {
   TimeTableVerificationResult result;
   double max_t = timetable.get_max_time();
+  if (to_time >= from_time)
+  {
+    max_t = std::min(max_t, to_time);
+  }
   if (step <= 0.0)
   {
     step = shared_collision_check_step(params);
   }
 
-  for (double t = from_time; t <= max_t + 1e-9; t += step)
+  double first_sample_time = from_time;
+  if (from_time > 0.0)
+  {
+    first_sample_time = std::ceil((from_time - 1e-9) / step) * step;
+  }
+
+  for (double t = first_sample_time; t <= max_t + 1e-9; t += step)
   {
     auto poses = timetable.get_poses(t);
 
@@ -3129,6 +3140,15 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
                             double *out_last_check_time = nullptr,
                             IdleBlockerRelocationPolicy idle_blocker_policy =
                                 IdleBlockerRelocationPolicy::RelocateAnyIdle);
+
+bool validate_pre_commit_trajectory(
+    TimeTable &trial_timetable,
+    const Trajectory &traj,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params,
+    const std::vector<TransferContactWindow> *transfer_windows,
+    CollisionInfo *out_collision,
+    std::string *out_failure_reason);
 
 double timetable_delay_search_horizon(double earliest_start,
                                       const TimeTable &timetable,
@@ -5946,7 +5966,22 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
     stats->delayed_segments += 1;
   }
 
-  timetable.add_trajectory(retract_traj);
+  TimeTable trial_timetable = timetable;
+  trial_timetable.add_trajectory(retract_traj);
+
+  CollisionInfo precommit_collision;
+  std::string precommit_failure_reason;
+  if (!validate_pre_commit_trajectory(
+          trial_timetable, retract_traj, entities, params, nullptr,
+          &precommit_collision, &precommit_failure_reason))
+  {
+    if (out_failure_reason)
+      *out_failure_reason = precommit_failure_reason;
+    std::cerr << "  [Retract] Failed strict pre-commit validation." << std::endl;
+    return false;
+  }
+
+  timetable = std::move(trial_timetable);
   std::ostringstream retract_msg;
   retract_msg << "  [Retract] Backing up " << std::fixed
               << std::setprecision(2) << actual_retract_dist << "m ("
@@ -6022,7 +6057,8 @@ SegmentCandidateValidation validate_segment_candidate(
     double start_time,
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
-    const Params &params)
+    const Params &params,
+    EntityMeta *terminal_approach_entity = nullptr)
 {
   SegmentCandidateValidation validation;
   validation.first_hard_collision = {true, "Valid", "", start_time};
@@ -6082,6 +6118,17 @@ SegmentCandidateValidation validate_segment_candidate(
         return true;
       }
     }
+    if (terminal_approach_entity && collider == terminal_approach_entity &&
+        collider->type == EntityType::OBJECT &&
+        rel_t >= duration - 0.3 - 1e-9)
+    {
+      auto it = others.find(collider);
+      if (it != others.end() &&
+          is_valid_transfer_contact(robot, robot_pose, collider, it->second))
+      {
+        return true;
+      }
+    }
 
     CollisionInfo info{false, collision_result.collision_type + " Collision",
                        collider_name, abs_t};
@@ -6099,12 +6146,21 @@ SegmentCandidateValidation validate_segment_candidate(
     return false;
   };
 
-  double rel_t = 0.0;
-  while (rel_t < duration)
+  if (!validate_sample(0.0))
+    return validation;
+
+  double first_abs_t = start_time;
+  if (dt > 1e-9 && start_time > 0.0)
   {
+    first_abs_t = std::ceil((start_time - 1e-9) / dt) * dt;
+  }
+
+  for (double abs_t = first_abs_t; abs_t < start_time + duration - 1e-9;
+       abs_t += dt)
+  {
+    const double rel_t = std::max(0.0, abs_t - start_time);
     if (!validate_sample(rel_t))
       return validation;
-    rel_t += dt;
   }
   if (!validate_sample(duration))
     return validation;
@@ -6349,6 +6405,7 @@ bool replan_transit_segment(
     const RuntimeOptions &options,
     std::vector<Waypoint> &out_waypoints_rel,
     const SegmentReplanContext &context = SegmentReplanContext{},
+    EntityMeta *terminal_approach_entity = nullptr,
     const std::vector<Waypoint> *reference_waypoints = nullptr)
 {
   Pose start_pose = timetable.get_pose(robot, start_time);
@@ -6383,7 +6440,8 @@ bool replan_transit_segment(
 
     report.candidate_tested = true;
     report.validation = validate_segment_candidate(
-        candidate_rel, robot, start_time, timetable, entities, params);
+        candidate_rel, robot, start_time, timetable, entities, params,
+        terminal_approach_entity);
     report.accepted_for_scheduling = report.validation.hard_valid;
     if (!report.validation.hard_valid)
     {
@@ -6406,8 +6464,10 @@ bool replan_transit_segment(
   {
     Color::println("[PHAStar] Attempting search method: " + stage, Color::CYAN);
     robot->initial_pose = plan_start_pose;
+    const std::string terminal_contact_name =
+        terminal_approach_entity ? terminal_approach_entity->name : "";
     PHAStar planner(robot, goal_pose, &timetable, &entities, plan_params,
-                    false, "", plan_start_time, stage);
+                    false, "", plan_start_time, stage, terminal_contact_name);
     planner.set_ignore_other_robots(true);
     planner.max_search_iterations = max_iter;
     planner.set_planner_expansion_threads(options.planner_expansion_threads);
@@ -6650,6 +6710,7 @@ bool prepare_segment_waypoints_for_scheduling(
     if (!replan_transit_segment(robot, segment_goal, segment_ready_time,
                                 timetable, entities, params, options, replanned_rel,
                                 replan_context,
+                                approach_goal_entity,
                                 &reference_waypoints))
     {
       std::cout << fallback_message << std::endl;
@@ -6730,6 +6791,85 @@ bool replan_transfer_segment_after_failed_schedule(
             << traj->waypoints.size()
             << " forward-only waypoints; retrying scheduling." << std::endl;
   return true;
+}
+
+std::vector<TransferContactWindow> transfer_windows_with_candidate(
+    const std::vector<TransferContactWindow> *transfer_windows,
+    const Trajectory &traj)
+{
+  std::vector<TransferContactWindow> windows;
+  if (transfer_windows)
+    windows = *transfer_windows;
+
+  if (traj.is_transfer && traj.entity && traj.transferred_object &&
+      !traj.waypoints.empty())
+  {
+    TransferContactWindow w;
+    w.robot = traj.entity;
+    w.object = traj.transferred_object;
+    w.start_time = traj.start_time;
+    w.end_time = traj.start_time + traj.waypoints.back().time;
+    windows.push_back(w);
+  }
+
+  return windows;
+}
+
+bool validate_pre_commit_trajectory(
+    TimeTable &trial_timetable,
+    const Trajectory &traj,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params,
+    const std::vector<TransferContactWindow> *transfer_windows,
+    CollisionInfo *out_collision,
+    std::string *out_failure_reason)
+{
+  const double start_time = traj.start_time;
+  const double end_time = traj.waypoints.empty()
+                              ? start_time
+                              : start_time + traj.waypoints.back().time;
+  const auto validation_windows =
+      transfer_windows_with_candidate(transfer_windows, traj);
+  auto verify = verify_timetable_collision_free(
+      trial_timetable, entities, params, validation_windows,
+      start_time, end_time);
+
+  if (verify.is_valid)
+    return true;
+
+  if (out_collision)
+  {
+    std::string entity_name = verify.entity_a;
+    if (traj.entity && entity_name == traj.entity->name)
+      entity_name = verify.entity_b;
+    if (entity_name == "Boundary" && verify.entity_b != "Boundary")
+      entity_name = verify.entity_b;
+
+    *out_collision = CollisionInfo{
+        false, verify.reason, entity_name, verify.time};
+  }
+
+  std::ostringstream oss;
+  oss << "pre-commit validation failed";
+  if (!verify.reason.empty())
+    oss << " (" << verify.reason;
+  if (!verify.entity_a.empty() || !verify.entity_b.empty())
+  {
+    oss << " between " << verify.entity_a << " and " << verify.entity_b;
+  }
+  if (!verify.reason.empty())
+    oss << ")";
+  oss << " at t=" << std::fixed << std::setprecision(2) << verify.time;
+
+  if (out_failure_reason)
+    *out_failure_reason = oss.str();
+
+  std::cout << "  [PreCommit] Rejected trajectory: collision at t="
+            << std::fixed << std::setprecision(2) << verify.time
+            << " between " << verify.entity_a
+            << " and " << verify.entity_b << std::endl;
+
+  return false;
 }
 
 bool reserve_and_commit_trajectory(
@@ -6823,6 +6963,18 @@ bool reserve_and_commit_trajectory(
                 robot);
         if (park_conflict.is_valid)
         {
+          CollisionInfo precommit_collision;
+          if (!validate_pre_commit_trajectory(
+                  trial_timetable, *traj, entities, params, transfer_windows,
+                  &precommit_collision, &transfer_failure_reason))
+          {
+            if (out_last_collision)
+              *out_last_collision = precommit_collision;
+            if (out_last_check_time)
+              *out_last_check_time = precommit_collision.time;
+            break;
+          }
+
           accumulate_wait_stats(stats,
                                 std::max(0.0, safe_start_time - earliest_start));
           if (out_last_collision)
@@ -6961,7 +7113,25 @@ bool reserve_and_commit_trajectory(
   }
 
   traj->start_time = safe_start_time;
-  timetable.add_trajectory(*traj);
+  TimeTable trial_timetable = timetable;
+  trial_timetable.add_trajectory(*traj);
+
+  CollisionInfo precommit_collision;
+  std::string precommit_failure_reason;
+  if (!validate_pre_commit_trajectory(
+          trial_timetable, *traj, entities, params, transfer_windows,
+          &precommit_collision, &precommit_failure_reason))
+  {
+    if (out_last_collision)
+      *out_last_collision = precommit_collision;
+    if (out_last_check_time)
+      *out_last_check_time = precommit_collision.time;
+    if (out_failure_reason)
+      *out_failure_reason = precommit_failure_reason;
+    return false;
+  }
+
+  timetable = std::move(trial_timetable);
   append_transfer_window_if_needed(*traj, transfer_windows);
   return true;
 }
@@ -7461,7 +7631,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/result_seq_ReloPush-BOSS_8_objects.txt_ind28.b64";
+         "/result_seq_ReloPush-BOSS_8_objects.txt_ind39.b64";
 }
 
 bool load_data(
