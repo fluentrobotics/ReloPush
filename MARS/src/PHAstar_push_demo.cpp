@@ -1542,6 +1542,32 @@ bool is_valid_transfer_contact(EntityMeta *e1, const Pose &p1,
   return true;
 }
 
+bool is_valid_terminal_approach_contact(RobotMeta *robot,
+                                        const Pose &robot_pose,
+                                        const Pose &goal_pose,
+                                        EntityMeta *collider,
+                                        const Pose &collider_pose,
+                                        EntityMeta *terminal_approach_entity,
+                                        const Params &params)
+{
+  if (!robot || !terminal_approach_entity || collider != terminal_approach_entity ||
+      !collider || collider->type != EntityType::OBJECT)
+  {
+    return false;
+  }
+
+  const double goal_dist =
+      std::hypot(robot_pose.x - goal_pose.x, robot_pose.y - goal_pose.y);
+  const double goal_yaw =
+      std::abs(pi_2_pi(robot_pose.yaw - goal_pose.yaw));
+  const double dist_tol = std::max(0.05, params.xy_resolution);
+  const double yaw_tol = std::max(0.20, params.yaw_resolution);
+  if (goal_dist > dist_tol || goal_yaw > yaw_tol)
+    return false;
+
+  return is_valid_transfer_contact(robot, robot_pose, collider, collider_pose);
+}
+
 std::string find_valid_start_contact_entity(
     RobotMeta *robot,
     const Pose &start_pose,
@@ -3105,7 +3131,8 @@ enum class IdleBlockerRelocationPolicy
 // ==========================================
 CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double start_time,
                                                   TimeTable &timetable, const Params &params,
-                                                  bool verbose);
+                                                  bool verbose,
+                                                  EntityMeta *terminal_approach_entity = nullptr);
 
 CollisionInfo check_collision_trajectory_against_entity(
     const Trajectory &traj,
@@ -3164,12 +3191,16 @@ bool check_collision_trajectory(const Trajectory &traj, double start_time,
 {
   if (traj.waypoints.empty())
     return true;
-  return check_collision_trajectory_detailed(traj, start_time, timetable, params, verbose).is_valid;
+  return check_collision_trajectory_detailed(
+             traj, start_time, timetable, params, verbose,
+             traj.approach_goal_entity)
+      .is_valid;
 }
 
 CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double start_time,
                                                   TimeTable &timetable, const Params &params,
-                                                  bool verbose = false)
+                                                  bool verbose,
+                                                  EntityMeta *terminal_approach_entity)
 {
   if (traj.waypoints.empty())
     return {true, "Empty Trajectory", "", start_time};
@@ -3236,22 +3267,122 @@ CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double
         nullptr);
     if (collision_result.has_collision)
     {
-      if (t <= 0.3 && collision_result.colliding_entity &&
-          collision_result.colliding_entity->type == EntityType::OBJECT)
+      EntityMeta *collider = collision_result.colliding_entity;
+      if (t <= 0.3 && collider &&
+          collider->type == EntityType::OBJECT)
       {
-        auto it = others.find(collision_result.colliding_entity);
+        auto it = others.find(collider);
         if (it != others.end() && is_valid_transfer_contact(robot, r_pose, it->first, it->second))
+        {
+          continue;
+        }
+      }
+      if (!traj.is_transfer && terminal_approach_entity && collider &&
+          collider == terminal_approach_entity &&
+          collider->type == EntityType::OBJECT)
+      {
+        auto it = others.find(collider);
+        const Pose terminal_pose = traj.waypoints.back();
+        if (it != others.end() &&
+            is_valid_terminal_approach_contact(
+                robot, r_pose, terminal_pose, collider, it->second,
+                terminal_approach_entity, params))
         {
           continue;
         }
       }
 
       return {false, collision_result.collision_type + " Collision",
-              collision_result.colliding_entity ? collision_result.colliding_entity->name : "",
+              collider ? collider->name : "",
               abs_t};
     }
   }
   return {true, "Valid", "", 0.0};
+}
+
+CollisionInfo check_terminal_hold_detailed(
+    const Trajectory &traj,
+    double start_time,
+    TimeTable &timetable,
+    const Params &params,
+    EntityMeta *terminal_approach_entity = nullptr)
+{
+  RobotMeta *robot = dynamic_cast<RobotMeta *>(traj.entity);
+  if (!robot || traj.waypoints.empty())
+    return {true, "No terminal hold to evaluate", "", start_time};
+
+  const double duration = std::max(0.0, traj.waypoints.back().time);
+  const double arrival_time = start_time + duration;
+  const double horizon = timetable.get_max_time();
+  if (horizon <= arrival_time + 1e-9)
+    return {true, "Valid", "", arrival_time};
+
+  const Pose goal_pose = traj.waypoints.back();
+  const double dt = shared_collision_check_step(params);
+  double first_sample_time = arrival_time + dt;
+  if (first_sample_time > 0.0)
+  {
+    first_sample_time = std::ceil((first_sample_time - 1e-9) / dt) * dt;
+  }
+
+  for (double abs_t = first_sample_time; abs_t <= horizon + 1e-9; abs_t += dt)
+  {
+    CollisionGeometry r_geom = setup_collision_geometry_for_type(
+        goal_pose, EntityType::ROBOT, robot->size, params);
+    CollisionGeometry r_geom_bounds =
+        setup_collision_geometry(goal_pose, robot->size, 1.0);
+
+    if (check_robot_bounds_collision(goal_pose, r_geom_bounds.corners, params))
+    {
+      return {false, "Boundary Collision", "Boundary", abs_t};
+    }
+
+    auto others = timetable.get_poses(abs_t);
+    auto collision_result = check_multiple_entities_collision(
+        r_geom, goal_pose,
+        nullptr, nullptr,
+        others,
+        params,
+        robot,
+        nullptr,
+        nullptr);
+    if (!collision_result.has_collision)
+      continue;
+
+    EntityMeta *collider = collision_result.colliding_entity;
+    if (terminal_approach_entity && collider == terminal_approach_entity &&
+        collider && collider->type == EntityType::OBJECT)
+    {
+      auto it = others.find(collider);
+      if (it != others.end() &&
+          is_valid_terminal_approach_contact(
+              robot, goal_pose, goal_pose, collider, it->second,
+              terminal_approach_entity, params))
+      {
+        continue;
+      }
+    }
+
+    return {false, collision_result.collision_type + " Collision",
+            collider ? collider->name : "", abs_t};
+  }
+
+  return {true, "Valid", "", 0.0};
+}
+
+CollisionInfo check_trajectory_motion_and_terminal_hold_detailed(
+    const Trajectory &traj,
+    double start_time,
+    TimeTable &timetable,
+    const Params &params,
+    EntityMeta *terminal_approach_entity = nullptr)
+{
+  CollisionInfo motion = check_collision_trajectory_detailed(
+      traj, start_time, timetable, params, false, terminal_approach_entity);
+  if (!motion.is_valid)
+    return motion;
+  return check_terminal_hold_detailed(
+      traj, start_time, timetable, params, terminal_approach_entity);
 }
 
 CollisionInfo check_collision_trajectory_against_entity(
@@ -3404,7 +3535,8 @@ double find_wait_only_start_time(
              1e-9)
   {
     CollisionInfo col_info =
-        check_collision_trajectory_detailed(traj, check_time, timetable, params, false);
+        check_trajectory_motion_and_terminal_hold_detailed(
+            traj, check_time, timetable, params, traj.approach_goal_entity);
     last_collision = col_info;
     last_check_time = check_time;
 
@@ -5680,7 +5812,9 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
          timetable_delay_search_horizon(earliest_start, timetable, step) +
              1e-9)
   {
-    CollisionInfo col_info = check_collision_trajectory_detailed(*traj, check_time, timetable, params, false);
+    CollisionInfo col_info =
+        check_trajectory_motion_and_terminal_hold_detailed(
+            *traj, check_time, timetable, params, traj->approach_goal_entity);
     last_collision = col_info;
     last_check_time = check_time;
 
@@ -5692,8 +5826,9 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
       {
         const double buffered_start = check_time + kExtraDelayBuffer;
         CollisionInfo buffered_info =
-            check_collision_trajectory_detailed(*traj, buffered_start,
-                                                timetable, params, false);
+            check_trajectory_motion_and_terminal_hold_detailed(
+                *traj, buffered_start, timetable, params,
+                traj->approach_goal_entity);
         if (buffered_info.is_valid)
         {
           check_time = buffered_start;
@@ -5711,6 +5846,19 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
       if (waited > 1e-9)
         std::cout << "  [Delay] Delayed " << waited << "s for safety." << std::endl;
       return check_time;
+    }
+
+    const double traj_duration =
+        traj->waypoints.empty() ? 0.0 : std::max(0.0, traj->waypoints.back().time);
+    const bool terminal_hold_conflict =
+        !traj->is_transfer &&
+        col_info.time >=
+            check_time + traj_duration -
+                std::max(shared_collision_check_step(params), 1e-3) - 1e-6;
+    if (terminal_hold_conflict)
+    {
+      check_time += step;
+      continue;
     }
 
     // Handle Collision
@@ -6002,6 +6150,7 @@ struct SegmentCandidateReport
 {
   std::string stage;
   PlanningResult planning;
+  std::vector<Waypoint> debug_waypoints;
   SegmentCandidateValidation validation;
   bool candidate_tested = false;
   bool accepted_for_scheduling = false;
@@ -6119,12 +6268,13 @@ SegmentCandidateValidation validate_segment_candidate(
       }
     }
     if (terminal_approach_entity && collider == terminal_approach_entity &&
-        collider->type == EntityType::OBJECT &&
-        rel_t >= duration - 0.3 - 1e-9)
+        collider->type == EntityType::OBJECT)
     {
       auto it = others.find(collider);
       if (it != others.end() &&
-          is_valid_transfer_contact(robot, robot_pose, collider, it->second))
+          is_valid_terminal_approach_contact(
+              robot, robot_pose, candidate_rel.back(), collider, it->second,
+              terminal_approach_entity, params))
       {
         return true;
       }
@@ -6397,6 +6547,49 @@ void write_segment_replan_diagnostics(
             << filename.str() << std::endl;
 }
 
+std::vector<PlanningDebugAttempt> segment_reports_to_debug_attempts(
+    const std::vector<SegmentCandidateReport> &reports)
+{
+  std::vector<PlanningDebugAttempt> attempts;
+  attempts.reserve(reports.size());
+  for (const auto &report : reports)
+  {
+    PlanningResult result = report.planning;
+    if (!report.debug_waypoints.empty())
+      result.waypoints = report.debug_waypoints;
+
+    if (report.candidate_tested && !report.validation.hard_valid)
+    {
+      result.status = PlanningStatus::NO_PATH_FOUND;
+      result.colliding_entity =
+          report.validation.first_hard_collision.entity_name;
+      result.failure_time = report.validation.first_hard_collision.time;
+      std::ostringstream detail;
+      detail << "MARS candidate validation rejected this path: "
+             << report.validation.first_hard_collision.reason;
+      if (!report.validation.first_hard_collision.entity_name.empty())
+      {
+        detail << " with "
+               << report.validation.first_hard_collision.entity_name;
+      }
+      if (report.validation.has_soft_robot_conflict)
+      {
+        detail << "; soft robot conflict: "
+               << report.validation.first_soft_robot_collision.reason;
+        if (!report.validation.first_soft_robot_collision.entity_name.empty())
+        {
+          detail << " with "
+                 << report.validation.first_soft_robot_collision.entity_name;
+        }
+      }
+      result.failure_detail = detail.str();
+    }
+
+    attempts.push_back({report.stage, result});
+  }
+  return attempts;
+}
+
 bool replan_transit_segment(
     RobotMeta *robot, const Pose &goal_pose, double start_time,
     TimeTable &timetable,
@@ -6438,6 +6631,7 @@ bool replan_transit_segment(
       return false;
     }
 
+    report.debug_waypoints = candidate_rel;
     report.candidate_tested = true;
     report.validation = validate_segment_candidate(
         candidate_rel, robot, start_time, timetable, entities, params,
@@ -6657,6 +6851,15 @@ bool replan_transit_segment(
                                    goal_pose, start_time, reports, false,
                                    selected_stage.empty() ? "none"
                                                           : selected_stage);
+  if (DEBUG_VIS && !reports.empty())
+  {
+    auto debug_attempts = segment_reports_to_debug_attempts(reports);
+    visualize_planning_attempt_debug(
+        timetable, robot, start_time, start_pose, goal_pose,
+        debug_attempts, params,
+        "Segment " + std::to_string(context.segment_id) +
+            " transit replanning");
+  }
   return false;
 }
 
@@ -6732,6 +6935,144 @@ bool prepare_segment_waypoints_for_scheduling(
   return true;
 }
 
+bool is_empty_noop_connector_between_pushes(
+    const std::vector<TrajectoryPtr> &edge_paths,
+    std::size_t connector_idx,
+    double pos_tol = 1e-2,
+    double yaw_tol = 1e-2)
+{
+  if (connector_idx == 0 || connector_idx + 1 >= edge_paths.size())
+    return false;
+
+  const auto &prev = edge_paths[connector_idx - 1];
+  const auto &connector = edge_paths[connector_idx];
+  const auto &next = edge_paths[connector_idx + 1];
+  if (!prev || !connector || !next)
+    return false;
+  if (!prev->is_transfer || connector->is_transfer || !next->is_transfer)
+    return false;
+  if (!connector->waypoints.empty() || prev->waypoints.empty() ||
+      next->waypoints.empty())
+  {
+    return false;
+  }
+
+  return poses_approximately_equal(prev->waypoints.back(),
+                                   next->waypoints.front(),
+                                   pos_tol, yaw_tol);
+}
+
+bool try_local_transfer_path_repair(
+    Trajectory *traj,
+    RobotMeta *robot,
+    double segment_ready_time,
+    TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params)
+{
+  if (!traj || !robot || !traj->is_transfer || !traj->transferred_object ||
+      traj->waypoints.size() < 4)
+  {
+    return false;
+  }
+
+  CollisionInfo original_collision =
+      check_collision_trajectory_detailed(*traj, segment_ready_time,
+                                          timetable, params, false);
+  if (original_collision.is_valid || original_collision.entity_name.empty())
+    return false;
+
+  auto collider_it = entities.find(original_collision.entity_name);
+  if (collider_it == entities.end() || !collider_it->second ||
+      collider_it->second == traj->transferred_object)
+  {
+    return false;
+  }
+
+  const double collision_rel_time =
+      std::max(0.0, original_collision.time - segment_ready_time);
+  std::size_t center_idx = 1;
+  double best_time_error = std::numeric_limits<double>::infinity();
+  for (std::size_t i = 1; i + 1 < traj->waypoints.size(); ++i)
+  {
+    const double err = std::abs(traj->waypoints[i].time - collision_rel_time);
+    if (err < best_time_error)
+    {
+      best_time_error = err;
+      center_idx = i;
+    }
+  }
+
+  const std::vector<double> offsets = {0.015, 0.025, 0.04, 0.06, 0.08};
+  const std::vector<int> radii = {2, 3, 4};
+  const auto original_waypoints = traj->waypoints;
+
+  for (double offset : offsets)
+  {
+    for (int sign : {-1, 1})
+    {
+      for (int radius : radii)
+      {
+        std::vector<Waypoint> candidate = original_waypoints;
+        for (std::size_t i = 1; i + 1 < candidate.size(); ++i)
+        {
+          const int dist = static_cast<int>(
+              std::abs(static_cast<long long>(i) -
+                       static_cast<long long>(center_idx)));
+          if (dist > radius)
+            continue;
+
+          const double phase =
+              static_cast<double>(dist) / static_cast<double>(radius + 1);
+          const double weight = 0.5 * (1.0 + std::cos(M_PI * phase));
+          const double lateral = static_cast<double>(sign) * offset * weight;
+          const double nx = -std::sin(candidate[i].yaw);
+          const double ny = std::cos(candidate[i].yaw);
+          candidate[i].x += lateral * nx;
+          candidate[i].y += lateral * ny;
+        }
+
+        Trajectory repaired = *traj;
+        repaired.waypoints = std::move(candidate);
+        repaired.CalcualteTimeStamps(robot);
+
+        CollisionInfo collider_check =
+            check_collision_trajectory_against_entity(
+                repaired, segment_ready_time, collider_it->second,
+                timetable, params);
+        if (!collider_check.is_valid)
+          continue;
+
+        CollisionInfo full_check =
+            check_collision_trajectory_detailed(repaired, segment_ready_time,
+                                                timetable, params, false);
+        if (!full_check.is_valid &&
+            full_check.entity_name == original_collision.entity_name)
+        {
+          continue;
+        }
+
+        traj->waypoints = std::move(repaired.waypoints);
+        traj->start_time = segment_ready_time;
+        traj->kind = TrajectoryKind::TRANSFER;
+        traj->is_transfer = true;
+
+        std::cout << "  [Segment] Local transfer repair accepted near t="
+                  << std::fixed << std::setprecision(2)
+                  << original_collision.time << "s using "
+                  << (sign < 0 ? "right" : "left")
+                  << " lateral bump " << offset << "m over "
+                  << radius << " waypoints." << std::endl;
+        return true;
+      }
+    }
+  }
+
+  std::cout << "  [Segment] Local transfer repair found no tiny detour; "
+            << "falling back to full transfer replanning." << std::endl;
+  return false;
+}
+
 bool replan_transfer_segment_after_failed_schedule(
     Trajectory *traj,
     RobotMeta *robot,
@@ -6757,6 +7098,12 @@ bool replan_transfer_segment_after_failed_schedule(
   std::cout << "  [Segment] Given transfer path is not schedulable; "
             << "attempting forward-only transfer replanning for "
             << traj->transferred_object->name << "." << std::endl;
+
+  if (try_local_transfer_path_repair(traj, robot, segment_ready_time,
+                                     timetable, entities, params))
+  {
+    return true;
+  }
 
   PHAStar planner(robot, goal_pose, &timetable, &entities, params,
                   true, traj->transferred_object->name, segment_ready_time,
@@ -7354,6 +7701,39 @@ bool process_task_execution(
       std::cerr << " at t=" << std::fixed << std::setprecision(2)
                 << wait_conflict.time;
     std::cerr << std::endl;
+
+    if (DEBUG_VIS)
+    {
+      Trajectory wait_hint;
+      wait_hint.entity = robot;
+      wait_hint.start_time = from_t;
+      wait_hint.is_transfer = false;
+      wait_hint.kind = TrajectoryKind::TRANSIT;
+      Waypoint wait_start;
+      wait_start.x = wait_pose.x;
+      wait_start.y = wait_pose.y;
+      wait_start.yaw = wait_pose.yaw;
+      wait_start.time = 0.0;
+      Waypoint wait_end = wait_start;
+      wait_end.time = std::max(0.0, to_t - from_t);
+      wait_hint.waypoints = {wait_start, wait_end};
+
+      std::ostringstream context;
+      context << "Waiting pose conflict before " << segment_label
+              << ". Robot " << (robot ? robot->name : "unknown")
+              << " waits at this pose from t=" << std::fixed
+              << std::setprecision(2) << from_t << " to " << to_t
+              << " while reserved occupancy collides at t="
+              << wait_conflict.time << ".";
+
+      visualize_current_state(
+          timetable, entities, params,
+          wait_conflict.time > 1e-6 ? wait_conflict.time : from_t,
+          wait_pose, wait_pose,
+          &wait_hint, from_t,
+          &wait_conflict,
+          context.str());
+    }
     return false;
   };
 
@@ -7475,13 +7855,30 @@ bool process_task_execution(
   }
 
   // 3. Execute Edge Paths (Pushing / Relocation Segments)
+  std::vector<bool> empty_noop_connectors(task.EdgePaths.size(), false);
+  for (std::size_t idx = 0; idx < task.EdgePaths.size(); ++idx)
+  {
+    empty_noop_connectors[idx] =
+        is_empty_noop_connector_between_pushes(task.EdgePaths, idx);
+  }
+
   int segment_idx = 0;
   for (auto &path_ptr : task.EdgePaths)
   {
     segment_idx++;
+    const std::size_t edge_path_idx = static_cast<std::size_t>(segment_idx - 1);
     double segment_ready_time = timetable.get_entity_max_time(robot);
     double segment_wait_start_time = timetable.get_entity_max_time(robot, 0.0);
     Pose segment_wait_pose = timetable.get_pose(robot, segment_wait_start_time);
+
+    if (edge_path_idx < empty_noop_connectors.size() &&
+        empty_noop_connectors[edge_path_idx])
+    {
+      std::cout << "  [Segment " << segment_idx
+                << "] Empty transit between continuous pushes; treating as no-op."
+                << std::endl;
+      continue;
+    }
 
     // Prepare Trajectory Object
     std::ostringstream fallback_msg;
@@ -7601,6 +7998,17 @@ bool process_task_execution(
     // D. Handle Retraction (if this was a push)
     if (path_ptr->is_transfer)
     {
+      const bool next_connector_is_noop =
+          edge_path_idx + 1 < empty_noop_connectors.size() &&
+          empty_noop_connectors[edge_path_idx + 1];
+      if (next_connector_is_noop)
+      {
+        std::cout << "  [Retract] Skipping retraction after segment "
+                  << segment_idx
+                  << " because the next empty connector continues directly into another push."
+                  << std::endl;
+        continue;
+      }
       if (!append_retraction(robot, *path_ptr, timetable, params, entities,
                              options,
                              out_stats, out_failure_reason))
@@ -7631,7 +8039,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/result_seq_ReloPush-BOSS_8_objects.txt_ind39.b64";
+         "/result_seq_ReloPush-BOSS_10_objects.txt_ind12.b64";
 }
 
 bool load_data(

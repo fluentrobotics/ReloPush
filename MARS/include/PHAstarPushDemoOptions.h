@@ -23,10 +23,10 @@ struct RuntimeOptions
     bool enable_visualization = true; // show results
 
     // Default planning parameters
-    double default_xy_resolution = 0.1;
+    double default_xy_resolution = 0.2;
     double default_yaw_resolution = 0.523598775598298873; // pi / 6
-    double default_time_step = 2.0;
-    double default_rs_step_size = 0.2;
+    double default_time_step = 2.5;
+    double default_rs_step_size = 0.3;
     int default_collision_steps = 2;
     double default_collision_check_time_step = 0.05;
     double default_max_steer = 0.523598775598298873; // pi / 6
@@ -41,9 +41,17 @@ struct RuntimeOptions
     double default_safety_margin = 0.03;
     double default_robot_collision_inflation = 1.005;
     bool enable_initial_transit_fallbacks = false;
-    int planner_expansion_threads = 4;
+    int planner_expansion_threads = 2;
     int max_search_iterations = 2000;
     bool robot_boundary_origin_only = true;
+
+    // Fine segment options (for replanning)
+    int fine_segment_max_search_iterations = 8000;
+    double fine_segment_xy_resolution = 0.1;
+    double fine_segment_yaw_resolution = 0.523598775598298873; // pi / 6
+    double fine_segment_time_step = 2.0;
+    double fine_segment_rs_step_size = 0.2;
+    double fine_segment_collision_check_time_step = 0.05;
 
     // E-Graph
     bool enable_reference_egraph_transit = true; // E-Graphs-inspired heuristic
@@ -59,14 +67,6 @@ struct RuntimeOptions
     bool enable_order_constraint_learning = true;
     bool has_fixed_random_seed = false;
     std::uint32_t base_random_seed = 0;
-
-    // Fine segment options (for replanning)
-    int fine_segment_max_search_iterations = 8000;
-    double fine_segment_xy_resolution = 0.05;
-    double fine_segment_yaw_resolution = 0.523598775598298873; // pi / 6
-    double fine_segment_time_step = 1.0;
-    double fine_segment_rs_step_size = 0.05;
-    double fine_segment_collision_check_time_step = 0.05;
 
     // Assignment Refinement options
     int assignment_search_iterations = 0; // for random assignment

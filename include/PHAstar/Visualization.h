@@ -21,10 +21,12 @@
 #include <QDebug>
 #include <QPushButton>
 #include <QDoubleSpinBox>
+#include <QCheckBox>
 #include <QTimer>
 #include <QFontMetrics>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QResizeEvent>
 
 #include <algorithm>
 #include <string>
@@ -665,6 +667,49 @@ public:
         setWindowTitle(QString("Debug State at t=%1").arg(query_time));
         resize(800, 600); // Adjust as needed
 
+        context_time_min_ = 0.0;
+        context_time_max_ = std::max(0.1, timetable_.get_max_time());
+        current_context_time_ = std::clamp(query_time_, context_time_min_,
+                                           context_time_max_);
+        query_time_ = current_context_time_;
+
+        context_time_label_ = new QLabel(this);
+        context_time_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        context_time_label_->setAutoFillBackground(true);
+        context_time_label_->setStyleSheet("QLabel { background: rgba(255,255,255,230); color: black; padding: 2px; }");
+        context_time_label_->setAutoFillBackground(true);
+        context_time_label_->setStyleSheet("QLabel { background: rgba(255,255,255,230); color: black; padding: 2px; }");
+        context_time_slider_ = new QSlider(Qt::Horizontal, this);
+        context_time_slider_->setRange(
+            0,
+            static_cast<int>(std::round((context_time_max_ - context_time_min_) *
+                                        kContextSliderScale)));
+        context_time_slider_->setValue(
+            static_cast<int>(std::round((current_context_time_ - context_time_min_) *
+                                        kContextSliderScale)));
+        QObject::connect(context_time_slider_, &QSlider::valueChanged,
+                         this, [this](int value)
+                         {
+                             current_context_time_ =
+                                 context_time_min_ +
+                                 static_cast<double>(value) / kContextSliderScale;
+                             query_time_ = current_context_time_;
+                             updateContextTimeLabel();
+                             update();
+                         });
+        show_future_traces_checkbox_ = new QCheckBox("Future traces", this);
+        show_future_traces_checkbox_->setChecked(false);
+        show_future_traces_checkbox_->setAutoFillBackground(true);
+        show_future_traces_checkbox_->setStyleSheet("QCheckBox { background: rgba(255,255,255,230); color: black; padding: 2px; }");
+        QObject::connect(show_future_traces_checkbox_, &QCheckBox::toggled,
+                         this, [this](bool enabled)
+                         {
+                             show_future_traces_ = enabled;
+                             update();
+                         });
+        updateContextTimeLabel();
+        layoutContextControls();
+
         // Debug print: Check entities
         qDebug() << "Debug Viz: " << entities_.size() << " entities at t=" << query_time;
         for (const auto &[name, ent] : entities_)
@@ -676,6 +721,12 @@ public:
     }
 
 protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QDialog::resizeEvent(event);
+        layoutContextControls();
+    }
+
     void paintEvent(QPaintEvent *event) override
     {
         QPainter painter(this);
@@ -688,28 +739,26 @@ protected:
         double w = params_.max_x - params_.min_x;
         double h = params_.max_y - params_.min_y;
         double scale_x = (width() - 100) / w; // Add margins
-        double scale_y = (height() - 100) / h;
+        double scale_y = (height() - 100 - kContextControlHeight) / h;
         double scale = std::min(scale_x, scale_y);
+        const double viewport_left = 50.0;
+        const double viewport_bottom = height() - 50.0 - kContextControlHeight;
+        const double viewport_top = viewport_bottom - h * scale;
         qDebug() << "Scale:" << scale << "Workspace:" << w << "x" << h;
 
         // Save original state
         painter.save();
 
-        // Apply transform for world coords
-        painter.translate(50, height() - 50); // Bottom-left origin with margin
-        painter.scale(scale, -scale);         // Flip Y, scale
-
-        // Draw bounds (with fixed device pen)
-        painter.restore();                  // Draw boundary in device coords for visibility
-        painter.setPen(QPen(Qt::black, 2)); // Fixed 2px width
-        double dev_min_x = 50;
-        double dev_min_y = 50;
-        double dev_w = w * scale;
-        double dev_h = h * scale;
-        painter.drawRect(QRectF(dev_min_x, dev_min_y, dev_w, dev_h));
-        painter.save(); // Re-apply transform for world drawing
-        painter.translate(50, height() - 50);
+        // Apply transform for world coords. The translation accounts for
+        // non-zero workspace minima so entities line up with the boundary.
+        painter.translate(viewport_left - params_.min_x * scale,
+                          viewport_bottom + params_.min_y * scale);
         painter.scale(scale, -scale);
+
+        // Draw bounds in world coordinates under the same transform as entities.
+        painter.setPen(QPen(Qt::black, 2.0 / std::max(scale, 1e-6)));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(QRectF(params_.min_x, params_.min_y, w, h));
 
         // Pre-compute poses and corners for all entities
         std::unordered_map<std::string, Pose> poses;
@@ -829,6 +878,60 @@ protected:
             painter.setPen(QPen(QColor(150, 0, 200), 0.05, Qt::SolidLine));
             painter.setBrush(Qt::NoBrush);
             painter.drawPolyline(attempt_poly);
+
+            const double attempt_abs_start =
+                attempted_start_time_ + attempted_traj_.waypoints.front().time;
+            const double attempt_abs_end =
+                attempted_start_time_ + attempted_traj_.waypoints.back().time;
+            if (query_time_ >= attempt_abs_start - 1e-9 &&
+                query_time_ <= attempt_abs_end + 1e-9 &&
+                attempted_traj_.entity)
+            {
+                const double rel_t =
+                    std::clamp(query_time_ - attempted_start_time_,
+                               attempted_traj_.waypoints.front().time,
+                               attempted_traj_.waypoints.back().time);
+                auto [tx, ty, tyaw] =
+                    interpolate_timed_path(attempted_traj_.waypoints, rel_t);
+                Pose try_pose{tx, ty, tyaw};
+                Corners try_corners = get_corners(
+                    try_pose.x, try_pose.y, try_pose.yaw,
+                    attempted_traj_.entity->size.front_length,
+                    attempted_traj_.entity->size.rear_length,
+                    attempted_traj_.entity->size.width);
+                QPolygonF try_poly;
+                for (const auto &c : try_corners)
+                    try_poly << QPointF(c.x, c.y);
+                painter.setPen(QPen(QColor(80, 0, 180), 0.08, Qt::SolidLine));
+                painter.setBrush(QBrush(QColor(150, 0, 200, 65)));
+                painter.drawPolygon(try_poly);
+                QPointF center(try_pose.x, try_pose.y);
+                QPointF front(try_pose.x + 0.25 * std::cos(try_pose.yaw),
+                              try_pose.y + 0.25 * std::sin(try_pose.yaw));
+                painter.setPen(QPen(QColor(80, 0, 180), 0.05, Qt::SolidLine));
+                painter.drawLine(center, front);
+
+                if (attempted_traj_.is_transfer &&
+                    attempted_traj_.transferred_object)
+                {
+                    Pose obj_pose = TimeTable::compute_object_pose(
+                        try_pose,
+                        attempted_traj_.entity->size,
+                        attempted_traj_.transferred_object->size);
+                    Corners obj_corners = get_corners(
+                        obj_pose.x, obj_pose.y, obj_pose.yaw,
+                        attempted_traj_.transferred_object->size.front_length,
+                        attempted_traj_.transferred_object->size.rear_length,
+                        attempted_traj_.transferred_object->size.width);
+                    QPolygonF obj_poly;
+                    for (const auto &c : obj_corners)
+                        obj_poly << QPointF(c.x, c.y);
+                    painter.setPen(QPen(QColor(240, 140, 0), 0.07,
+                                        Qt::SolidLine));
+                    painter.setBrush(QBrush(QColor(255, 180, 0, 70)));
+                    painter.drawPolygon(obj_poly);
+                }
+            }
 
             if (has_failure_info_)
             {
@@ -998,26 +1101,29 @@ protected:
             }
         }
 
-        // Future overlays (scaled, semi-transparent)
-        painter.setOpacity(0.3);
-        for (double dt = 5.0; dt <= 15.0; dt += 5.0)
+        // Optional future overlays (scaled, semi-transparent).
+        if (show_future_traces_)
         {
-            for (const auto &[name, ent] : entities_)
+            painter.setOpacity(0.3);
+            for (double dt = 5.0; dt <= 15.0; dt += 5.0)
             {
-                if (ent->type != EntityType::ROBOT)
-                    continue;
-                Pose p_future = timetable_.get_pose(ent, query_time_ + dt);
-                painter.setBrush(Qt::gray);
-                painter.setPen(QPen(Qt::black, 0.02));
-                Corners corners = get_corners(p_future.x, p_future.y, p_future.yaw,
-                                              ent->size.front_length, ent->size.rear_length, ent->size.width);
-                QPolygonF poly;
-                for (const auto &c : corners)
-                    poly << QPointF(c.x, c.y);
-                painter.drawPolygon(poly);
+                for (const auto &[name, ent] : entities_)
+                {
+                    if (ent->type != EntityType::ROBOT)
+                        continue;
+                    Pose p_future = timetable_.get_pose(ent, query_time_ + dt);
+                    painter.setBrush(Qt::gray);
+                    painter.setPen(QPen(Qt::black, 0.02));
+                    Corners corners = get_corners(p_future.x, p_future.y, p_future.yaw,
+                                                  ent->size.front_length, ent->size.rear_length, ent->size.width);
+                    QPolygonF poly;
+                    for (const auto &c : corners)
+                        poly << QPointF(c.x, c.y);
+                    painter.drawPolygon(poly);
+                }
             }
+            painter.setOpacity(1.0);
         }
-        painter.setOpacity(1.0);
 
         // Restore for unscaled drawing (e.g., labels)
         painter.restore();
@@ -1031,8 +1137,8 @@ protected:
         {
             Pose p = timetable_.get_pose(ent, query_time_);
             // World to device
-            double dev_x = 50 + (p.x - params_.min_x) * scale;
-            double dev_y = 50 + (params_.max_y - p.y) * scale;                          // Adjust for flipped Y (since bottom is max_y after flip?)
+            double dev_x = viewport_left + (p.x - params_.min_x) * scale;
+            double dev_y = viewport_top + (params_.max_y - p.y) * scale;
             painter.drawText(QPointF(dev_x, dev_y + 10), QString::fromStdString(name)); // Pixel offset
         }
 
@@ -1113,9 +1219,64 @@ protected:
                              Qt::AlignTop | Qt::TextWordWrap,
                              details);
         }
+
+        painter.fillRect(QRect(8, height() - kContextControlHeight + 4,
+                               270, 22),
+                         QColor(255, 255, 255, 230));
+        painter.setPen(Qt::black);
+        painter.drawText(QRect(12, height() - kContextControlHeight + 4,
+                               260, 22),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QString("Timestamp: %1 s")
+                             .arg(query_time_, 0, 'f', 2));
     }
 
 private:
+    static constexpr int kContextSliderScale = 10;
+    static constexpr int kContextControlHeight = 64;
+
+    void layoutContextControls()
+    {
+        if (!context_time_slider_ || !context_time_label_)
+            return;
+
+        const int margin = 12;
+        const int checkbox_width = 120;
+        const int label_width = 360;
+        const int slider_height = 24;
+        const int gap = 10;
+        const int base_y = height() - kContextControlHeight + 8;
+        const int slider_width =
+            std::max(80, width() - 2 * margin - label_width -
+                             checkbox_width - 2 * gap);
+
+        context_time_slider_->setGeometry(
+            margin, base_y + 12, slider_width, slider_height);
+        if (show_future_traces_checkbox_)
+        {
+            show_future_traces_checkbox_->setGeometry(
+                margin + slider_width + gap, base_y + 10,
+                checkbox_width, slider_height);
+            show_future_traces_checkbox_->raise();
+        }
+        context_time_label_->setGeometry(
+            margin + slider_width + checkbox_width + 2 * gap, base_y,
+            label_width, kContextControlHeight - 8);
+        context_time_slider_->raise();
+        context_time_label_->raise();
+    }
+
+    void updateContextTimeLabel()
+    {
+        if (!context_time_label_)
+            return;
+        context_time_label_->setText(
+            QString("Timestamp: %1 s   full timetable=[%2, %3]")
+                .arg(current_context_time_, 0, 'f', 2)
+                .arg(context_time_min_, 0, 'f', 1)
+                .arg(context_time_max_, 0, 'f', 1));
+    }
+
     const TimeTable &timetable_;
     const std::unordered_map<std::string, EntityMeta *> &entities_;
     const Params &params_;
@@ -1128,6 +1289,13 @@ private:
     bool has_failure_info_ = false;
     CollisionInfo failure_info_;
     std::string context_text_;
+    double current_context_time_ = 0.0;
+    double context_time_min_ = 0.0;
+    double context_time_max_ = 0.0;
+    QLabel *context_time_label_ = nullptr;
+    QSlider *context_time_slider_ = nullptr;
+    QCheckBox *show_future_traces_checkbox_ = nullptr;
+    bool show_future_traces_ = false;
 };
 
 // The visualize_current_state function remains the same
@@ -1285,6 +1453,44 @@ inline const std::map<double, Pose> *find_entity_timeline(
     return &it->second;
 }
 
+inline bool waypoints_use_absolute_time(const std::vector<Waypoint> &waypoints,
+                                        double plan_start_time)
+{
+    return !waypoints.empty() &&
+           waypoints.front().time > plan_start_time - 1e-6;
+}
+
+inline double waypoint_path_abs_start(const std::vector<Waypoint> &waypoints,
+                                      double plan_start_time)
+{
+    if (waypoints.empty())
+        return plan_start_time;
+    return waypoints_use_absolute_time(waypoints, plan_start_time)
+               ? waypoints.front().time
+               : plan_start_time + waypoints.front().time;
+}
+
+inline double waypoint_path_abs_end(const std::vector<Waypoint> &waypoints,
+                                    double plan_start_time)
+{
+    if (waypoints.empty())
+        return plan_start_time;
+    return waypoints_use_absolute_time(waypoints, plan_start_time)
+               ? waypoints.back().time
+               : plan_start_time + waypoints.back().time;
+}
+
+inline double waypoint_query_time_for_abs(const std::vector<Waypoint> &waypoints,
+                                          double plan_start_time,
+                                          double abs_time)
+{
+    if (waypoints.empty())
+        return 0.0;
+    return waypoints_use_absolute_time(waypoints, plan_start_time)
+               ? abs_time
+               : abs_time - plan_start_time;
+}
+
 // Helper to get corners for drawing (Local calculation)
 inline std::vector<GeometryPoint> get_corners_local(double x, double y, double yaw, double fl, double rl, double w)
 {
@@ -1329,7 +1535,9 @@ public:
         plan_duration = 0.0;
         if (!plan.waypoints.empty())
         {
-            plan_duration = plan.waypoints.back().time;
+            plan_duration = std::max(0.0,
+                                     waypoint_path_abs_end(plan.waypoints, plan_start_time) -
+                                         waypoint_path_abs_start(plan.waypoints, plan_start_time));
         }
         else
         {
@@ -1419,14 +1627,16 @@ protected:
 
             drawShape(p, current_pose, entity, bodyColor, QPen(Qt::black, 1), toScreen, QString::fromStdString(entity->name));
 
-            drawTrail(p, timeline, trail_start, trail_end, toScreen);
+            if (show_future_traces_)
+                drawTrail(p, timeline, trail_start, trail_end, toScreen);
         }
 
         if (const auto *active_timeline =
                 find_entity_timeline(timetable, active_robot))
         {
-            drawTrail(p, *active_timeline, trail_start, trail_end, toScreen,
-                      QPen(QColor(65, 105, 225, 180), 2, Qt::DashLine));
+            if (show_future_traces_)
+                drawTrail(p, *active_timeline, trail_start, trail_end, toScreen,
+                          QPen(QColor(65, 105, 225, 180), 2, Qt::DashLine));
             Pose active_pose = timetable.get_pose(active_robot, context_time);
             drawShape(p, active_pose, active_robot,
                       QColor(65, 105, 225, 80),
@@ -1445,12 +1655,19 @@ protected:
             p.setPen(QPen(QColor(0, 102, 255), 3, Qt::SolidLine));
             p.drawPolyline(path);
 
+            const double path_abs_start =
+                waypoint_path_abs_start(plan.waypoints, plan_start_time);
+            const double path_abs_end =
+                waypoint_path_abs_end(plan.waypoints, plan_start_time);
             if (enable_context_slider_ &&
-                context_time >= plan_start_time - 1e-9 &&
-                context_time <= plan_start_time + plan_duration + 1e-9)
+                context_time >= path_abs_start - 1e-9 &&
+                context_time <= path_abs_end + 1e-9)
             {
-                const double rel_t = std::clamp(context_time - plan_start_time, 0.0, plan_duration);
-                auto [x_now, y_now, yaw_now] = interpolate_timed_path(plan.waypoints, rel_t);
+                const double query_t =
+                    waypoint_query_time_for_abs(plan.waypoints, plan_start_time,
+                                                context_time);
+                auto [x_now, y_now, yaw_now] =
+                    interpolate_timed_path(plan.waypoints, query_t);
                 drawShape(p, Pose{x_now, y_now, yaw_now}, active_robot,
                           QColor(30, 144, 255, 90), QPen(Qt::black, 2),
                           toScreen, "PLAN");
@@ -1463,6 +1680,14 @@ protected:
 
         // --- 6. Draw Legend (Side Panel) ---
         drawLegend(p, view_width + 10, 20, legend_width - 20, view_height - 40);
+
+        p.fillRect(QRect(8, height() - kContextControlHeight + 4, 270, 22),
+                   QColor(255, 255, 255, 230));
+        p.setPen(Qt::black);
+        p.drawText(QRect(12, height() - kContextControlHeight + 4, 260, 22),
+                   Qt::AlignLeft | Qt::AlignVCenter,
+                   QString("Timestamp: %1 s")
+                       .arg(currentContextTime(), 0, 'f', 2));
     }
 
 private:
@@ -1471,8 +1696,7 @@ private:
 
     bool shouldEnableContextSlider() const
     {
-        return plan.status != PlanningStatus::SUCCESS &&
-               plan_kind_text.find("Initial transit") != std::string::npos;
+        return true;
     }
 
     void initializeContextSliderIfNeeded()
@@ -1486,13 +1710,17 @@ private:
 
         context_time_pivot_ = (plan.failure_time > 1e-6)
                                   ? plan.failure_time
-                                  : plan_start_time;
-        context_time_min_ = std::max(0.0, context_time_pivot_ - 30.0);
-        context_time_max_ = std::max(context_time_min_ + 0.1, context_time_pivot_ + 30.0);
+                                  : waypoint_path_abs_start(plan.waypoints, plan_start_time);
+        context_time_min_ = 0.0;
+        context_time_max_ = std::max(0.1, timetable.get_max_time());
         current_context_time_ = context_time_pivot_;
+        current_context_time_ = std::clamp(current_context_time_,
+                                           context_time_min_, context_time_max_);
 
         context_time_label_ = new QLabel(this);
         context_time_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        context_time_label_->setAutoFillBackground(true);
+        context_time_label_->setStyleSheet("QLabel { background: rgba(255,255,255,230); color: black; padding: 2px; }");
 
         context_time_slider_ = new QSlider(Qt::Horizontal, this);
         context_time_slider_->setRange(
@@ -1512,6 +1740,16 @@ private:
                              updateContextTimeLabel();
                              update();
                          });
+        show_future_traces_checkbox_ = new QCheckBox("Future traces", this);
+        show_future_traces_checkbox_->setChecked(false);
+        show_future_traces_checkbox_->setAutoFillBackground(true);
+        show_future_traces_checkbox_->setStyleSheet("QCheckBox { background: rgba(255,255,255,230); color: black; padding: 2px; }");
+        QObject::connect(show_future_traces_checkbox_, &QCheckBox::toggled,
+                         this, [this](bool enabled)
+                         {
+                             show_future_traces_ = enabled;
+                             update();
+                         });
 
         updateContextTimeLabel();
         layoutContextControls();
@@ -1523,14 +1761,29 @@ private:
             return;
 
         const int margin = 12;
-        const int label_height = 18;
+        const int checkbox_width = 120;
+        const int label_width = 380;
         const int slider_height = 24;
+        const int gap = 10;
         const int base_y = height() - kContextControlHeight + 8;
+        const int slider_width =
+            std::max(80, width() - 2 * margin - label_width -
+                             checkbox_width - 2 * gap);
 
-        context_time_label_->setGeometry(
-            margin, base_y, width() - 2 * margin, label_height);
         context_time_slider_->setGeometry(
-            margin, base_y + label_height + 6, width() - 2 * margin, slider_height);
+            margin, base_y + 12, slider_width, slider_height);
+        if (show_future_traces_checkbox_)
+        {
+            show_future_traces_checkbox_->setGeometry(
+                margin + slider_width + gap, base_y + 10,
+                checkbox_width, slider_height);
+            show_future_traces_checkbox_->raise();
+        }
+        context_time_label_->setGeometry(
+            margin + slider_width + checkbox_width + 2 * gap, base_y,
+            label_width, kContextControlHeight - 8);
+        context_time_slider_->raise();
+        context_time_label_->raise();
     }
 
     void updateContextTimeLabel()
@@ -1540,7 +1793,7 @@ private:
 
         context_time_label_->setText(
             QString("Context time: %1 s   window=[%2, %3]   pivot=%4")
-                .arg(current_context_time_, 0, 'f', 1)
+                .arg(current_context_time_, 0, 'f', 2)
                 .arg(context_time_min_, 0, 'f', 1)
                 .arg(context_time_max_, 0, 'f', 1)
                 .arg(context_time_pivot_, 0, 'f', 1));
@@ -1789,6 +2042,8 @@ private:
     double context_time_max_ = 0.0;
     QLabel *context_time_label_ = nullptr;
     QSlider *context_time_slider_ = nullptr;
+    QCheckBox *show_future_traces_checkbox_ = nullptr;
+    bool show_future_traces_ = false;
 };
 
 struct PlanningDebugAttempt
@@ -1820,6 +2075,8 @@ public:
 
         context_time_label_ = new QLabel(this);
         context_time_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        context_time_label_->setAutoFillBackground(true);
+        context_time_label_->setStyleSheet("QLabel { background: rgba(255,255,255,230); color: black; padding: 2px; }");
 
         context_time_slider_ = new QSlider(Qt::Horizontal, this);
         QObject::connect(context_time_slider_, &QSlider::valueChanged,
@@ -1829,6 +2086,16 @@ public:
                                  context_time_min_ +
                                  static_cast<double>(value) / kContextSliderScale;
                              updateContextTimeLabel();
+                             update();
+                         });
+        show_future_traces_checkbox_ = new QCheckBox("Future traces", this);
+        show_future_traces_checkbox_->setChecked(false);
+        show_future_traces_checkbox_->setAutoFillBackground(true);
+        show_future_traces_checkbox_->setStyleSheet("QCheckBox { background: rgba(255,255,255,230); color: black; padding: 2px; }");
+        QObject::connect(show_future_traces_checkbox_, &QCheckBox::toggled,
+                         this, [this](bool enabled)
+                         {
+                             show_future_traces_ = enabled;
                              update();
                          });
 
@@ -1915,7 +2182,10 @@ protected:
         double plan_duration = 0.0;
         if (!plan.waypoints.empty())
         {
-            plan_duration = std::max(0.1, plan.waypoints.back().time - plan_start_time_);
+            plan_duration = std::max(
+                0.1,
+                waypoint_path_abs_end(plan.waypoints, plan_start_time_) -
+                    waypoint_path_abs_start(plan.waypoints, plan_start_time_));
         }
         else
         {
@@ -1959,14 +2229,16 @@ protected:
 
             drawShape(p, current_pose, entity, body_color, QPen(Qt::black, 1),
                       toScreen, QString::fromStdString(entity->name));
-            drawTrail(p, timeline, context_time_min_, context_time_max_, toScreen);
+            if (show_future_traces_)
+                drawTrail(p, timeline, context_time_min_, context_time_max_, toScreen);
         }
 
         if (const auto *active_timeline =
                 find_entity_timeline(timetable_, active_robot_))
         {
-            drawTrail(p, *active_timeline, context_time_min_, context_time_max_, toScreen,
-                      QPen(QColor(65, 105, 225, 180), 2, Qt::DashLine));
+            if (show_future_traces_)
+                drawTrail(p, *active_timeline, context_time_min_, context_time_max_, toScreen,
+                          QPen(QColor(65, 105, 225, 180), 2, Qt::DashLine));
             Pose active_pose = timetable_.get_pose(active_robot_, current_context_time_);
             drawShape(p, active_pose, active_robot_,
                       QColor(65, 105, 225, 80),
@@ -1984,13 +2256,18 @@ protected:
             p.setPen(QPen(QColor(0, 102, 255), 3, Qt::SolidLine));
             p.drawPolyline(path);
 
-            if (current_context_time_ >= plan_start_time_ - 1e-9 &&
-                current_context_time_ <= plan_start_time_ + plan_duration + 1e-9)
+            const double path_abs_start =
+                waypoint_path_abs_start(plan.waypoints, plan_start_time_);
+            const double path_abs_end =
+                waypoint_path_abs_end(plan.waypoints, plan_start_time_);
+            if (current_context_time_ >= path_abs_start - 1e-9 &&
+                current_context_time_ <= path_abs_end + 1e-9)
             {
-                const double rel_t =
-                    std::clamp(current_context_time_ - plan_start_time_, 0.0, plan_duration);
+                const double query_t =
+                    waypoint_query_time_for_abs(plan.waypoints, plan_start_time_,
+                                                current_context_time_);
                 auto [x_now, y_now, yaw_now] =
-                    interpolate_timed_path(plan.waypoints, rel_t);
+                    interpolate_timed_path(plan.waypoints, query_t);
                 drawShape(p, Pose{x_now, y_now, yaw_now}, active_robot_,
                           QColor(30, 144, 255, 90), QPen(Qt::black, 2),
                           toScreen, "TRY");
@@ -2003,6 +2280,14 @@ protected:
                   QPen(Qt::black, 2, Qt::DashLine), toScreen, "GOAL");
 
         drawLegend(p, view_width + 10, 20, legend_width - 20, view_height - 40);
+
+        p.fillRect(QRect(8, height() - kContextControlHeight + 4, 270, 22),
+                   QColor(255, 255, 255, 230));
+        p.setPen(Qt::black);
+        p.drawText(QRect(12, height() - kContextControlHeight + 4, 260, 22),
+                   Qt::AlignLeft | Qt::AlignVCenter,
+                   QString("Timestamp: %1 s")
+                       .arg(current_context_time_, 0, 'f', 2));
     }
 
 private:
@@ -2036,10 +2321,12 @@ private:
         const PlanningResult &plan = currentAttempt().result;
         context_time_pivot_ = (plan.failure_time > 1e-6)
                                   ? plan.failure_time
-                                  : plan_start_time_;
-        context_time_min_ = std::max(0.0, context_time_pivot_ - 30.0);
-        context_time_max_ = std::max(context_time_min_ + 0.1, context_time_pivot_ + 30.0);
+                                  : waypoint_path_abs_start(plan.waypoints, plan_start_time_);
+        context_time_min_ = 0.0;
+        context_time_max_ = std::max(0.1, timetable_.get_max_time());
         current_context_time_ = context_time_pivot_;
+        current_context_time_ = std::clamp(current_context_time_,
+                                           context_time_min_, context_time_max_);
 
         if (context_time_slider_)
         {
@@ -2088,14 +2375,29 @@ private:
             return;
 
         const int margin = 12;
-        const int label_height = 18;
+        const int checkbox_width = 120;
+        const int label_width = 380;
         const int slider_height = 24;
+        const int gap = 10;
         const int base_y = height() - kContextControlHeight + 8;
+        const int slider_width =
+            std::max(80, width() - 2 * margin - label_width -
+                             checkbox_width - 2 * gap);
 
-        context_time_label_->setGeometry(
-            margin, base_y, width() - 2 * margin, label_height);
         context_time_slider_->setGeometry(
-            margin, base_y + label_height + 6, width() - 2 * margin, slider_height);
+            margin, base_y + 12, slider_width, slider_height);
+        if (show_future_traces_checkbox_)
+        {
+            show_future_traces_checkbox_->setGeometry(
+                margin + slider_width + gap, base_y + 10,
+                checkbox_width, slider_height);
+            show_future_traces_checkbox_->raise();
+        }
+        context_time_label_->setGeometry(
+            margin + slider_width + checkbox_width + 2 * gap, base_y,
+            label_width, kContextControlHeight - 8);
+        context_time_slider_->raise();
+        context_time_label_->raise();
     }
 
     void updateContextTimeLabel()
@@ -2105,7 +2407,7 @@ private:
 
         context_time_label_->setText(
             QString("Context time: %1 s   window=[%2, %3]   pivot=%4")
-                .arg(current_context_time_, 0, 'f', 1)
+                .arg(current_context_time_, 0, 'f', 2)
                 .arg(context_time_min_, 0, 'f', 1)
                 .arg(context_time_max_, 0, 'f', 1)
                 .arg(context_time_pivot_, 0, 'f', 1));
@@ -2335,6 +2637,8 @@ private:
     double context_time_max_ = 0.0;
     QLabel *context_time_label_ = nullptr;
     QSlider *context_time_slider_ = nullptr;
+    QCheckBox *show_future_traces_checkbox_ = nullptr;
+    bool show_future_traces_ = false;
     mutable std::vector<std::pair<QRect, int>> attempt_row_rects_;
 };
 
@@ -2617,10 +2921,11 @@ private:
             context_time_pivot_ = plan_start_time_;
         }
 
-        context_time_min_ = std::max(0.0, context_time_pivot_ - 30.0);
-        context_time_max_ = std::max(context_time_min_ + 0.1,
-                                     context_time_pivot_ + 30.0);
+        context_time_min_ = 0.0;
+        context_time_max_ = std::max(0.1, currentTimeTable().get_max_time());
         current_context_time_ = context_time_pivot_;
+        current_context_time_ = std::clamp(current_context_time_,
+                                           context_time_min_, context_time_max_);
 
         if (context_time_slider_)
         {
@@ -2662,14 +2967,18 @@ private:
             return;
 
         const int margin = 12;
-        const int label_height = 18;
+        const int label_width = 380;
         const int slider_height = 24;
+        const int gap = 10;
         const int base_y = height() - kContextControlHeight + 8;
+        const int slider_width =
+            std::max(80, width() - 2 * margin - label_width - gap);
 
-        context_time_label_->setGeometry(
-            margin, base_y, width() - 2 * margin, label_height);
         context_time_slider_->setGeometry(
-            margin, base_y + label_height + 6, width() - 2 * margin, slider_height);
+            margin, base_y + 12, slider_width, slider_height);
+        context_time_label_->setGeometry(
+            margin + slider_width + gap, base_y,
+            label_width, kContextControlHeight - 8);
     }
 
     void updateContextTimeLabel()
@@ -2679,7 +2988,7 @@ private:
 
         context_time_label_->setText(
             QString("Context time: %1 s   window=[%2, %3]   pivot=%4")
-                .arg(current_context_time_, 0, 'f', 1)
+                .arg(current_context_time_, 0, 'f', 2)
                 .arg(context_time_min_, 0, 'f', 1)
                 .arg(context_time_max_, 0, 'f', 1)
                 .arg(context_time_pivot_, 0, 'f', 1));
@@ -3095,13 +3404,22 @@ protected:
 
             drawShape(p, current_pose, entity, body_color, QPen(Qt::black, 1),
                       toScreen, QString::fromStdString(entity->name));
-            drawTrail(p, timeline, context_time_min_, context_time_max_, toScreen);
+            if (show_future_traces_)
+                drawTrail(p, timeline, context_time_min_, context_time_max_, toScreen);
         }
 
         highlightVerifiedEntity(p, toScreen, verification_entity_a_, "A");
         highlightVerifiedEntity(p, toScreen, verification_entity_b_, "B");
 
         drawLegend(p, view_width + 10, 20, legend_width - 20, view_height - 40);
+
+        p.fillRect(QRect(8, height() - kContextControlHeight + 4, 270, 22),
+                   QColor(255, 255, 255, 230));
+        p.setPen(Qt::black);
+        p.drawText(QRect(12, height() - kContextControlHeight + 4, 260, 22),
+                   Qt::AlignLeft | Qt::AlignVCenter,
+                   QString("Timestamp: %1 s")
+                       .arg(current_context_time_, 0, 'f', 2));
     }
 
 private:
@@ -3111,10 +3429,11 @@ private:
     void initializeContextWindow()
     {
         context_time_pivot_ = std::max(0.0, verification_time_);
-        context_time_min_ = std::max(0.0, context_time_pivot_ - 30.0);
-        context_time_max_ = std::max(context_time_min_ + 0.1,
-                                     context_time_pivot_ + 30.0);
+        context_time_min_ = 0.0;
+        context_time_max_ = std::max(0.1, timetable_.get_max_time());
         current_context_time_ = context_time_pivot_;
+        current_context_time_ = std::clamp(current_context_time_,
+                                           context_time_min_, context_time_max_);
 
         context_time_slider_->setRange(
             0,
@@ -3144,14 +3463,29 @@ private:
             return;
 
         const int margin = 12;
-        const int label_height = 18;
+        const int checkbox_width = 120;
+        const int label_width = 380;
         const int slider_height = 24;
+        const int gap = 10;
         const int base_y = height() - kContextControlHeight + 8;
+        const int slider_width =
+            std::max(80, width() - 2 * margin - label_width -
+                             checkbox_width - 2 * gap);
 
-        context_time_label_->setGeometry(
-            margin, base_y, width() - 2 * margin, label_height);
         context_time_slider_->setGeometry(
-            margin, base_y + label_height + 6, width() - 2 * margin, slider_height);
+            margin, base_y + 12, slider_width, slider_height);
+        if (show_future_traces_checkbox_)
+        {
+            show_future_traces_checkbox_->setGeometry(
+                margin + slider_width + gap, base_y + 10,
+                checkbox_width, slider_height);
+            show_future_traces_checkbox_->raise();
+        }
+        context_time_label_->setGeometry(
+            margin + slider_width + checkbox_width + 2 * gap, base_y,
+            label_width, kContextControlHeight - 8);
+        context_time_slider_->raise();
+        context_time_label_->raise();
     }
 
     void updateContextTimeLabel()
@@ -3161,7 +3495,7 @@ private:
 
         context_time_label_->setText(
             QString("Timestamp: %1 s   window=[%2, %3]   collision=%4")
-                .arg(current_context_time_, 0, 'f', 1)
+                .arg(current_context_time_, 0, 'f', 2)
                 .arg(context_time_min_, 0, 'f', 1)
                 .arg(context_time_max_, 0, 'f', 1)
                 .arg(context_time_pivot_, 0, 'f', 1));
@@ -3430,6 +3764,8 @@ private:
     double context_time_max_ = 0.0;
     QLabel *context_time_label_ = nullptr;
     QSlider *context_time_slider_ = nullptr;
+    QCheckBox *show_future_traces_checkbox_ = nullptr;
+    bool show_future_traces_ = false;
 };
 
 // Main entry point for visualization
