@@ -2,15 +2,21 @@
 
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <functional>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <array>
+#include <cstdio>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#include <ReloPush/config.h>
 
 // Required by PHAstar.h
 bool DEBUG_VIS = false;
@@ -21,6 +27,8 @@ namespace
   constexpr double kPosEps = 1e-2;
   constexpr double kYawEps = 1e-2;
   bool g_enable_visualization = false;
+  bool g_include_known_failure_repros = false;
+  std::filesystem::path g_test_executable_path;
 
   void maybe_show_results(
       const std::string &case_name, const TimeTable &timetable,
@@ -64,6 +72,22 @@ namespace
       return raw;
     }
 
+    RobotMeta *add_mars_runtime_robot(const std::string &name,
+                                       const Pose &initial_pose)
+    {
+      RobotMeta *robot = add_robot(name, initial_pose);
+      robot->size.front_length = 0.36;
+      robot->size.rear_length = 0.12;
+      robot->size.width = 0.275;
+      robot->min_turning_radius = 1.02;
+      robot->min_turning_radius_transit = 1.02;
+      robot->min_turning_radius_transfer = 1.43;
+      robot->wheel_base = 0.29;
+      robot->speed_transit = 0.2;
+      robot->speed_transfer = 0.15;
+      return robot;
+    }
+
     ObjectMeta *add_object(const std::string &name, const Pose &initial_pose)
     {
       auto obj = std::make_unique<ObjectMeta>();
@@ -91,6 +115,64 @@ namespace
     return params;
   }
 
+  Params make_task5_b8_boundary_params()
+  {
+    Params params = make_push_demo_params();
+    params.xy_resolution = 0.1;
+    params.yaw_resolution = M_PI / 6.0;
+    params.time_step = 1.6;
+    params.time_resolution = params.time_step;
+    params.rs_step_size = 0.16;
+    params.collision_check_time_step = 0.05;
+    params.robot_collision_inflation = 1.005;
+    return params;
+  }
+
+  Params make_relopush_like_task5_b8_params()
+  {
+    Params params = make_task5_b8_boundary_params();
+    params.xy_resolution = 0.08;
+    params.yaw_resolution = 0.235;
+    params.time_step = 1.2;
+    params.time_resolution = params.time_step;
+    params.rs_step_size = 0.12;
+    return params;
+  }
+
+  Params make_contact_boundary_task5_b8_params()
+  {
+    Params params = make_relopush_like_task5_b8_params();
+    params.time_step = 1.0;
+    params.time_resolution = params.time_step;
+    params.rs_step_size = 0.10;
+    params.reverse_penalty = 2.0;
+    params.spatial_only_index = true;
+    params.disable_wait_primitive = true;
+    params.enable_holonomic_heuristic = true;
+    params.holonomic_heuristic_resolution = 0.10;
+    return params;
+  }
+
+  void print_planning_stats(const PlanningResult &res)
+  {
+    const auto &s = res.debug_stats;
+    std::cout << "      status=" << static_cast<int>(res.status)
+              << ", detail='" << res.failure_detail << "'"
+              << ", iterations=" << s.iterations
+              << ", generated=" << s.generated_nodes
+              << ", accepted=" << s.accepted_nodes
+              << ", reject_collision=" << s.reject_collision
+              << ", analytic_collision=" << s.analytic_collision
+              << " (boundary=" << s.analytic_boundary_collision
+              << ", object=" << s.analytic_object_collision << ")"
+              << ", spatial_index=" << (s.spatial_index_collapses ? "true" : "false")
+              << ", wait_skipped=" << s.wait_primitives_skipped
+              << ", best_dist=" << s.best_dist
+              << ", best_yaw_error=" << s.best_yaw_error
+              << ", best_pose=(" << s.best_pose.x << ", " << s.best_pose.y
+              << ", " << s.best_pose.yaw << ")\n";
+  }
+
   Waypoint make_waypoint(double x, double y, double yaw, double t)
   {
     Waypoint wp;
@@ -104,6 +186,39 @@ namespace
   bool near(double a, double b, double eps = kPosEps)
   {
     return std::abs(a - b) <= eps;
+  }
+
+  std::string run_command_capture(const std::string &command, int &exit_code)
+  {
+    std::array<char, 512> buffer{};
+    std::string output;
+    FILE *pipe = popen(command.c_str(), "r");
+    if (!pipe)
+    {
+      exit_code = -1;
+      return {};
+    }
+
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
+    {
+      output += buffer.data();
+    }
+
+    const int rc = pclose(pipe);
+    exit_code = rc;
+    return output;
+  }
+
+  std::string read_text_file(const std::filesystem::path &path)
+  {
+    std::ifstream ifs(path);
+    if (!ifs)
+    {
+      return {};
+    }
+
+    return std::string((std::istreambuf_iterator<char>(ifs)),
+                       std::istreambuf_iterator<char>());
   }
 
   bool has_wait_segment(const std::vector<Waypoint> &wps)
@@ -854,21 +969,193 @@ namespace
     return true;
   }
 
+  bool test_anchor_first_contact_segment_regression()
+  {
+    const std::filesystem::path exe_dir = g_test_executable_path.parent_path();
+    const std::filesystem::path demo_path = exe_dir / "phastar_push_demo";
+    if (!std::filesystem::exists(demo_path))
+    {
+      std::cerr << "    Missing phastar_push_demo executable at "
+                << demo_path << "\n";
+      return false;
+    }
+
+    const std::filesystem::path instance_path =
+        std::filesystem::path(CMAKE_SOURCE_DIR) /
+        "result_seq_ReloPush-BOSS_10_objects.txt_ind77.b64";
+    if (!std::filesystem::exists(instance_path))
+    {
+      std::cerr << "    Missing regression instance file at "
+                << instance_path << "\n";
+      return false;
+    }
+
+    std::string command =
+        demo_path.string() +
+        " --no-visualization --no-visualize-relopush-plan --no-debug-vis"
+        " --assignment-search-iters=0 --local-sequence-search-iters=0"
+        " --shuffle-sequence-search-iters=0 --lns-iters=0 --random-seed=1"
+        " --input-sequence=" + instance_path.string() + " 2>&1";
+
+    int exit_code = 0;
+    const std::string output = run_command_capture(command, exit_code);
+    if (exit_code != 0)
+    {
+      std::cerr << "    Demo regression command failed with exit code "
+                << exit_code << "\n";
+      return false;
+    }
+
+    const std::string anchor_marker =
+        "[PHAStar] Contact-start segment transit: trying anchor-only search before Reference E-Graph.";
+    if (output.find(anchor_marker) == std::string::npos)
+    {
+      std::cerr << "    Anchor-first contact-start segment log was not found.\n";
+      return false;
+    }
+
+    const std::filesystem::path diag_path =
+        std::filesystem::path(CMAKE_SOURCE_DIR) /
+        "results/planner_diagnostics_task1_b1_segment2_robot2.txt";
+    if (!std::filesystem::exists(diag_path))
+    {
+      std::cerr << "    Expected task-1 diagnostic file was not generated.\n";
+      return false;
+    }
+
+    const std::string diag_output = read_text_file(diag_path);
+    if (diag_output.empty())
+    {
+      std::cerr << "    Failed to read task-1 diagnostic file.\n";
+      return false;
+    }
+
+    const std::string selected_stage =
+        "primary Hybrid A* (anchor-first contact): SUCCESS";
+    if (diag_output.find(selected_stage) == std::string::npos)
+    {
+      std::cerr << "    Task-1 segment regression did not use the expected anchor-first success path.\n";
+      return false;
+    }
+
+    const std::string task1_success = "[Assign] SUCCESS with robot2";
+    if (output.find(task1_success) == std::string::npos)
+    {
+      std::cerr << "    Task 1 did not complete successfully for robot2 in the regression instance.\n";
+      return false;
+    }
+
+    return true;
+  }
+
+  bool test_task5_b8_boundary_contact_repro()
+  {
+    constexpr double kStartTime = 115.415;
+    const Pose start_pose(1.893, 0.562, 3.695);
+    const Pose source_clearance_goal(1.025, 0.088, 0.498);
+    constexpr double kMarsPrePushDistance = 0.445;
+    const Pose b8_pose(1.424, 0.304, 0.498);
+    const Pose mars_goal(
+        b8_pose.x - kMarsPrePushDistance * std::cos(source_clearance_goal.yaw),
+        b8_pose.y - kMarsPrePushDistance * std::sin(source_clearance_goal.yaw),
+        source_clearance_goal.yaw);
+
+    // Exact reduced repro from result_seq_ReloPush-BOSS_10_objects.txt_ind88.b64,
+    // task 5 / b8 / segment 2 diagnostics.
+
+    struct Trial
+    {
+      std::string name;
+      Pose goal;
+      Params params;
+      int max_iterations;
+    };
+
+    const std::vector<Trial> trials = {
+        {"current MARS goal + current fine params",
+         mars_goal, make_task5_b8_boundary_params(), 10000},
+        {"source-clearance goal + current fine params",
+         source_clearance_goal, make_task5_b8_boundary_params(), 10000},
+        {"current MARS goal + ReloPush-like primitive params",
+         mars_goal, make_relopush_like_task5_b8_params(), 20000},
+        {"source-clearance goal + ReloPush-like primitive params",
+         source_clearance_goal, make_relopush_like_task5_b8_params(), 20000},
+        {"current MARS goal + contact-boundary geometric params",
+         mars_goal, make_contact_boundary_task5_b8_params(), 30000},
+        {"source-clearance goal + contact-boundary geometric params",
+         source_clearance_goal, make_contact_boundary_task5_b8_params(), 30000},
+    };
+
+    bool any_success = false;
+    for (const auto &trial : trials)
+    {
+      EntityStore store;
+      RobotMeta *robot = store.add_mars_runtime_robot("robot1", start_pose);
+      store.add_object("b8", b8_pose);
+
+      TimeTable timetable(0.5);
+      timetable.add_initial(store.entities);
+      robot->initial_pose = timetable.get_pose(robot, kStartTime);
+
+      PHAStar planner(robot, trial.goal, &timetable, &store.entities,
+                      trial.params, false, "", kStartTime,
+                      "task5-b8-boundary-contact-repro", "b8");
+      planner.max_search_iterations = trial.max_iterations;
+      planner.set_ignore_other_robots(true);
+      planner.set_planner_expansion_threads(1);
+
+      const auto res = planner.Planning_with_res(kStartTime);
+      std::cout << "    [Task5/b8 repro] " << trial.name << "\n";
+      print_planning_stats(res);
+
+      if (res.status == PlanningStatus::SUCCESS)
+      {
+        any_success = true;
+        Trajectory planned;
+        planned.entity = robot;
+        planned.start_time = kStartTime;
+        planned.is_transfer = false;
+        planned.approach_goal_entity = store.entities["b8"];
+        planned.waypoints = res.waypoints;
+        maybe_show_results("Task 5 b8 boundary/contact reduced repro",
+                           timetable, store.entities, {planned}, trial.params);
+      }
+    }
+
+    if (!any_success)
+    {
+      std::cerr << "    None of the task-5/b8 reduced repro trials found a path.\n";
+      return false;
+    }
+
+    return true;
+  }
+
 } // namespace
 
 int main(int argc, char **argv)
 {
+  g_test_executable_path = std::filesystem::path(argv[0]);
+
   for (int i = 1; i < argc; ++i)
   {
     if (std::strcmp(argv[i], "--visualize") == 0)
     {
       g_enable_visualization = true;
     }
+    else if (std::strcmp(argv[i], "--include-known-failure-repros") == 0)
+    {
+      g_include_known_failure_repros = true;
+    }
   }
 
   if (g_enable_visualization)
   {
     std::cout << "[  INFO    ] Visualization enabled via --visualize\n";
+  }
+  if (g_include_known_failure_repros)
+  {
+    std::cout << "[  INFO    ] Known-failure repro tests enabled\n";
   }
 
   using TestFn = std::function<bool()>;
@@ -886,10 +1173,19 @@ int main(int argc, char **argv)
        test_safe_parking_trajectory_collision_free},
       {"Expand safe parking mode finds feasible candidate",
        test_expand_safe_parking_mode_finds_feasible_candidate},
+      {"Anchor-first contact segment regression",
+       test_anchor_first_contact_segment_regression},
   };
 
+  std::vector<std::pair<std::string, TestFn>> all_tests = tests;
+  if (g_include_known_failure_repros)
+  {
+    all_tests.push_back({"Task 5 b8 boundary/contact reduced repro",
+                         test_task5_b8_boundary_contact_repro});
+  }
+
   int failed = 0;
-  for (const auto &[name, fn] : tests)
+  for (const auto &[name, fn] : all_tests)
   {
     std::cout << "[ RUN      ] " << name << "\n";
     const bool ok = fn();
@@ -906,7 +1202,7 @@ int main(int argc, char **argv)
 
   if (failed == 0)
   {
-    std::cout << "[  PASSED  ] " << tests.size() << " tests.\n";
+    std::cout << "[  PASSED  ] " << all_tests.size() << " tests.\n";
     return 0;
   }
   std::cout << "[  FAILED  ] " << failed << " tests.\n";

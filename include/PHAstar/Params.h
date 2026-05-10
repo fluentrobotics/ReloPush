@@ -21,6 +21,7 @@ struct Params
     double max_time = 1000.0;
     int collision_steps = 3;
     double collision_check_time_step = 0.05;
+    double analytic_threshold_scale = 5.0;
     double analytic_threshold = 5.0;
     double rs_step_size = 0.2;
     double inflation = 1.0;
@@ -34,6 +35,12 @@ struct Params
     // false: strict corner-based check (default, current behavior)
     // true:  origin-only check (valid if robot reference pose is in bounds)
     bool robot_boundary_origin_only = true;
+
+    // Targeted geometric-search options for tight static/contact replans.
+    bool spatial_only_index = false;
+    bool disable_wait_primitive = false;
+    bool enable_holonomic_heuristic = false;
+    double holonomic_heuristic_resolution = 0.10;
 };
 
 #endif // PARAMS_H

@@ -78,6 +78,7 @@ add_executable(phastar_unit_tests
     tests/phastar_unit_tests.cpp
 )
 phastar_apply_common_settings(phastar_unit_tests)
+add_dependencies(phastar_unit_tests phastar_push_demo)
 
 if(BUILD_TESTING)
     add_test(NAME phastar_unit_tests COMMAND phastar_unit_tests)

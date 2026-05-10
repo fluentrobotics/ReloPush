@@ -62,6 +62,7 @@ namespace
   thread_local std::uint32_t g_parking_rng_seed = 0;
   thread_local ParkingCandidateMode g_parking_candidate_mode = ParkingCandidateMode::EXPAND;
   thread_local std::unordered_map<std::string, double> g_recent_failed_relocations;
+  thread_local std::unordered_map<std::string, int> g_initial_transit_failure_counts;
 
   const char *parking_candidate_mode_name(ParkingCandidateMode mode)
   {
@@ -130,6 +131,37 @@ namespace
   void reset_thread_local_planning_state()
   {
     g_recent_failed_relocations.clear();
+    g_initial_transit_failure_counts.clear();
+  }
+
+  std::string rounded_pose_key(const Pose &pose)
+  {
+    const int xi = static_cast<int>(std::round(pose.x * 10.0));
+    const int yi = static_cast<int>(std::round(pose.y * 10.0));
+    const int ai = static_cast<int>(std::round(mod2pi(pose.yaw) * 10.0));
+    return std::to_string(xi) + ":" + std::to_string(yi) + ":" +
+           std::to_string(ai);
+  }
+
+  std::string initial_transit_failure_key(RobotMeta *robot, const Pose &pose)
+  {
+    return (robot ? robot->name : std::string("unknown")) + "@" +
+           rounded_pose_key(pose);
+  }
+
+  void clear_initial_transit_failures_for_robot(RobotMeta *robot)
+  {
+    if (!robot)
+      return;
+    const std::string prefix = robot->name + "@";
+    for (auto it = g_initial_transit_failure_counts.begin();
+         it != g_initial_transit_failure_counts.end();)
+    {
+      if (it->first.rfind(prefix, 0) == 0)
+        it = g_initial_transit_failure_counts.erase(it);
+      else
+        ++it;
+    }
   }
 }
 
@@ -1792,11 +1824,11 @@ Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
   params.robot_collision_inflation =
       positive_or(options.default_robot_collision_inflation, params.robot_collision_inflation);
 
-  // Keep the MARS analytic expansion threshold expressed relative to max steer.
-  params.analytic_threshold =
-      positive_or(options.default_analytic_threshold_scale, 5.0) * params.max_steer;
-  // params.analytic_threshold = std::hypot(params.max_x - params.min_x,
-  // params.max_y - params.min_y) * 2.0;
+  // PHAStar converts this scale to a mode-specific distance using the
+  // robot's turning radius when each planner instance is constructed.
+  params.analytic_threshold_scale =
+      positive_or(options.default_analytic_threshold_scale,
+                  params.analytic_threshold_scale);
 
   // Set workspace boundaries if available
   if (!loadedSequence.empty())
@@ -3059,6 +3091,33 @@ Params make_fine_segment_params(const Params &params,
   return fine;
 }
 
+Params make_contact_boundary_segment_params(const Params &params,
+                                            const RuntimeOptions &options)
+{
+  Params contact = make_fine_segment_params(params, options);
+  contact.xy_resolution = std::min(contact.xy_resolution,
+                                   std::max(1e-6, options.contact_boundary_xy_resolution));
+  contact.yaw_resolution = std::min(contact.yaw_resolution,
+                                    std::max(1e-6, options.contact_boundary_yaw_resolution));
+  contact.time_step = std::min(contact.time_step,
+                               std::max(1e-6, options.contact_boundary_time_step));
+  contact.time_resolution = contact.time_step;
+  contact.rs_step_size = std::min(contact.rs_step_size,
+                                  std::max(1e-6, options.contact_boundary_rs_step_size));
+  contact.reverse_penalty =
+      std::max(0.0, options.contact_boundary_reverse_penalty);
+  contact.spatial_only_index = true;
+  contact.disable_wait_primitive = true;
+  contact.enable_holonomic_heuristic = true;
+  contact.holonomic_heuristic_resolution =
+      std::max(1e-3, options.contact_boundary_holonomic_resolution);
+  contact.collision_steps = std::max(
+      contact.collision_steps,
+      static_cast<int>(std::ceil(contact.time_step /
+                                 std::max(1e-3, contact.collision_check_time_step))));
+  return contact;
+}
+
 ReferenceExperienceGraphOptions reference_egraph_options_from_runtime(
     const RuntimeOptions &options)
 {
@@ -3344,7 +3403,7 @@ CollisionInfo check_terminal_hold_detailed(
         others,
         params,
         robot,
-        nullptr,
+        traj.is_transfer ? traj.transferred_object : nullptr,
         nullptr);
     if (!collision_result.has_collision)
       continue;
@@ -4337,6 +4396,11 @@ bool relocate_blocking_robot(RobotMeta *blocker,
   };
 
   std::unordered_set<std::string> tried_pose_keys;
+  int relocation_modes_tried = 0;
+  int relocation_candidates_planned = 0;
+  int relocation_planning_failures = 0;
+  int relocation_schedule_failures = 0;
+  int relocation_safety_rejections = 0;
   std::vector<ParkingCandidateMode> candidate_modes;
   auto append_mode_once = [&](ParkingCandidateMode mode)
   {
@@ -4488,6 +4552,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
   for (std::size_t mode_index = 0; mode_index < candidate_modes.size(); ++mode_index)
   {
     ParkingCandidateMode candidate_mode = candidate_modes[mode_index];
+    relocation_modes_tried++;
     if (mode_index > 0)
     {
       std::cout << "  [Relocate] Retrying with "
@@ -4510,6 +4575,12 @@ bool relocate_blocking_robot(RobotMeta *blocker,
         std::cout << "  [Relocate] SUCCESS: Moved " << blocker->name
                   << " to (" << connected_result.parking_pose.x << ", "
                   << connected_result.parking_pose.y << ")" << std::endl;
+        std::cout << "  [Relocate] Summary: modes=" << relocation_modes_tried
+                  << ", planned_candidates=" << relocation_candidates_planned
+                  << ", planning_failures=" << relocation_planning_failures
+                  << ", schedule_failures=" << relocation_schedule_failures
+                  << ", safety_rejections=" << relocation_safety_rejections
+                  << std::endl;
         return true;
       }
       continue;
@@ -4536,6 +4607,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       if (parking_pose_conflicts_with_blocked_hint(cand.pose, blocker,
                                                    blocked_traj_hint))
       {
+        relocation_safety_rejections++;
         PlanningResult skipped_res;
         skipped_res.status = PlanningStatus::NO_PATH_FOUND;
         skipped_res.failure_detail =
@@ -4555,6 +4627,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       }
       else
       {
+        relocation_candidates_planned++;
         PHAStar planner(blocker, cand.pose, &timetable, &entities, params, false,
                         "", ready_time, "Safe parking relocation");
         planner.set_ignore_other_robots(true);
@@ -4567,6 +4640,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
 
       if (res.status != PlanningStatus::SUCCESS)
       {
+        relocation_planning_failures++;
         record_debug_trial(candidate_mode, cand.pose, res);
         continue;
       }
@@ -4591,6 +4665,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       wait_added = std::max(0.0, safe_start - ready_time);
       if (safe_start < 0.0)
       {
+        relocation_schedule_failures++;
         PlanningResult trial_res = res;
         shift_waypoint_times(trial_res.waypoints,
                              std::max(ready_time, last_check_time) - ready_time);
@@ -4623,6 +4698,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
               blocker, cand.pose, arrival_time, timetable, params);
       if (!park_conflict.is_valid)
       {
+        relocation_safety_rejections++;
         PlanningResult trial_res = res;
         trial_res.status = PlanningStatus::NO_PATH_FOUND;
         std::ostringstream oss;
@@ -4655,6 +4731,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
               blocked_traj_hint, blocker, committed_timetable, params,
               &blocked_hint_collision, &blocked_hint_check_time))
       {
+        relocation_safety_rejections++;
         PlanningResult trial_res = res;
         trial_res.status = PlanningStatus::NO_PATH_FOUND;
         std::ostringstream oss;
@@ -4710,12 +4787,24 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       std::cout << "  [Relocate] SUCCESS: Moved " << blocker->name
                 << " to (" << selected_parking_pose.x << ", "
                 << selected_parking_pose.y << ")" << std::endl;
+      std::cout << "  [Relocate] Summary: modes=" << relocation_modes_tried
+                << ", planned_candidates=" << relocation_candidates_planned
+                << ", planning_failures=" << relocation_planning_failures
+                << ", schedule_failures=" << relocation_schedule_failures
+                << ", safety_rejections=" << relocation_safety_rejections
+                << std::endl;
       return true;
     }
   }
   recent_failed_relocations[fail_key] = ready_time;
   show_debug_trials();
   std::cerr << "  [Relocate] FAILED: Could not find safe parking spot for " << blocker->name << std::endl;
+  std::cerr << "  [Relocate] Summary: modes=" << relocation_modes_tried
+            << ", planned_candidates=" << relocation_candidates_planned
+            << ", planning_failures=" << relocation_planning_failures
+            << ", schedule_failures=" << relocation_schedule_failures
+            << ", safety_rejections=" << relocation_safety_rejections
+            << std::endl;
   return false;
 }
 
@@ -6164,6 +6253,11 @@ struct SegmentReplanContext
   std::string object_name;
   std::string start_contact_entity;
   bool tight_or_contact_case = false;
+  bool has_live_object_pose = false;
+  Pose live_object_pose;
+  double mars_prepush_distance = 0.0;
+  double source_prepush_distance = 0.0;
+  Pose source_clearance_goal;
 };
 
 bool is_soft_robot_collision(const CollisionInfo &info,
@@ -6420,8 +6514,18 @@ std::string format_planner_stats(const PlanningDebugStats &stats)
       << ", reject_closed=" << stats.reject_closed
       << ", reject_worse_g=" << stats.reject_worse_g
       << ", analytic_collision=" << stats.analytic_collision
+      << " (boundary=" << stats.analytic_boundary_collision
+      << ", object=" << stats.analytic_object_collision
+      << ", robot_soft=" << stats.analytic_robot_soft_collision
+      << ", other=" << stats.analytic_other_collision << ")"
       << ", analytic_post_arrival_collision="
       << stats.analytic_post_arrival_collision
+      << " (boundary="
+      << stats.analytic_post_arrival_boundary_collision
+      << ", object=" << stats.analytic_post_arrival_object_collision
+      << ", robot_soft="
+      << stats.analytic_post_arrival_robot_soft_collision
+      << ", other=" << stats.analytic_post_arrival_other_collision << ")"
       << ", egraph_nodes=" << stats.reference_egraph_nodes
       << ", egraph_snap_acc=" << stats.reference_egraph_snap_accepted
       << ", egraph_snap_rej=" << stats.reference_egraph_snap_rejected
@@ -6431,13 +6535,18 @@ std::string format_planner_stats(const PlanningDebugStats &stats)
       << ", mha_ref_exp=" << stats.mha_reference_expansions
       << ", mha_ref_queued=" << stats.mha_reference_queued
       << ", mha_ref_skip_far=" << stats.mha_reference_skipped_far
+      << ", iteration_limit_hit=" << stats.search_iteration_limit_hit
+      << ", spatial_index=" << (stats.spatial_index_collapses ? "true" : "false")
+      << ", wait_skipped=" << stats.wait_primitives_skipped
       << ", expansion_threads=" << stats.planner_expansion_threads
+      << ", analytic_threshold=" << stats.analytic_threshold
       << ", analytic_validation_time="
       << std::fixed << std::setprecision(4)
       << stats.analytic_validation_time_sec
       << "s, primitive_collision_time="
       << stats.primitive_collision_time_sec
       << "s, heuristic_time=" << stats.heuristic_time_sec
+      << "s, holonomic_build_time=" << stats.holonomic_heuristic_time_sec
       << "s, serial_merge_time=" << stats.serial_merge_time_sec << "s";
   if (std::isfinite(stats.best_dist))
   {
@@ -6497,6 +6606,19 @@ void write_segment_replan_diagnostics(
       << ", " << start_pose.yaw << ") at t=" << start_time << "\n";
   ofs << "[PlannerDiag] Goal:  (" << goal_pose.x << ", " << goal_pose.y
       << ", " << goal_pose.yaw << ")\n";
+  if (context.has_live_object_pose)
+  {
+    ofs << "[PlannerDiag] Live object pose: ("
+        << context.live_object_pose.x << ", " << context.live_object_pose.y
+        << ", " << context.live_object_pose.yaw << ")\n";
+    ofs << "[PlannerDiag] Prepush distances: mars="
+        << context.mars_prepush_distance
+        << ", source=" << context.source_prepush_distance << "\n";
+    ofs << "[PlannerDiag] Source-clearance goal: ("
+        << context.source_clearance_goal.x << ", "
+        << context.source_clearance_goal.y << ", "
+        << context.source_clearance_goal.yaw << ")\n";
+  }
   ofs << "[PlannerDiag] Start contact entity: "
       << (context.start_contact_entity.empty() ? "none"
                                                : context.start_contact_entity)
@@ -6613,6 +6735,16 @@ bool replan_transit_segment(
   diag_context.tight_or_contact_case =
       !diag_context.start_contact_entity.empty() ||
       (start_goal_dist < 1.5 && start_goal_yaw > M_PI / 2.0);
+  const auto near_boundary = [&](const Pose &pose)
+  {
+    constexpr double kBoundaryMargin = 0.35;
+    return pose.x <= params.min_x + kBoundaryMargin ||
+           pose.x >= params.max_x - kBoundaryMargin ||
+           pose.y <= params.min_y + kBoundaryMargin ||
+           pose.y >= params.max_y - kBoundaryMargin;
+  };
+  const bool contact_boundary_case =
+      diag_context.tight_or_contact_case && near_boundary(goal_pose);
 
   std::vector<SegmentCandidateReport> reports;
   std::string selected_stage;
@@ -6654,7 +6786,8 @@ bool replan_transit_segment(
                              double plan_start_time,
                              const Params &plan_params,
                              int max_iter,
-                             const std::string &stage) -> PlanningResult
+                             const std::string &stage,
+                             bool allow_reference_egraph = true) -> PlanningResult
   {
     Color::println("[PHAStar] Attempting search method: " + stage, Color::CYAN);
     robot->initial_pose = plan_start_pose;
@@ -6665,7 +6798,8 @@ bool replan_transit_segment(
     planner.set_ignore_other_robots(true);
     planner.max_search_iterations = max_iter;
     planner.set_planner_expansion_threads(options.planner_expansion_threads);
-    if (options.enable_reference_egraph_transit && reference_waypoints &&
+    if (allow_reference_egraph &&
+        options.enable_reference_egraph_transit && reference_waypoints &&
         reference_waypoints->size() >= 2)
     {
       planner.set_reference_experience_graph(
@@ -6685,10 +6819,12 @@ bool replan_transit_segment(
                                    double plan_start_time,
                                    const Params &plan_params,
                                    int max_iter,
-                                   const std::vector<Waypoint> *prefix = nullptr) -> bool
+                                   const std::vector<Waypoint> *prefix = nullptr,
+                                   bool allow_reference_egraph = true) -> bool
   {
     PlanningResult res = run_hybrid_plan(plan_start_pose, plan_start_time,
-                                         plan_params, max_iter, stage);
+                                         plan_params, max_iter, stage,
+                                         allow_reference_egraph);
     if (res.waypoints.empty())
       return evaluate_candidate(stage, res, {});
 
@@ -6703,8 +6839,22 @@ bool replan_transit_segment(
     return evaluate_candidate(stage, res, std::move(candidate_rel));
   };
 
-  if (evaluate_hybrid_stage("primary Hybrid A*", start_pose, start_time,
-                            params, options.max_search_iterations))
+  const bool anchor_first_for_contact =
+      options.anchor_first_contact_segment_transit &&
+      !diag_context.start_contact_entity.empty();
+  if (anchor_first_for_contact && options.enable_reference_egraph_transit)
+  {
+    std::cout << "[PHAStar] Contact-start segment transit: trying anchor-only "
+                 "search before Reference E-Graph."
+              << std::endl;
+  }
+
+  if (evaluate_hybrid_stage(
+          anchor_first_for_contact
+              ? "primary Hybrid A* (anchor-first contact)"
+              : "primary Hybrid A*",
+          start_pose, start_time, params, options.max_search_iterations,
+          nullptr, !anchor_first_for_contact))
   {
     if (diag_context.tight_or_contact_case)
       write_segment_replan_diagnostics(diag_context, robot, start_pose,
@@ -6720,8 +6870,12 @@ bool replan_transit_segment(
         options.max_search_iterations,
         options.fine_segment_max_search_iterations);
     if (diag_context.tight_or_contact_case &&
-        evaluate_hybrid_stage("fine Hybrid A*", start_pose, start_time,
-                              fine_params, fine_max_iter))
+        evaluate_hybrid_stage(
+            anchor_first_for_contact
+                ? "fine Hybrid A* (anchor-first contact)"
+                : "fine Hybrid A*",
+            start_pose, start_time, fine_params, fine_max_iter,
+            nullptr, !anchor_first_for_contact))
     {
       write_segment_replan_diagnostics(diag_context, robot, start_pose,
                                        goal_pose, start_time, reports, true,
@@ -6729,7 +6883,51 @@ bool replan_transit_segment(
       return true;
     }
 
-    if (!diag_context.start_contact_entity.empty())
+    if (options.enable_contact_boundary_geometric_retry &&
+        contact_boundary_case)
+    {
+      Params contact_params =
+          make_contact_boundary_segment_params(params, options);
+      const int contact_max_iter = std::max(
+          fine_max_iter, options.contact_boundary_max_search_iterations);
+      if (evaluate_hybrid_stage(
+              "contact-boundary geometric Hybrid A*",
+              start_pose, start_time, contact_params, contact_max_iter,
+              nullptr, false))
+      {
+        write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                         goal_pose, start_time, reports, true,
+                                         selected_stage);
+        return true;
+      }
+    }
+
+    if (anchor_first_for_contact && options.enable_reference_egraph_transit)
+    {
+      if (evaluate_hybrid_stage(
+              "primary Hybrid A* (Reference E-Graph fallback)",
+              start_pose, start_time, params, options.max_search_iterations))
+      {
+        write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                         goal_pose, start_time, reports, true,
+                                         selected_stage);
+        return true;
+      }
+
+      if (diag_context.tight_or_contact_case &&
+          evaluate_hybrid_stage(
+              "fine Hybrid A* (Reference E-Graph fallback)",
+              start_pose, start_time, fine_params, fine_max_iter))
+      {
+        write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                         goal_pose, start_time, reports, true,
+                                         selected_stage);
+        return true;
+      }
+    }
+
+    if (options.enable_reverse_escape_retries &&
+        !diag_context.start_contact_entity.empty())
     {
       const double escape_distance = 0.12;
       const double escape_steer =
@@ -6815,7 +7013,8 @@ bool replan_transit_segment(
       return true;
     }
 
-    if (!diag_context.start_contact_entity.empty())
+    if (options.enable_reverse_escape_retries &&
+        !diag_context.start_contact_entity.empty())
     {
       const double escape_distance = 0.12;
       const double escape_steer =
@@ -6891,13 +7090,33 @@ bool prepare_segment_waypoints_for_scheduling(
     Pose start_pose = timetable.get_pose(robot, segment_ready_time);
     Pose segment_goal = traj->waypoints.back();
     EntityMeta *approach_goal_entity = traj->approach_goal_entity;
+    SegmentReplanContext segment_context = replan_context;
     if (robot && approach_goal_entity)
     {
       const Pose live_object_pose =
           timetable.get_pose(approach_goal_entity, segment_ready_time);
-      segment_goal = compute_adjusted_prepush_goal(
-          live_object_pose, segment_goal.yaw, robot, approach_goal_entity,
-          0.01);
+      const double mars_prepush_distance =
+          contact_offset_for_object(robot, approach_goal_entity, 0.01);
+      const double source_prepush_distance = traj->source_pre_push_distance;
+      const double effective_prepush_distance =
+          std::max(mars_prepush_distance,
+                   source_prepush_distance > 1e-9
+                       ? source_prepush_distance
+                       : mars_prepush_distance);
+      ReloPush::State object_centric_pose(
+          live_object_pose.x, live_object_pose.y, mod2pi(segment_goal.yaw));
+      segment_goal = PoseFromReloPushState(
+          object_centric_pose.get_prePush(effective_prepush_distance));
+
+      segment_context.has_live_object_pose = true;
+      segment_context.live_object_pose = live_object_pose;
+      segment_context.mars_prepush_distance = mars_prepush_distance;
+      segment_context.source_prepush_distance = source_prepush_distance;
+      segment_context.source_clearance_goal = PoseFromReloPushState(
+          object_centric_pose.get_prePush(
+              source_prepush_distance > 1e-9
+                  ? source_prepush_distance
+                  : mars_prepush_distance));
     }
     std::vector<Waypoint> reference_waypoints = original_waypoints;
     if (!reference_waypoints.empty())
@@ -6912,7 +7131,7 @@ bool prepare_segment_waypoints_for_scheduling(
     std::vector<Waypoint> replanned_rel;
     if (!replan_transit_segment(robot, segment_goal, segment_ready_time,
                                 timetable, entities, params, options, replanned_rel,
-                                replan_context,
+                                segment_context,
                                 approach_goal_entity,
                                 &reference_waypoints))
     {
@@ -8039,7 +8258,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/result_seq_ReloPush-BOSS_10_objects.txt_ind12.b64";
+         "/result_seq_ReloPush-BOSS_10_objects.txt_ind88.b64";
 }
 
 bool load_data(
@@ -8177,6 +8396,29 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     else if (arg == "--parking-candidate-mode=random")
     {
       options.parking_candidate_mode = ParkingCandidateMode::RANDOM;
+    }
+    else if (arg == "--failed-candidate-idle-parking")
+    {
+      options.enable_failed_candidate_idle_parking = true;
+    }
+    else if (arg == "--no-failed-candidate-idle-parking")
+    {
+      options.enable_failed_candidate_idle_parking = false;
+    }
+    else if (arg.rfind("--failed-candidate-initial-transit-threshold=", 0) == 0)
+    {
+      std::string value = arg.substr(
+          std::string("--failed-candidate-initial-transit-threshold=").size());
+      try
+      {
+        options.failed_candidate_initial_transit_failure_threshold =
+            std::max(1, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --failed-candidate-initial-transit-threshold value: '"
+                  << value << "'. Keeping default." << std::endl;
+      }
     }
     else if (arg == "--enable-order-learning" ||
              arg == "--order-learning")
@@ -8317,6 +8559,16 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     {
       options.enable_lns_fine_segment_retry = false;
     }
+    else if (arg == "--reverse-escape-retries" ||
+             arg == "--enable-reverse-escape-retries")
+    {
+      options.enable_reverse_escape_retries = true;
+    }
+    else if (arg == "--no-reverse-escape-retries" ||
+             arg == "--disable-reverse-escape-retries")
+    {
+      options.enable_reverse_escape_retries = false;
+    }
     else if (arg == "--initial-transit-fallbacks")
     {
       options.enable_initial_transit_fallbacks = true;
@@ -8332,6 +8584,22 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     else if (arg == "--no-reference-egraph-transit")
     {
       options.enable_reference_egraph_transit = false;
+    }
+    else if (arg == "--anchor-first-contact-segment-transit")
+    {
+      options.anchor_first_contact_segment_transit = true;
+    }
+    else if (arg == "--no-anchor-first-contact-segment-transit")
+    {
+      options.anchor_first_contact_segment_transit = false;
+    }
+    else if (arg == "--contact-boundary-geometric-retry")
+    {
+      options.enable_contact_boundary_geometric_retry = true;
+    }
+    else if (arg == "--no-contact-boundary-geometric-retry")
+    {
+      options.enable_contact_boundary_geometric_retry = false;
     }
     else if (arg == "--visualize" || arg == "--visualization")
     {
@@ -8472,7 +8740,7 @@ void print_runtime_options(const RuntimeOptions &options)
             << ", collision_steps=" << options.default_collision_steps
             << ", collision_step="
             << options.default_collision_check_time_step
-            << ", analytic_scale="
+            << ", analytic_threshold_scale="
             << options.default_analytic_threshold_scale << std::endl;
   std::cout << "[Config] Default search costs/collision: "
             << "turn_penalty=" << options.default_turn_penalty
@@ -8491,8 +8759,28 @@ void print_runtime_options(const RuntimeOptions &options)
             << ", rs_step=" << options.fine_segment_rs_step_size
             << ", collision_step="
             << options.fine_segment_collision_check_time_step << std::endl;
+  std::cout << "[Config] Reverse escape retries: "
+            << (options.enable_reverse_escape_retries ? "enabled" : "disabled")
+            << std::endl;
+  std::cout << "[Config] Contact-boundary geometric retry: "
+            << (options.enable_contact_boundary_geometric_retry ? "enabled" : "disabled")
+            << ", max_iter=" << options.contact_boundary_max_search_iterations
+            << ", xy=" << options.contact_boundary_xy_resolution
+            << ", yaw=" << options.contact_boundary_yaw_resolution
+            << ", time_step=" << options.contact_boundary_time_step
+            << ", rs_step=" << options.contact_boundary_rs_step_size
+            << ", reverse_penalty="
+            << options.contact_boundary_reverse_penalty
+            << ", holonomic_resolution="
+            << options.contact_boundary_holonomic_resolution
+            << std::endl;
   std::cout << "[Config] Parking candidate mode: "
             << parking_candidate_mode_name(options.parking_candidate_mode)
+            << std::endl;
+  std::cout << "[Config] Failed-candidate idle parking: "
+            << (options.enable_failed_candidate_idle_parking ? "enabled" : "disabled")
+            << ", initial_transit_threshold="
+            << options.failed_candidate_initial_transit_failure_threshold
             << std::endl;
   std::cout << "[Config] Order-constraint learning: "
             << (options.enable_order_constraint_learning ? "enabled" : "disabled")
@@ -8519,6 +8807,9 @@ void print_runtime_options(const RuntimeOptions &options)
             << ", snap_yaw=" << options.reference_egraph_snap_yaw
             << ", lookahead=" << options.reference_egraph_successor_lookahead
             << ", max_nodes=" << options.reference_egraph_max_nodes
+            << std::endl;
+  std::cout << "[Config] Anchor-first contact segment transit: "
+            << (options.anchor_first_contact_segment_transit ? "enabled" : "disabled")
             << std::endl;
   std::cout << "[Config] Visualization: "
             << (options.enable_visualization ? "enabled" : "disabled")
@@ -9042,6 +9333,79 @@ bool attempt_task_with_candidate(
   return false;
 }
 
+bool maybe_safe_park_repeated_initial_transit_failure(
+    RobotMeta *robot,
+    double free_time,
+    const std::string &failure_reason,
+    TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params,
+    const RuntimeOptions &options)
+{
+  if (!options.enable_failed_candidate_idle_parking || !robot)
+    return false;
+
+  if (failure_reason.find("initial transit planning failed") ==
+      std::string::npos)
+  {
+    return false;
+  }
+
+  const double robot_ready_time = timetable.get_entity_max_time(robot);
+  if (std::abs(robot_ready_time - free_time) > 1e-3)
+  {
+    clear_initial_transit_failures_for_robot(robot);
+    return false;
+  }
+
+  const Pose idle_pose = timetable.get_pose(robot, robot_ready_time);
+  const std::string fail_key = initial_transit_failure_key(robot, idle_pose);
+  int &failure_count = g_initial_transit_failure_counts[fail_key];
+  failure_count += 1;
+
+  const int threshold = std::max(
+      1, options.failed_candidate_initial_transit_failure_threshold);
+  std::cout << "         [CandidateRecovery] " << robot->name
+            << " initial transit failed from idle pose "
+            << rounded_pose_key(idle_pose) << " (" << failure_count
+            << "/" << threshold << ")." << std::endl;
+
+  if (failure_count < threshold)
+    return false;
+
+  Trajectory blocked_hint;
+  blocked_hint.entity = robot;
+  blocked_hint.start_time = robot_ready_time;
+  blocked_hint.is_transfer = false;
+  blocked_hint.kind = TrajectoryKind::TRANSIT;
+  Waypoint wait_pose;
+  wait_pose.x = idle_pose.x;
+  wait_pose.y = idle_pose.y;
+  wait_pose.yaw = idle_pose.yaw;
+  wait_pose.time = 0.0;
+  wait_pose.linear_velocity = 0.0;
+  wait_pose.steering_angle = 0.0;
+  blocked_hint.waypoints.push_back(wait_pose);
+
+  std::cout << "         [CandidateRecovery] " << robot->name
+            << " failed initial transit from this idle pose " << failure_count
+            << " times; safe-parking before next candidate." << std::endl;
+
+  if (!relocate_blocking_robot(robot, timetable, params, entities, options,
+                               &blocked_hint))
+  {
+    std::cout << "         [CandidateRecovery] Safe parking failed for "
+              << robot->name << "; keeping existing pose." << std::endl;
+    return false;
+  }
+
+  clear_initial_transit_failures_for_robot(robot);
+  std::cout << "         [CandidateRecovery] " << robot->name
+            << " safe-parked after repeated initial-transit failures."
+            << std::endl;
+  return true;
+}
+
 TaskCsvRow execute_single_task_with_candidates(
     Task &task,
     int task_counter,
@@ -9070,9 +9434,14 @@ TaskCsvRow execute_single_task_with_candidates(
                                     transfer_windows, row,
                                     last_failed_robot, last_failure_reason))
     {
+      clear_initial_transit_failures_for_robot(cand_robot);
       task_success = true;
       break;
     }
+
+    maybe_safe_park_repeated_initial_transit_failure(
+        cand_robot, free_time, last_failure_reason, timetable, entities,
+        params, options);
   }
 
   if (!task_success)

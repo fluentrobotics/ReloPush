@@ -23,6 +23,7 @@
 #include <exception>
 #include <functional>
 #include <mutex>
+#include <queue>
 #include <thread>
 
 // PHA* Implementation
@@ -252,6 +253,12 @@ public:
     int x_width, y_width, theta_width, time_width;
     std::vector<double> entity_diags;
     ReferenceExperienceGraph reference_egraph;
+    mutable bool holonomic_heuristic_ready = false;
+    mutable int holonomic_width = 0;
+    mutable int holonomic_height = 0;
+    mutable double holonomic_resolution = 0.10;
+    mutable std::vector<double> holonomic_costs;
+    mutable double holonomic_build_time_sec = 0.0;
 
     // Backup path (valid geometry but blocked by relocatable robot)
     PlanningResult backup_result;
@@ -275,6 +282,8 @@ public:
         iy = std::max(0, std::min(iy, y_width - 1));
         itheta = std::max(0, std::min(itheta, theta_width - 1));
         itime = std::max(0, std::min(itime, time_width - 1));
+        if (params.spatial_only_index)
+            return (static_cast<size_t>(iy) * x_width + ix) * theta_width + itheta;
         return (((static_cast<size_t>(iy) * x_width + ix) * theta_width + itheta) * time_width) + itime;
     }
 
@@ -799,6 +808,83 @@ public:
         }
         return rs_t;
     }
+
+    CollisionInfo check_boundary_along_rs(
+        const std::vector<std::tuple<double, double, double>> &rs_path,
+        double current_t) const
+    {
+        double speed_val = speed;
+        if (speed_val <= 1e-6)
+            speed_val = 0.1;
+
+        auto check_pose_boundary = [&](const Pose &robot_pose,
+                                       double check_t) -> CollisionInfo
+        {
+            CollisionGeometry robot_geom_bounds =
+                setup_collision_geometry(robot_pose, robot->size, 1.0);
+            if (check_robot_bounds_collision(robot_pose,
+                                             robot_geom_bounds.corners,
+                                             params))
+            {
+                return {false, "Robot Out of Bounds", "Boundary", check_t};
+            }
+
+            if (is_transfer && transferred)
+            {
+                Pose obj_pose =
+                    TimeTable::compute_object_pose(robot_pose, robot->size,
+                                                   transferred->size);
+                CollisionGeometry obj_geom_bounds =
+                    setup_collision_geometry(obj_pose, transferred->size, 1.0);
+                if (check_object_bounds_collision(obj_pose,
+                                                  obj_geom_bounds.corners,
+                                                  params))
+                {
+                    return {false, "Object Out of Bounds", "Boundary", check_t};
+                }
+            }
+
+            return {true, "Valid", "", check_t};
+        };
+
+        for (size_t i = 0; i + 1 < rs_path.size(); ++i)
+        {
+            auto [x1, y1, yaw1] = rs_path[i];
+            auto [x2, y2, yaw2] = rs_path[i + 1];
+
+            const double dx = x2 - x1;
+            const double dy = y2 - y1;
+            const double dist = std::hypot(dx, dy);
+            if (dist <= 1e-5)
+                continue;
+
+            const double time_inc = dist / speed_val;
+            const int samples = std::max(params.collision_steps,
+                                         collision_samples_for_duration(time_inc));
+            for (int j = 1; j <= samples; ++j)
+            {
+                const double frac = static_cast<double>(j) / samples;
+                const double x_i = x1 + frac * dx;
+                const double y_i = y1 + frac * dy;
+
+                double dyaw = yaw2 - yaw1;
+                while (dyaw > M_PI)
+                    dyaw -= 2 * M_PI;
+                while (dyaw < -M_PI)
+                    dyaw += 2 * M_PI;
+                const double yaw_i = mod2pi(yaw1 + frac * dyaw);
+                const double t_i = current_t + frac * time_inc;
+
+                CollisionInfo boundary_info =
+                    check_pose_boundary(Pose{x_i, y_i, yaw_i}, t_i);
+                if (!boundary_info.is_valid)
+                    return boundary_info;
+            }
+            current_t += time_inc;
+        }
+
+        return {true, "Valid", "", current_t};
+    }
     /*
         bool check_collision_along_rs(const std::vector<std::tuple<double, double, double>>& rs_path, double current_t) {
             double front_inf = robot->size.front_length * params.inflation;
@@ -925,19 +1011,181 @@ public:
         return node->cost + calc_heuristic(node);
     }
 
+    bool holonomic_cell_blocked(int ix, int iy) const
+    {
+        const double x = params.min_x +
+                         (static_cast<double>(ix) + 0.5) * holonomic_resolution;
+        const double y = params.min_y +
+                         (static_cast<double>(iy) + 0.5) * holonomic_resolution;
+        const Pose pose{x, y, goal ? goal->yaw : 0.0};
+
+        CollisionGeometry robot_bounds =
+            setup_collision_geometry(pose, robot->size, 1.0);
+        if (check_robot_bounds_collision(pose, robot_bounds.corners, params))
+            return true;
+
+        CollisionGeometry robot_geom = setup_collision_geometry_for_type(
+            pose, EntityType::ROBOT, robot->size, params);
+        auto poses = timetable->get_poses(start ? start->t : 0.0);
+        for (const auto &[ent, ent_pose] : poses)
+        {
+            if (ent == robot || ent == transferred || ent == ignored_entity)
+                continue;
+            if (ignore_other_robots && ent->type == EntityType::ROBOT)
+                continue;
+
+            CollisionGeometry ent_geom = setup_collision_geometry_for_type(
+                ent_pose, ent->type, ent->size, params);
+            if (rectangles_intersect(robot_geom.corners, ent_geom.corners))
+                return true;
+        }
+        return false;
+    }
+
+    void ensure_holonomic_heuristic() const
+    {
+        if (holonomic_heuristic_ready || !params.enable_holonomic_heuristic)
+            return;
+
+        const auto build_start = std::chrono::steady_clock::now();
+        holonomic_resolution =
+            std::max(1e-3, params.holonomic_heuristic_resolution);
+        holonomic_width = static_cast<int>(
+                              std::ceil((params.max_x - params.min_x) /
+                                        holonomic_resolution)) +
+                          1;
+        holonomic_height = static_cast<int>(
+                               std::ceil((params.max_y - params.min_y) /
+                                         holonomic_resolution)) +
+                           1;
+        const int total = std::max(0, holonomic_width * holonomic_height);
+        holonomic_costs.assign(static_cast<std::size_t>(total),
+                               std::numeric_limits<double>::infinity());
+        if (total == 0)
+        {
+            holonomic_heuristic_ready = true;
+            return;
+        }
+
+        auto cell_index = [&](int ix, int iy)
+        {
+            return iy * holonomic_width + ix;
+        };
+        auto clamp_x = [&](double x)
+        {
+            return std::max(0, std::min(holonomic_width - 1,
+                                        static_cast<int>(std::floor(
+                                            (x - params.min_x) /
+                                            holonomic_resolution))));
+        };
+        auto clamp_y = [&](double y)
+        {
+            return std::max(0, std::min(holonomic_height - 1,
+                                        static_cast<int>(std::floor(
+                                            (y - params.min_y) /
+                                            holonomic_resolution))));
+        };
+
+        const int gx = clamp_x(goal->x);
+        const int gy = clamp_y(goal->y);
+        using CostCell = std::pair<double, int>;
+        std::priority_queue<CostCell, std::vector<CostCell>,
+                            std::greater<CostCell>>
+            open;
+        const int goal_idx = cell_index(gx, gy);
+        holonomic_costs[static_cast<std::size_t>(goal_idx)] = 0.0;
+        open.emplace(0.0, goal_idx);
+
+        constexpr int kDx[8] = {1, -1, 0, 0, 1, 1, -1, -1};
+        constexpr int kDy[8] = {0, 0, 1, -1, 1, -1, 1, -1};
+        while (!open.empty())
+        {
+            const auto [cost, idx] = open.top();
+            open.pop();
+            if (cost > holonomic_costs[static_cast<std::size_t>(idx)] + 1e-9)
+                continue;
+
+            const int ix = idx % holonomic_width;
+            const int iy = idx / holonomic_width;
+            for (int k = 0; k < 8; ++k)
+            {
+                const int nx = ix + kDx[k];
+                const int ny = iy + kDy[k];
+                if (nx < 0 || ny < 0 || nx >= holonomic_width ||
+                    ny >= holonomic_height)
+                    continue;
+                const int nidx = cell_index(nx, ny);
+                if (nidx != goal_idx && holonomic_cell_blocked(nx, ny))
+                    continue;
+                const double step =
+                    ((k < 4) ? 1.0 : std::sqrt(2.0)) * holonomic_resolution;
+                const double next_cost = cost + step;
+                double &stored =
+                    holonomic_costs[static_cast<std::size_t>(nidx)];
+                if (next_cost + 1e-9 < stored)
+                {
+                    stored = next_cost;
+                    open.emplace(next_cost, nidx);
+                }
+            }
+        }
+
+        holonomic_build_time_sec += std::chrono::duration<double>(
+                                        std::chrono::steady_clock::now() -
+                                        build_start)
+                                        .count();
+        holonomic_heuristic_ready = true;
+    }
+
+    double holonomic_heuristic_cost(double x, double y) const
+    {
+        if (!params.enable_holonomic_heuristic)
+            return 0.0;
+        ensure_holonomic_heuristic();
+        if (holonomic_width <= 0 || holonomic_height <= 0 ||
+            holonomic_costs.empty())
+            return 0.0;
+
+        const int ix = std::max(0, std::min(holonomic_width - 1,
+                                            static_cast<int>(std::floor(
+                                                (x - params.min_x) /
+                                                holonomic_resolution))));
+        const int iy = std::max(0, std::min(holonomic_height - 1,
+                                            static_cast<int>(std::floor(
+                                                (y - params.min_y) /
+                                                holonomic_resolution))));
+        const double cost =
+            holonomic_costs[static_cast<std::size_t>(iy * holonomic_width + ix)];
+        return std::isfinite(cost) ? cost : 0.0;
+    }
+
     double calc_base_heuristic_to_pose(const Node *node, const Pose &target) const
     {
-        auto [_, __, ___, ____, lengths, _____, ______] =
-            ReedShepp::reeds_shepp_path_planning(
-                node->x, node->y, node->yaw, target.x, target.y, target.yaw,
-                max_curvature, params.rs_step_size * 10, wheel_base);
-        if (lengths.empty())
-            return std::numeric_limits<double>::infinity();
+        if (max_curvature <= 1e-9)
+            return std::max(std::hypot(target.x - node->x, target.y - node->y),
+                            holonomic_heuristic_cost(node->x, node->y));
 
-        double h = 0.0;
-        for (double l : lengths)
-            h += std::abs(l);
-        return h;
+        const double step_size = std::max(1e-6, params.rs_step_size);
+        auto paths = ReedShepp::generate_path(
+            node->x, node->y, node->yaw,
+            target.x, target.y, target.yaw,
+            max_curvature, step_size);
+
+        double best = std::numeric_limits<double>::infinity();
+        for (const auto &path : paths)
+        {
+            if (!analytic_path_allowed_for_mode(path))
+                continue;
+            best = std::min(best, std::abs(path.L) / max_curvature);
+        }
+
+        const double holo = holonomic_heuristic_cost(node->x, node->y);
+        if (std::isfinite(best))
+            return std::max(best, holo);
+
+        // Keep the search guided even if the RS solver has no closed-form candidate.
+        return std::max(std::hypot(target.x - node->x, target.y - node->y),
+                        holo);
     }
 
     double calc_anchor_heuristic(Node *node) const
@@ -1218,6 +1466,8 @@ public:
         max_steer = std::atan(wheel_base * max_curvature);
         speed = is_transfer ? robot->speed_transfer : robot->speed_transit;
         params.movement_length = speed * params.time_step;
+        params.analytic_threshold =
+            std::max(0.0, params.analytic_threshold_scale) * min_turn_radius;
 
         if (is_transfer)
         {
@@ -1244,7 +1494,6 @@ public:
             entity_diags.push_back(diag);
         }
 
-        // params.analytic_threshold = 5.0 * min_turn_radius;
         start_clock = std::chrono::high_resolution_clock::now();
     }
 
@@ -1448,6 +1697,8 @@ public:
         PlanningResult res;
         PlanningDebugStats stats;
         stats.planner_expansion_threads = std::max(1, planner_expansion_threads);
+        stats.analytic_threshold = params.analytic_threshold;
+        stats.spatial_index_collapses = params.spatial_only_index ? 1 : 0;
         stats.reference_egraph_nodes = reference_egraph.enabled
                                            ? reference_egraph.nodes.size()
                                            : 0;
@@ -1464,9 +1715,44 @@ public:
             return (info.reason.find("Robot") != std::string::npos) &&
                    (info.entity_name != "Boundary");
         };
+        auto record_analytic_rejection =
+            [&](const CollisionInfo &info, bool post_arrival)
+        {
+            const bool boundary =
+                info.entity_name == "Boundary" ||
+                info.reason.find("Out of Bounds") != std::string::npos;
+            const bool robot_soft = is_soft_robot_block(info);
+            const bool object =
+                info.reason.find("Object") != std::string::npos ||
+                info.reason.find("Obj") != std::string::npos;
+
+            if (post_arrival)
+            {
+                if (boundary)
+                    stats.analytic_post_arrival_boundary_collision++;
+                else if (robot_soft)
+                    stats.analytic_post_arrival_robot_soft_collision++;
+                else if (object)
+                    stats.analytic_post_arrival_object_collision++;
+                else
+                    stats.analytic_post_arrival_other_collision++;
+            }
+            else
+            {
+                if (boundary)
+                    stats.analytic_boundary_collision++;
+                else if (robot_soft)
+                    stats.analytic_robot_soft_collision++;
+                else if (object)
+                    stats.analytic_object_collision++;
+                else
+                    stats.analytic_other_collision++;
+            }
+        };
 
         auto stamp_stats = [&](PlanningResult &out)
         {
+            stats.holonomic_heuristic_time_sec = holonomic_build_time_sec;
             out.debug_stats = stats;
         };
 
@@ -1532,6 +1818,8 @@ public:
         const bool use_reference_mha = reference_egraph.enabled && !is_transfer;
         const double mha_selection_inflation =
             std::max(1.5, reference_egraph.options.epsilon);
+        constexpr std::size_t kMaxConsecutiveReferenceExpansions = 4;
+        std::size_t consecutive_reference_expansions = 0;
         const double reference_aux_radius =
             std::max(reference_egraph.options.snap_radius * 2.0,
                      params.xy_resolution * 3.0);
@@ -1644,6 +1932,7 @@ public:
             // Early exit if search is taking too long
             if (iteration > (size_t)max_search_iterations)
             {
+                stats.search_iteration_limit_hit++;
                 if (backup_result.status == PlanningStatus::BLOCKED_BY_ROBOT)
                 {
                     std::cout << "Hit iteration limit (" << max_search_iterations << ") with backup path. Returning backup." << std::endl;
@@ -1667,6 +1956,14 @@ public:
                     std::get<0>(reference_open_set.top()) <=
                         mha_selection_inflation *
                             std::get<0>(anchor_open_set.top());
+                if (expand_reference_queue && !anchor_open_set.empty() &&
+                    consecutive_reference_expansions >=
+                        kMaxConsecutiveReferenceExpansions)
+                {
+                    // Keep the reference guide helpful without letting it
+                    // starve the anchor search on mismatched experiences.
+                    expand_reference_queue = false;
+                }
             }
 
             PQElem open_entry =
@@ -1677,11 +1974,13 @@ public:
             {
                 reference_open_set.pop();
                 stats.mha_reference_expansions++;
+                consecutive_reference_expansions++;
             }
             else
             {
                 anchor_open_set.pop();
                 stats.mha_anchor_expansions++;
+                consecutive_reference_expansions = 0;
             }
             // for debug
             local_explored.push_back(*current);
@@ -1731,7 +2030,9 @@ public:
             {
                 AnalyticCandidateEval eval;
                 auto rs_path = rs_points(rs_candidate);
-                eval.rs_info = check_collision_along_rs(rs_path, current->t);
+                eval.rs_info = check_boundary_along_rs(rs_path, current->t);
+                if (eval.rs_info.is_valid)
+                    eval.rs_info = check_collision_along_rs(rs_path, current->t);
                 if (eval.rs_info.is_valid)
                 {
                     eval.arrival_t = rs_arrival_time(current, rs_candidate);
@@ -1763,6 +2064,7 @@ public:
                     }
 
                     stats.analytic_post_arrival_collision++;
+                    record_analytic_rejection(post_arrival_collision, true);
                     if (is_soft_robot_block(post_arrival_collision))
                     {
                         // Blocked at goal by a robot. Save as backup.
@@ -1820,6 +2122,7 @@ public:
                 else // CollisionInfo (rs_info) not valid
                 {
                     stats.analytic_collision++;
+                    record_analytic_rejection(rs_info, false);
                     if (is_soft_robot_block(rs_info))
                     {
                         // This path is blocked by a robot, but geometerically valid.
@@ -1921,12 +2224,14 @@ public:
                     return res;
                 }
                 stats.analytic_post_arrival_collision++;
+                record_analytic_rejection(post_arrival_collision, true);
                 // Else continue
             }
 
             struct PrimitiveCandidateEval
             {
                 bool generated = false;
+                bool skipped_wait = false;
                 bool collision_free = false;
                 Node node;
                 double heuristic = std::numeric_limits<double>::infinity();
@@ -1938,6 +2243,11 @@ public:
                 [&](const std::pair<int, double> &prim) -> PrimitiveCandidateEval
             {
                 PrimitiveCandidateEval eval;
+                if (params.disable_wait_primitive && prim.first == 0)
+                {
+                    eval.skipped_wait = true;
+                    return eval;
+                }
                 eval.generated = compute_generated_node(current, prim, eval.node);
                 if (!eval.generated)
                     return eval;
@@ -1958,6 +2268,11 @@ public:
             auto merge_primitive_candidate =
                 [&](const PrimitiveCandidateEval &eval)
             {
+                if (eval.skipped_wait)
+                {
+                    stats.wait_primitives_skipped++;
+                    return;
+                }
                 if (!eval.generated)
                     return;
                 stats.generated_nodes++;
@@ -2114,6 +2429,11 @@ public:
             {
                 for (auto prim : motion_primitives)
                 {
+                    if (params.disable_wait_primitive && prim.first == 0)
+                    {
+                        stats.wait_primitives_skipped++;
+                        continue;
+                    }
                     Node *new_node = generate_node(current, prim);
                     if (!new_node)
                         continue;
