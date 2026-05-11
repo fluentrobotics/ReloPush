@@ -11,7 +11,7 @@ inline double NormalizeReloPushYaw(double yaw_in)
     return mod2pi(yaw_in);
 }
 
-Pose PoseFromReloPushState(const ReloPush::State& state_in)
+inline Pose PoseFromReloPushState(const ReloPush::State& state_in)
 {
     Pose p;
     p.x = state_in.x;
@@ -21,7 +21,7 @@ Pose PoseFromReloPushState(const ReloPush::State& state_in)
     return p;
 }
 
-Waypoint WaypointFromReloPushState(const ReloPush::State& state_in)
+inline Waypoint WaypointFromReloPushState(const ReloPush::State& state_in)
 {
     Pose p = PoseFromReloPushState(state_in);
 
@@ -76,7 +76,7 @@ inline Pose DetermineTaskStartPoseRobot(const FinalAllocation& fa)
     return pose_out;
 }
 
-TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
+inline TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
                                    RobotMeta* robot_in=nullptr, EntityMeta* transferred_obj=nullptr,
                                    double start_time = 0.0,
                                    double source_pre_push_distance = 0.0,
@@ -116,7 +116,7 @@ TrajectoryPtr ReloPushPath2TrajPtr(const std::shared_ptr<EdgePath> edgePath,
     return std::make_shared<Trajectory>(traj);
 }
 
-TrajectoryPtr ReloPushPath2TrajPtr(const EdgePath edgePath,
+inline TrajectoryPtr ReloPushPath2TrajPtr(const EdgePath edgePath,
                                    RobotMeta* robot_in=nullptr, EntityMeta* transferred_obj=nullptr,
                                    double start_time = 0.0,
                                    double source_pre_push_distance = 0.0,

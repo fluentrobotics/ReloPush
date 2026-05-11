@@ -39,7 +39,7 @@
 #include <PHAstar/TimeTable.h>
 #include <PHAstar/PlanningResult.h>
 
-std::tuple<double, double, double> interpolate_timed_path(const std::vector<Waypoint> &waypoints, double t)
+inline std::tuple<double, double, double> interpolate_timed_path(const std::vector<Waypoint> &waypoints, double t)
 {
     if (t <= waypoints[0].time)
         return {waypoints[0].x, waypoints[0].y, waypoints[0].yaw};
@@ -275,7 +275,7 @@ protected:
     }
 };
 
-void show_results(int argc, char **argv, const TimeTable &timetable, const std::unordered_map<std::string, EntityMeta *> &entities,
+inline void show_results(int argc, char **argv, const TimeTable &timetable, const std::unordered_map<std::string, EntityMeta *> &entities,
                   const Params &params)
 {
     QApplication app(argc, argv);
@@ -379,7 +379,7 @@ void show_results(int argc, char **argv, const TimeTable &timetable, const std::
     app.exec();
 }
 
-void show_results_comparison(
+inline void show_results_comparison(
     int argc, char **argv,
     const QString &left_title,
     const TimeTable &left_timetable,
@@ -532,7 +532,7 @@ void show_results_comparison(
     app.exec();
 }
 
-void show_results(int argc, char **argv, const TimeTable &timetable, const std::unordered_map<std::string, EntityMeta *> &entities, const std::vector<Trajectory> &all_trajectories, const Params &params)
+inline void show_results(int argc, char **argv, const TimeTable &timetable, const std::unordered_map<std::string, EntityMeta *> &entities, const std::vector<Trajectory> &all_trajectories, const Params &params)
 {
     QApplication app(argc, argv);
     QMainWindow win;
@@ -1299,7 +1299,7 @@ private:
 };
 
 // The visualize_current_state function remains the same
-void visualize_current_state(const TimeTable &timetable, const std::unordered_map<std::string, EntityMeta *> &entities,
+inline void visualize_current_state(const TimeTable &timetable, const std::unordered_map<std::string, EntityMeta *> &entities,
                              const Params &params, double query_time,
                              const Pose &start_pose = {}, const Pose &goal_pose = {},
                              const Trajectory *attempted_traj = nullptr,
@@ -1386,7 +1386,7 @@ private:
     const Params &params_;
 };
 
-void visualize_search_tree(const std::vector<Node> &nodes, const Params &params)
+inline void visualize_search_tree(const std::vector<Node> &nodes, const Params &params)
 {
     QApplication *app = qobject_cast<QApplication *>(QCoreApplication::instance());
     bool own_app = false;
@@ -3769,7 +3769,7 @@ private:
 };
 
 // Main entry point for visualization
-void visualize_planning_debug(const TimeTable &tt,
+inline void visualize_planning_debug(const TimeTable &tt,
                               RobotMeta *robot,
                               const PlanningResult &result,
                               double start_time,

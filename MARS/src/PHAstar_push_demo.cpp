@@ -18,6 +18,14 @@
 #include <ReloPush/config.h>
 #include <ReloPush/TaskAllocation.hpp>
 #include <ReloPush/PrintInColor.hpp>
+#include <CsvLogging.h>
+#include <ResultVisualization.h>
+#include <SafeParking.h>
+#include <PlanningHelpers.h>
+#include <CollisionScheduling.h>
+#include <ReloPushSetup.h>
+#include <AllocationSearch.h>
+#include <TaskExecution.h>
 #include <QFont>
 #include <QImage>
 #include <QPainterPath>
@@ -55,207 +63,63 @@ Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
 ReferenceExperienceGraphOptions reference_egraph_options_from_runtime(
     const RuntimeOptions &options);
 
+// Thread-local state for task execution failure tracking (defined here, declared in TaskExecution.h)
+thread_local std::unordered_map<std::string, int> g_initial_transit_failure_counts;
+
+// Thread-local relocation cache (defined here, declared in SafeParking.h)
+thread_local std::unordered_map<std::string, double> g_recent_failed_relocations;
+
+std::unordered_map<std::string, double> &recent_failed_relocation_cache()
+{
+  return g_recent_failed_relocations;
+}
+
+std::string rounded_pose_key(const Pose &pose)
+{
+  const int xi = static_cast<int>(std::round(pose.x * 10.0));
+  const int yi = static_cast<int>(std::round(pose.y * 10.0));
+  const int ai = static_cast<int>(std::round(mod2pi(pose.yaw) * 10.0));
+  return std::to_string(xi) + ":" + std::to_string(yi) + ":" +
+         std::to_string(ai);
+}
+
+std::string initial_transit_failure_key(RobotMeta *robot, const Pose &pose)
+{
+  return (robot ? robot->name : std::string("unknown")) + "@" +
+         rounded_pose_key(pose);
+}
+
+void clear_initial_transit_failures_for_robot(RobotMeta *robot)
+{
+  if (!robot)
+    return;
+  const std::string prefix = robot->name + "@";
+  for (auto it = g_initial_transit_failure_counts.begin();
+       it != g_initial_transit_failure_counts.end();)
+  {
+    if (it->first.rfind(prefix, 0) == 0)
+      it = g_initial_transit_failure_counts.erase(it);
+    else
+      ++it;
+  }
+}
+
 namespace
 {
-  thread_local std::mt19937 g_parking_rng;
-  thread_local bool g_parking_rng_initialized = false;
-  thread_local std::uint32_t g_parking_rng_seed = 0;
-  thread_local ParkingCandidateMode g_parking_candidate_mode = ParkingCandidateMode::EXPAND;
-  thread_local std::unordered_map<std::string, double> g_recent_failed_relocations;
-  thread_local std::unordered_map<std::string, int> g_initial_transit_failure_counts;
-
-  const char *parking_candidate_mode_name(ParkingCandidateMode mode)
-  {
-    switch (mode)
-    {
-    case ParkingCandidateMode::REVERSE_RECENT:
-      return "reverse-recent-path";
-    case ParkingCandidateMode::REVERSE_RECENT_SHORTER:
-      return "reverse-recent-shorter";
-    case ParkingCandidateMode::CONNECTED_VFH:
-      return "connected-vfh";
-    case ParkingCandidateMode::CONNECTED:
-      return "connected-primitives";
-    case ParkingCandidateMode::EXPAND:
-      return "expand-primitives";
-    case ParkingCandidateMode::RANDOM:
-    default:
-      return "randomized-candidates";
-    }
-  }
-
-  const char *parking_candidate_mode_name()
-  {
-    return parking_candidate_mode_name(g_parking_candidate_mode);
-  }
-
-  void initialize_parking_rng(bool has_fixed_seed, std::uint32_t fixed_seed)
-  {
-    if (has_fixed_seed)
-    {
-      g_parking_rng_seed = fixed_seed;
-    }
-    else
-    {
-      std::random_device rd;
-      g_parking_rng_seed = rd();
-    }
-
-    g_parking_rng.seed(g_parking_rng_seed);
-    g_parking_rng_initialized = true;
-  }
-
-  std::mt19937 &parking_rng()
-  {
-    if (!g_parking_rng_initialized)
-    {
-      initialize_parking_rng(false, 0);
-    }
-    return g_parking_rng;
-  }
-
-  std::uint32_t parking_rng_seed()
-  {
-    if (!g_parking_rng_initialized)
-    {
-      initialize_parking_rng(false, 0);
-    }
-    return g_parking_rng_seed;
-  }
-
-  std::unordered_map<std::string, double> &recent_failed_relocation_cache()
-  {
-    return g_recent_failed_relocations;
-  }
-
   void reset_thread_local_planning_state()
   {
     g_recent_failed_relocations.clear();
     g_initial_transit_failure_counts.clear();
   }
-
-  std::string rounded_pose_key(const Pose &pose)
-  {
-    const int xi = static_cast<int>(std::round(pose.x * 10.0));
-    const int yi = static_cast<int>(std::round(pose.y * 10.0));
-    const int ai = static_cast<int>(std::round(mod2pi(pose.yaw) * 10.0));
-    return std::to_string(xi) + ":" + std::to_string(yi) + ":" +
-           std::to_string(ai);
-  }
-
-  std::string initial_transit_failure_key(RobotMeta *robot, const Pose &pose)
-  {
-    return (robot ? robot->name : std::string("unknown")) + "@" +
-           rounded_pose_key(pose);
-  }
-
-  void clear_initial_transit_failures_for_robot(RobotMeta *robot)
-  {
-    if (!robot)
-      return;
-    const std::string prefix = robot->name + "@";
-    for (auto it = g_initial_transit_failure_counts.begin();
-         it != g_initial_transit_failure_counts.end();)
-    {
-      if (it->first.rfind(prefix, 0) == 0)
-        it = g_initial_transit_failure_counts.erase(it);
-      else
-        ++it;
-    }
-  }
 }
 
-std::string csv_escape(const std::string &value)
-{
-  bool need_quotes = value.find(',') != std::string::npos ||
-                     value.find('"') != std::string::npos ||
-                     value.find('\n') != std::string::npos;
-  if (!need_quotes)
-    return value;
+// csv_escape, planning_status_name -> CsvLogging.cpp
 
-  std::string escaped = "\"";
-  for (char c : value)
-  {
-    if (c == '"')
-      escaped += "\"\"";
-    else
-      escaped += c;
-  }
-  escaped += "\"";
-  return escaped;
-}
+// write_task_csv_log, OrientationJumpRecord -> CsvLogging.cpp/CsvLogging.h
 
-const char *planning_status_name(PlanningStatus status)
-{
-  switch (status)
-  {
-  case PlanningStatus::SUCCESS:
-    return "SUCCESS";
-  case PlanningStatus::START_INVALID_COLLISION:
-    return "START_INVALID_COLLISION";
-  case PlanningStatus::START_OUT_OF_BOUNDS:
-    return "START_OUT_OF_BOUNDS";
-  case PlanningStatus::GOAL_INVALID_COLLISION:
-    return "GOAL_INVALID_COLLISION";
-  case PlanningStatus::GOAL_OUT_OF_BOUNDS:
-    return "GOAL_OUT_OF_BOUNDS";
-  case PlanningStatus::NO_PATH_FOUND:
-    return "NO_PATH_FOUND";
-  case PlanningStatus::TIMEOUT_EXCEEDED:
-    return "TIMEOUT_EXCEEDED";
-  case PlanningStatus::HIGH_COST_UNFEASIBLE:
-    return "HIGH_COST_UNFEASIBLE";
-  case PlanningStatus::BLOCKED_BY_ROBOT:
-    return "BLOCKED_BY_ROBOT";
-  case PlanningStatus::INTERNAL_ERROR:
-  default:
-    return "INTERNAL_ERROR";
-  }
-}
-
-void write_task_csv_log(const std::string &csv_path,
-                        const std::vector<TaskCsvRow> &rows)
-{
-  std::ofstream ofs(csv_path);
-  if (!ofs.is_open())
-  {
-    std::cerr << "[Log] Failed to open CSV file: " << csv_path << std::endl;
-    return;
-  }
-
-  ofs << "task_id,object,status,robot,start_time,end_time,total_waiting,attempts,failure_reason\n";
-  ofs << std::fixed << std::setprecision(2);
-
-  for (const auto &row : rows)
-  {
-    ofs << row.task_id << ","
-        << csv_escape(row.object_name) << ","
-        << csv_escape(row.status) << ","
-        << csv_escape(row.robot_name) << ","
-        << row.start_time << ","
-        << row.end_time << ","
-        << row.total_waiting << ","
-        << row.attempts << ","
-        << csv_escape(row.failure_reason) << "\n";
-  }
-
-  std::cout << "[Log] Wrote task execution CSV: " << csv_path << std::endl;
-}
-
-struct OrientationJumpRecord
-{
-  std::string scenario_label;
-  std::string source;
-  std::string robot_name;
-  double prev_time = 0.0;
-  double curr_time = 0.0;
-  Pose prev_pose;
-  Pose curr_pose;
-  double raw_yaw_delta = 0.0;
-  double wrapped_yaw_delta = 0.0;
-  double distance = 0.0;
-};
-
+// write_timetable_robot_pose_csv through sanitize_filename_component -> CsvLogging.cpp
+// (see CsvLogging.h for declarations)
+#if 0  // Extracted to CsvLogging.cpp
 void write_timetable_robot_pose_csv(const std::string &csv_path,
                                     const std::string &scenario_label,
                                     const TimeTable &timetable,
@@ -525,7 +389,9 @@ std::string default_result_summary_path(const ReloPush::HandoffInstanceInfo &ins
          std::to_string(instance_info.instance_index) + "_" +
          sanitize_filename_component(scenario_label) + ".png";
 }
+#endif  // Extracted to CsvLogging.cpp
 
+#if 0  // Extracted to ResultVisualization.cpp
 std::vector<EntityMeta *> sorted_entities_by_type(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     EntityType type)
@@ -827,7 +693,9 @@ void export_result_summary_figure(
   std::cout << "[ResultViz] Wrote result summary figure: "
             << output_path << std::endl;
 }
+#endif  // Extracted to ResultVisualization.cpp
 
+#if 0  // Extracted to PlanningHelpers.cpp
 bool poses_approximately_equal(const Pose &a, const Pose &b,
                                double pos_tol = 1e-3,
                                double yaw_tol = 1e-3)
@@ -1022,7 +890,9 @@ std::string compare_pair_collision_checks(const TimeTable &timetable,
       << ", fast_threshold=" << fast_threshold;
   return oss.str();
 }
+#endif  // Extracted to PlanningHelpers.cpp
 
+#if 0  // Extracted to CsvLogging.cpp
 void write_allocation_search_summary_csv(
     const std::string &csv_path,
     const std::vector<AllocationRunSummary> &summaries,
@@ -1154,7 +1024,9 @@ void write_instance_run_record_csv(
 
   std::cout << "[Log] Appended instance record CSV: " << csv_path << std::endl;
 }
+#endif  // Extracted to CsvLogging.cpp
 
+#if 0  // Extracted to ReloPushSetup.cpp
 double compute_relopush_single_robot_makespan(
     const std::vector<FinalAllocation> &loaded_sequence)
 {
@@ -1546,7 +1418,9 @@ std::uint32_t mix_seed(std::uint32_t seed, std::uint32_t salt)
   x ^= x >> 16;
   return x;
 }
+#endif  // Extracted to ReloPushSetup.cpp
 
+#if 0  // Extracted to CollisionScheduling.cpp
 bool is_valid_transfer_contact(EntityMeta *e1, const Pose &p1,
                                EntityMeta *e2, const Pose &p2)
 {
@@ -1640,7 +1514,7 @@ bool has_transfer_pair(EntityMeta *e1, EntityMeta *e2,
 }
 
 RobotMeta *find_robot_transferring_object_at_time(
-    ObjectMeta *object,
+    EntityMeta *object,
     double t,
     TimeTable &timetable)
 {
@@ -1665,7 +1539,9 @@ RobotMeta *find_robot_transferring_object_at_time(
 
   return nullptr;
 }
+#endif  // Extracted to CollisionScheduling.cpp
 
+#if 0  // Extracted to CollisionScheduling.cpp
 RobotMeta *find_resolvable_robot_blocker(
     const CollisionInfo &col_info,
     TimeTable &timetable,
@@ -1687,7 +1563,7 @@ RobotMeta *find_resolvable_robot_blocker(
   if (collider->type == EntityType::OBJECT)
   {
     return find_robot_transferring_object_at_time(
-        dynamic_cast<ObjectMeta *>(collider), col_info.time, timetable);
+        collider, col_info.time, timetable);
   }
 
   return nullptr;
@@ -1700,9 +1576,9 @@ TimeTableVerificationResult verify_timetable_collision_free(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const std::vector<TransferContactWindow> &transfer_windows,
-    double from_time = 0.0,
-    double to_time = -1.0,
-    double step = -1.0)
+    double from_time,
+    double to_time,
+    double step)
 {
   TimeTableVerificationResult result;
   double max_t = timetable.get_max_time();
@@ -1779,11 +1655,13 @@ TimeTableVerificationResult verify_timetable_collision_free(
 
   return result;
 }
+#endif  // Extracted to CollisionScheduling.cpp
 
 // ==========================================
 // 1. HELPER & UTILITY FUNCTIONS
 // ==========================================
 
+#if 0  // Extracted to AllocationSearch.cpp
 namespace
 {
   double positive_or(double value, double fallback)
@@ -1936,7 +1814,9 @@ Pose calcRobotPoseFromObj(const Pose &obj_pose, const OccuRect &robot_size,
   robot_pose.yaw = obj_pose.yaw;
   return robot_pose;
 }
+#endif  // Extracted to AllocationSearch.cpp
 
+#if 0  // Extracted to PlanningHelpers.cpp
 double contact_offset_for_object(const RobotMeta *robot,
                                  const EntityMeta *object,
                                  double extra_clearance = 0.0)
@@ -2208,7 +2088,9 @@ void diagnose_planning_failure(RobotMeta *robot, const Pose &start,
     std::cerr << "    [PASS] Global scene is consistent (ignoring transfers)."
               << std::endl;
 }
+#endif  // Extracted to PlanningHelpers.cpp
 
+#if 0  // Extracted to SafeParking.cpp
 // ==========================================
 // 2. CORE PLANNING SUB-ROUTINES (Moved up)
 // ==========================================
@@ -2963,6 +2845,11 @@ bool is_parking_pose_safe_until_last_timestamp(EntityMeta *entity,
   }
   return true;
 }
+#endif  // Extracted to SafeParking.cpp
+
+#if 0  // Extracted to PlanningHelpers.cpp
+// INF is also used outside SafeParking (kept here for remaining code)
+static const double INF = std::numeric_limits<double>::infinity();
 
 void project_waypoints_inside_bounds(std::vector<Waypoint> &waypoints,
                                      RobotMeta *robot,
@@ -3049,13 +2936,17 @@ void shift_waypoint_times(std::vector<Waypoint> &waypoints, double delta)
   for (auto &wp : waypoints)
     wp.time += delta;
 }
+#endif  // Extracted to PlanningHelpers.cpp
 
+#if 0  // Extracted to PlanningHelpers.cpp
 void make_waypoint_times_relative(std::vector<Waypoint> &waypoints,
                                   double reference_time)
 {
   shift_waypoint_times(waypoints, -reference_time);
 }
+#endif  // Extracted to PlanningHelpers.cpp
 
+#if 0  // Extracted to PlanningHelpers.cpp
 Params make_relaxed_fallback_params(const Params &params)
 {
   Params relaxed = params;
@@ -3154,7 +3045,9 @@ void accumulate_wait_stats(TaskExecutionStats *stats, double wait_added)
     stats->delayed_segments += 1;
   }
 }
+#endif  // Extracted to PlanningHelpers.cpp
 
+#if 0  // Extracted to CollisionScheduling.cpp
 void append_transfer_window_if_needed(
     const Trajectory &traj,
     std::vector<TransferContactWindow> *transfer_windows)
@@ -3167,7 +3060,9 @@ void append_transfer_window_if_needed(
     transfer_windows->push_back({traj.entity, traj.transferred_object, st, et});
   }
 }
+#endif
 
+#if 0  // Extracted to CollisionScheduling.cpp
 double shared_collision_check_step(const Params &params)
 {
   const double planner_step =
@@ -3177,17 +3072,21 @@ double shared_collision_check_step(const Params &params)
   return std::max(1e-3, std::min(params.collision_check_time_step,
                                  planner_step));
 }
+#endif
 
+#if 0  // Moved to PHAstarPushDemoTypes.h
 enum class IdleBlockerRelocationPolicy
 {
   RelocateAnyIdle,
   WaitOnly,
   RelocateIfBecameIdleDuringAttempt,
 };
+#endif
 
 // ==========================================
 // Collision check helpers
 // ==========================================
+#if 0  // Extracted to CollisionScheduling.cpp
 CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double start_time,
                                                   TimeTable &timetable, const Params &params,
                                                   bool verbose,
@@ -3235,7 +3134,9 @@ bool validate_pre_commit_trajectory(
     const std::vector<TransferContactWindow> *transfer_windows,
     CollisionInfo *out_collision,
     std::string *out_failure_reason);
+#endif
 
+#if 0  // Extracted to CollisionScheduling.cpp
 double timetable_delay_search_horizon(double earliest_start,
                                       const TimeTable &timetable,
                                       double step)
@@ -3887,7 +3788,9 @@ double delayed_segment_start_after_stationary_conflict(
       conflict_time - std::max(0.0, segment_duration) + step;
   return std::max(current_start + step, shift_from_conflict);
 }
+#endif
 
+#if 0  // Extracted to SafeParking.cpp
 struct ConnectedSafeParkingSearchResult
 {
   bool found = false;
@@ -4807,10 +4710,12 @@ bool relocate_blocking_robot(RobotMeta *blocker,
             << std::endl;
   return false;
 }
+#endif  // Extracted to SafeParking.cpp
 
 // ==========================================
 // Initial transit planning
 // ==========================================
+#if 0  // Extracted to PlanningHelpers.cpp
 bool plan_initial_transit(
     RobotMeta *robot, const Pose &target_pose, double start_time,
     TimeTable &timetable,
@@ -5783,12 +5688,14 @@ bool plan_initial_transit(
 
   return true;
 }
+#endif  // Extracted to PlanningHelpers.cpp
 
 // ==========================================
 // 2. CORE PLANNING SUB-ROUTINES
 // ==========================================
 
 // Finds the robot that becomes free the earliest
+#if 0  // Extracted to TaskExecution.cpp
 RobotMeta *find_earliest_robot(const std::vector<RobotMeta *> &robots,
                                TimeTable &timetable, double &out_free_time)
 {
@@ -5860,8 +5767,10 @@ std::vector<std::pair<RobotMeta *, double>> get_sorted_candidate_robots(
             });
   return candidates;
 }
+#endif  // Extracted to TaskExecution.cpp
 
 // Attempts to find a collision-free time slot for a trajectory segment
+#if 0  // Extracted to CollisionScheduling.cpp
 double find_safe_start_time(Trajectory *traj, double earliest_start,
                             TimeTable &timetable, const Params &params,
                             const std::unordered_map<std::string, EntityMeta *> &entities,
@@ -6106,8 +6015,10 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
   write_failure_outputs();
   return -1.0; // Failure signal
 }
+#endif
 
 // Generates and adds a retraction trajectory (backing up) after a push
+#if 0  // Extracted to PlanningHelpers.cpp
 bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
                        TimeTable &timetable, const Params &params,
                        const std::unordered_map<std::string, EntityMeta *> &entities,
@@ -6226,7 +6137,9 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
   std::cout << retract_msg.str() << std::endl;
   return true;
 }
+#endif  // Extracted to PlanningHelpers.cpp
 
+#if 0  // Struct definitions extracted to PlanningHelpers.h
 struct SegmentCandidateValidation
 {
   bool hard_valid = false;
@@ -6245,21 +6158,9 @@ struct SegmentCandidateReport
   bool accepted_for_scheduling = false;
   bool selected = false;
 };
+#endif  // Struct definitions extracted
 
-struct SegmentReplanContext
-{
-  int task_id = -1;
-  int segment_id = -1;
-  std::string object_name;
-  std::string start_contact_entity;
-  bool tight_or_contact_case = false;
-  bool has_live_object_pose = false;
-  Pose live_object_pose;
-  double mars_prepush_distance = 0.0;
-  double source_prepush_distance = 0.0;
-  Pose source_clearance_goal;
-};
-
+#if 0  // Extracted to CollisionScheduling.cpp
 bool is_soft_robot_collision(const CollisionInfo &info,
                              const std::unordered_map<std::string, EntityMeta *> &entities)
 {
@@ -6293,7 +6194,9 @@ std::string find_valid_start_contact_entity(
   }
   return "";
 }
+#endif
 
+#if 0  // Extracted to PlanningHelpers.cpp
 SegmentCandidateValidation validate_segment_candidate(
     const std::vector<Waypoint> &candidate_rel,
     RobotMeta *robot,
@@ -7061,11 +6964,13 @@ bool replan_transit_segment(
   }
   return false;
 }
+#endif  // Extracted to PlanningHelpers.cpp
 
 // ==========================================
 // 3. MAIN TASK PIPELINE
 // ==========================================
 
+#if 0  // Extracted to TaskExecution.cpp
 bool prepare_segment_waypoints_for_scheduling(
     Trajectory *traj,
     RobotMeta *robot,
@@ -7358,7 +7263,9 @@ bool replan_transfer_segment_after_failed_schedule(
             << " forward-only waypoints; retrying scheduling." << std::endl;
   return true;
 }
+#endif  // Extracted to TaskExecution.cpp
 
+#if 0  // Extracted to CollisionScheduling.cpp
 std::vector<TransferContactWindow> transfer_windows_with_candidate(
     const std::vector<TransferContactWindow> *transfer_windows,
     const Trajectory &traj)
@@ -7701,7 +7608,9 @@ bool reserve_and_commit_trajectory(
   append_transfer_window_if_needed(*traj, transfer_windows);
   return true;
 }
+#endif
 
+#if 0  // Extracted to TaskExecution.cpp
 // Helper function to handle the scheduling of a single path segment
 bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
                            RobotMeta *robot, TimeTable &timetable,
@@ -8239,6 +8148,7 @@ bool process_task_execution(
   }
   return true;
 }
+#endif  // Extracted to TaskExecution.cpp
 
 // ==========================================
 // 4. MAIN ENTRY POINT
@@ -8258,7 +8168,7 @@ bool process_task_execution(
 std::string default_sequence_path()
 {
   return std::string(CMAKE_SOURCE_DIR) +
-         "/result_seq_ReloPush-BOSS_10_objects.txt_ind88.b64";
+         "/result_seq_ReloPush-BOSS_10_objects.txt_ind91.b64";
 }
 
 bool load_data(
@@ -8709,6 +8619,7 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
   return options;
 }
 
+#if 0  // Extracted to AllocationSearch.cpp
 void print_runtime_options(const RuntimeOptions &options)
 {
   std::cout << "[Config] Debug vis logs: "
@@ -8843,6 +8754,7 @@ void print_runtime_options(const RuntimeOptions &options)
               << std::endl;
   }
 }
+#endif  // Extracted to AllocationSearch.cpp
 
 void initialize_environment(
     const std::vector<FinalAllocation> &loaded_sequence,
@@ -8902,6 +8814,7 @@ void initialize_environment(
   }
 }
 
+#if 0  // Extracted to AllocationSearch.cpp
 std::vector<Task> initialize_tasks(
     const std::vector<FinalAllocation> &loaded_sequence,
     std::unordered_map<std::string, EntityMeta *> &entities)
@@ -8995,7 +8908,9 @@ std::vector<Task> build_tasks_for_plan(
 
   return ordered_tasks;
 }
+#endif  // Extracted to AllocationSearch.cpp
 
+#if 0  // Extracted to TaskExecution.cpp
 std::vector<std::pair<RobotMeta *, double>>
 prepare_task_candidates(Task &task,
                         const std::vector<RobotMeta *> &all_robots,
@@ -9479,7 +9394,9 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
 
   return task_rows;
 }
+#endif  // Extracted to TaskExecution.cpp
 
+#if 0  // Extracted to AllocationSearch.cpp
 AllocationRunSummary summarize_run(
     const std::string &label,
     const AllocationScenarioPlan &plan,
@@ -11088,6 +11005,7 @@ void print_search_method_summary(
 
   std::cout << "no candidates evaluated" << std::endl;
 }
+#endif  // Extracted to AllocationSearch.cpp
 
 int phastar_push_demo_main(int argc, char **argv)
 {

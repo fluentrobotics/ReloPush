@@ -55,8 +55,8 @@ struct RuntimeOptions
     bool enable_reverse_escape_retries = false;
     bool enable_contact_boundary_geometric_retry = true;
     int contact_boundary_max_search_iterations = 5000;
-    double contact_boundary_xy_resolution = 0.1;  // 0.08
-    double contact_boundary_yaw_resolution = 0.3; // 0.26; // 0.235
+    double contact_boundary_xy_resolution = 0.08;   // 0.08
+    double contact_boundary_yaw_resolution = 0.235; // 0.26; // 0.235
     double contact_boundary_time_step = 1.0;
     double contact_boundary_rs_step_size = 0.10;
     double contact_boundary_reverse_penalty = 2.0;

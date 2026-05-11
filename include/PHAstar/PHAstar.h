@@ -211,7 +211,7 @@ private:
     }
 };
 
-bool is_in_bounds(const Corners &corners, double min_x, double max_x, double min_y, double max_y)
+inline bool is_in_bounds(const Corners &corners, double min_x, double max_x, double min_y, double max_y)
 {
     for (const auto &c : corners)
     {
@@ -2647,7 +2647,7 @@ public:
     }
 };
 
-std::vector<Trajectory> perform_planning(
+inline std::vector<Trajectory> perform_planning(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const std::vector<std::tuple<std::string, Pose, bool, std::string, double>> &robot_plans,
     TimeTable &timetable,

@@ -13,7 +13,7 @@ struct GeometryPoint {
 
 using Corners = std::vector<GeometryPoint>;
 
-std::pair<double, double> project(const Corners& corners, const GeometryPoint& axis) {
+inline std::pair<double, double> project(const Corners& corners, const GeometryPoint& axis) {
     double min_d = std::numeric_limits<double>::infinity();
     double max_d = -std::numeric_limits<double>::infinity();
     for (const auto& c : corners) {
@@ -24,11 +24,11 @@ std::pair<double, double> project(const Corners& corners, const GeometryPoint& a
     return {min_d, max_d};
 }
 
-bool overlap(std::pair<double, double> p1, std::pair<double, double> p2) {
+inline bool overlap(std::pair<double, double> p1, std::pair<double, double> p2) {
     return p1.second >= p2.first && p2.second >= p1.first;
 }
 
-std::vector<GeometryPoint> get_axes(const Corners& corners) {
+inline std::vector<GeometryPoint> get_axes(const Corners& corners) {
     std::vector<GeometryPoint> axes;
     for (size_t i = 0; i < 4; ++i) {
         GeometryPoint p1 = corners[i];
@@ -46,7 +46,7 @@ std::vector<GeometryPoint> get_axes(const Corners& corners) {
     return axes;
 }
 
-Corners get_corners(double x, double y, double yaw, double front, double rear, double width) {
+inline Corners get_corners(double x, double y, double yaw, double front, double rear, double width) {
     double cos = std::cos(yaw);
     double sin = std::sin(yaw);
     Corners corners = {
@@ -58,7 +58,7 @@ Corners get_corners(double x, double y, double yaw, double front, double rear, d
     return corners;
 }
 
-bool rectangles_intersect(const Corners& corners1, const Corners& corners2) {
+inline bool rectangles_intersect(const Corners& corners1, const Corners& corners2) {
     auto axes1 = get_axes(corners1);
     auto axes2 = get_axes(corners2);
     std::vector<GeometryPoint> all_axes;
@@ -85,7 +85,7 @@ struct Pose : public GeometryPoint {
     }
 };
 
-Pose offsetPose(Pose& pose_in, double offset_dist)
+inline Pose offsetPose(Pose& pose_in, double offset_dist)
 {
     double op_x = pose_in.x + offset_dist * std::cos(pose_in.yaw);
     double op_y = pose_in.y + offset_dist * std::sin(pose_in.yaw);

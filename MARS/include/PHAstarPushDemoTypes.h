@@ -295,3 +295,24 @@ struct ParkingCandidate
   double estimated_rs_length;
   std::vector<Waypoint> connected_waypoints;
 };
+
+struct SegmentReplanContext
+{
+  int task_id = -1;
+  int segment_id = -1;
+  std::string object_name;
+  std::string start_contact_entity;
+  bool tight_or_contact_case = false;
+  bool has_live_object_pose = false;
+  Pose live_object_pose;
+  double mars_prepush_distance = 0.0;
+  double source_prepush_distance = 0.0;
+  Pose source_clearance_goal;
+};
+
+enum class IdleBlockerRelocationPolicy
+{
+  RelocateAnyIdle,
+  WaitOnly,
+  RelocateIfBecameIdleDuringAttempt,
+};

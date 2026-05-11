@@ -332,7 +332,7 @@ private:
     }
 };
 
-void print_timetable_poses(const std::unordered_map<std::string, EntityMeta *> &entities, const std::vector<Trajectory> &all_trajectories, const TimeTable &timetable)
+inline void print_timetable_poses(const std::unordered_map<std::string, EntityMeta *> &entities, const std::vector<Trajectory> &all_trajectories, const TimeTable &timetable)
 {
     std::cout << "TimeTable poses for robot2:" << std::endl;
     EntityMeta *robot2_ent = entities.at("robot2");

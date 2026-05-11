@@ -39,13 +39,13 @@ namespace ReedShepp
     };
 
 
-    std::pair<double, double> polar(double x, double y) {
+    inline std::pair<double, double> polar(double x, double y) {
         double r = std::hypot(x, y);
         double theta = std::atan2(y, x);
         return {r, theta};
     }
 
-    std::vector<Path> set_path(std::vector<Path> paths, const std::vector<double>& lengths, const std::string& ctypes, double step_size, bool reflected = false) {
+    inline std::vector<Path> set_path(std::vector<Path> paths, const std::vector<double>& lengths, const std::string& ctypes, double step_size, bool reflected = false) {
         Path path;
         path.ctypes = ctypes;
         path.lengths = lengths;
@@ -68,7 +68,7 @@ namespace ReedShepp
 
     constexpr double eps = 1e-6;
 
-    std::tuple<bool, std::vector<double>, std::string> left_straight_left(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_straight_left(double x, double y, double phi) {
         auto [u, t] = polar(x - std::sin(phi), y - 1.0 + std::cos(phi));
         if (t >= -eps && t <= M_PI) {  // Relaxed
             double v = mod2pi(phi - t);
@@ -79,7 +79,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_straight_right(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_straight_right(double x, double y, double phi) {
         auto [u1, t1] = polar(x + std::sin(phi), y - 1.0 - std::cos(phi));
         u1 *= u1;
         if (u1 >= 4.0) {
@@ -94,7 +94,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_x_right_x_left(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_x_right_x_left(double x, double y, double phi) {
         double zeta = x - std::sin(phi);
         double eeta = y - 1 + std::cos(phi);
         auto [u1, theta] = polar(zeta, eeta);
@@ -110,7 +110,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_x_right_left(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_x_right_left(double x, double y, double phi) {
         double zeta = x - std::sin(phi);
         double eeta = y - 1 + std::cos(phi);
         auto [u1, theta] = polar(zeta, eeta);
@@ -126,7 +126,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_right_x_left(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_right_x_left(double x, double y, double phi) {
         double zeta = x - std::sin(phi);
         double eeta = y - 1 + std::cos(phi);
         auto [u1, theta] = polar(zeta, eeta);
@@ -142,7 +142,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_right_x_left_right(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_right_x_left_right(double x, double y, double phi) {
         double zeta = x + std::sin(phi);
         double eeta = y - 1 - std::cos(phi);
         auto [u1, theta] = polar(zeta, eeta);
@@ -158,7 +158,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_x_right_left_x_right(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_x_right_left_x_right(double x, double y, double phi) {
         double zeta = x + std::sin(phi);
         double eeta = y - 1 - std::cos(phi);
         auto [u1, theta] = polar(zeta, eeta);
@@ -175,7 +175,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_x_right90_straight_left(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_x_right90_straight_left(double x, double y, double phi) {
         auto [u, t] = polar(x - std::sin(phi), y - 1 + std::cos(phi));
         if (t >= 0.0) {
             double v = mod2pi(phi - t + M_PI / 2);
@@ -186,7 +186,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_straight_right90_x_left(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_straight_right90_x_left(double x, double y, double phi) {
         auto [u, t] = polar(x + std::sin(phi), y - 1 - std::cos(phi));
         if (t >= 0.0) {
             double v = mod2pi(phi - t - M_PI / 2);
@@ -197,7 +197,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_x_right90_straight_right(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_x_right90_straight_right(double x, double y, double phi) {
         auto [u1, t1] = polar(x + std::sin(phi), y - 1 - std::cos(phi));
         u1 = u1 * u1;
         if (u1 >= 4.0) {
@@ -212,7 +212,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_straight_left90_x_right(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_straight_left90_x_right(double x, double y, double phi) {
         auto [u1, t1] = polar(x - std::sin(phi), y - 1 + std::cos(phi));
         u1 = u1 * u1;
         if (u1 >= 4.0) {
@@ -227,7 +227,7 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::tuple<bool, std::vector<double>, std::string> left_x_right90_straight_left90_x_right(double x, double y, double phi) {
+    inline std::tuple<bool, std::vector<double>, std::string> left_x_right90_straight_left90_x_right(double x, double y, double phi) {
         auto [u1, t1] = polar(x + std::sin(phi), y - 1 - std::cos(phi));
         u1 = u1 * u1;
         if (u1 >= 4.0) {
@@ -242,13 +242,13 @@ namespace ReedShepp
         return {false, {}, ""};
     }
 
-    std::vector<double> timeflip(const std::vector<double>& lengths) {
+    inline std::vector<double> timeflip(const std::vector<double>& lengths) {
         std::vector<double> flipped;
         for (double d : lengths) flipped.push_back(-d);
         return flipped;
     }
 
-    std::string reflect(const std::string& dirs) {
+    inline std::string reflect(const std::string& dirs) {
         std::string reflected;
         for (char d : dirs) {
             if (d == 'L') reflected += 'R';
@@ -258,7 +258,7 @@ namespace ReedShepp
         return reflected;
     }
 
-    std::vector<Path> generate_path(double sx, double sy, double syaw, double gx, double gy, double gyaw, double maxc, double step_size) {
+    inline std::vector<Path> generate_path(double sx, double sy, double syaw, double gx, double gy, double gyaw, double maxc, double step_size) {
         double dx = gx - sx;
         double dy = gy - sy;
         double dth = gyaw - syaw;
@@ -295,7 +295,7 @@ namespace ReedShepp
         return paths;
     }
 
-    std::tuple<double, double, double, int, double> interpolate(double dist, double length, char mode, double maxc, double ox, double oy, double oyaw, double wb) {
+    inline std::tuple<double, double, double, int, double> interpolate(double dist, double length, char mode, double maxc, double ox, double oy, double oyaw, double wb) {
         double x, y, yaw, steer = 0.0;
         int direction;
         if (mode == 'S') {
@@ -325,7 +325,7 @@ namespace ReedShepp
         return {x, y, yaw, direction, steer};
     }
 
-    std::tuple<std::vector<double>, std::vector<double>, std::vector<double>, std::vector<int>, std::vector<double>> generate_local_course(const std::vector<double>& lengths, const std::string& modes, double maxc, double step_size, double wb) {
+    inline std::tuple<std::vector<double>, std::vector<double>, std::vector<double>, std::vector<int>, std::vector<double>> generate_local_course(const std::vector<double>& lengths, const std::string& modes, double maxc, double step_size, double wb) {
         std::vector<double> xs, ys, yaws, steers;
         std::vector<int> directions;
         double ox = 0.0, oy = 0.0, oyaw = 0.0;
@@ -357,7 +357,7 @@ namespace ReedShepp
         return {xs, ys, yaws, directions, steers};
     }
 
-    std::vector<Path> calc_paths(double sx, double sy, double syaw, double gx, double gy, double gyaw, double maxc, double step_size, double wb) {
+    inline std::vector<Path> calc_paths(double sx, double sy, double syaw, double gx, double gy, double gyaw, double maxc, double step_size, double wb) {
         auto paths = generate_path(sx, sy, syaw, gx, gy, gyaw, maxc, step_size);
         std::vector<Path> valid_paths;
         for (auto& path : paths) {
@@ -389,7 +389,7 @@ namespace ReedShepp
         return valid_paths;
     }
 
-    std::tuple<std::vector<double>, std::vector<double>, std::vector<double>, std::string, std::vector<double>, std::vector<double>, std::vector<int>> reeds_shepp_path_planning(double sx, double sy, double syaw, double gx, double gy, double gyaw, double maxc, double step_size, double wb) {
+    inline std::tuple<std::vector<double>, std::vector<double>, std::vector<double>, std::string, std::vector<double>, std::vector<double>, std::vector<int>> reeds_shepp_path_planning(double sx, double sy, double syaw, double gx, double gy, double gyaw, double maxc, double step_size, double wb) {
         auto paths = calc_paths(sx, sy, syaw, gx, gy, gyaw, maxc, step_size, wb);
         if (paths.empty()) return {{}, {}, {}, "", {}, {}, {}};
         auto min_it = std::min_element(paths.begin(), paths.end(), [](const Path& a, const Path& b){ return std::abs(a.L) < std::abs(b.L); });

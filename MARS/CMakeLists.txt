@@ -58,6 +58,14 @@ phastar_apply_common_settings(phastar_demo)
 
 add_executable(phastar_push_demo
     src/PHAstar_push_demo.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
@@ -67,6 +75,14 @@ phastar_link_zeromq(phastar_push_demo)
 
 add_executable(phastar_push_replay_sequence
     src/PHAstar_push_replay_sequence.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
