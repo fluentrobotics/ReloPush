@@ -66,6 +66,9 @@ add_executable(phastar_push_demo
     src/ReloPushSetup.cpp
     src/AllocationSearch.cpp
     src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
@@ -83,6 +86,9 @@ add_executable(phastar_push_replay_sequence
     src/ReloPushSetup.cpp
     src/AllocationSearch.cpp
     src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
