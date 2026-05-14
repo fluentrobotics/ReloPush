@@ -40,6 +40,7 @@ struct RuntimeOptions
     double default_inflation = 1.0;
     double default_safety_margin = 0.03;
     double default_robot_collision_inflation = 1.005;
+    double retraction_distance = 0.11;
     bool enable_initial_transit_fallbacks = false;
     int planner_expansion_threads = 2;
     int max_search_iterations = 500;
@@ -54,7 +55,7 @@ struct RuntimeOptions
     double fine_segment_collision_check_time_step = 0.05;
     bool enable_reverse_escape_retries = false;
     bool enable_contact_boundary_geometric_retry = true;
-    int contact_boundary_max_search_iterations = 5000;
+    int contact_boundary_max_search_iterations = 500;
     double contact_boundary_xy_resolution = 0.08;   // 0.08
     double contact_boundary_yaw_resolution = 0.235; // 0.26; // 0.235
     double contact_boundary_time_step = 1.0;
