@@ -8,6 +8,7 @@
 #include <ReloPush/TaskAllocation.hpp>
 #include <ReloPush/Visualization/VisualizeResults.h>
 #include <chrono>
+#include <filesystem>
 #include <thread>
 #include <ReloPush/trajectory.hpp>
 #include <array>
@@ -440,6 +441,7 @@ int main(int argc, char *argv[])
             result_filename = std::string(CMAKE_SOURCE_DIR) + "/results/result_opt_no_init_" + filename;
     }
 
+    std::filesystem::create_directories(std::string(CMAKE_SOURCE_DIR) + "/results");
     std::cout << "saving to: " << result_filename << std::endl;
 
     // Open for appending (if you run many instances), or for writing (overwrite)
@@ -555,9 +557,12 @@ int main(int argc, char *argv[])
     }
     else
     {
+        const std::string relopush_out_dir =
+            std::string(CMAKE_SOURCE_DIR) + "/results/relopush-out";
+        std::filesystem::create_directories(relopush_out_dir);
         saveFinalSequenceToFile(
             finalSequence,
-            std::string(CMAKE_SOURCE_DIR) + "/result_seq_" + filename + "_ind" + std::to_string(instance_ind) + ".b64");
+            relopush_out_dir + "/result_seq_" + filename + "_ind" + std::to_string(instance_ind) + ".b64");
     }
 
     if (show_trajectory_window)

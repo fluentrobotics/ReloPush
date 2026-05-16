@@ -3,7 +3,6 @@ include(GNUInstallDirs)
 
 set(PHASTAR_COMMON_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/fromReloPush
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/include/ReloPush
     ${Boost_INCLUDE_DIRS}

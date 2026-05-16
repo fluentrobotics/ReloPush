@@ -4,7 +4,8 @@
 #include <PHAstar/Entities.h>
 #include <PHAstar/PHAstar.h>
 #include <PHAstar/Utils.h>
-#include <ReloPush.h>
+#include <ReloPush/State.h>
+#include <ReloPush/TaskAllocation.hpp>
 
 inline double NormalizeReloPushYaw(double yaw_in)
 {

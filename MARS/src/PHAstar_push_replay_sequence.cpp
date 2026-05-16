@@ -76,7 +76,7 @@ namespace
   std::string parse_sequence_csv_path(int argc, char **argv)
   {
     std::string default_path =
-        std::string(CMAKE_SOURCE_DIR) + "/task_execution_log_lns_adaptive.csv";
+        index_log_path("task_execution_log_lns_adaptive.csv");
 
     for (int i = 1; i < argc; ++i)
     {
@@ -320,7 +320,7 @@ int main(int argc, char **argv)
   print_comparison_line(replay_executed.summary, greedy_executed.summary.makespan);
 
   std::string replay_csv_path =
-      std::string(CMAKE_SOURCE_DIR) + "/task_execution_log_replay_sequence.csv";
+      index_log_path("task_execution_log_replay_sequence.csv");
   write_task_csv_log(replay_csv_path, replay_executed.summary.task_rows);
 
   if (runtime_options.enable_visualization)

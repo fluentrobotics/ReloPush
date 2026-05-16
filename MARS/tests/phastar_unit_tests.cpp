@@ -982,7 +982,7 @@ namespace
 
     const std::filesystem::path instance_path =
         std::filesystem::path(CMAKE_SOURCE_DIR) /
-        "result_seq_ReloPush-BOSS_10_objects.txt_ind77.b64";
+        "results/relopush-out/result_seq_ReloPush-BOSS_10_objects.txt_ind77.b64";
     if (!std::filesystem::exists(instance_path))
     {
       std::cerr << "    Missing regression instance file at "
@@ -1016,7 +1016,7 @@ namespace
 
     const std::filesystem::path diag_path =
         std::filesystem::path(CMAKE_SOURCE_DIR) /
-        "results/planner_diagnostics_task1_b1_segment2_robot2.txt";
+        "diagnostics/planner_diagnostics_task1_b1_segment2_robot2.txt";
     if (!std::filesystem::exists(diag_path))
     {
       std::cerr << "    Expected task-1 diagnostic file was not generated.\n";

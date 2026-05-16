@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
     {
         // std::cerr << "Usage: " << argv[0] << " <filename.b64>" << std::endl;
         // return 1;
-        filename = std::string(CMAKE_SOURCE_DIR) + "/result_seq_ReloPush-BOSS_13_objects.txt_ind2.b64";
+        filename = std::string(CMAKE_SOURCE_DIR) + "/results/relopush-out/result_seq_ReloPush-BOSS_13_objects.txt_ind2.b64";
     }
     else
     {
