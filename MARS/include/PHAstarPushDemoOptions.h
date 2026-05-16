@@ -18,9 +18,9 @@ enum class ParkingCandidateMode
 struct RuntimeOptions
 {
     // visualization options
-    bool debug_vis = true;
-    bool visualize_relopush_plan = true;
-    bool enable_visualization = true; // show results
+    bool debug_vis = false;
+    bool visualize_relopush_plan = false;
+    bool enable_visualization = false; // show results
 
     // Default planning parameters
     double default_xy_resolution = 0.2;
@@ -87,8 +87,8 @@ struct RuntimeOptions
     int shuffle_sequence_search_iterations = 0;
     int lns_iterations = 0;
     int lns_threads = 5;
-    bool enable_fine_segment_retry = true;     // in case initial plan fails in greedy assignment
-    bool enable_lns_fine_segment_retry = true; // for LNS
+    bool enable_fine_segment_retry = true;      // in case initial plan fails in greedy assignment
+    bool enable_lns_fine_segment_retry = false; // for LNS
 
     // for figure generation
     bool enable_result_summary_figure = false;

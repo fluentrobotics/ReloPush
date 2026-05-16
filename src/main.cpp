@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
 
     std::string filename = "ReloPush-BOSS_10_objects.txt";
 
-    int instance_ind = 91; // 32 // 63 //6 //40 //8
+    int instance_ind = 34; // 32 // 63 //6 //40 //8
     bool use_opt = true;
     bool vis = true;
     bool no_init_guess = false;

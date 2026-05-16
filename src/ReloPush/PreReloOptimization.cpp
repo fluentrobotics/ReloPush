@@ -1,7 +1,6 @@
 
 #include <ReloPush/PreReloOptimization.hpp>
 
-
 namespace ReloPush
 {
     ReloPush::State revert_pre_push(ReloPush::State prePushState, float distance)
@@ -20,7 +19,8 @@ namespace ReloPush
 
     /// Finding an initial guess for this optimization
     // Function to wrap an angle to the range [-pi, pi]
-    double wrap_to_pi(double angle) {
+    double wrap_to_pi(double angle)
+    {
         angle = fmod(angle + M_PI, 2.0 * M_PI);
         if (angle < 0)
             angle += 2.0 * M_PI;
@@ -28,14 +28,19 @@ namespace ReloPush
     }
 
     // Function to find the intersection point of a line with slope 's' and a horizontal line at y = y_int
-    std::pair<double, double> find_y_Intersection(double s, double x_s, double y_s, double y_int) {
-        if (std::abs(s) < 1e-12) { // Using a small epsilon instead of exact zero
-            if (std::abs(y_s - y_int) < 1e-12) {
-                //throw std::runtime_error("The lines are coincident (infinite intersections).");
-                return std::make_pair(std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::quiet_NaN());
-            } else {
-                //throw std::runtime_error("The lines are parallel and do not intersect.");
-                return std::make_pair(std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::quiet_NaN());
+    std::pair<double, double> find_y_Intersection(double s, double x_s, double y_s, double y_int)
+    {
+        if (std::abs(s) < 1e-12)
+        { // Using a small epsilon instead of exact zero
+            if (std::abs(y_s - y_int) < 1e-12)
+            {
+                // throw std::runtime_error("The lines are coincident (infinite intersections).");
+                return std::make_pair(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
+            }
+            else
+            {
+                // throw std::runtime_error("The lines are parallel and do not intersect.");
+                return std::make_pair(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
             }
         }
 
@@ -53,9 +58,9 @@ namespace ReloPush
     std::pair<double, double> find_turn_circle_intersections(double yaw_g_ip, double x_g, double y_g, double th_delta, double min_turn_radius)
     {
         // orthogonal cases (to be developed)
-        if(abs(yaw_g_ip - M_PI/2) < 0.01 || abs(mod2pi(yaw_g_ip) - (1.5)*M_PI) < 0.01)
+        if (abs(yaw_g_ip - M_PI / 2) < 0.01 || abs(mod2pi(yaw_g_ip) - (1.5) * M_PI) < 0.01)
         {
-            return std::make_pair(x_g,0);
+            return std::make_pair(x_g, 0);
         }
 
         double th_g_ip = yaw_g_ip;
@@ -65,18 +70,17 @@ namespace ReloPush
 
         // Find target left and right polar angle
         double phi_L = fromOMPL::mod2pi(th_g_ip - th_delta);
-        double phi_R = fromOMPL::mod2pi(-1*th_g_ip - th_delta);
-
+        double phi_R = fromOMPL::mod2pi(-1 * th_g_ip - th_delta);
 
         double x_l = R * sin(phi_L);
-        double y_l = R - R*cos(phi_L);
+        double y_l = R - R * cos(phi_L);
 
         double x_r = R * sin(phi_R);
-        double y_r = -1*(R - R*cos(phi_R));
+        double y_r = -1 * (R - R * cos(phi_R));
 
         double x_out, y_out;
 
-        if(phi_L <= phi_R)
+        if (phi_L <= phi_R)
         {
             x_out = x_l;
             y_out = y_l;
@@ -128,7 +132,8 @@ namespace ReloPush
     // Function to find the initial guess for the intersection point in the world frame
     std::pair<double, double> find_init_guess_intersection(double x_g, double y_g, double yaw_g,
                                                            double x_r, double y_r, double yaw_ip,
-                                                           double min_turn_radius, double th_delta) {
+                                                           double min_turn_radius, double th_delta)
+    {
         // ------------------------------
         // 1) Define final orientation in the robot frame
         // double th_final_robot = wrap_to_pi(yaw_g - yaw_ip);
@@ -151,24 +156,25 @@ namespace ReloPush
         // ------------------------------
         // 3) Find a point in the robot frame for which the orientation is 'th_final_robot'
         double xP_r, yP_r;
-        //try {
-            std::pair<double, double> turn_circle = find_turn_circle_intersections(yaw_g_ip,
-                                                                                   x_g, y_g, th_delta,
-                                                                                   min_turn_radius);
-            xP_r = turn_circle.first;
-            yP_r = turn_circle.second;
+        // try {
+        std::pair<double, double> turn_circle = find_turn_circle_intersections(yaw_g_ip,
+                                                                               x_g, y_g, th_delta,
+                                                                               min_turn_radius);
+        xP_r = turn_circle.first;
+        yP_r = turn_circle.second;
 
-            // Check for NaN
-            if (std::isnan(xP_r) || std::isnan(yP_r)) {
-                //throw std::runtime_error("No feasible point found that matches the final orientation!");
-                return std::make_pair(std::numeric_limits<double>::quiet_NaN(),
-                                      std::numeric_limits<double>::quiet_NaN());
-            }
+        // Check for NaN
+        if (std::isnan(xP_r) || std::isnan(yP_r))
+        {
+            // throw std::runtime_error("No feasible point found that matches the final orientation!");
+            return std::make_pair(std::numeric_limits<double>::quiet_NaN(),
+                                  std::numeric_limits<double>::quiet_NaN());
+        }
         //}
-        //catch (const std::exception& e) {
-            //std::cerr << "Warning: " << e.what() << std::endl;
-            //return std::make_pair(std::numeric_limits<double>::quiet_NaN(),
-            //                      std::numeric_limits<double>::quiet_NaN());
+        // catch (const std::exception& e) {
+        // std::cerr << "Warning: " << e.what() << std::endl;
+        // return std::make_pair(std::numeric_limits<double>::quiet_NaN(),
+        //                      std::numeric_limits<double>::quiet_NaN());
         //}
 
         // ------------------------------
@@ -182,38 +188,44 @@ namespace ReloPush
         //    heading toward (x_g_r, y_g_r).
 
         double xI_r, yI_r;
-        if (std::abs(y_g_r) < 1e-9) { // Degenerate case
+        if (std::abs(y_g_r) < 1e-9)
+        { // Degenerate case
             // The goal line is horizontal in the robot frame.
             // Handle this by setting intersection to NaN
             xI_r = std::numeric_limits<double>::quiet_NaN();
             yI_r = std::numeric_limits<double>::quiet_NaN();
         }
-        else {
+        else
+        {
             // Slope of the goal line
             double s;
-            if (std::abs(x_g_r) < 1e-9) { // Avoid division by zero for vertical line
+            if (std::abs(x_g_r) < 1e-9)
+            { // Avoid division by zero for vertical line
                 s = std::numeric_limits<double>::infinity();
             }
-            else {
+            else
+            {
                 s = std::tan(yaw_g_ip);
             }
 
-            if (std::isinf(s)) { // Vertical line
+            if (std::isinf(s))
+            {               // Vertical line
                 xI_r = 0.0; // Intersection at x = 0
                 yI_r = yP_r;
             }
-            else {
-                //try {
-                    std::pair<double, double> intersection = find_y_Intersection(s, x_g_r, y_g_r, yP_r);
-                    xI_r = intersection.first;
-                    yI_r = intersection.second;
-                    //if(xI_r == std::numeric_limits<double>::quiet_NaN() || yI_r == std::numeric_limits<double>::quiet_NaN())
-                    //{
-                        // parallel. skip
+            else
+            {
+                // try {
+                std::pair<double, double> intersection = find_y_Intersection(s, x_g_r, y_g_r, yP_r);
+                xI_r = intersection.first;
+                yI_r = intersection.second;
+                // if(xI_r == std::numeric_limits<double>::quiet_NaN() || yI_r == std::numeric_limits<double>::quiet_NaN())
+                //{
+                //  parallel. skip
 
-                    //}
                 //}
-                //catch (const std::exception& e) {
+                //}
+                // catch (const std::exception& e) {
                 //    std::cerr << "Warning: " << e.what() << std::endl;
                 //    xI_r = std::numeric_limits<double>::quiet_NaN();
                 //    yI_r = std::numeric_limits<double>::quiet_NaN();
@@ -224,11 +236,13 @@ namespace ReloPush
         // ------------------------------
         // 6) Transform intersection back to the world frame
         double xI_world, yI_world;
-        if (!std::isnan(xI_r) && !std::isnan(yI_r)) {
+        if (!std::isnan(xI_r) && !std::isnan(yI_r))
+        {
             xI_world = x_r + cos_yaw_ip * xI_r - sin_yaw_ip * yI_r;
             yI_world = y_r + sin_yaw_ip * xI_r + cos_yaw_ip * yI_r;
         }
-        else {
+        else
+        {
             xI_world = std::numeric_limits<double>::quiet_NaN();
             yI_world = std::numeric_limits<double>::quiet_NaN();
         }
@@ -236,16 +250,18 @@ namespace ReloPush
         return std::make_pair(xI_world, yI_world);
     }
 
-
     // Tolerance for floating-point comparisons.
     const double tol = 1e-6;
 
     // Wrap an angle (in radians) to the interval [-pi, pi].
-    double wrapToPi(double angle) {
-        while (angle > M_PI) {
+    double wrapToPi(double angle)
+    {
+        while (angle > M_PI)
+        {
             angle -= 2.0 * M_PI;
         }
-        while (angle <= -M_PI) {
+        while (angle <= -M_PI)
+        {
             angle += 2.0 * M_PI;
         }
         return angle;
@@ -265,11 +281,11 @@ namespace ReloPush
     \tparam second : robot_final (Eigen::Vector2d) is the final robot (car) position.
     */
     std::pair<Eigen::Vector2d, Eigen::Vector2d>
-    FindInitialGuess(const Eigen::Vector3d& carPose,
-                                               const Eigen::Vector3d& goalPose,
-                                               double bumperOffset,
-                                               double R,
-                                               double bumperTheta)
+    FindInitialGuess(const Eigen::Vector3d &carPose,
+                     const Eigen::Vector3d &goalPose,
+                     double bumperOffset,
+                     double R,
+                     double bumperTheta)
     {
         // Extract initial position and orientation.
         Eigen::Vector2d P0(carPose[0], carPose[1]);
@@ -287,15 +303,21 @@ namespace ReloPush
 
         // Compute the turning finish point.
         Eigen::Vector2d P_turn;
-        if (std::fabs(deltaTheta) < tol) {
+        if (std::fabs(deltaTheta) < tol)
+        {
             // No turning maneuver needed.
             P_turn = P0;
-        } else {
+        }
+        else
+        {
             Eigen::Vector2d center;
-            if (deltaTheta > 0) {
+            if (deltaTheta > 0)
+            {
                 // Left turn: center = P0 + R * [-sin(theta0), cos(theta0)]
                 center = P0 + R * Eigen::Vector2d(-std::sin(theta0), std::cos(theta0));
-            } else {
+            }
+            else
+            {
                 // Right turn: center = P0 + R * [ sin(theta0), -cos(theta0)]
                 center = P0 + R * Eigen::Vector2d(std::sin(theta0), -std::cos(theta0));
             }
@@ -315,11 +337,14 @@ namespace ReloPush
         // The goal line is defined as: L(s) = P_goal + s * [cos(theta_goal), sin(theta_goal)].
         Eigen::Vector2d d = P_goal - pBumper_start;
         double t;
-        if (std::fabs(std::sin(theta_goal - theta0)) < tol) {
+        if (std::fabs(std::sin(theta_goal - theta0)) < tol)
+        {
             // If directions are nearly parallel, project d onto [cos(theta0), sin(theta0)].
             t = d.dot(Eigen::Vector2d(std::cos(theta0), std::sin(theta0)));
-        } else {
-            t = ( std::sin(theta_goal) * d[0] - std::cos(theta_goal) * d[1] ) / std::sin(theta_goal - theta0);
+        }
+        else
+        {
+            t = (std::sin(theta_goal) * d[0] - std::cos(theta_goal) * d[1]) / std::sin(theta_goal - theta0);
         }
         double offset = t;
 
@@ -332,7 +357,6 @@ namespace ReloPush
         return std::make_pair(pBumper_final, robot_final);
     }
 
-
     /*! \brief Find a Pre-Relocation by Optimization
         returns a OptResult
 
@@ -343,7 +367,7 @@ namespace ReloPush
     */
     OptResult FindPreRelocationOptimization(double x_i, double y_i, double th_i,
                                             double x2, double y2, double th2,
-                                            double th_ip, double R, double x_init_guess, double y_init_guess, PlanningContext& ctx)
+                                            double th_ip, double R, double x_init_guess, double y_init_guess, PlanningContext &ctx)
     {
         /*  For unique orientation
         double param[2];
@@ -369,26 +393,27 @@ namespace ReloPush
         double paramSE2[3];
         paramSE2[0] = x_init_guess;
         paramSE2[1] = y_init_guess;
-        paramSE2[2] = th2 + (th_ip - th_i); //colinear
+        paramSE2[2] = th2 + (th_ip - th_i); // colinear
 
         ceres::Problem problemSE2;
-        ceres::CostFunction* cost_function_se2 =
+        ceres::CostFunction *cost_function_se2 =
             new ceres::AutoDiffCostFunction<CostFunctorSE2, 1, 3>(
-                new CostFunctorSE2(x_i, y_i, th_i, x2, y2, th2, th_ip, R,ctx.parameters.PrePush_dist, ctx.parameters.boundary));
+                new CostFunctorSE2(x_i, y_i, th_i, x2, y2, th2, th_ip, R, ctx.parameters.PrePush_dist, ctx.parameters.boundary));
         problemSE2.AddResidualBlock(cost_function_se2, nullptr, paramSE2);
-
 
         // 4) Configure the solver
         ceres::Solver::Options options;
         options.linear_solver_type = ceres::DENSE_QR;
-        options.function_tolerance = 1e-4;  // Rough convergence for the next optimization
+        options.function_tolerance = 1e-4; // Rough convergence for the next optimization
         options.gradient_tolerance = 1e-4;
         options.parameter_tolerance = 1e-4;
         options.use_nonmonotonic_steps = true;
         options.num_threads = 4;
         options.initial_trust_region_radius = 1;
-        //options.num_threads = 4;
-        //options.minimizer_type = ceres::LINE_SEARCH;
+        options.logging_type = ceres::SILENT;
+        options.minimizer_progress_to_stdout = false;
+        // options.num_threads = 4;
+        // options.minimizer_type = ceres::LINE_SEARCH;
         /*
         options.linear_solver_type = ceres::DENSE_QR;
         options.minimizer_progress_to_stdout = false;
@@ -398,48 +423,43 @@ namespace ReloPush
         options.max_num_iterations = 100;
         */
 
-
         // 5) Run the solver
         ceres::Solver::Summary summary;
         ceres::Solve(options, &problemSE2, &summary);
 
         // 6) Print results
-        //std::cout << summary.BriefReport() << "\n";
-        //std::cout << "Final x1,y1: " << param[0] << ", " << param[1] << "\n";
+        // std::cout << summary.BriefReport() << "\n";
+        // std::cout << "Final x1,y1: " << param[0] << ", " << param[1] << "\n";
 
         // If you want, we can evaluate the final cost:
         double cost_eval[1];
-        double* parameters = &paramSE2[0];
+        double *parameters = &paramSE2[0];
         cost_function_se2->Evaluate(&parameters, cost_eval, nullptr);
-        //std::cout << "Final cost = " << cost_eval[0] << "\n";
-
+        // std::cout << "Final cost = " << cost_eval[0] << "\n";
 
         // second optimization: line search
         options.minimizer_type = ceres::LINE_SEARCH;
         options.max_num_line_search_step_size_iterations = 5;
         options.line_search_direction_type = ceres::LBFGS;
-        options.function_tolerance = 1e-8;  // Rough convergence for the next optimization
+        options.function_tolerance = 1e-8; // Rough convergence for the next optimization
         options.gradient_tolerance = 1e-8;
         options.parameter_tolerance = 1e-8;
         ceres::Solve(options, &problemSE2, &summary);
-        //std::cout << summary.BriefReport() << "\n";
+        // std::cout << summary.BriefReport() << "\n";
         parameters = &paramSE2[0];
         cost_function_se2->Evaluate(&parameters, cost_eval, nullptr);
 
-
         // Start Prepush
-        //double x_i_prepush = x_i - ctx.parameters.PrePush_dist * cos(th_ip);
-        //double y_i_prepush = y_i - ctx.parameters.PrePush_dist * sin(th_ip);
-        //auto yaw_l = findLandingYaw(x_i_prepush,y_i_prepush,th_i,paramSE2[0],paramSE2[1],th_ip,R);
+        // double x_i_prepush = x_i - ctx.parameters.PrePush_dist * cos(th_ip);
+        // double y_i_prepush = y_i - ctx.parameters.PrePush_dist * sin(th_ip);
+        // auto yaw_l = findLandingYaw(x_i_prepush,y_i_prepush,th_i,paramSE2[0],paramSE2[1],th_ip,R);
 
         // Optimized obj relo
-        ReloPush::State objRelo(paramSE2[0],paramSE2[1],paramSE2[2]);
+        ReloPush::State objRelo(paramSE2[0], paramSE2[1], paramSE2[2]);
 
         // pre-relocation from optimized car prepush for pre-relo
-        //ReloPush::State PreRelo = revert_pre_push(robotRelo,ctx.parameters.PrePush_dist);
+        // ReloPush::State PreRelo = revert_pre_push(robotRelo,ctx.parameters.PrePush_dist);
 
-        return OptResult(objRelo.x,objRelo.y,objRelo.yaw,cost_eval[0], objRelo.yaw-th_ip);
+        return OptResult(objRelo.x, objRelo.y, objRelo.yaw, cost_eval[0], objRelo.yaw - th_ip);
     }
 }
-
-
