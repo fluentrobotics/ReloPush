@@ -36,6 +36,29 @@ std::uint32_t mix_seed(std::uint32_t seed, std::uint32_t salt);
 
 void print_runtime_options(const RuntimeOptions &options)
 {
+  auto print_method_list =
+      [](const std::string &label,
+         const std::vector<TransitPlannerStep> &methods)
+  {
+    std::cout << "[Config] " << label << ":";
+    if (methods.empty())
+    {
+      std::cout << " none" << std::endl;
+      return;
+    }
+    std::cout << std::endl;
+    for (std::size_t idx = 0; idx < methods.size(); ++idx)
+    {
+      const auto &step = methods[idx];
+      std::cout << "  " << (idx + 1) << ") "
+                << transit_planner_method_name(step.method)
+                << " [" << reference_egraph_use_name(step.reference_egraph)
+                << ", "
+                << transit_planner_applicability_name(step.applicability)
+                << "]" << std::endl;
+    }
+  };
+
   std::cout << "[Config] Debug vis logs: "
             << (options.debug_vis ? "enabled" : "disabled")
             << std::endl;
@@ -86,12 +109,8 @@ void print_runtime_options(const RuntimeOptions &options)
             << ", rs_step=" << options.fine_segment_rs_step_size
             << ", collision_step="
             << options.fine_segment_collision_check_time_step << std::endl;
-  std::cout << "[Config] Reverse escape retries: "
-            << (options.enable_reverse_escape_retries ? "enabled" : "disabled")
-            << std::endl;
-  std::cout << "[Config] Contact-boundary geometric retry: "
-            << (options.enable_contact_boundary_geometric_retry ? "enabled" : "disabled")
-            << ", max_iter=" << options.contact_boundary_max_search_iterations
+  std::cout << "[Config] Contact-boundary params: "
+            << "max_iter=" << options.contact_boundary_max_search_iterations
             << ", xy=" << options.contact_boundary_xy_resolution
             << ", yaw=" << options.contact_boundary_yaw_resolution
             << ", time_step=" << options.contact_boundary_time_step
@@ -123,21 +142,16 @@ void print_runtime_options(const RuntimeOptions &options)
   std::cout << "[Config] LNS fine segment retry: "
             << (options.enable_lns_fine_segment_retry ? "enabled" : "disabled")
             << std::endl;
-  std::cout << "[Config] Initial transit fallbacks: "
-            << (options.enable_initial_transit_fallbacks ? "enabled" : "disabled")
-            << std::endl;
-  std::cout << "[Config] Reference E-Graph transit: "
-            << (options.enable_reference_egraph_transit ? "enabled" : "disabled")
-            << ", epsilon=" << options.reference_egraph_epsilon
+  std::cout << "[Config] Reference E-Graph params: "
+            << "epsilon=" << options.reference_egraph_epsilon
             << ", spacing=" << options.reference_egraph_waypoint_spacing
             << ", snap_radius=" << options.reference_egraph_snap_radius
             << ", snap_yaw=" << options.reference_egraph_snap_yaw
             << ", lookahead=" << options.reference_egraph_successor_lookahead
             << ", max_nodes=" << options.reference_egraph_max_nodes
             << std::endl;
-  std::cout << "[Config] Anchor-first contact segment transit: "
-            << (options.anchor_first_contact_segment_transit ? "enabled" : "disabled")
-            << std::endl;
+  print_method_list("Initial transit methods", options.initial_transit_methods);
+  print_method_list("Segment transit methods", options.segment_transit_methods);
   std::cout << "[Config] Visualization: "
             << (options.enable_visualization ? "enabled" : "disabled")
             << std::endl;
@@ -1662,7 +1676,24 @@ AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
   std::mt19937 rng(repair_seed);
   RuntimeOptions lns_options = options;
   if (!lns_options.enable_lns_fine_segment_retry)
-    lns_options.enable_fine_segment_retry = false;
+  {
+    auto keep_primary_only = [](const TransitPlannerStep &step)
+    {
+      return step.method == TransitPlannerMethod::PrimaryHybridAStar;
+    };
+    lns_options.initial_transit_methods.erase(
+        std::remove_if(lns_options.initial_transit_methods.begin(),
+                       lns_options.initial_transit_methods.end(),
+                       [&](const TransitPlannerStep &step)
+                       { return !keep_primary_only(step); }),
+        lns_options.initial_transit_methods.end());
+    lns_options.segment_transit_methods.erase(
+        std::remove_if(lns_options.segment_transit_methods.begin(),
+                       lns_options.segment_transit_methods.end(),
+                       [&](const TransitPlannerStep &step)
+                       { return !keep_primary_only(step); }),
+        lns_options.segment_transit_methods.end());
+  }
 
   std::size_t task_count = loaded_sequence.size();
   AllocationScenarioPlan partial_plan =

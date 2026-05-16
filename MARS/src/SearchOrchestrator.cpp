@@ -18,6 +18,19 @@
 #include <algorithm>
 #include <sstream>
 
+namespace
+{
+std::string instance_record_csv_path(const ReloPush::HandoffInstanceInfo &instance_info)
+{
+  const std::string filename =
+      "mars_instance_record_" +
+      sanitize_filename_component(instance_info.file_name) + ".csv";
+  if (instance_info.file_name.rfind("ReloPush-BOSS_", 0) == 0)
+    return std::string(CMAKE_SOURCE_DIR) + "/results/" + filename;
+  return index_log_path(filename);
+}
+} // namespace
+
 int run_greedy_only_pipeline(
     int argc, char **argv,
     const RuntimeOptions &options,
@@ -60,9 +73,7 @@ int run_greedy_only_pipeline(
   write_allocation_search_summary_csv(comparison_csv, {greedy_summary},
                                       greedy_summary.makespan);
 
-  std::string instance_record_csv = index_log_path(
-      "mars_instance_record_" +
-      sanitize_filename_component(instance_info.file_name) + ".csv");
+  std::string instance_record_csv = instance_record_csv_path(instance_info);
   write_instance_run_record_csv(
       instance_record_csv,
       instance_info,
@@ -705,9 +716,7 @@ int finalize_and_replay_best(
     write_search_trial_records_csv(trial_csv, trial_records);
   }
 
-  std::string instance_record_csv = index_log_path(
-      "mars_instance_record_" +
-      sanitize_filename_component(instance_info.file_name) + ".csv");
+  std::string instance_record_csv = instance_record_csv_path(instance_info);
   write_instance_run_record_csv(
       instance_record_csv,
       instance_info,

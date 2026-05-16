@@ -15,6 +15,111 @@ enum class ParkingCandidateMode
     REVERSE_RECENT_SHORTER,
 };
 
+enum class TransitPlannerMethod
+{
+    PrimaryHybridAStar,
+    FineHybridAStar,
+    ContactBoundaryGeometricHybridAStar,
+    GhostHybridAStar,
+    GeometryFallbackHybridAStar,
+    ReedSheppFallback,
+    AllCandidateReedShepp,
+    ReverseStraightEscapeFineHybridAStar,
+    ReverseLeftEscapeFineHybridAStar,
+    ReverseRightEscapeFineHybridAStar,
+    ReverseStraightEscapeReedShepp,
+    ReverseLeftEscapeReedShepp,
+    ReverseRightEscapeReedShepp,
+};
+
+enum class ReferenceEGraphUse
+{
+    Disabled,
+    EnabledWhenAvailable,
+};
+
+enum class TransitPlannerApplicability
+{
+    Always,
+    TightOrContactOnly,
+    ContactBoundaryOnly,
+    StartContactOnly,
+    NonStartContactOnly,
+    StartContactTightOrContactOnly,
+    NonStartContactTightOrContactOnly,
+};
+
+struct TransitPlannerStep
+{
+    TransitPlannerMethod method;
+    ReferenceEGraphUse reference_egraph = ReferenceEGraphUse::Disabled;
+    TransitPlannerApplicability applicability = TransitPlannerApplicability::Always;
+};
+
+inline const char *transit_planner_method_name(TransitPlannerMethod method)
+{
+    switch (method)
+    {
+    case TransitPlannerMethod::PrimaryHybridAStar:
+        return "primary Hybrid A*";
+    case TransitPlannerMethod::FineHybridAStar:
+        return "fine Hybrid A*";
+    case TransitPlannerMethod::ContactBoundaryGeometricHybridAStar:
+        return "contact-boundary geometric Hybrid A*";
+    case TransitPlannerMethod::GhostHybridAStar:
+        return "ghost Hybrid A*";
+    case TransitPlannerMethod::GeometryFallbackHybridAStar:
+        return "geometry fallback Hybrid A*";
+    case TransitPlannerMethod::ReedSheppFallback:
+        return "Reed-Shepp fallback";
+    case TransitPlannerMethod::AllCandidateReedShepp:
+        return "all-candidate Reed-Shepp";
+    case TransitPlannerMethod::ReverseStraightEscapeFineHybridAStar:
+        return "reverse-straight escape + fine Hybrid A*";
+    case TransitPlannerMethod::ReverseLeftEscapeFineHybridAStar:
+        return "reverse-left escape + fine Hybrid A*";
+    case TransitPlannerMethod::ReverseRightEscapeFineHybridAStar:
+        return "reverse-right escape + fine Hybrid A*";
+    case TransitPlannerMethod::ReverseStraightEscapeReedShepp:
+        return "reverse-straight escape + Reed-Shepp";
+    case TransitPlannerMethod::ReverseLeftEscapeReedShepp:
+        return "reverse-left escape + Reed-Shepp";
+    case TransitPlannerMethod::ReverseRightEscapeReedShepp:
+        return "reverse-right escape + Reed-Shepp";
+    }
+    return "unknown";
+}
+
+inline const char *reference_egraph_use_name(ReferenceEGraphUse use)
+{
+    return use == ReferenceEGraphUse::EnabledWhenAvailable
+               ? "Reference E-Graph when available"
+               : "no Reference E-Graph";
+}
+
+inline const char *transit_planner_applicability_name(
+    TransitPlannerApplicability applicability)
+{
+    switch (applicability)
+    {
+    case TransitPlannerApplicability::Always:
+        return "always";
+    case TransitPlannerApplicability::TightOrContactOnly:
+        return "tight/contact only";
+    case TransitPlannerApplicability::ContactBoundaryOnly:
+        return "contact-boundary only";
+    case TransitPlannerApplicability::StartContactOnly:
+        return "start-contact only";
+    case TransitPlannerApplicability::NonStartContactOnly:
+        return "non-start-contact only";
+    case TransitPlannerApplicability::StartContactTightOrContactOnly:
+        return "start-contact tight/contact only";
+    case TransitPlannerApplicability::NonStartContactTightOrContactOnly:
+        return "non-start-contact tight/contact only";
+    }
+    return "unknown";
+}
+
 struct RuntimeOptions
 {
     // visualization options
@@ -41,7 +146,6 @@ struct RuntimeOptions
     double default_safety_margin = 0.03;
     double default_robot_collision_inflation = 1.005;
     double retraction_distance = 0.11;
-    bool enable_initial_transit_fallbacks = false;
     int planner_expansion_threads = 2;
     int max_search_iterations = 500;
     bool robot_boundary_origin_only = true;
@@ -53,8 +157,6 @@ struct RuntimeOptions
     double fine_segment_time_step = 1.6;
     double fine_segment_rs_step_size = 0.16;
     double fine_segment_collision_check_time_step = 0.05;
-    bool enable_reverse_escape_retries = false;
-    bool enable_contact_boundary_geometric_retry = true;
     int contact_boundary_max_search_iterations = 500;
     double contact_boundary_xy_resolution = 0.08;   // 0.08
     double contact_boundary_yaw_resolution = 0.235; // 0.26; // 0.235
@@ -64,8 +166,6 @@ struct RuntimeOptions
     double contact_boundary_holonomic_resolution = 0.10;
 
     // E-Graph
-    bool enable_reference_egraph_transit = true; // E-Graphs-inspired heuristic
-    bool anchor_first_contact_segment_transit = true;
     double reference_egraph_epsilon = 10.0;
     double reference_egraph_waypoint_spacing = 0.10;
     double reference_egraph_snap_radius = 0.25;
@@ -87,8 +187,51 @@ struct RuntimeOptions
     int shuffle_sequence_search_iterations = 0;
     int lns_iterations = 0;
     int lns_threads = 5;
-    bool enable_fine_segment_retry = true;      // in case initial plan fails in greedy assignment
     bool enable_lns_fine_segment_retry = false; // for LNS
+
+    std::vector<TransitPlannerStep> initial_transit_methods = {
+        {TransitPlannerMethod::PrimaryHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable},
+        {TransitPlannerMethod::FineHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable},
+        {TransitPlannerMethod::ContactBoundaryGeometricHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable},
+    };
+
+    std::vector<TransitPlannerStep> segment_transit_methods = {
+        /*
+        {TransitPlannerMethod::PrimaryHybridAStar,
+         ReferenceEGraphUse::Disabled,
+         TransitPlannerApplicability::StartContactOnly},
+        {TransitPlannerMethod::FineHybridAStar,
+         ReferenceEGraphUse::Disabled,
+         TransitPlannerApplicability::StartContactTightOrContactOnly},
+        {TransitPlannerMethod::PrimaryHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable,
+         TransitPlannerApplicability::NonStartContactOnly},
+        {TransitPlannerMethod::FineHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable,
+         TransitPlannerApplicability::NonStartContactTightOrContactOnly},
+        {TransitPlannerMethod::ContactBoundaryGeometricHybridAStar,
+         ReferenceEGraphUse::Disabled,
+         TransitPlannerApplicability::ContactBoundaryOnly},
+        {TransitPlannerMethod::PrimaryHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable,
+         TransitPlannerApplicability::StartContactOnly},
+        {TransitPlannerMethod::FineHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable,
+         TransitPlannerApplicability::StartContactTightOrContactOnly},
+        {TransitPlannerMethod::AllCandidateReedShepp,
+         ReferenceEGraphUse::Disabled,
+         TransitPlannerApplicability::Always},
+         */
+        {TransitPlannerMethod::PrimaryHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable},
+        {TransitPlannerMethod::FineHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable},
+        {TransitPlannerMethod::ContactBoundaryGeometricHybridAStar,
+         ReferenceEGraphUse::EnabledWhenAvailable},
+    };
 
     // for figure generation
     bool enable_result_summary_figure = false;

@@ -239,48 +239,6 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     {
       options.enable_lns_fine_segment_retry = false;
     }
-    else if (arg == "--reverse-escape-retries" ||
-             arg == "--enable-reverse-escape-retries")
-    {
-      options.enable_reverse_escape_retries = true;
-    }
-    else if (arg == "--no-reverse-escape-retries" ||
-             arg == "--disable-reverse-escape-retries")
-    {
-      options.enable_reverse_escape_retries = false;
-    }
-    else if (arg == "--initial-transit-fallbacks")
-    {
-      options.enable_initial_transit_fallbacks = true;
-    }
-    else if (arg == "--no-initial-transit-fallbacks")
-    {
-      options.enable_initial_transit_fallbacks = false;
-    }
-    else if (arg == "--reference-egraph-transit")
-    {
-      options.enable_reference_egraph_transit = true;
-    }
-    else if (arg == "--no-reference-egraph-transit")
-    {
-      options.enable_reference_egraph_transit = false;
-    }
-    else if (arg == "--anchor-first-contact-segment-transit")
-    {
-      options.anchor_first_contact_segment_transit = true;
-    }
-    else if (arg == "--no-anchor-first-contact-segment-transit")
-    {
-      options.anchor_first_contact_segment_transit = false;
-    }
-    else if (arg == "--contact-boundary-geometric-retry")
-    {
-      options.enable_contact_boundary_geometric_retry = true;
-    }
-    else if (arg == "--no-contact-boundary-geometric-retry")
-    {
-      options.enable_contact_boundary_geometric_retry = false;
-    }
     else if (arg == "--visualize" || arg == "--visualization")
     {
       options.enable_visualization = true;

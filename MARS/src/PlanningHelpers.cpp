@@ -706,7 +706,7 @@ ReferenceExperienceGraphOptions reference_egraph_options_from_runtime(
     const RuntimeOptions &options)
 {
   ReferenceExperienceGraphOptions egraph_options;
-  egraph_options.enabled = options.enable_reference_egraph_transit;
+  egraph_options.enabled = true;
   egraph_options.epsilon = options.reference_egraph_epsilon;
   egraph_options.waypoint_spacing = options.reference_egraph_waypoint_spacing;
   egraph_options.snap_radius = options.reference_egraph_snap_radius;
@@ -715,6 +715,24 @@ ReferenceExperienceGraphOptions reference_egraph_options_from_runtime(
       options.reference_egraph_successor_lookahead;
   egraph_options.max_nodes = options.reference_egraph_max_nodes;
   return egraph_options;
+}
+
+bool transit_step_uses_reference_egraph(const TransitPlannerStep &step)
+{
+  return step.reference_egraph == ReferenceEGraphUse::EnabledWhenAvailable;
+}
+
+bool transit_step_is_fine_repair(const TransitPlannerStep &step)
+{
+  return step.method == TransitPlannerMethod::FineHybridAStar ||
+         step.method == TransitPlannerMethod::ContactBoundaryGeometricHybridAStar ||
+         step.method == TransitPlannerMethod::ReverseStraightEscapeFineHybridAStar ||
+         step.method == TransitPlannerMethod::ReverseLeftEscapeFineHybridAStar ||
+         step.method == TransitPlannerMethod::ReverseRightEscapeFineHybridAStar ||
+         step.method == TransitPlannerMethod::AllCandidateReedShepp ||
+         step.method == TransitPlannerMethod::ReverseStraightEscapeReedShepp ||
+         step.method == TransitPlannerMethod::ReverseLeftEscapeReedShepp ||
+         step.method == TransitPlannerMethod::ReverseRightEscapeReedShepp;
 }
 
 std::vector<Waypoint> waypoints_from_relopush_state_path(
@@ -855,7 +873,8 @@ bool plan_initial_transit(
 
   auto run_initial_transit_planner = [&](const std::string &debug_label,
                                          const Params &plan_params,
-                                         int max_iterations) -> PlanningResult
+                                         int max_iterations,
+                                         bool allow_reference_egraph) -> PlanningResult
   {
     current_pose = timetable.get_pose(robot, planning_start_time);
     robot->initial_pose = current_pose;
@@ -864,7 +883,7 @@ bool plan_initial_transit(
     retry_planner.set_debug_popup_enabled(false);
     retry_planner.max_search_iterations = max_iterations;
     retry_planner.set_planner_expansion_threads(options.planner_expansion_threads);
-    if (options.enable_reference_egraph_transit && reference_waypoints &&
+    if (allow_reference_egraph && reference_waypoints &&
         reference_waypoints->size() >= 2)
     {
       retry_planner.set_reference_experience_graph(
@@ -879,30 +898,70 @@ bool plan_initial_transit(
     return retry_planner.Planning_with_res(planning_start_time);
   };
 
-  auto replan_initial_transit = [&](const std::string &debug_label) -> PlanningResult
+  auto replan_initial_transit_step =
+      [&](const TransitPlannerStep &step,
+          const std::string &debug_label) -> PlanningResult
   {
-    return run_initial_transit_planner(debug_label, params,
-                                       options.max_search_iterations);
+    const bool use_reference_egraph = transit_step_uses_reference_egraph(step);
+    switch (step.method)
+    {
+    case TransitPlannerMethod::PrimaryHybridAStar:
+      return run_initial_transit_planner(
+          debug_label, params, options.max_search_iterations,
+          use_reference_egraph);
+    case TransitPlannerMethod::FineHybridAStar:
+    {
+      Params fine_params = make_fine_segment_params(params, options);
+      const int fine_max_iter = std::max(
+          options.max_search_iterations,
+          options.fine_segment_max_search_iterations);
+      return run_initial_transit_planner(
+          debug_label, fine_params, fine_max_iter, use_reference_egraph);
+    }
+    case TransitPlannerMethod::ContactBoundaryGeometricHybridAStar:
+    {
+      Params contact_params = make_contact_boundary_segment_params(params, options);
+      const int contact_max_iter = std::max(
+          options.max_search_iterations,
+          options.contact_boundary_max_search_iterations);
+      return run_initial_transit_planner(
+          debug_label, contact_params, contact_max_iter, use_reference_egraph);
+    }
+    default:
+    {
+      PlanningResult unsupported;
+      unsupported.status = PlanningStatus::NO_PATH_FOUND;
+      unsupported.failure_detail = "unsupported initial-transit method in ordered list";
+      return unsupported;
+    }
+    }
   };
 
-  auto replan_initial_transit_fine = [&](const std::string &debug_label) -> PlanningResult
+  bool tried_fine_initial_transit = false;
+  auto run_initial_transit_method_list =
+      [&](const std::string &debug_prefix,
+          bool fine_only = false) -> PlanningResult
   {
-    Params fine_params = make_fine_segment_params(params, options);
-    const int fine_max_iter = std::max(
-        options.max_search_iterations,
-        options.fine_segment_max_search_iterations);
-    return run_initial_transit_planner(debug_label, fine_params, fine_max_iter);
-  };
+    PlanningResult result;
+    result.status = PlanningStatus::NO_PATH_FOUND;
+    result.failure_detail = "no initial-transit methods configured";
 
-  auto replan_initial_transit_contact_boundary =
-      [&](const std::string &debug_label) -> PlanningResult
-  {
-    Params contact_params = make_contact_boundary_segment_params(params, options);
-    const int contact_max_iter = std::max(
-        options.max_search_iterations,
-        options.contact_boundary_max_search_iterations);
-    return run_initial_transit_planner(debug_label, contact_params,
-                                       contact_max_iter);
+    for (const auto &step : options.initial_transit_methods)
+    {
+      if (fine_only && !transit_step_is_fine_repair(step))
+        continue;
+
+      if (transit_step_is_fine_repair(step))
+        tried_fine_initial_transit = true;
+
+      const std::string stage = debug_prefix + " " +
+                                transit_planner_method_name(step.method);
+      result = replan_initial_transit_step(step, stage);
+      append_attempt(transit_planner_method_name(step.method), result);
+      if (!result.waypoints.empty())
+        return result;
+    }
+    return result;
   };
 
   std::function<bool(PlanningResult &, const std::string &, bool)>
@@ -970,8 +1029,8 @@ bool plan_initial_transit(
       chosen_start_time = safe_start;
 
       PlanningResult refreshed_res =
-          replan_initial_transit("Initial transit after delay target refresh");
-      append_attempt("replan after delayed target refresh", refreshed_res);
+          run_initial_transit_method_list(
+              "Initial transit after delay target refresh");
 
       if (!refreshed_res.waypoints.empty() &&
           try_schedule_time_aware_path(
@@ -1059,8 +1118,10 @@ bool plan_initial_transit(
               << current_pose.yaw << ") at t=" << planning_start_time
               << "s." << std::endl;
 
-    res = replan_initial_transit("Initial transit after self safe parking");
-    append_attempt(retry_stage, res);
+    res = run_initial_transit_method_list(
+        "Initial transit after self safe parking");
+    if (!res.waypoints.empty())
+      append_attempt(retry_stage, res);
     return true;
   };
 
@@ -1157,24 +1218,15 @@ bool plan_initial_transit(
                 << current_pose.x << ", " << current_pose.y << ", "
                 << current_pose.yaw << ")." << std::endl;
 
-      PlanningResult delayed_res = replan_initial_transit(
+      PlanningResult delayed_res = run_initial_transit_method_list(
           "Initial transit delayed replan after blocked backup");
-      append_attempt("delayed replan after blocked backup", delayed_res);
 
       if (delayed_res.waypoints.empty())
       {
-        if (options.enable_fine_segment_retry)
-        {
-          delayed_res = replan_initial_transit_fine(
-              "Initial transit fine delayed replan after blocked backup");
-          append_attempt("fine delayed replan after blocked backup",
-                         delayed_res);
-        }
-
+        delayed_res = run_initial_transit_method_list(
+            "Initial transit delayed replan after blocked backup", true);
         if (delayed_res.waypoints.empty())
-        {
           continue;
-        }
       }
 
       if (try_schedule_time_aware_path(
@@ -1197,30 +1249,7 @@ bool plan_initial_transit(
     return false;
   };
 
-  auto path_res = replan_initial_transit("Initial transit");
-  append_attempt("primary planner", path_res);
-  bool tried_fine_initial_transit = false;
-
-  if (path_res.waypoints.empty() && options.enable_fine_segment_retry)
-  {
-    std::cout << "  [Transit] Primary initial transit failed. "
-                 "Trying fine Hybrid A* before expensive fallbacks."
-              << std::endl;
-    path_res = replan_initial_transit_fine("Initial transit fine Hybrid A*");
-    tried_fine_initial_transit = true;
-    append_attempt("fine Hybrid A*", path_res);
-  }
-
-  if (path_res.waypoints.empty() &&
-      options.enable_contact_boundary_geometric_retry)
-  {
-    std::cout << "  [Transit] Fine initial transit failed. "
-                 "Trying contact-boundary geometric Hybrid A*."
-              << std::endl;
-    path_res = replan_initial_transit_contact_boundary(
-        "Initial transit contact-boundary geometric Hybrid A*");
-    append_attempt("contact-boundary geometric Hybrid A*", path_res);
-  }
+  auto path_res = run_initial_transit_method_list("Initial transit");
 
   for (int relocation_attempt = 0; relocation_attempt < 3; ++relocation_attempt)
   {
@@ -1328,16 +1357,29 @@ bool plan_initial_transit(
     }
   }
 
-  if (path_res.waypoints.empty() && !options.enable_initial_transit_fallbacks)
+  const auto has_initial_method = [&](TransitPlannerMethod method)
+  {
+    return std::any_of(options.initial_transit_methods.begin(),
+                       options.initial_transit_methods.end(),
+                       [&](const TransitPlannerStep &step)
+                       { return step.method == method; });
+  };
+  const bool has_expensive_initial_fallback =
+      has_initial_method(TransitPlannerMethod::GhostHybridAStar) ||
+      has_initial_method(TransitPlannerMethod::GeometryFallbackHybridAStar) ||
+      has_initial_method(TransitPlannerMethod::ReedSheppFallback);
+
+  if (path_res.waypoints.empty() && !has_expensive_initial_fallback)
   {
     PlanningResult disabled_res;
     disabled_res.status = PlanningStatus::NO_PATH_FOUND;
-    disabled_res.failure_detail = "initial-transit fallbacks disabled";
-    append_attempt("initial-transit fallbacks disabled", disabled_res);
+    disabled_res.failure_detail = "initial-transit method list exhausted";
+    append_attempt("initial-transit method list exhausted", disabled_res);
   }
 
   // Fallback for cases where standard planning finds nothing (Search exhausted)
-  if (path_res.waypoints.empty() && options.enable_initial_transit_fallbacks)
+  if (path_res.waypoints.empty() &&
+      has_initial_method(TransitPlannerMethod::GhostHybridAStar))
   {
     std::cerr << " [Transit] Standard planning failed. Attempting to resolve blocking robots with full Ghost Planning..." << std::endl;
 
@@ -1417,7 +1459,8 @@ bool plan_initial_transit(
     }
   }
 
-  if (path_res.waypoints.empty() && options.enable_initial_transit_fallbacks)
+  if (path_res.waypoints.empty() &&
+      has_initial_method(TransitPlannerMethod::GeometryFallbackHybridAStar))
   {
     Params relaxed = make_relaxed_fallback_params(params);
 
@@ -1457,7 +1500,8 @@ bool plan_initial_transit(
     }
   }
 
-  if (path_res.waypoints.empty() && options.enable_initial_transit_fallbacks)
+  if (path_res.waypoints.empty() &&
+      has_initial_method(TransitPlannerMethod::ReedSheppFallback))
   {
     double maxc = 1.0 / std::max(robot->transit_turning_radius(), 1e-6);
     auto [rs_x, rs_y, rs_yaw, rs_ctypes, rs_lengths, rs_steers, rs_dirs] =
@@ -1634,18 +1678,16 @@ bool plan_initial_transit(
   if (!validate_initial_transit_candidate(path_res,
                                           "initial transit replay validation"))
   {
-    if (options.enable_fine_segment_retry && !tried_fine_initial_transit)
+    if (!tried_fine_initial_transit)
     {
       std::cout << "  [Transit] Initial transit replay validation failed. "
-                   "Trying fine Hybrid A* repair before committing."
+                   "Trying configured fine repair before committing."
                 << std::endl;
-      path_res = replan_initial_transit_fine(
-          "Initial transit fine Hybrid A* after replay validation");
-      tried_fine_initial_transit = true;
-      append_attempt("fine Hybrid A* after replay validation", path_res);
+      path_res = run_initial_transit_method_list(
+          "Initial transit after replay validation", true);
       validate_initial_transit_candidate(
           path_res,
-          "fine initial transit replay validation");
+          "initial transit repair replay validation");
     }
   }
 
@@ -2427,8 +2469,7 @@ bool replan_transit_segment(
     planner.set_ignore_other_robots(true);
     planner.max_search_iterations = max_iter;
     planner.set_planner_expansion_threads(options.planner_expansion_threads);
-    if (allow_reference_egraph &&
-        options.enable_reference_egraph_transit && reference_waypoints &&
+    if (allow_reference_egraph && reference_waypoints &&
         reference_waypoints->size() >= 2)
     {
       planner.set_reference_experience_graph(
@@ -2468,210 +2509,179 @@ bool replan_transit_segment(
     return evaluate_candidate(stage, res, std::move(candidate_rel));
   };
 
-  const bool anchor_first_for_contact =
-      options.anchor_first_contact_segment_transit &&
-      !diag_context.start_contact_entity.empty();
-  if (anchor_first_for_contact && options.enable_reference_egraph_transit)
-  {
-    std::cout << "[PHAStar] Contact-start segment transit: trying anchor-only "
-                 "search before Reference E-Graph."
-              << std::endl;
-  }
+  const bool start_contact_case = !diag_context.start_contact_entity.empty();
+  const Params fine_params = make_fine_segment_params(params, options);
+  const int fine_max_iter = std::max(
+      options.max_search_iterations,
+      options.fine_segment_max_search_iterations);
+  const Params contact_params =
+      make_contact_boundary_segment_params(params, options);
+  const int contact_max_iter = std::max(
+      fine_max_iter, options.contact_boundary_max_search_iterations);
 
-  if (evaluate_hybrid_stage(
-          anchor_first_for_contact
-              ? "primary Hybrid A* (anchor-first contact)"
-              : "primary Hybrid A*",
-          start_pose, start_time, params, options.max_search_iterations,
-          nullptr, !anchor_first_for_contact))
+  auto step_applies = [&](const TransitPlannerStep &step) -> bool
   {
-    if (diag_context.tight_or_contact_case)
-      write_segment_replan_diagnostics(diag_context, robot, start_pose,
-                                       goal_pose, start_time, reports, true,
-                                       selected_stage);
-    return true;
-  }
-
-  if (options.enable_fine_segment_retry)
-  {
-    Params fine_params = make_fine_segment_params(params, options);
-    const int fine_max_iter = std::max(
-        options.max_search_iterations,
-        options.fine_segment_max_search_iterations);
-    if (diag_context.tight_or_contact_case &&
-        evaluate_hybrid_stage(
-            anchor_first_for_contact
-                ? "fine Hybrid A* (anchor-first contact)"
-                : "fine Hybrid A*",
-            start_pose, start_time, fine_params, fine_max_iter,
-            nullptr, !anchor_first_for_contact))
+    switch (step.applicability)
     {
-      write_segment_replan_diagnostics(diag_context, robot, start_pose,
-                                       goal_pose, start_time, reports, true,
-                                       selected_stage);
+    case TransitPlannerApplicability::Always:
       return true;
+    case TransitPlannerApplicability::TightOrContactOnly:
+      return diag_context.tight_or_contact_case;
+    case TransitPlannerApplicability::ContactBoundaryOnly:
+      return contact_boundary_case;
+    case TransitPlannerApplicability::StartContactOnly:
+      return start_contact_case;
+    case TransitPlannerApplicability::NonStartContactOnly:
+      return !start_contact_case;
+    case TransitPlannerApplicability::StartContactTightOrContactOnly:
+      return start_contact_case && diag_context.tight_or_contact_case;
+    case TransitPlannerApplicability::NonStartContactTightOrContactOnly:
+      return !start_contact_case && diag_context.tight_or_contact_case;
     }
+    return false;
+  };
 
-    if (options.enable_contact_boundary_geometric_retry &&
-        contact_boundary_case)
+  auto evaluate_rs_candidates = [&](const Pose &rs_start_pose,
+                                    double rs_start_time,
+                                    const Params &rs_params,
+                                    const std::string &stage_prefix,
+                                    const std::vector<Waypoint> *prefix = nullptr) -> bool
+  {
+    Color::println("[PHAStar] Attempting search method: " + stage_prefix, Color::CYAN);
+    const double maxc =
+        1.0 / std::max(robot->transit_turning_radius(), 1e-6);
+    auto paths = ReedShepp::calc_paths(rs_start_pose.x, rs_start_pose.y,
+                                       rs_start_pose.yaw,
+                                       goal_pose.x, goal_pose.y, goal_pose.yaw,
+                                       maxc, rs_params.rs_step_size,
+                                       robot->wheel_base);
+    std::sort(paths.begin(), paths.end(),
+              [](const ReedShepp::Path &a, const ReedShepp::Path &b)
+              { return a.L < b.L; });
+
+    for (std::size_t i = 0; i < paths.size(); ++i)
     {
-      Params contact_params =
-          make_contact_boundary_segment_params(params, options);
-      const int contact_max_iter = std::max(
-          fine_max_iter, options.contact_boundary_max_search_iterations);
-      if (evaluate_hybrid_stage(
-              "contact-boundary geometric Hybrid A*",
-              start_pose, start_time, contact_params, contact_max_iter,
-              nullptr, false))
+      PlanningResult rs_res;
+      rs_res.status = PlanningStatus::SUCCESS;
+      rs_res.waypoints = waypoints_from_rs_path(paths[i], robot);
+      shift_waypoint_times(rs_res.waypoints, rs_start_time);
+
+      std::vector<Waypoint> candidate_rel;
+      if (prefix)
+        candidate_rel = combine_prefix_and_tail(*prefix, rs_res.waypoints,
+                                                start_time);
+      else
       {
-        write_segment_replan_diagnostics(diag_context, robot, start_pose,
-                                         goal_pose, start_time, reports, true,
-                                         selected_stage);
+        candidate_rel = rs_res.waypoints;
+        make_waypoint_times_relative(candidate_rel, start_time);
+      }
+
+      std::ostringstream stage;
+      stage << stage_prefix << " RS candidate " << i << " "
+            << paths[i].ctypes << " L=" << std::fixed << std::setprecision(3)
+            << paths[i].L;
+      if (evaluate_candidate(stage.str(), rs_res, std::move(candidate_rel)))
         return true;
-      }
     }
+    return false;
+  };
 
-    if (anchor_first_for_contact && options.enable_reference_egraph_transit)
-    {
-      if (evaluate_hybrid_stage(
-              "primary Hybrid A* (Reference E-Graph fallback)",
-              start_pose, start_time, params, options.max_search_iterations))
-      {
-        write_segment_replan_diagnostics(diag_context, robot, start_pose,
-                                         goal_pose, start_time, reports, true,
-                                         selected_stage);
-        return true;
-      }
+  const double escape_distance = 0.12;
+  const double escape_steer =
+      robot->transit_turning_radius() > 1e-9
+          ? std::atan(robot->wheel_base / robot->transit_turning_radius())
+          : 0.0;
 
-      if (diag_context.tight_or_contact_case &&
-          evaluate_hybrid_stage(
-              "fine Hybrid A* (Reference E-Graph fallback)",
-              start_pose, start_time, fine_params, fine_max_iter))
-      {
-        write_segment_replan_diagnostics(diag_context, robot, start_pose,
-                                         goal_pose, start_time, reports, true,
-                                         selected_stage);
-        return true;
-      }
-    }
-
-    if (options.enable_reverse_escape_retries &&
-        !diag_context.start_contact_entity.empty())
-    {
-      const double escape_distance = 0.12;
-      const double escape_steer =
-          robot->transit_turning_radius() > 1e-9
-              ? std::atan(robot->wheel_base / robot->transit_turning_radius())
-              : 0.0;
-      const std::vector<std::pair<std::string, double>> escape_stages = {
-          {"reverse-straight escape + fine Hybrid A*", 0.0},
-          {"reverse-left escape + fine Hybrid A*", escape_steer},
-          {"reverse-right escape + fine Hybrid A*", -escape_steer}};
-
-      for (const auto &[stage, steer_angle] : escape_stages)
-      {
-        auto prefix = make_reverse_escape_prefix(start_pose, robot,
-                                                 steer_angle, escape_distance);
-        if (prefix.empty())
-          continue;
-        const Waypoint &escape_end = prefix.back();
-        Pose escape_pose{escape_end.x, escape_end.y, escape_end.yaw};
-        const double escape_abs_time = start_time + escape_end.time;
-        if (evaluate_hybrid_stage(stage, escape_pose, escape_abs_time,
-                                  fine_params, fine_max_iter, &prefix))
-        {
-          write_segment_replan_diagnostics(diag_context, robot, start_pose,
-                                           goal_pose, start_time, reports, true,
-                                           selected_stage);
-          return true;
-        }
-      }
-    }
-
-    auto evaluate_rs_candidates = [&](const Pose &rs_start_pose,
-                                      double rs_start_time,
-                                      const Params &rs_params,
-                                      const std::string &stage_prefix,
-                                      const std::vector<Waypoint> *prefix = nullptr) -> bool
-    {
-      Color::println("[PHAStar] Attempting search method: " + stage_prefix, Color::CYAN);
-      const double maxc =
-          1.0 / std::max(robot->transit_turning_radius(), 1e-6);
-      auto paths = ReedShepp::calc_paths(rs_start_pose.x, rs_start_pose.y,
-                                         rs_start_pose.yaw,
-                                         goal_pose.x, goal_pose.y, goal_pose.yaw,
-                                         maxc, rs_params.rs_step_size,
-                                         robot->wheel_base);
-      std::sort(paths.begin(), paths.end(),
-                [](const ReedShepp::Path &a, const ReedShepp::Path &b)
-                { return a.L < b.L; });
-
-      for (std::size_t i = 0; i < paths.size(); ++i)
-      {
-        PlanningResult rs_res;
-        rs_res.status = PlanningStatus::SUCCESS;
-        rs_res.waypoints = waypoints_from_rs_path(paths[i], robot);
-        shift_waypoint_times(rs_res.waypoints, rs_start_time);
-
-        std::vector<Waypoint> candidate_rel;
-        if (prefix)
-          candidate_rel = combine_prefix_and_tail(*prefix, rs_res.waypoints,
-                                                  start_time);
-        else
-        {
-          candidate_rel = rs_res.waypoints;
-          make_waypoint_times_relative(candidate_rel, start_time);
-        }
-
-        std::ostringstream stage;
-        stage << stage_prefix << " RS candidate " << i << " "
-              << paths[i].ctypes << " L=" << std::fixed << std::setprecision(3)
-              << paths[i].L;
-        if (evaluate_candidate(stage.str(), rs_res, std::move(candidate_rel)))
-          return true;
-      }
+  auto evaluate_escape_hybrid = [&](const std::string &stage,
+                                    double steer_angle) -> bool
+  {
+    if (!start_contact_case)
       return false;
-    };
+    auto prefix = make_reverse_escape_prefix(start_pose, robot,
+                                             steer_angle, escape_distance);
+    if (prefix.empty())
+      return false;
+    const Waypoint &escape_end = prefix.back();
+    Pose escape_pose{escape_end.x, escape_end.y, escape_end.yaw};
+    const double escape_abs_time = start_time + escape_end.time;
+    return evaluate_hybrid_stage(stage, escape_pose, escape_abs_time,
+                                 fine_params, fine_max_iter, &prefix);
+  };
 
-    if (evaluate_rs_candidates(start_pose, start_time, fine_params,
-                               "all-candidate"))
+  auto evaluate_escape_rs = [&](const std::string &stage,
+                                double steer_angle) -> bool
+  {
+    if (!start_contact_case)
+      return false;
+    auto prefix = make_reverse_escape_prefix(start_pose, robot,
+                                             steer_angle, escape_distance);
+    if (prefix.empty())
+      return false;
+    const Waypoint &escape_end = prefix.back();
+    Pose escape_pose{escape_end.x, escape_end.y, escape_end.yaw};
+    const double escape_abs_time = start_time + escape_end.time;
+    return evaluate_rs_candidates(escape_pose, escape_abs_time, fine_params,
+                                  stage, &prefix);
+  };
+
+  for (const auto &step : options.segment_transit_methods)
+  {
+    if (!step_applies(step))
+      continue;
+
+    const bool use_reference_egraph = transit_step_uses_reference_egraph(step);
+    const std::string stage = transit_planner_method_name(step.method);
+    bool accepted = false;
+    switch (step.method)
     {
-      write_segment_replan_diagnostics(diag_context, robot, start_pose,
-                                       goal_pose, start_time, reports, true,
-                                       selected_stage);
-      return true;
+    case TransitPlannerMethod::PrimaryHybridAStar:
+      accepted = evaluate_hybrid_stage(stage, start_pose, start_time, params,
+                                       options.max_search_iterations, nullptr,
+                                       use_reference_egraph);
+      break;
+    case TransitPlannerMethod::FineHybridAStar:
+      accepted = evaluate_hybrid_stage(stage, start_pose, start_time,
+                                       fine_params, fine_max_iter, nullptr,
+                                       use_reference_egraph);
+      break;
+    case TransitPlannerMethod::ContactBoundaryGeometricHybridAStar:
+      accepted = evaluate_hybrid_stage(stage, start_pose, start_time,
+                                       contact_params, contact_max_iter,
+                                       nullptr, use_reference_egraph);
+      break;
+    case TransitPlannerMethod::AllCandidateReedShepp:
+      accepted = evaluate_rs_candidates(start_pose, start_time, fine_params,
+                                        stage);
+      break;
+    case TransitPlannerMethod::ReverseStraightEscapeFineHybridAStar:
+      accepted = evaluate_escape_hybrid(stage, 0.0);
+      break;
+    case TransitPlannerMethod::ReverseLeftEscapeFineHybridAStar:
+      accepted = evaluate_escape_hybrid(stage, escape_steer);
+      break;
+    case TransitPlannerMethod::ReverseRightEscapeFineHybridAStar:
+      accepted = evaluate_escape_hybrid(stage, -escape_steer);
+      break;
+    case TransitPlannerMethod::ReverseStraightEscapeReedShepp:
+      accepted = evaluate_escape_rs(stage, 0.0);
+      break;
+    case TransitPlannerMethod::ReverseLeftEscapeReedShepp:
+      accepted = evaluate_escape_rs(stage, escape_steer);
+      break;
+    case TransitPlannerMethod::ReverseRightEscapeReedShepp:
+      accepted = evaluate_escape_rs(stage, -escape_steer);
+      break;
+    default:
+      break;
     }
 
-    if (options.enable_reverse_escape_retries &&
-        !diag_context.start_contact_entity.empty())
+    if (accepted)
     {
-      const double escape_distance = 0.12;
-      const double escape_steer =
-          robot->transit_turning_radius() > 1e-9
-              ? std::atan(robot->wheel_base / robot->transit_turning_radius())
-              : 0.0;
-      const std::vector<std::pair<std::string, double>> escape_stages = {
-          {"reverse-straight escape", 0.0},
-          {"reverse-left escape", escape_steer},
-          {"reverse-right escape", -escape_steer}};
-      for (const auto &[stage, steer_angle] : escape_stages)
-      {
-        auto prefix = make_reverse_escape_prefix(start_pose, robot,
-                                                 steer_angle, escape_distance);
-        if (prefix.empty())
-          continue;
-        const Waypoint &escape_end = prefix.back();
-        Pose escape_pose{escape_end.x, escape_end.y, escape_end.yaw};
-        const double escape_abs_time = start_time + escape_end.time;
-        if (evaluate_rs_candidates(escape_pose, escape_abs_time, fine_params,
-                                   stage, &prefix))
-        {
-          write_segment_replan_diagnostics(diag_context, robot, start_pose,
-                                           goal_pose, start_time, reports, true,
-                                           selected_stage);
-          return true;
-        }
-      }
+      if (diag_context.tight_or_contact_case)
+        write_segment_replan_diagnostics(diag_context, robot, start_pose,
+                                         goal_pose, start_time, reports, true,
+                                         selected_stage);
+      return true;
     }
   }
 
