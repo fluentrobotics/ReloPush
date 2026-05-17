@@ -3,7 +3,7 @@
 
 #include <string>
 #include <vector>
-#include <memory.h>
+#include <memory>
 
 #include <PHAstar/Point.h>
 
