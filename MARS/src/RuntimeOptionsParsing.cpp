@@ -277,7 +277,8 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     {
       options.lns_reassign_only = true;
     }
-    else if (arg == "--no-lns-reassign-only" ||
+    else if (arg == "--lns-task-reassign" ||
+             arg == "--no-lns-reassign-only" ||
              arg == "--lns-allow-sequence-edits")
     {
       options.lns_reassign_only = false;

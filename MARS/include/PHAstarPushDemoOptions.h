@@ -191,7 +191,7 @@ struct RuntimeOptions
     int lns_threads = 5;
     int robot_count = 2;                        // capped by the predefined MARS robot set
     bool enable_lns_fine_segment_retry = false; // for LNS
-    bool lns_reassign_only = false;             // preserve task order during LNS
+    bool lns_reassign_only = false;             // false: lns-task-reassign default
 
     std::vector<TransitPlannerStep> initial_transit_methods = {
         {TransitPlannerMethod::PrimaryHybridAStar,

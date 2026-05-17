@@ -5,7 +5,7 @@ set -u
 usage() {
     cat <<'EOF'
 Usage:
-  ./script/run_all_indices_integrated.sh <input_file> [--mode=f|d|u|o] [--lns-iters=N] [--num-robots=N] [--visualize|--no-visualization] [--start-index=N] [--end-index=N] [--base-port=N] [--continue-on-error] [--mars-arg=ARG]...
+  ./script/run_all_indices_integrated.sh <input_file> [--mode=f|d|u|o] [--lns-iters=N] [--num-robots=N] [--lns-reassign-only|--lns-task-reassign] [--visualize|--no-visualization] [--start-index=N] [--end-index=N] [--base-port=N] [--continue-on-error] [--mars-arg=ARG]...
 
 Description:
   Runs every non-empty instance index in input/<input_file> using the integrated
@@ -21,6 +21,8 @@ Options:
   --mode=MODE            ReloPush mode: f, d, u, or o (default: f)
   --lns-iters=N          Default MARS LNS iterations (default: 10)
   --num-robots=N         MARS robot count to use, capped by predefined robots (default: 2)
+  --lns-task-reassign    During LNS, allow task-order repair and robot reassignment (default)
+  --lns-reassign-only    During LNS, preserve task order and reassign only robots
   --visualize            Enable MARS visualization
   --no-visualization     Disable MARS visualization (default)
   --start-index=N        First instance index to run
@@ -45,6 +47,7 @@ shift 1
 MODE="f"
 LNS_ITERS=20
 NUM_ROBOTS=2
+LNS_MODE="lns-task-reassign"
 ENABLE_VISUALIZATION=0
 
 START_INDEX=""
@@ -63,6 +66,15 @@ for arg in "$@"; do
             ;;
         --num-robots=*|--robot-count=*)
             NUM_ROBOTS="${arg#*=}"
+            ;;
+        --lns-reassign-only|--lns-preserve-task-sequence)
+            LNS_MODE="lns-reassign-only"
+            ;;
+        --lns-task-reassign|--lns-allow-sequence-edits|--no-lns-reassign-only)
+            LNS_MODE="lns-task-reassign"
+            ;;
+        --lns-mode=*)
+            LNS_MODE="${arg#--lns-mode=}"
             ;;
         --visualize|--visualization)
             ENABLE_VISUALIZATION=1
@@ -173,6 +185,7 @@ echo "[Config] mode: $MODE"
 echo "[Config] visualization: ${VISUALIZATION_ARG#--}"
 echo "[Config] lns iterations: $LNS_ITERS"
 echo "[Config] MARS robots: $NUM_ROBOTS"
+echo "[Config] LNS mode: $LNS_MODE"
 echo "[Config] base port: $BASE_PORT"
 if [ -n "$START_INDEX" ]; then
     echo "[Config] start index: $START_INDEX"
@@ -273,6 +286,19 @@ while IFS= read -r line || [ -n "$line" ]; do
         "--no-visualize-relopush-plan"
         "--no-debug-vis"
     )
+    case "$LNS_MODE" in
+        lns-reassign-only|reassign-only|preserve-task-sequence)
+            MARS_CMD+=(--lns-reassign-only)
+            ;;
+        lns-task-reassign|task-reassign|allow-sequence-edits)
+            MARS_CMD+=(--lns-task-reassign)
+            ;;
+        *)
+            echo "[Error] Invalid LNS mode '$LNS_MODE'. Expected lns-task-reassign or lns-reassign-only." >&2
+            cleanup
+            exit 1
+            ;;
+    esac
     if [ "${#MARS_ARGS[@]}" -gt 0 ]; then
         MARS_CMD+=("${MARS_ARGS[@]}")
     fi

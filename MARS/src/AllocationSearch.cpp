@@ -242,8 +242,9 @@ void print_runtime_options(const RuntimeOptions &options)
   std::cout << "[Config] LNS fine segment retry: "
             << (options.enable_lns_fine_segment_retry ? "enabled" : "disabled")
             << std::endl;
-  std::cout << "[Config] LNS reassign-only mode: "
-            << (options.lns_reassign_only ? "enabled" : "disabled")
+  std::cout << "[Config] LNS mode: "
+            << (options.lns_reassign_only ? "lns-reassign-only"
+                                          : "lns-task-reassign")
             << std::endl;
   std::cout << "[Config] Reference E-Graph params: "
             << "epsilon=" << options.reference_egraph_epsilon
