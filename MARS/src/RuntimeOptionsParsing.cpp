@@ -10,7 +10,7 @@
 
 std::string default_sequence_path()
 {
-  return relopush_sequence_path("ReloPush-BOSS_10_objects.txt", 91);
+  return relopush_sequence_path("ReloPush-BOSS_10_objects.txt", 80);
 }
 
 RuntimeOptions parse_runtime_options(int argc, char **argv)
@@ -144,6 +144,21 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
       {
         std::cerr << "[Warn] Invalid --max-search-iters value: '" << value
                   << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--safe-parking-max-search-iters=", 0) == 0)
+    {
+      std::string value =
+          arg.substr(std::string("--safe-parking-max-search-iters=").size());
+      try
+      {
+        options.safe_parking_max_search_iterations =
+            std::max(0, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --safe-parking-max-search-iters value: '"
+                  << value << "'. Keeping default." << std::endl;
       }
     }
     else if (arg.rfind("--retraction-distance=", 0) == 0 ||

@@ -60,7 +60,7 @@ SequenceSearchOutcome run_adaptive_lns_search(
     const LearnedOrderConstraints &disabled_constraints,
     int *out_enforced_constraint_count);
 
-// Final replay + CSVs + summary figure + handoff reply
+// Final CSVs + summary figure + optional replay + handoff reply
 int finalize_and_replay_best(
     int argc, char **argv,
     const RuntimeOptions &options,
@@ -68,6 +68,9 @@ int finalize_and_replay_best(
     const std::vector<FinalAllocation> &loaded_sequence,
     const std::vector<AllocationRunSummary> &summaries,
     const AllocationRunSummary &best_summary,
+    const ExecutedScenario *cached_best_executed,
+    double greedy_allocation_planning_time_s,
+    const std::vector<double> &lns_batch_planning_times_s,
     double relopush_single_robot_makespan,
     double greedy_makespan,
     double lns_best_makespan,

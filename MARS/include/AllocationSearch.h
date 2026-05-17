@@ -86,7 +86,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
     const RuntimeOptions &options,
     const std::vector<ScenarioEvaluationRequest> &requests);
 
-std::vector<AllocationRunSummary> evaluate_lns_batch(
+std::vector<LnsEvaluationResult> evaluate_lns_batch(
     const std::vector<FinalAllocation> &loaded_sequence,
     const RuntimeOptions &options,
     const AllocationScenarioPlan &base_plan,
@@ -96,7 +96,7 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
     const std::vector<std::string> &robot_names,
     const std::string &label);
 
-AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
+ExecutedScenario repair_destroyed_tasks_with_sampled_insertion(
     const std::vector<FinalAllocation> &loaded_sequence,
     const RuntimeOptions &options,
     const AllocationScenarioPlan &base_plan,

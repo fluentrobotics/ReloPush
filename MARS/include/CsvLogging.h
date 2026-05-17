@@ -102,6 +102,12 @@ void write_instance_run_record_csv(
     double greedy_makespan,
     double lns_best_makespan,
     int lns_iterations,
+    double greedy_allocation_planning_time_s,
+    const std::vector<double> &lns_batch_planning_times_s,
+    int path_max_search_iterations_default,
+    int path_max_search_iterations_fine,
+    int safe_parking_max_search_iterations,
+    int lns_threads,
     const std::string &best_overall_label,
     double best_overall_makespan);
 

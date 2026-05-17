@@ -44,6 +44,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cstdint>
 #include <cmath>
 #include <limits>
@@ -62,248 +63,269 @@ bool DEBUG_VIS = false;
 
 int phastar_push_demo_main(int argc, char **argv)
 {
-  // Parse options and load data
-  RuntimeOptions runtime_options = parse_runtime_options(argc, argv);
-  ReloPush::HandoffInstanceInfo instance_info;
-  std::vector<FinalAllocation> loadedSequence;
-  std::unique_ptr<ReloPush::FinalSequenceHandoffServer> handoff_server;
-  if (!load_data(runtime_options, instance_info, loadedSequence, handoff_server))
-  {
-    return 1;
-  }
+    // Parse options and load data
+    RuntimeOptions runtime_options = parse_runtime_options(argc, argv);
+    ReloPush::HandoffInstanceInfo instance_info;
+    std::vector<FinalAllocation> loadedSequence;
+    std::unique_ptr<ReloPush::FinalSequenceHandoffServer> handoff_server;
+    if (!load_data(runtime_options, instance_info, loadedSequence, handoff_server))
+    {
+        return 1;
+    }
 
-  const double relopush_single_robot_makespan =
-      compute_relopush_single_robot_makespan(loadedSequence);
+    const double relopush_single_robot_makespan =
+        compute_relopush_single_robot_makespan(loadedSequence);
 
-  DEBUG_VIS = runtime_options.debug_vis;
-  print_runtime_options(runtime_options);
-  std::cout << "[Config] Instance file: " << instance_info.file_name << std::endl;
-  std::cout << "[Config] Instance index: " << instance_info.instance_index << std::endl;
-  std::cout << "[Config] ReloPush single-robot makespan: "
-            << std::fixed << std::setprecision(2)
-            << relopush_single_robot_makespan << "s" << std::endl;
+    DEBUG_VIS = runtime_options.debug_vis;
+    // print_runtime_options(runtime_options);
+    std::cout << "[Config] Instance file: " << instance_info.file_name << std::endl;
+    std::cout << "[Config] Instance index: " << instance_info.instance_index << std::endl;
+    std::cout << "[Config] ReloPush single-robot makespan: "
+              << std::fixed << std::setprecision(2)
+              << relopush_single_robot_makespan << "s" << std::endl;
 
-  if (runtime_options.visualize_relopush_plan)
-  {
-    visualize_relopush_plan(argc, argv, loadedSequence, instance_info, runtime_options);
-  }
+    if (runtime_options.visualize_relopush_plan)
+    {
+        visualize_relopush_plan(argc, argv, loadedSequence, instance_info, runtime_options);
+    }
 
-  // Check if greedy-only mode (no search)
-  const bool greedy_only_run =
-      runtime_options.assignment_search_iterations <= 0 &&
-      runtime_options.local_sequence_search_iterations <= 0 &&
-      runtime_options.shuffle_sequence_search_iterations <= 0 &&
-      runtime_options.lns_iterations <= 0;
+    // Check if greedy-only mode (no search)
+    const bool greedy_only_run =
+        runtime_options.assignment_search_iterations <= 0 &&
+        runtime_options.local_sequence_search_iterations <= 0 &&
+        runtime_options.shuffle_sequence_search_iterations <= 0 &&
+        runtime_options.lns_iterations <= 0;
 
-  if (greedy_only_run)
-  {
-    return run_greedy_only_pipeline(
+    if (greedy_only_run)
+    {
+        return run_greedy_only_pipeline(
+            argc, argv,
+            runtime_options,
+            instance_info,
+            loadedSequence,
+            relopush_single_robot_makespan,
+            handoff_server.get());
+    }
+
+    // Multi-strategy search mode
+    std::cout << "[Search] Evaluating greedy baseline..." << std::endl;
+    AllocationScenarioPlan greedy_plan = make_identity_plan(loadedSequence.size());
+    const std::uint32_t greedy_parking_seed =
+        mix_seed(runtime_options.base_random_seed, 0xC0FFEE01u);
+
+    const auto greedy_start = std::chrono::steady_clock::now();
+    ExecutedScenario greedy_executed = execute_allocation_scenario(
+        loadedSequence, runtime_options, greedy_plan, "greedy",
+        greedy_parking_seed, false);
+    const double greedy_allocation_planning_time_s =
+        std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - greedy_start)
+            .count();
+    AllocationRunSummary greedy_summary = greedy_executed.summary;
+
+    std::vector<std::string> robot_names = collect_robot_names(
+        loadedSequence, runtime_options);
+    std::mt19937 search_rng(
+        mix_seed(runtime_options.base_random_seed, 0x51A7BEEFu));
+    const int lns_batch_size = std::max(1, runtime_options.lns_threads);
+
+    // Run assignment search
+    AllocationRunSummary assignment_best_feasible;
+    AllocationRunSummary assignment_best_partial;
+    bool assignment_has_feasible = false;
+    bool assignment_has_partial = false;
+
+    run_assignment_reassignment_search(
+        loadedSequence, runtime_options, greedy_plan, greedy_summary,
+        robot_names, lns_batch_size, search_rng,
+        assignment_best_feasible, assignment_best_partial,
+        assignment_has_feasible, assignment_has_partial);
+
+    AllocationRunSummary assignment_report =
+        assignment_has_feasible ? assignment_best_feasible : assignment_best_partial;
+
+    // Run sequence search methods
+    std::vector<SearchTrialRecord> sequence_trial_records;
+    std::unordered_set<std::string> tried_sequence_signatures;
+    tried_sequence_signatures.insert(task_order_signature(greedy_plan));
+    LearnedOrderConstraints disabled_order_constraints =
+        make_learned_order_constraints(loadedSequence.size());
+    int local_sequence_enforced_constraints = 0;
+    int full_shuffle_enforced_constraints = 0;
+    int lns_enforced_constraints = 0;
+
+    const std::string local_sequence_label = "local-edit-task-sequence";
+    auto local_sequence_outcome = run_sequence_search_method(
+        loadedSequence, runtime_options, greedy_plan, greedy_summary,
+        local_sequence_label,
+        "Local task-sequence search (swap/relocate edits)",
+        "SeqLocal",
+        runtime_options.local_sequence_search_iterations,
+        mutate_sequence_plan,
+        lns_batch_size, search_rng,
+        tried_sequence_signatures, sequence_trial_records,
+        disabled_order_constraints,
+        &local_sequence_enforced_constraints);
+
+    const std::string sequence_label = "random-task-sequence";
+    auto full_shuffle_outcome = run_sequence_search_method(
+        loadedSequence, runtime_options, greedy_plan, greedy_summary,
+        sequence_label,
+        "Randomized task-sequence search (full random shuffle)",
+        "SeqFull",
+        runtime_options.shuffle_sequence_search_iterations,
+        mutate_full_shuffle_sequence_plan,
+        lns_batch_size, search_rng,
+        tried_sequence_signatures, sequence_trial_records,
+        disabled_order_constraints,
+        &full_shuffle_enforced_constraints);
+
+    // Select LNS seed
+    const AllocationRunSummary *lns_seed_summary = &greedy_summary;
+    if (assignment_has_feasible &&
+        is_better_run(assignment_best_feasible, *lns_seed_summary))
+    {
+        lns_seed_summary = &assignment_best_feasible;
+    }
+    if (local_sequence_outcome.has_feasible &&
+        is_better_run(local_sequence_outcome.best_feasible, *lns_seed_summary))
+    {
+        lns_seed_summary = &local_sequence_outcome.best_feasible;
+    }
+    if (full_shuffle_outcome.has_feasible &&
+        is_better_run(full_shuffle_outcome.best_feasible, *lns_seed_summary))
+    {
+        lns_seed_summary = &full_shuffle_outcome.best_feasible;
+    }
+
+    // Run adaptive LNS
+    std::mt19937 lns_rng(
+        mix_seed(runtime_options.base_random_seed, 0x1EA5E123u));
+    auto lns_outcome = run_adaptive_lns_search(
+        loadedSequence, runtime_options, *lns_seed_summary,
+        greedy_plan, robot_names, lns_batch_size, lns_rng,
+        disabled_order_constraints,
+        &lns_enforced_constraints);
+
+    // Print order constraint learning stats
+    if (runtime_options.enable_order_constraint_learning)
+    {
+        std::cout << "[Learn][Order] " << local_sequence_label
+                  << " enforced precedence constraints: "
+                  << local_sequence_enforced_constraints << std::endl;
+        std::cout << "[Learn][Order] " << sequence_label
+                  << " enforced precedence constraints: "
+                  << full_shuffle_enforced_constraints << std::endl;
+        std::cout << "[Learn][Order] lns-adaptive"
+                  << " enforced precedence constraints: "
+                  << lns_enforced_constraints << std::endl;
+    }
+    else
+    {
+        std::cout << "[Learn][Order] disabled" << std::endl;
+    }
+
+    // Print comparison summary
+    std::cout << "[Compare] Makespan summary" << std::endl;
+    print_comparison_line(greedy_summary, greedy_summary.makespan);
+    print_search_method_summary("fixed-sequence-random-reassign",
+                                assignment_has_feasible,
+                                assignment_best_feasible,
+                                assignment_has_partial,
+                                assignment_best_partial,
+                                greedy_summary.makespan);
+    print_search_method_summary(local_sequence_label,
+                                local_sequence_outcome.has_feasible,
+                                local_sequence_outcome.best_feasible,
+                                local_sequence_outcome.has_partial,
+                                local_sequence_outcome.best_partial,
+                                greedy_summary.makespan);
+    print_search_method_summary(sequence_label,
+                                full_shuffle_outcome.has_feasible,
+                                full_shuffle_outcome.best_feasible,
+                                full_shuffle_outcome.has_partial,
+                                full_shuffle_outcome.best_partial,
+                                greedy_summary.makespan);
+    print_search_method_summary("lns-adaptive",
+                                lns_outcome.has_feasible,
+                                lns_outcome.best_feasible,
+                                lns_outcome.has_partial,
+                                lns_outcome.best_partial,
+                                greedy_summary.makespan);
+
+    // Select best overall
+    AllocationRunSummary local_sequence_report =
+        local_sequence_outcome.has_feasible
+            ? local_sequence_outcome.best_feasible
+            : local_sequence_outcome.best_partial;
+
+    AllocationRunSummary sequence_report =
+        full_shuffle_outcome.has_feasible
+            ? full_shuffle_outcome.best_feasible
+            : full_shuffle_outcome.best_partial;
+
+    AllocationRunSummary lns_report =
+        lns_outcome.has_feasible
+            ? lns_outcome.best_feasible
+            : lns_outcome.best_partial;
+
+    std::vector<AllocationRunSummary> summaries = {
+        greedy_summary,
+        assignment_report,
+        local_sequence_report,
+        sequence_report,
+        lns_report};
+
+    AllocationRunSummary best_summary = greedy_summary;
+    if (assignment_has_feasible && is_better_run(assignment_best_feasible, best_summary))
+        best_summary = assignment_best_feasible;
+    if (local_sequence_outcome.has_feasible && is_better_run(local_sequence_outcome.best_feasible, best_summary))
+        best_summary = local_sequence_outcome.best_feasible;
+    if (full_shuffle_outcome.has_feasible && is_better_run(full_shuffle_outcome.best_feasible, best_summary))
+        best_summary = full_shuffle_outcome.best_feasible;
+    if (lns_outcome.has_feasible && is_better_run(lns_outcome.best_feasible, best_summary))
+        best_summary = lns_outcome.best_feasible;
+
+    const double lns_best_makespan =
+        lns_outcome.has_feasible
+            ? lns_outcome.best_feasible.makespan
+            : std::numeric_limits<double>::infinity();
+
+    const ExecutedScenario *cached_best_executed = nullptr;
+    if (best_summary.label == greedy_summary.label &&
+        same_execution_signature(best_summary, greedy_summary))
+    {
+        cached_best_executed = &greedy_executed;
+    }
+    if (lns_outcome.best_feasible_execution &&
+        best_summary.label == lns_outcome.best_feasible.label &&
+        same_execution_signature(best_summary, lns_outcome.best_feasible))
+    {
+        cached_best_executed = lns_outcome.best_feasible_execution.get();
+    }
+
+    // Finalize selected scenario
+    return finalize_and_replay_best(
         argc, argv,
         runtime_options,
         instance_info,
         loadedSequence,
+        summaries,
+        best_summary,
+        cached_best_executed,
+        greedy_allocation_planning_time_s,
+        lns_outcome.lns_batch_planning_times_s,
         relopush_single_robot_makespan,
+        greedy_summary.makespan,
+        lns_best_makespan,
+        sequence_trial_records,
         handoff_server.get());
-  }
-
-  // Multi-strategy search mode
-  std::cout << "[Search] Evaluating greedy baseline..." << std::endl;
-  AllocationScenarioPlan greedy_plan = make_identity_plan(loadedSequence.size());
-  const std::uint32_t greedy_parking_seed =
-      mix_seed(runtime_options.base_random_seed, 0xC0FFEE01u);
-
-  ExecutedScenario greedy_executed = execute_allocation_scenario(
-      loadedSequence, runtime_options, greedy_plan, "greedy",
-      greedy_parking_seed, false);
-  AllocationRunSummary greedy_summary = greedy_executed.summary;
-
-  std::vector<std::string> robot_names = collect_robot_names(
-      loadedSequence, runtime_options);
-  std::mt19937 search_rng(
-      mix_seed(runtime_options.base_random_seed, 0x51A7BEEFu));
-  const int lns_batch_size = std::max(1, runtime_options.lns_threads);
-
-  // Run assignment search
-  AllocationRunSummary assignment_best_feasible;
-  AllocationRunSummary assignment_best_partial;
-  bool assignment_has_feasible = false;
-  bool assignment_has_partial = false;
-
-  run_assignment_reassignment_search(
-      loadedSequence, runtime_options, greedy_plan, greedy_summary,
-      robot_names, lns_batch_size, search_rng,
-      assignment_best_feasible, assignment_best_partial,
-      assignment_has_feasible, assignment_has_partial);
-
-  AllocationRunSummary assignment_report =
-      assignment_has_feasible ? assignment_best_feasible : assignment_best_partial;
-
-  // Run sequence search methods
-  std::vector<SearchTrialRecord> sequence_trial_records;
-  std::unordered_set<std::string> tried_sequence_signatures;
-  tried_sequence_signatures.insert(task_order_signature(greedy_plan));
-  LearnedOrderConstraints disabled_order_constraints =
-      make_learned_order_constraints(loadedSequence.size());
-  int local_sequence_enforced_constraints = 0;
-  int full_shuffle_enforced_constraints = 0;
-  int lns_enforced_constraints = 0;
-
-  const std::string local_sequence_label = "local-edit-task-sequence";
-  auto local_sequence_outcome = run_sequence_search_method(
-      loadedSequence, runtime_options, greedy_plan, greedy_summary,
-      local_sequence_label,
-      "Local task-sequence search (swap/relocate edits)",
-      "SeqLocal",
-      runtime_options.local_sequence_search_iterations,
-      mutate_sequence_plan,
-      lns_batch_size, search_rng,
-      tried_sequence_signatures, sequence_trial_records,
-      disabled_order_constraints,
-      &local_sequence_enforced_constraints);
-
-  const std::string sequence_label = "random-task-sequence";
-  auto full_shuffle_outcome = run_sequence_search_method(
-      loadedSequence, runtime_options, greedy_plan, greedy_summary,
-      sequence_label,
-      "Randomized task-sequence search (full random shuffle)",
-      "SeqFull",
-      runtime_options.shuffle_sequence_search_iterations,
-      mutate_full_shuffle_sequence_plan,
-      lns_batch_size, search_rng,
-      tried_sequence_signatures, sequence_trial_records,
-      disabled_order_constraints,
-      &full_shuffle_enforced_constraints);
-
-  // Select LNS seed
-  const AllocationRunSummary *lns_seed_summary = &greedy_summary;
-  if (assignment_has_feasible &&
-      is_better_run(assignment_best_feasible, *lns_seed_summary))
-  {
-    lns_seed_summary = &assignment_best_feasible;
-  }
-  if (local_sequence_outcome.has_feasible &&
-      is_better_run(local_sequence_outcome.best_feasible, *lns_seed_summary))
-  {
-    lns_seed_summary = &local_sequence_outcome.best_feasible;
-  }
-  if (full_shuffle_outcome.has_feasible &&
-      is_better_run(full_shuffle_outcome.best_feasible, *lns_seed_summary))
-  {
-    lns_seed_summary = &full_shuffle_outcome.best_feasible;
-  }
-
-  // Run adaptive LNS
-  std::mt19937 lns_rng(
-      mix_seed(runtime_options.base_random_seed, 0x1EA5E123u));
-  auto lns_outcome = run_adaptive_lns_search(
-      loadedSequence, runtime_options, *lns_seed_summary,
-      greedy_plan, robot_names, lns_batch_size, lns_rng,
-      disabled_order_constraints,
-      &lns_enforced_constraints);
-
-  // Print order constraint learning stats
-  if (runtime_options.enable_order_constraint_learning)
-  {
-    std::cout << "[Learn][Order] " << local_sequence_label
-              << " enforced precedence constraints: "
-              << local_sequence_enforced_constraints << std::endl;
-    std::cout << "[Learn][Order] " << sequence_label
-              << " enforced precedence constraints: "
-              << full_shuffle_enforced_constraints << std::endl;
-    std::cout << "[Learn][Order] lns-adaptive"
-              << " enforced precedence constraints: "
-              << lns_enforced_constraints << std::endl;
-  }
-  else
-  {
-    std::cout << "[Learn][Order] disabled" << std::endl;
-  }
-
-  // Print comparison summary
-  std::cout << "[Compare] Makespan summary" << std::endl;
-  print_comparison_line(greedy_summary, greedy_summary.makespan);
-  print_search_method_summary("fixed-sequence-random-reassign",
-                              assignment_has_feasible,
-                              assignment_best_feasible,
-                              assignment_has_partial,
-                              assignment_best_partial,
-                              greedy_summary.makespan);
-  print_search_method_summary(local_sequence_label,
-                              local_sequence_outcome.has_feasible,
-                              local_sequence_outcome.best_feasible,
-                              local_sequence_outcome.has_partial,
-                              local_sequence_outcome.best_partial,
-                              greedy_summary.makespan);
-  print_search_method_summary(sequence_label,
-                              full_shuffle_outcome.has_feasible,
-                              full_shuffle_outcome.best_feasible,
-                              full_shuffle_outcome.has_partial,
-                              full_shuffle_outcome.best_partial,
-                              greedy_summary.makespan);
-  print_search_method_summary("lns-adaptive",
-                              lns_outcome.has_feasible,
-                              lns_outcome.best_feasible,
-                              lns_outcome.has_partial,
-                              lns_outcome.best_partial,
-                              greedy_summary.makespan);
-
-  // Select best overall
-  AllocationRunSummary local_sequence_report =
-      local_sequence_outcome.has_feasible
-          ? local_sequence_outcome.best_feasible
-          : local_sequence_outcome.best_partial;
-
-  AllocationRunSummary sequence_report =
-      full_shuffle_outcome.has_feasible
-          ? full_shuffle_outcome.best_feasible
-          : full_shuffle_outcome.best_partial;
-
-  AllocationRunSummary lns_report =
-      lns_outcome.has_feasible
-          ? lns_outcome.best_feasible
-          : lns_outcome.best_partial;
-
-  std::vector<AllocationRunSummary> summaries = {
-      greedy_summary,
-      assignment_report,
-      local_sequence_report,
-      sequence_report,
-      lns_report};
-
-  AllocationRunSummary best_summary = greedy_summary;
-  if (assignment_has_feasible && is_better_run(assignment_best_feasible, best_summary))
-    best_summary = assignment_best_feasible;
-  if (local_sequence_outcome.has_feasible && is_better_run(local_sequence_outcome.best_feasible, best_summary))
-    best_summary = local_sequence_outcome.best_feasible;
-  if (full_shuffle_outcome.has_feasible && is_better_run(full_shuffle_outcome.best_feasible, best_summary))
-    best_summary = full_shuffle_outcome.best_feasible;
-  if (lns_outcome.has_feasible && is_better_run(lns_outcome.best_feasible, best_summary))
-    best_summary = lns_outcome.best_feasible;
-
-  const double lns_best_makespan =
-      lns_outcome.has_feasible
-          ? lns_outcome.best_feasible.makespan
-          : std::numeric_limits<double>::infinity();
-
-  // Finalize and replay
-  return finalize_and_replay_best(
-      argc, argv,
-      runtime_options,
-      instance_info,
-      loadedSequence,
-      summaries,
-      best_summary,
-      relopush_single_robot_makespan,
-      greedy_summary.makespan,
-      lns_best_makespan,
-      sequence_trial_records,
-      handoff_server.get());
 }
 
 #ifndef PHASTAR_PUSH_NO_MAIN
 int main(int argc, char **argv)
 {
-  std::cout << "== Pushing ==" << std::endl;
-  return phastar_push_demo_main(argc, argv);
+    std::cout << "== Pushing ==" << std::endl;
+    return phastar_push_demo_main(argc, argv);
 }
 #endif

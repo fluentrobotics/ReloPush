@@ -1596,7 +1596,10 @@ bool relocate_blocking_robot(RobotMeta *blocker,
                         "", ready_time, "Safe parking relocation");
         planner.set_ignore_other_robots(true);
         planner.set_debug_popup_enabled(false);
-        planner.max_search_iterations = options.max_search_iterations;
+        planner.max_search_iterations =
+            options.safe_parking_max_search_iterations > 0
+                ? options.safe_parking_max_search_iterations
+                : options.max_search_iterations;
         planner.set_planner_expansion_threads(options.planner_expansion_threads);
 
         res = planner.Planning_with_res(ready_time);
@@ -1771,4 +1774,3 @@ bool relocate_blocking_robot(RobotMeta *blocker,
             << std::endl;
   return false;
 }
-

@@ -83,7 +83,6 @@ TimeTableVerificationResult verify_timetable_collision_free(
     const Params &params);
 
 // visualize_planning_attempt_debug and visualize_planning_debug - defined in monolith
-// planning_status_name - defined in monolith
 // sanitize_filename_component - defined in monolith
 
 bool is_valid_transfer_contact(EntityMeta *e1, const Pose &p1,
@@ -735,6 +734,22 @@ bool transit_step_is_fine_repair(const TransitPlannerStep &step)
          step.method == TransitPlannerMethod::ReverseRightEscapeReedShepp;
 }
 
+std::string format_planning_status_line(const std::string &stage,
+                                        const PlanningResult &res)
+{
+  std::ostringstream oss;
+  oss << stage << " => " << planning_status_name(res.status);
+  if (!res.colliding_entity.empty())
+    oss << ", blocker=" << res.colliding_entity;
+  if (res.failure_time > 1e-6)
+    oss << ", t=" << std::fixed << std::setprecision(2) << res.failure_time;
+  if (!res.failure_detail.empty())
+    oss << ", detail=" << res.failure_detail;
+  if (!res.waypoints.empty())
+    oss << ", waypoints=" << res.waypoints.size();
+  return oss.str();
+}
+
 std::vector<Waypoint> waypoints_from_relopush_state_path(
     const ReloPush::StatePathPtr &path)
 {
@@ -783,49 +798,16 @@ bool plan_initial_transit(
             << ") from Start (" << current_pose.x << ", " << current_pose.y << ", " << current_pose.yaw
             << ") at " << planning_start_time << "s" << std::endl;
 
-  auto status_to_string = [](PlanningStatus status) -> const char *
-  {
-    switch (status)
-    {
-    case PlanningStatus::SUCCESS:
-      return "SUCCESS";
-    case PlanningStatus::START_INVALID_COLLISION:
-      return "START_INVALID_COLLISION";
-    case PlanningStatus::START_OUT_OF_BOUNDS:
-      return "START_OUT_OF_BOUNDS";
-    case PlanningStatus::GOAL_INVALID_COLLISION:
-      return "GOAL_INVALID_COLLISION";
-    case PlanningStatus::GOAL_OUT_OF_BOUNDS:
-      return "GOAL_OUT_OF_BOUNDS";
-    case PlanningStatus::NO_PATH_FOUND:
-      return "NO_PATH_FOUND";
-    case PlanningStatus::TIMEOUT_EXCEEDED:
-      return "TIMEOUT_EXCEEDED";
-    case PlanningStatus::HIGH_COST_UNFEASIBLE:
-      return "HIGH_COST_UNFEASIBLE";
-    case PlanningStatus::BLOCKED_BY_ROBOT:
-      return "BLOCKED_BY_ROBOT";
-    case PlanningStatus::INTERNAL_ERROR:
-    default:
-      return "INTERNAL_ERROR";
-    }
-  };
-
   std::vector<std::string> attempt_log;
   std::vector<PlanningDebugAttempt> debug_attempts;
   auto append_attempt = [&](const std::string &stage, const PlanningResult &res)
   {
-    std::ostringstream oss;
-    oss << stage << " => " << status_to_string(res.status);
-    if (!res.colliding_entity.empty())
-      oss << ", blocker=" << res.colliding_entity;
-    if (res.failure_time > 1e-6)
-      oss << ", t=" << std::fixed << std::setprecision(2) << res.failure_time;
-    if (!res.failure_detail.empty())
-      oss << ", detail=" << res.failure_detail;
-    if (!res.waypoints.empty())
-      oss << ", waypoints=" << res.waypoints.size();
-    attempt_log.push_back(oss.str());
+    attempt_log.push_back(format_planning_status_line(stage, res));
+    if (options.print_planning_status)
+    {
+      std::cout << "  [TransitStatus] " << attempt_log.size() << ") "
+                << attempt_log.back() << std::endl;
+    }
     debug_attempts.push_back({stage, res});
   };
 
@@ -2430,6 +2412,12 @@ bool replan_transit_segment(
 
     if (candidate_rel.empty())
     {
+      if (options.print_planning_status)
+      {
+        std::cout << "  [SegmentStatus] "
+                  << format_planning_status_line(stage, report.planning)
+                  << std::endl;
+      }
       reports.push_back(std::move(report));
       return false;
     }
@@ -2442,6 +2430,21 @@ bool replan_transit_segment(
     report.accepted_for_scheduling = report.validation.hard_valid;
     if (!report.validation.hard_valid)
     {
+      if (options.print_planning_status)
+      {
+        std::cout << "  [SegmentStatus] " << stage
+                  << " => " << planning_status_name(report.planning.status)
+                  << ", validation=FAILED";
+        if (!report.validation.first_hard_collision.reason.empty())
+        {
+          std::cout << ", detail="
+                    << report.validation.first_hard_collision.reason;
+          if (!report.validation.first_hard_collision.entity_name.empty())
+            std::cout << " with "
+                      << report.validation.first_hard_collision.entity_name;
+        }
+        std::cout << std::endl;
+      }
       reports.push_back(std::move(report));
       return false;
     }
@@ -2449,6 +2452,14 @@ bool replan_transit_segment(
     out_waypoints_rel = std::move(candidate_rel);
     selected_stage = stage;
     report.selected = true;
+    if (options.print_planning_status)
+    {
+      std::cout << "  [SegmentStatus] " << stage
+                << " => " << planning_status_name(report.planning.status)
+                << ", validation=PASS"
+                << ", waypoints=" << report.debug_waypoints.size()
+                << std::endl;
+    }
     reports.push_back(std::move(report));
     return true;
   };

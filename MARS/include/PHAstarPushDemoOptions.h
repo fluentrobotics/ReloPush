@@ -125,7 +125,8 @@ struct RuntimeOptions
     // visualization options
     bool debug_vis = false;
     bool visualize_relopush_plan = false;
-    bool enable_visualization = false; // show results
+    bool enable_visualization = true; // show results
+    bool print_planning_status = true;
 
     // Default planning parameters
     double default_xy_resolution = 0.2;
@@ -146,8 +147,8 @@ struct RuntimeOptions
     double default_safety_margin = 0.03;
     double default_robot_collision_inflation = 1.005;
     double retraction_distance = 0.11;
-    int planner_expansion_threads = 2;
-    int max_search_iterations = 500;
+    int planner_expansion_threads = 1;
+    int max_search_iterations = 300;
     bool robot_boundary_origin_only = true;
 
     // Fine segment options (for replanning)
@@ -175,6 +176,7 @@ struct RuntimeOptions
 
     // Safe Parking
     ParkingCandidateMode parking_candidate_mode = ParkingCandidateMode::REVERSE_RECENT_SHORTER;
+    int safe_parking_max_search_iterations = 25; // 0 inherits max_search_iterations
     bool enable_failed_candidate_idle_parking = true;
     int failed_candidate_initial_transit_failure_threshold = 2;
     bool enable_order_constraint_learning = true;
@@ -185,7 +187,7 @@ struct RuntimeOptions
     int assignment_search_iterations = 0; // for random assignment
     int local_sequence_search_iterations = 0;
     int shuffle_sequence_search_iterations = 0;
-    int lns_iterations = 0;
+    int lns_iterations = 10;
     int lns_threads = 5;
     bool enable_lns_fine_segment_retry = false; // for LNS
 

@@ -17,6 +17,8 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <numeric>
 #include <random>
 #include <sstream>
@@ -29,6 +31,91 @@
 // Functions that remain in PHAstar_push_demo.cpp for now
 std::string default_sequence_path();
 std::uint32_t mix_seed(std::uint32_t seed, std::uint32_t salt);
+extern bool DEBUG_VIS;
+
+namespace
+{
+class ScopedDebugVisualizationOverride
+{
+public:
+  explicit ScopedDebugVisualizationOverride(bool enabled)
+      : enabled_(enabled), previous_(DEBUG_VIS)
+  {
+    if (enabled_)
+      DEBUG_VIS = false;
+  }
+
+  ~ScopedDebugVisualizationOverride()
+  {
+    if (enabled_)
+      DEBUG_VIS = previous_;
+  }
+
+  ScopedDebugVisualizationOverride(const ScopedDebugVisualizationOverride &) = delete;
+  ScopedDebugVisualizationOverride &
+  operator=(const ScopedDebugVisualizationOverride &) = delete;
+
+private:
+  bool enabled_ = false;
+  bool previous_ = false;
+};
+
+RuntimeOptions make_parallel_lns_worker_options(const RuntimeOptions &options)
+{
+  RuntimeOptions worker_options = options;
+  worker_options.planner_expansion_threads = 1;
+  worker_options.print_planning_status = false;
+
+  // LNS candidates run in worker threads when lns_threads > 1. Qt windows
+  // must stay on the main thread, so disable every Qt-facing option there.
+  if (options.lns_threads > 1)
+  {
+    worker_options.debug_vis = false;
+    worker_options.enable_visualization = false;
+    worker_options.visualize_relopush_plan = false;
+    worker_options.enable_result_summary_figure = false;
+  }
+
+  return worker_options;
+}
+
+std::mutex &lns_worker_status_mutex()
+{
+  static std::mutex mutex;
+  return mutex;
+}
+
+void print_lns_worker_status(std::size_t worker_idx,
+                             std::size_t worker_count,
+                             const LnsSearchCandidate &candidate,
+                             const std::string &state,
+                             const AllocationRunSummary *summary = nullptr)
+{
+  std::lock_guard<std::mutex> lock(lns_worker_status_mutex());
+  std::clog << "[LNS worker " << (worker_idx + 1) << "/" << worker_count
+            << "] " << state
+            << " iter=" << candidate.iteration
+            << " op=" << candidate.destroy_operator
+            << " k=" << candidate.destroyed_tasks.size();
+
+  if (summary)
+  {
+    std::clog << " feas=" << (summary->all_tasks_succeeded ? 1 : 0);
+    if (summary->all_tasks_succeeded)
+    {
+      std::clog << " mk=" << std::fixed << std::setprecision(2)
+                << summary->makespan << "s";
+    }
+    else
+    {
+      std::clog << " suc=" << summary->successful_tasks << "/"
+                << (summary->successful_tasks + summary->failed_tasks);
+    }
+  }
+
+  std::clog << std::endl;
+}
+} // namespace
 
 // ==========================================
 // Config Display
@@ -61,6 +148,9 @@ void print_runtime_options(const RuntimeOptions &options)
 
   std::cout << "[Config] Debug vis logs: "
             << (options.debug_vis ? "enabled" : "disabled")
+            << std::endl;
+  std::cout << "[Config] Planning status terminal output: "
+            << (options.print_planning_status ? "enabled" : "disabled")
             << std::endl;
   std::cout << "[Config] Robot boundary mode: "
             << (options.robot_boundary_origin_only ? "origin-only" : "corner-strict")
@@ -119,6 +209,14 @@ void print_runtime_options(const RuntimeOptions &options)
             << options.contact_boundary_reverse_penalty
             << ", holonomic_resolution="
             << options.contact_boundary_holonomic_resolution
+            << std::endl;
+  std::cout << "[Config] Safe parking max search iterations: "
+            << (options.safe_parking_max_search_iterations > 0
+                    ? options.safe_parking_max_search_iterations
+                    : options.max_search_iterations)
+            << (options.safe_parking_max_search_iterations > 0
+                    ? ""
+                    : " (inherits max search iterations)")
             << std::endl;
   std::cout << "[Config] Parking candidate mode: "
             << parking_candidate_mode_name(options.parking_candidate_mode)
@@ -245,6 +343,14 @@ void initialize_environment(
     std::cout << "[Config] Parking RNG seed: " << parking_rng_seed() << std::endl;
     std::cout << "[Config] Parking candidate mode: "
               << parking_candidate_mode_name() << std::endl;
+    std::cout << "[Config] Safe parking max search iterations: "
+              << (options.safe_parking_max_search_iterations > 0
+                      ? options.safe_parking_max_search_iterations
+                      : options.max_search_iterations)
+              << (options.safe_parking_max_search_iterations > 0
+                      ? ""
+                      : " (inherits max search iterations)")
+              << std::endl;
     std::ostringstream collision_tuning;
     collision_tuning << std::fixed << std::setprecision(3)
                      << "[Config] Collision tuning: inflation="
@@ -388,7 +494,7 @@ ExecutedScenario execute_allocation_scenario(
     std::uint32_t parking_seed,
     bool verbose)
 {
-  ScopedStreamSilencer silencer(!verbose);
+  ScopedStreamSilencer silencer(!verbose && !options.print_planning_status);
 
   ExecutedScenario executed;
   std::vector<RobotMeta *> all_robots;
@@ -432,7 +538,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
     return results;
   }
 
-  ScopedGlobalStreamSilencer silencer(true);
+  ScopedGlobalStreamSilencer silencer(!options.print_planning_status);
   RuntimeOptions worker_options = options;
   worker_options.planner_expansion_threads = 1;
   std::atomic<std::size_t> next_index{0};
@@ -468,7 +574,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
 }
 
 // Forward declaration for the repair function (defined later in this file)
-AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
+ExecutedScenario repair_destroyed_tasks_with_sampled_insertion(
     const std::vector<FinalAllocation> &loaded_sequence,
     const RuntimeOptions &options,
     const AllocationScenarioPlan &base_plan,
@@ -482,7 +588,7 @@ AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
     const std::string &label,
     bool disable_local_silencer);
 
-std::vector<AllocationRunSummary> evaluate_lns_batch(
+std::vector<LnsEvaluationResult> evaluate_lns_batch(
     const std::vector<FinalAllocation> &loaded_sequence,
     const RuntimeOptions &options,
     const AllocationScenarioPlan &base_plan,
@@ -492,7 +598,7 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
     const std::vector<std::string> &robot_names,
     const std::string &label)
 {
-  std::vector<AllocationRunSummary> results(candidates.size());
+  std::vector<LnsEvaluationResult> results(candidates.size());
   if (candidates.empty())
     return results;
 
@@ -504,17 +610,20 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
   {
     for (std::size_t i = 0; i < candidates.size(); ++i)
     {
-      results[i] = repair_destroyed_tasks_with_sampled_insertion(
+      auto executed = repair_destroyed_tasks_with_sampled_insertion(
           loaded_sequence, options, base_plan, base_summary, constraints,
           candidates[i].destroyed_tasks, robot_names, candidates[i].destroy_scores,
           candidates[i].parking_seed, candidates[i].repair_seed, label, false);
+      results[i].summary = executed.summary;
+      results[i].executed =
+          std::make_unique<ExecutedScenario>(std::move(executed));
     }
     return results;
   }
 
   ScopedGlobalStreamSilencer silencer(true);
-  RuntimeOptions worker_options = options;
-  worker_options.planner_expansion_threads = 1;
+  RuntimeOptions worker_options = make_parallel_lns_worker_options(options);
+  ScopedDebugVisualizationOverride debug_vis_override(options.lns_threads > 1);
   std::atomic<std::size_t> next_index{0};
   std::vector<std::thread> workers;
   workers.reserve(worker_count);
@@ -523,7 +632,8 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
   {
     workers.emplace_back(
         [&loaded_sequence, &worker_options, &base_plan, &base_summary, &constraints,
-         &candidates, &results, &robot_names, &label, &next_index]()
+         &candidates, &results, &robot_names, &label, &next_index,
+         worker_idx, worker_count]()
         {
           while (true)
           {
@@ -531,11 +641,19 @@ std::vector<AllocationRunSummary> evaluate_lns_batch(
             if (idx >= candidates.size())
               break;
 
-            results[idx] = repair_destroyed_tasks_with_sampled_insertion(
+            print_lns_worker_status(worker_idx, worker_count,
+                                    candidates[idx], "running");
+            auto executed = repair_destroyed_tasks_with_sampled_insertion(
                 loaded_sequence, worker_options, base_plan, base_summary, constraints,
                 candidates[idx].destroyed_tasks, robot_names,
                 candidates[idx].destroy_scores, candidates[idx].parking_seed,
                 candidates[idx].repair_seed, label, true);
+            results[idx].summary = executed.summary;
+            results[idx].executed =
+                std::make_unique<ExecutedScenario>(std::move(executed));
+            print_lns_worker_status(worker_idx, worker_count,
+                                    candidates[idx], "complete",
+                                    &results[idx].summary);
           }
         });
   }
@@ -1659,7 +1777,7 @@ static std::vector<std::size_t> build_sampled_insertion_positions(
   return positions;
 }
 
-AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
+ExecutedScenario repair_destroyed_tasks_with_sampled_insertion(
     const std::vector<FinalAllocation> &loaded_sequence,
     const RuntimeOptions &options,
     const AllocationScenarioPlan &base_plan,
@@ -1889,7 +2007,7 @@ AllocationRunSummary repair_destroyed_tasks_with_sampled_insertion(
     }
   }
 
-  return repaired.summary;
+  return repaired;
 }
 
 // ==========================================

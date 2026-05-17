@@ -38,6 +38,34 @@ namespace
     if (!parent.empty())
       std::filesystem::create_directories(parent);
   }
+
+  std::string format_instance_record_number(double value)
+  {
+    if (!std::isfinite(value))
+      return "INF";
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << value;
+    return oss.str();
+  }
+
+  std::string format_lns_batch_times(
+      const std::vector<double> &lns_batch_planning_times_s)
+  {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+    for (std::size_t i = 0; i < lns_batch_planning_times_s.size(); ++i)
+    {
+      if (i > 0)
+        oss << ";";
+      oss << (i + 1) << "=";
+      if (std::isfinite(lns_batch_planning_times_s[i]))
+        oss << lns_batch_planning_times_s[i];
+      else
+        oss << "INF";
+    }
+    return oss.str();
+  }
 }
 
 std::string csv_escape(const std::string &value)
@@ -503,13 +531,46 @@ void write_instance_run_record_csv(
     double greedy_makespan,
     double lns_best_makespan,
     int lns_iterations,
+    double greedy_allocation_planning_time_s,
+    const std::vector<double> &lns_batch_planning_times_s,
+    int path_max_search_iterations_default,
+    int path_max_search_iterations_fine,
+    int safe_parking_max_search_iterations,
+    int lns_threads,
     const std::string &best_overall_label,
     double best_overall_makespan)
 {
+  const std::string header =
+      "file_name,instance_index,relopush_single_robot_makespan,"
+      "greedy_allocation_makespan,lns_best_makespan,lns_iterations,"
+      "greedy_allocation_planning_time_s,lns_batch_planning_times_s,"
+      "path_max_search_iterations_default,path_max_search_iterations_fine,"
+      "safe_parking_max_search_iterations,lns_threads,"
+      "best_overall_label,best_overall_makespan";
+
   bool write_header = false;
   {
     std::ifstream ifs(csv_path);
-    write_header = !ifs.good() || ifs.peek() == std::ifstream::traits_type::eof();
+    if (!ifs.good() || ifs.peek() == std::ifstream::traits_type::eof())
+    {
+      write_header = true;
+    }
+    else
+    {
+      bool found_current_header = false;
+      std::string line;
+      while (std::getline(ifs, line))
+      {
+        if (!line.empty() && line.back() == '\r')
+          line.pop_back();
+        if (line == header)
+        {
+          found_current_header = true;
+          break;
+        }
+      }
+      write_header = !found_current_header;
+    }
   }
 
   ensure_parent_directory(csv_path);
@@ -522,36 +583,23 @@ void write_instance_run_record_csv(
 
   if (write_header)
   {
-    ofs << "file_name,instance_index,relopush_single_robot_makespan,"
-           "greedy_allocation_makespan,lns_best_makespan,lns_iterations,"
-           "best_overall_label,best_overall_makespan\n";
+    ofs << header << "\n";
   }
 
-  ofs << std::fixed << std::setprecision(2);
   ofs << csv_escape(instance_info.file_name) << ","
-      << instance_info.instance_index << ",";
-  if (std::isfinite(relopush_single_robot_makespan))
-    ofs << relopush_single_robot_makespan;
-  else
-    ofs << "INF";
-  ofs << ",";
-  if (std::isfinite(greedy_makespan))
-    ofs << greedy_makespan;
-  else
-    ofs << "INF";
-  ofs << ",";
-  if (std::isfinite(lns_best_makespan))
-    ofs << lns_best_makespan;
-  else
-    ofs << "INF";
-  ofs << ","
+      << instance_info.instance_index << ","
+      << format_instance_record_number(relopush_single_robot_makespan) << ","
+      << format_instance_record_number(greedy_makespan) << ","
+      << format_instance_record_number(lns_best_makespan) << ","
       << lns_iterations << ","
-      << csv_escape(best_overall_label) << ",";
-  if (std::isfinite(best_overall_makespan))
-    ofs << best_overall_makespan;
-  else
-    ofs << "INF";
-  ofs << "\n";
+      << format_instance_record_number(greedy_allocation_planning_time_s) << ","
+      << csv_escape(format_lns_batch_times(lns_batch_planning_times_s)) << ","
+      << path_max_search_iterations_default << ","
+      << path_max_search_iterations_fine << ","
+      << safe_parking_max_search_iterations << ","
+      << lns_threads << ","
+      << csv_escape(best_overall_label) << ","
+      << format_instance_record_number(best_overall_makespan) << "\n";
 
   std::cout << "[Log] Appended instance record CSV: " << csv_path << std::endl;
 }

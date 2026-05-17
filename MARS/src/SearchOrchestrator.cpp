@@ -13,9 +13,11 @@
 #include <iostream>
 #include <iomanip>
 #include <limits>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <chrono>
 #include <sstream>
 
 namespace
@@ -28,6 +30,26 @@ std::string instance_record_csv_path(const ReloPush::HandoffInstanceInfo &instan
   if (instance_info.file_name.rfind("ReloPush-BOSS_", 0) == 0)
     return std::string(CMAKE_SOURCE_DIR) + "/results/" + filename;
   return index_log_path(filename);
+}
+
+double elapsed_seconds(std::chrono::steady_clock::time_point start)
+{
+  return std::chrono::duration<double>(
+             std::chrono::steady_clock::now() - start)
+      .count();
+}
+
+int effective_fine_path_max_search_iterations(const RuntimeOptions &options)
+{
+  return std::max(options.max_search_iterations,
+                  options.fine_segment_max_search_iterations);
+}
+
+int effective_safe_parking_max_search_iterations(const RuntimeOptions &options)
+{
+  return options.safe_parking_max_search_iterations > 0
+             ? options.safe_parking_max_search_iterations
+             : options.max_search_iterations;
 }
 } // namespace
 
@@ -50,9 +72,12 @@ int run_greedy_only_pipeline(
   const std::uint32_t greedy_parking_seed = mix_seed(options.base_random_seed, 0xC0FFEE01u);
   AllocationScenarioPlan greedy_plan = make_identity_plan(loaded_sequence.size());
 
+  const auto greedy_start = std::chrono::steady_clock::now();
   auto greedy_executed = execute_allocation_scenario(
       loaded_sequence, options, greedy_plan, greedy_label,
       greedy_parking_seed, true);
+  const double greedy_allocation_planning_time_s =
+      elapsed_seconds(greedy_start);
   const auto &greedy_summary = greedy_executed.summary;
 
   std::cout << "[Compare] Makespan summary" << std::endl;
@@ -81,6 +106,12 @@ int run_greedy_only_pipeline(
       greedy_summary.makespan,
       std::numeric_limits<double>::infinity(),
       options.lns_iterations,
+      greedy_allocation_planning_time_s,
+      {},
+      options.max_search_iterations,
+      effective_fine_path_max_search_iterations(options),
+      effective_safe_parking_max_search_iterations(options),
+      options.lns_threads,
       greedy_summary.label,
       greedy_summary.makespan);
 
@@ -565,14 +596,17 @@ SequenceSearchOutcome run_adaptive_lns_search(
       batch_candidates.push_back(std::move(candidate_info));
     }
 
+    const auto lns_batch_start = std::chrono::steady_clock::now();
     auto batch_results = evaluate_lns_batch(
         loaded_sequence, options, batch_base_plan, batch_base_summary,
         batch_constraints, batch_candidates, robot_names, lns_label);
+    lns_outcome.lns_batch_planning_times_s.push_back(
+        elapsed_seconds(lns_batch_start));
 
     for (std::size_t batch_idx = 0; batch_idx < batch_candidates.size(); ++batch_idx)
     {
       const auto &candidate_info = batch_candidates[batch_idx];
-      AllocationRunSummary candidate = batch_results[batch_idx];
+      AllocationRunSummary candidate = batch_results[batch_idx].summary;
       candidate.label = lns_label;
 
       if (options.enable_order_constraint_learning &&
@@ -598,6 +632,12 @@ SequenceSearchOutcome run_adaptive_lns_search(
       {
         lns_outcome.best_feasible = candidate;
         lns_outcome.best_feasible.label = lns_label;
+        if (batch_results[batch_idx].executed)
+        {
+          batch_results[batch_idx].executed->summary = lns_outcome.best_feasible;
+          lns_outcome.best_feasible_execution =
+              std::move(batch_results[batch_idx].executed);
+        }
         lns_outcome.has_feasible = true;
         improved_global = true;
         maybe_update_lns_order_learning_reference(candidate);
@@ -691,6 +731,9 @@ int finalize_and_replay_best(
     const std::vector<FinalAllocation> &loaded_sequence,
     const std::vector<AllocationRunSummary> &summaries,
     const AllocationRunSummary &best_summary,
+    const ExecutedScenario *cached_best_executed,
+    double greedy_allocation_planning_time_s,
+    const std::vector<double> &lns_batch_planning_times_s,
     double relopush_single_robot_makespan,
     double greedy_makespan,
     double lns_best_makespan,
@@ -724,10 +767,18 @@ int finalize_and_replay_best(
       greedy_makespan,
       lns_best_makespan,
       options.lns_iterations,
+      greedy_allocation_planning_time_s,
+      lns_batch_planning_times_s,
+      options.max_search_iterations,
+      effective_fine_path_max_search_iterations(options),
+      effective_safe_parking_max_search_iterations(options),
+      options.lns_threads,
       best_summary.label,
       best_summary.makespan);
 
-  std::cout << "[Final] Replaying best scenario: "
+  std::cout << "[Final] "
+            << (cached_best_executed ? "Using cached best scenario: "
+                                     : "Replaying best scenario: ")
             << best_summary.label;
   if (options.enable_visualization)
     std::cout << " (with visualization)";
@@ -735,22 +786,29 @@ int finalize_and_replay_best(
     std::cout << " (headless)";
   std::cout << std::endl;
 
-  auto best_executed = execute_allocation_scenario(
-      loaded_sequence, options, best_summary.plan,
-      best_summary.label, best_summary.parking_seed, true);
+  std::unique_ptr<ExecutedScenario> replayed_best_executed;
+  const ExecutedScenario *best_executed = cached_best_executed;
+  if (!best_executed)
+  {
+    replayed_best_executed = std::make_unique<ExecutedScenario>(
+        execute_allocation_scenario(
+            loaded_sequence, options, best_summary.plan,
+            best_summary.label, best_summary.parking_seed, true));
+    best_executed = replayed_best_executed.get();
+  }
 
   std::string csv_path = index_log_path("task_execution_log.csv");
-  write_task_csv_log(csv_path, best_executed.summary.task_rows);
-  log_timetable_orientation_diagnostics(best_executed.summary.label,
-                                        best_executed.timetable,
-                                        best_executed.entities,
-                                        best_executed.params);
+  write_task_csv_log(csv_path, best_executed->summary.task_rows);
+  log_timetable_orientation_diagnostics(best_executed->summary.label,
+                                        best_executed->timetable,
+                                        best_executed->entities,
+                                        best_executed->params);
 
   export_result_summary_figure(options, instance_info,
-                               best_executed.summary.label,
-                               best_executed.timetable,
-                               best_executed.entities,
-                               best_executed.params);
+                               best_executed->summary.label,
+                               best_executed->timetable,
+                               best_executed->entities,
+                               best_executed->params);
 
   // Notify ReloPush if needed
   if (handoff_server && handoff_server->hasPendingRequest())
@@ -758,9 +816,9 @@ int finalize_and_replay_best(
     try
     {
       handoff_server->sendReply(ReloPush::makeMarsReply(
-          best_executed.summary.all_tasks_succeeded,
-          best_executed.summary.all_tasks_succeeded ? "best-scenario-complete"
-                                                    : "best-scenario-failed"));
+          best_executed->summary.all_tasks_succeeded,
+          best_executed->summary.all_tasks_succeeded ? "best-scenario-complete"
+                                                     : "best-scenario-failed"));
     }
     catch (const std::exception &ex)
     {
@@ -771,9 +829,9 @@ int finalize_and_replay_best(
 
   if (options.enable_visualization)
   {
-    show_results(argc, argv, best_executed.timetable, best_executed.entities,
-                 best_executed.params);
+    show_results(argc, argv, best_executed->timetable, best_executed->entities,
+                 best_executed->params);
   }
 
-  return best_executed.summary.all_tasks_succeeded ? 0 : 1;
+  return best_executed->summary.all_tasks_succeeded ? 0 : 1;
 }

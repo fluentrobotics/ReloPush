@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <streambuf>
 #include <string>
@@ -155,14 +156,6 @@ struct LnsSearchCandidate
   double destroy_fraction = 0.10;
 };
 
-struct SequenceSearchOutcome
-{
-  AllocationRunSummary best_feasible;
-  AllocationRunSummary best_partial;
-  bool has_feasible = false;
-  bool has_partial = false;
-};
-
 struct LearnedOrderConstraints
 {
   std::vector<std::vector<int>> evidence_counts;
@@ -287,6 +280,22 @@ struct ExecutedScenario
     other.entities.clear();
     return *this;
   }
+};
+
+struct LnsEvaluationResult
+{
+  AllocationRunSummary summary;
+  std::unique_ptr<ExecutedScenario> executed;
+};
+
+struct SequenceSearchOutcome
+{
+  AllocationRunSummary best_feasible;
+  AllocationRunSummary best_partial;
+  std::unique_ptr<ExecutedScenario> best_feasible_execution;
+  std::vector<double> lns_batch_planning_times_s;
+  bool has_feasible = false;
+  bool has_partial = false;
 };
 
 struct ParkingCandidate
