@@ -51,6 +51,12 @@ int effective_safe_parking_max_search_iterations(const RuntimeOptions &options)
              ? options.safe_parking_max_search_iterations
              : options.max_search_iterations;
 }
+
+std::string lns_mode_label(const RuntimeOptions &options)
+{
+  return options.lns_reassign_only ? "lns-reassign-only"
+                                   : "lns-task-reassign";
+}
 } // namespace
 
 int run_greedy_only_pipeline(
@@ -99,6 +105,7 @@ int run_greedy_only_pipeline(
                                       greedy_summary.makespan);
 
   std::string instance_record_csv = instance_record_csv_path(instance_info);
+  const auto robot_names = collect_robot_names(loaded_sequence, options);
   write_instance_run_record_csv(
       instance_record_csv,
       instance_info,
@@ -112,6 +119,8 @@ int run_greedy_only_pipeline(
       effective_fine_path_max_search_iterations(options),
       effective_safe_parking_max_search_iterations(options),
       options.lns_threads,
+      static_cast<int>(robot_names.size()),
+      lns_mode_label(options),
       greedy_summary.label,
       greedy_summary.makespan);
 
@@ -494,7 +503,12 @@ SequenceSearchOutcome run_adaptive_lns_search(
   }
 
   std::cout << "[Search] Adaptive LNS from "
-            << lns_seed_summary.label << "..." << std::endl;
+            << lns_seed_summary.label;
+  if (options.lns_reassign_only)
+  {
+    std::cout << " (fixed task sequence, robot reassignment only)";
+  }
+  std::cout << "..." << std::endl;
 
   AllocationRunSummary lns_current = lns_seed_summary;
   lns_current.label = lns_label;
@@ -523,7 +537,8 @@ SequenceSearchOutcome run_adaptive_lns_search(
     AllocationRunSummary batch_base_summary = lns_current;
     AllocationScenarioPlan batch_base_plan = lns_current.plan;
     const LearnedOrderConstraints &batch_constraints =
-        options.enable_order_constraint_learning
+        (options.enable_order_constraint_learning &&
+         !options.lns_reassign_only)
             ? lns_learned_order_constraints
             : disabled_constraints;
     auto batch_destroy_scores =
@@ -610,6 +625,7 @@ SequenceSearchOutcome run_adaptive_lns_search(
       candidate.label = lns_label;
 
       if (options.enable_order_constraint_learning &&
+          !options.lns_reassign_only &&
           !candidate.all_tasks_succeeded)
       {
         learn_order_constraints_from_failed_summary(
@@ -734,6 +750,7 @@ int finalize_and_replay_best(
     const ExecutedScenario *cached_best_executed,
     double greedy_allocation_planning_time_s,
     const std::vector<double> &lns_batch_planning_times_s,
+    int robot_count,
     double relopush_single_robot_makespan,
     double greedy_makespan,
     double lns_best_makespan,
@@ -773,6 +790,8 @@ int finalize_and_replay_best(
       effective_fine_path_max_search_iterations(options),
       effective_safe_parking_max_search_iterations(options),
       options.lns_threads,
+      robot_count,
+      lns_mode_label(options),
       best_summary.label,
       best_summary.makespan);
 

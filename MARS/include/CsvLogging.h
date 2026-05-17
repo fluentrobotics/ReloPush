@@ -108,6 +108,8 @@ void write_instance_run_record_csv(
     int path_max_search_iterations_fine,
     int safe_parking_max_search_iterations,
     int lns_threads,
+    int robot_count,
+    const std::string &lns_mode,
     const std::string &best_overall_label,
     double best_overall_makespan);
 

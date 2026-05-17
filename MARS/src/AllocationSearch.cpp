@@ -242,6 +242,9 @@ void print_runtime_options(const RuntimeOptions &options)
   std::cout << "[Config] LNS fine segment retry: "
             << (options.enable_lns_fine_segment_retry ? "enabled" : "disabled")
             << std::endl;
+  std::cout << "[Config] LNS reassign-only mode: "
+            << (options.lns_reassign_only ? "enabled" : "disabled")
+            << std::endl;
   std::cout << "[Config] Reference E-Graph params: "
             << "epsilon=" << options.reference_egraph_epsilon
             << ", spacing=" << options.reference_egraph_waypoint_spacing
@@ -1840,15 +1843,122 @@ ExecutedScenario repair_destroyed_tasks_with_sampled_insertion(
     }
   }
 
-  std::vector<std::size_t> repair_order = destroyed_tasks;
-  std::shuffle(repair_order.begin(), repair_order.end(), rng);
-  std::stable_sort(repair_order.begin(), repair_order.end(),
-                   [&](std::size_t a, std::size_t b)
-                   {
-                     double score_a = (a < destroy_scores.size()) ? destroy_scores[a] : 0.0;
-                     double score_b = (b < destroy_scores.size()) ? destroy_scores[b] : 0.0;
-                     return score_a > score_b;
-                   });
+  auto make_ranked_repair_order = [&]()
+  {
+    std::vector<std::size_t> repair_order = destroyed_tasks;
+    std::shuffle(repair_order.begin(), repair_order.end(), rng);
+    std::stable_sort(repair_order.begin(), repair_order.end(),
+                     [&](std::size_t a, std::size_t b)
+                     {
+                       double score_a = (a < destroy_scores.size()) ? destroy_scores[a] : 0.0;
+                       double score_b = (b < destroy_scores.size()) ? destroy_scores[b] : 0.0;
+                       return score_a > score_b;
+                     });
+    return repair_order;
+  };
+
+  if (lns_options.lns_reassign_only)
+  {
+    AllocationScenarioPlan reassigned_plan = base_plan;
+    reassigned_plan.task_order = normalized_task_order(base_plan, task_count);
+    reassigned_plan.preferred_robot_names_by_original_task.resize(task_count);
+
+    for (std::size_t task_idx = 0; task_idx < task_count; ++task_idx)
+    {
+      if (task_idx < executed_robot_by_task.size() &&
+          !executed_robot_by_task[task_idx].empty())
+      {
+        reassigned_plan.preferred_robot_names_by_original_task[task_idx] =
+            executed_robot_by_task[task_idx];
+      }
+    }
+
+    auto choose_alternative_robot =
+        [&](const AllocationScenarioPlan &plan,
+            std::size_t task_idx) -> std::string
+    {
+      if (task_idx >= task_count)
+        return "";
+
+      std::string current =
+          (task_idx < plan.preferred_robot_names_by_original_task.size())
+              ? plan.preferred_robot_names_by_original_task[task_idx]
+              : "";
+      if (current.empty() && task_idx < executed_robot_by_task.size())
+        current = executed_robot_by_task[task_idx];
+
+      std::vector<std::string> alternatives;
+      alternatives.reserve(robot_names.size());
+      for (const auto &robot_name : robot_names)
+      {
+        if (robot_name != current)
+          alternatives.push_back(robot_name);
+      }
+
+      if (alternatives.empty())
+        return current;
+
+      std::shuffle(alternatives.begin(), alternatives.end(), rng);
+      return alternatives.front();
+    };
+
+    std::vector<std::size_t> valid_destroyed_tasks;
+    valid_destroyed_tasks.reserve(destroyed_tasks.size());
+    for (std::size_t task_idx : make_ranked_repair_order())
+    {
+      if (task_idx >= task_count)
+        continue;
+
+      valid_destroyed_tasks.push_back(task_idx);
+      std::string chosen_preference =
+          choose_alternative_robot(reassigned_plan, task_idx);
+      if (!chosen_preference.empty())
+      {
+        reassigned_plan.preferred_robot_names_by_original_task[task_idx] =
+            chosen_preference;
+      }
+    }
+
+    auto repaired = execute_allocation_scenario(
+        loaded_sequence, lns_options, reassigned_plan, label,
+        parking_seed, disable_local_silencer);
+    repaired.summary.label = label;
+
+    for (int refine_iter = 0;
+         refine_iter < 2 && !valid_destroyed_tasks.empty();
+         ++refine_iter)
+    {
+      AllocationScenarioPlan candidate_plan = repaired.summary.plan;
+      candidate_plan.task_order = normalized_task_order(base_plan, task_count);
+      candidate_plan.preferred_robot_names_by_original_task.resize(task_count);
+
+      std::uniform_int_distribution<std::size_t> destroyed_pick_dist(
+          0, valid_destroyed_tasks.size() - 1);
+      std::size_t picked_task =
+          valid_destroyed_tasks[destroyed_pick_dist(rng)];
+
+      std::string chosen_preference =
+          choose_alternative_robot(candidate_plan, picked_task);
+      if (!chosen_preference.empty())
+      {
+        candidate_plan.preferred_robot_names_by_original_task[picked_task] =
+            chosen_preference;
+      }
+
+      auto refined = execute_allocation_scenario(
+          loaded_sequence, lns_options, candidate_plan, label,
+          parking_seed, disable_local_silencer);
+      if (is_preferred_search_result(refined.summary, repaired.summary))
+      {
+        repaired = std::move(refined);
+        repaired.summary.label = label;
+      }
+    }
+
+    return repaired;
+  }
+
+  std::vector<std::size_t> repair_order = make_ranked_repair_order();
 
   for (std::size_t task_idx : repair_order)
   {

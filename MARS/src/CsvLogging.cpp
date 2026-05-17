@@ -537,6 +537,8 @@ void write_instance_run_record_csv(
     int path_max_search_iterations_fine,
     int safe_parking_max_search_iterations,
     int lns_threads,
+    int robot_count,
+    const std::string &lns_mode,
     const std::string &best_overall_label,
     double best_overall_makespan)
 {
@@ -545,7 +547,7 @@ void write_instance_run_record_csv(
       "greedy_allocation_makespan,lns_best_makespan,lns_iterations,"
       "greedy_allocation_planning_time_s,lns_batch_planning_times_s,"
       "path_max_search_iterations_default,path_max_search_iterations_fine,"
-      "safe_parking_max_search_iterations,lns_threads,"
+      "safe_parking_max_search_iterations,lns_threads,robot_count,lns_mode,"
       "best_overall_label,best_overall_makespan";
 
   bool write_header = false;
@@ -598,6 +600,8 @@ void write_instance_run_record_csv(
       << path_max_search_iterations_fine << ","
       << safe_parking_max_search_iterations << ","
       << lns_threads << ","
+      << robot_count << ","
+      << csv_escape(lns_mode) << ","
       << csv_escape(best_overall_label) << ","
       << format_instance_record_number(best_overall_makespan) << "\n";
 

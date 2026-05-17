@@ -272,6 +272,16 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     {
       options.enable_lns_fine_segment_retry = false;
     }
+    else if (arg == "--lns-reassign-only" ||
+             arg == "--lns-preserve-task-sequence")
+    {
+      options.lns_reassign_only = true;
+    }
+    else if (arg == "--no-lns-reassign-only" ||
+             arg == "--lns-allow-sequence-edits")
+    {
+      options.lns_reassign_only = false;
+    }
     else if (arg == "--visualize" || arg == "--visualization")
     {
       options.enable_visualization = true;
