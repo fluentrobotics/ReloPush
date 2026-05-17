@@ -120,6 +120,24 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << "'. Keeping default." << std::endl;
       }
     }
+    else if (arg.rfind("--num-robots=", 0) == 0 ||
+             arg.rfind("--robot-count=", 0) == 0)
+    {
+      const std::string num_prefix = "--num-robots=";
+      const std::string count_prefix = "--robot-count=";
+      std::string value = arg.rfind(num_prefix, 0) == 0
+                              ? arg.substr(num_prefix.size())
+                              : arg.substr(count_prefix.size());
+      try
+      {
+        options.robot_count = std::max(1, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid robot count value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
     else if (arg.rfind("--planner-expansion-threads=", 0) == 0)
     {
       std::string value = arg.substr(std::string("--planner-expansion-threads=").size());

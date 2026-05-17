@@ -160,6 +160,8 @@ void print_runtime_options(const RuntimeOptions &options)
             << std::endl;
   std::cout << "[Config] LNS threads: "
             << options.lns_threads << std::endl;
+  std::cout << "[Config] Requested MARS robots: "
+            << options.robot_count << std::endl;
   std::cout << "[Config] Planner expansion threads: "
             << options.planner_expansion_threads << std::endl;
   if (options.lns_threads > 1 && options.planner_expansion_threads > 1)
@@ -362,7 +364,7 @@ void initialize_environment(
     std::cout << collision_tuning.str() << std::endl;
   }
 
-  entities = initialize_entities(loaded_sequence);
+  entities = initialize_entities(loaded_sequence, options.robot_count);
   timetable.add_initial(entities);
 
   all_robots.clear();
@@ -376,6 +378,13 @@ void initialize_environment(
             {
               return a->name < b->name;
             });
+  if (verbose)
+  {
+    std::cout << "[Config] Active MARS robots: "
+              << all_robots.size()
+              << " (requested " << options.robot_count << ")"
+              << std::endl;
+  }
   if (verbose && !all_robots.empty())
   {
     const RobotMeta *sample_robot = all_robots.front();
@@ -2192,7 +2201,8 @@ Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
 }
 
 std::unordered_map<std::string, EntityMeta *>
-initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
+initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
+                    int requested_robot_count)
 {
   std::unordered_map<std::string, EntityMeta *> entities;
 
@@ -2205,53 +2215,39 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence)
   double common_speed_transit = 0.2;
   double common_speed_transfer = 0.15;
 
-  // Robot 1
-  RobotMeta *robot1 = new RobotMeta;
-  robot1->name = "robot1";
-  robot1->type = EntityType::ROBOT;
-  robot1->initial_pose = {0.5, 0.45, 0.0};
-  robot1->size.front_length = common_front_length;
-  robot1->size.rear_length = common_rear_length;
-  robot1->size.width = common_width;
-  robot1->min_turning_radius = common_min_turning_radius_transfer;
-  robot1->min_turning_radius_transit = common_min_turning_radius_transit;
-  robot1->min_turning_radius_transfer = common_min_turning_radius_transfer;
-  robot1->wheel_base = common_wheel_base;
-  robot1->speed_transit = common_speed_transit;
-  robot1->speed_transfer = common_speed_transfer;
-  entities["robot1"] = robot1;
+  struct PredefinedRobot
+  {
+    const char *name;
+    Pose initial_pose;
+  };
 
-  // Robot 2
-  RobotMeta *robot2 = new RobotMeta;
-  robot2->name = "robot2";
-  robot2->type = EntityType::ROBOT;
-  robot2->initial_pose = {0.5, 3.0, 0.0};
-  robot2->size.front_length = common_front_length;
-  robot2->size.rear_length = common_rear_length;
-  robot2->size.width = common_width;
-  robot2->min_turning_radius = common_min_turning_radius_transfer;
-  robot2->min_turning_radius_transit = common_min_turning_radius_transit;
-  robot2->min_turning_radius_transfer = common_min_turning_radius_transfer;
-  robot2->wheel_base = common_wheel_base;
-  robot2->speed_transit = common_speed_transit;
-  robot2->speed_transfer = common_speed_transfer;
-  entities["robot2"] = robot2;
+  const std::vector<PredefinedRobot> predefined_robots = {
+      {"robot1", {0.5, 0.45, 0.0}},
+      {"robot2", {0.5, 3.0, 0.0}},
+      {"robot3", {0.5, 4.5, 0.0}},
+  };
 
-  // Robot 3
-  RobotMeta *robot3 = new RobotMeta;
-  robot3->name = "robot3";
-  robot3->type = EntityType::ROBOT;
-  robot3->initial_pose = {0.5, 4.5, 0.0};
-  robot3->size.front_length = common_front_length;
-  robot3->size.rear_length = common_rear_length;
-  robot3->size.width = common_width;
-  robot3->min_turning_radius = common_min_turning_radius_transfer;
-  robot3->min_turning_radius_transit = common_min_turning_radius_transit;
-  robot3->min_turning_radius_transfer = common_min_turning_radius_transfer;
-  robot3->wheel_base = common_wheel_base;
-  robot3->speed_transit = common_speed_transit;
-  robot3->speed_transfer = common_speed_transfer;
-  entities["robot3"] = robot3;
+  const std::size_t active_robot_count = std::min<std::size_t>(
+      predefined_robots.size(),
+      static_cast<std::size_t>(std::max(1, requested_robot_count)));
+
+  for (std::size_t i = 0; i < active_robot_count; ++i)
+  {
+    RobotMeta *robot = new RobotMeta;
+    robot->name = predefined_robots[i].name;
+    robot->type = EntityType::ROBOT;
+    robot->initial_pose = predefined_robots[i].initial_pose;
+    robot->size.front_length = common_front_length;
+    robot->size.rear_length = common_rear_length;
+    robot->size.width = common_width;
+    robot->min_turning_radius = common_min_turning_radius_transfer;
+    robot->min_turning_radius_transit = common_min_turning_radius_transit;
+    robot->min_turning_radius_transfer = common_min_turning_radius_transfer;
+    robot->wheel_base = common_wheel_base;
+    robot->speed_transit = common_speed_transit;
+    robot->speed_transfer = common_speed_transfer;
+    entities[robot->name] = robot;
+  }
 
   // Parse Objects
   if (!loadedSequence.empty())

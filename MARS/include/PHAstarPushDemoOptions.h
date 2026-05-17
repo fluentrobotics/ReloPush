@@ -189,6 +189,7 @@ struct RuntimeOptions
     int shuffle_sequence_search_iterations = 0;
     int lns_iterations = 10;
     int lns_threads = 5;
+    int robot_count = 2;                        // capped by the predefined MARS robot set
     bool enable_lns_fine_segment_retry = false; // for LNS
 
     std::vector<TransitPlannerStep> initial_transit_methods = {
