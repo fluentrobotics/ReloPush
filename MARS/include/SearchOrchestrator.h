@@ -71,6 +71,8 @@ int finalize_and_replay_best(
     const ExecutedScenario *cached_best_executed,
     double greedy_allocation_planning_time_s,
     const std::vector<double> &lns_batch_planning_times_s,
+    const std::vector<int> &lns_batch_failed_iterations,
+    int lns_failed_iterations,
     int robot_count,
     double relopush_single_robot_makespan,
     double greedy_makespan,

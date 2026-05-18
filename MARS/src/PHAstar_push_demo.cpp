@@ -315,6 +315,8 @@ int phastar_push_demo_main(int argc, char **argv)
         cached_best_executed,
         greedy_allocation_planning_time_s,
         lns_outcome.lns_batch_planning_times_s,
+        lns_outcome.lns_batch_failed_iterations,
+        lns_outcome.lns_failed_iterations,
         static_cast<int>(robot_names.size()),
         relopush_single_robot_makespan,
         greedy_summary.makespan,

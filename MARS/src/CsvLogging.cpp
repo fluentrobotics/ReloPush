@@ -58,11 +58,35 @@ namespace
     {
       if (i > 0)
         oss << ";";
-      oss << (i + 1) << "=";
       if (std::isfinite(lns_batch_planning_times_s[i]))
         oss << lns_batch_planning_times_s[i];
       else
         oss << "INF";
+    }
+    return oss.str();
+  }
+
+  double sum_lns_batch_times(
+      const std::vector<double> &lns_batch_planning_times_s)
+  {
+    double total = 0.0;
+    for (double time_s : lns_batch_planning_times_s)
+    {
+      if (std::isfinite(time_s))
+        total += time_s;
+    }
+    return total;
+  }
+
+  std::string format_lns_batch_counts(
+      const std::vector<int> &lns_batch_failed_iterations)
+  {
+    std::ostringstream oss;
+    for (std::size_t i = 0; i < lns_batch_failed_iterations.size(); ++i)
+    {
+      if (i > 0)
+        oss << ";";
+      oss << lns_batch_failed_iterations[i];
     }
     return oss.str();
   }
@@ -531,8 +555,10 @@ void write_instance_run_record_csv(
     double greedy_makespan,
     double lns_best_makespan,
     int lns_iterations,
+    int lns_failed_iterations,
     double greedy_allocation_planning_time_s,
     const std::vector<double> &lns_batch_planning_times_s,
+    const std::vector<int> &lns_batch_failed_iterations,
     int path_max_search_iterations_default,
     int path_max_search_iterations_fine,
     int safe_parking_max_search_iterations,
@@ -545,7 +571,9 @@ void write_instance_run_record_csv(
   const std::string header =
       "file_name,instance_index,relopush_single_robot_makespan,"
       "greedy_allocation_makespan,lns_best_makespan,lns_iterations,"
+      "lns_failed_iterations,"
       "greedy_allocation_planning_time_s,lns_batch_planning_times_s,"
+      "lns_total_planning_time_s,lns_batch_failed_iterations,"
       "path_max_search_iterations_default,path_max_search_iterations_fine,"
       "safe_parking_max_search_iterations,lns_threads,robot_count,lns_mode,"
       "best_overall_label,best_overall_makespan";
@@ -594,8 +622,11 @@ void write_instance_run_record_csv(
       << format_instance_record_number(greedy_makespan) << ","
       << format_instance_record_number(lns_best_makespan) << ","
       << lns_iterations << ","
+      << lns_failed_iterations << ","
       << format_instance_record_number(greedy_allocation_planning_time_s) << ","
       << csv_escape(format_lns_batch_times(lns_batch_planning_times_s)) << ","
+      << format_instance_record_number(sum_lns_batch_times(lns_batch_planning_times_s)) << ","
+      << csv_escape(format_lns_batch_counts(lns_batch_failed_iterations)) << ","
       << path_max_search_iterations_default << ","
       << path_max_search_iterations_fine << ","
       << safe_parking_max_search_iterations << ","

@@ -113,7 +113,9 @@ int run_greedy_only_pipeline(
       greedy_summary.makespan,
       std::numeric_limits<double>::infinity(),
       options.lns_iterations,
+      0,
       greedy_allocation_planning_time_s,
+      {},
       {},
       options.max_search_iterations,
       effective_fine_path_max_search_iterations(options),
@@ -618,11 +620,17 @@ SequenceSearchOutcome run_adaptive_lns_search(
     lns_outcome.lns_batch_planning_times_s.push_back(
         elapsed_seconds(lns_batch_start));
 
+    int batch_failed_iterations = 0;
     for (std::size_t batch_idx = 0; batch_idx < batch_candidates.size(); ++batch_idx)
     {
       const auto &candidate_info = batch_candidates[batch_idx];
       AllocationRunSummary candidate = batch_results[batch_idx].summary;
       candidate.label = lns_label;
+      if (!candidate.all_tasks_succeeded)
+      {
+        ++lns_outcome.lns_failed_iterations;
+        ++batch_failed_iterations;
+      }
 
       if (options.enable_order_constraint_learning &&
           !options.lns_reassign_only &&
@@ -732,6 +740,7 @@ SequenceSearchOutcome run_adaptive_lns_search(
       }
       std::cout << std::endl;
     }
+    lns_outcome.lns_batch_failed_iterations.push_back(batch_failed_iterations);
   }
 
   if (out_enforced_constraint_count)
@@ -750,6 +759,8 @@ int finalize_and_replay_best(
     const ExecutedScenario *cached_best_executed,
     double greedy_allocation_planning_time_s,
     const std::vector<double> &lns_batch_planning_times_s,
+    const std::vector<int> &lns_batch_failed_iterations,
+    int lns_failed_iterations,
     int robot_count,
     double relopush_single_robot_makespan,
     double greedy_makespan,
@@ -784,8 +795,10 @@ int finalize_and_replay_best(
       greedy_makespan,
       lns_best_makespan,
       options.lns_iterations,
+      lns_failed_iterations,
       greedy_allocation_planning_time_s,
       lns_batch_planning_times_s,
+      lns_batch_failed_iterations,
       options.max_search_iterations,
       effective_fine_path_max_search_iterations(options),
       effective_safe_parking_max_search_iterations(options),
