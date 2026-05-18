@@ -5,7 +5,7 @@ set -u
 usage() {
     cat <<'EOF'
 Usage:
-  ./script/run_all_indices_integrated.sh <input_file> [--mode=f|d|u|o] [--lns-iters=N] [--num-robots=N] [--lns-reassign-only|--lns-task-reassign] [--visualize|--no-visualization] [--start-index=N] [--end-index=N] [--base-port=N] [--continue-on-error] [--mars-arg=ARG]...
+  ./script/run_all_indices_integrated.sh <input_file> [--mode=f|d|u|o] [--lns-iters=N] [--num-robots=N] [--lns-reassign-only|--lns-task-reassign] [--order-learning|--no-order-learning] [--visualize|--no-visualization] [--start-index=N] [--end-index=N] [--base-port=N] [--continue-on-error] [--mars-arg=ARG]...
 
 Description:
   Runs every non-empty instance index in input/<input_file> using the integrated
@@ -23,6 +23,8 @@ Options:
   --num-robots=N         MARS robot count to use, capped by predefined robots (default: 2)
   --lns-task-reassign    During LNS, allow task-order repair and robot reassignment (default)
   --lns-reassign-only    During LNS, preserve task order and reassign only robots
+  --order-learning       Enable MARS order-constraint learning (default)
+  --no-order-learning    Disable MARS order-constraint learning
   --visualize            Enable MARS visualization
   --no-visualization     Disable MARS visualization (default)
   --start-index=N        First instance index to run
@@ -48,6 +50,7 @@ MODE="f"
 LNS_ITERS=20
 NUM_ROBOTS=2
 LNS_MODE="lns-task-reassign"
+ORDER_LEARNING=1
 ENABLE_VISUALIZATION=0
 
 START_INDEX=""
@@ -75,6 +78,12 @@ for arg in "$@"; do
             ;;
         --lns-mode=*)
             LNS_MODE="${arg#--lns-mode=}"
+            ;;
+        --order-learning|--enable-order-learning)
+            ORDER_LEARNING=1
+            ;;
+        --no-order-learning|--disable-order-learning)
+            ORDER_LEARNING=0
             ;;
         --visualize|--visualization)
             ENABLE_VISUALIZATION=1
@@ -186,6 +195,11 @@ echo "[Config] visualization: ${VISUALIZATION_ARG#--}"
 echo "[Config] lns iterations: $LNS_ITERS"
 echo "[Config] MARS robots: $NUM_ROBOTS"
 echo "[Config] LNS mode: $LNS_MODE"
+if [ "$ORDER_LEARNING" -eq 1 ]; then
+    echo "[Config] order learning: enabled"
+else
+    echo "[Config] order learning: disabled"
+fi
 echo "[Config] base port: $BASE_PORT"
 if [ -n "$START_INDEX" ]; then
     echo "[Config] start index: $START_INDEX"
@@ -299,6 +313,11 @@ while IFS= read -r line || [ -n "$line" ]; do
             exit 1
             ;;
     esac
+    if [ "$ORDER_LEARNING" -eq 1 ]; then
+        MARS_CMD+=(--order-learning)
+    else
+        MARS_CMD+=(--no-order-learning)
+    fi
     if [ "${#MARS_ARGS[@]}" -gt 0 ]; then
         MARS_CMD+=("${MARS_ARGS[@]}")
     fi
