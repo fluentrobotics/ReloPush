@@ -1,5 +1,6 @@
 #include <ReloPush/TaskAllocation.hpp>
 #include <ReloPush/ReloPushBossDiagnostics.hpp>
+#include <tuple>
 
 EdgeMatrixEntry PairCostResult::getBestPath()
 {
@@ -598,7 +599,8 @@ MatrixResult computeCostMatrix(
         rowColList.end(),
         [](const RowColCost &a, const RowColCost &b)
         {
-            return a.cost < b.cost;
+            return std::tie(a.cost, a.row, a.col) <
+                   std::tie(b.cost, b.row, b.col);
         }
         );
 
@@ -778,7 +780,8 @@ MatrixResult computeCostMatrixWithPaths(
     std::sort(rowColList.begin(), rowColList.end(),
               [](const RowColCost &a, const RowColCost &b)
               {
-                  return a.cost < b.cost;
+                  return std::tie(a.cost, a.row, a.col) <
+                         std::tie(b.cost, b.row, b.col);
               });
 
     // Fill in the final sorted list
@@ -985,7 +988,8 @@ MatrixResultPtr computeCostMatrixWithPaths(
     std::sort(rowColList.begin(), rowColList.end(),
               [](const RowColCost &a, const RowColCost &b)
               {
-                  return a.cost < b.cost;
+                  return std::tie(a.cost, a.row, a.col) <
+                         std::tie(b.cost, b.row, b.col);
               });
 
     // 6) Fill in the final sorted list & pathMat
@@ -1133,6 +1137,7 @@ std::map<std::string, PairCostResult> computeMatrixPairs(
         PairCostResult pcr;
         pcr.objectName = objName;
         pcr.goalName = goalName;
+        pcr.input_order = p.second.input_order;
         // pcr.bestCost     = bestCost;
         // pcr.bestRow      = bestRow;
         // pcr.bestCol      = bestCol;
@@ -1785,6 +1790,7 @@ std::vector<LowestCostInfo> getSortedPairCandidates(const PairResultsMap &pairRe
                 LowestCostInfo info;
                 info.objectName = pcr.objectName;
                 info.goalName = pcr.goalName;
+                info.input_order = pcr.input_order;
                 info.row = entry.row;
                 info.col = entry.col;
                 info.cost = entry.cost;
@@ -1793,7 +1799,10 @@ std::vector<LowestCostInfo> getSortedPairCandidates(const PairResultsMap &pairRe
         }
     }
     std::sort(candidates.begin(), candidates.end(), [](const LowestCostInfo &a, const LowestCostInfo &b)
-              { return a.cost < b.cost; });
+              {
+                  return std::tie(a.cost, a.input_order, a.objectName, a.goalName, a.row, a.col) <
+                         std::tie(b.cost, b.input_order, b.objectName, b.goalName, b.row, b.col);
+              });
     return candidates;
 }
 

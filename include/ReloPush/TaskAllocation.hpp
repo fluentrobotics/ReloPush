@@ -114,6 +114,7 @@ class PairCostResult
 public:
     std::string objectName;
     std::string goalName;
+    std::size_t input_order = ObjectInfo::unspecified_input_order;
 
     //double bestCost;
     //int bestRow;
@@ -131,6 +132,7 @@ struct LowestCostInfo : RowColCost
 {
     std::string objectName;
     std::string goalName;
+    std::size_t input_order = ObjectInfo::unspecified_input_order;
     //int row;
     //int col;
     //double cost;
@@ -140,6 +142,7 @@ struct LowestCostInfo : RowColCost
     {
         objectName="";
         goalName="";
+        input_order = ObjectInfo::unspecified_input_order;
     }
 };
 

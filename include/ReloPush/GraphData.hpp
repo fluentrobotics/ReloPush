@@ -15,7 +15,7 @@ using EdgePathTypes = std::variant<reloDubinsPath, ReloPush::StatePathPtr>; // f
 
 struct EdgePath
 {
-    bool is_pushing;
+    bool is_pushing = false;
     EdgePathTypes path;
 
     EdgePath()
@@ -162,6 +162,7 @@ struct VertexData
     double y;                   ///< Position Y
     int numberOfSides;          ///< e.g., 4 for a box with 4 discrete sides
     double radius;
+    std::size_t input_order;
 
     /**
      * Default constructor
@@ -173,7 +174,9 @@ struct VertexData
         nominalOrientation(0.0),
         x(0.0),
         y(0.0),
-        numberOfSides(0)
+        numberOfSides(0),
+        radius(0.0),
+        input_order(ObjectInfo::unspecified_input_order)
     {}
 
     /**
@@ -233,6 +236,7 @@ struct EdgeData
         preRelo.yawRelocated_object = 0.0;
         preRelo.extraCost   = 0.0;
         preRelo.relocatingIndex = -1;
+        preRelo.reason = StateValidity::valid;
     }
 
     void printPath(bool add_lines = true) const

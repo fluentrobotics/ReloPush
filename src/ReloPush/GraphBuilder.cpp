@@ -2,6 +2,7 @@
 #include "ReloPush/DubinsTools.h"
 #include <ReloPush/PathPlanningTools.h>
 #include <boost/graph/graphviz.hpp>
+#include <algorithm>
 #include <fstream>
 #include <cmath>    // std::sqrt
 #include <iostream> // std::cout
@@ -29,6 +30,20 @@ Vertex addVertexToGraph(
     g[v].numberOfSides = numberOfSides;
 
     return v;
+}
+
+namespace
+{
+bool vertex_order_less(const VertexData &a, const VertexData &b)
+{
+    if (a.input_order != b.input_order)
+        return a.input_order < b.input_order;
+    if (a.name != b.name)
+        return a.name < b.name;
+    if (a.type != b.type)
+        return static_cast<int>(a.type) < static_cast<int>(b.type);
+    return a.orientationIndex < b.orientationIndex;
+}
 }
 
 // -----------------------------------------------------------------
@@ -982,6 +997,8 @@ std::vector<Vertex> createVerticesForObject(Graph &g, const ObjectInfo &obj)
             obj.x,
             obj.y,
             obj.numberOfSides);
+        g[v].radius = obj.enclosingRadius;
+        g[v].input_order = obj.input_order;
         createdVertices.push_back(v);
     }
 
@@ -1009,6 +1026,8 @@ std::vector<Vertex> createVerticesForGoal(Graph &g, const GoalInfo &goal)
             goal.x,
             goal.y,
             goal.numberOfSides);
+        g[v].radius = goal.enclosingRadius;
+        g[v].input_order = goal.input_order;
         createdVertices.push_back(v);
     }
 
@@ -1034,10 +1053,10 @@ void initGraph(Graph &g, ObjectMap &objects, GoalMap &goals)
     // For each object, create vertices (each orientation)
     std::vector<std::vector<Vertex>> objectVerts;
     objectVerts.reserve(objects.size());
-    for (auto &oi : objects)
+    for (const auto &object : objects.toOrderedList())
     {
         // Create vertices
-        auto verts = createVerticesForObject(g, oi.second);
+        auto verts = createVerticesForObject(g, object);
         // Also, if your VertexData has a 'radius' field, set it there
         // (In createVerticesForObject, you likely do it automatically)
         objectVerts.push_back(verts);
@@ -1046,9 +1065,9 @@ void initGraph(Graph &g, ObjectMap &objects, GoalMap &goals)
     // Same for goals
     std::vector<std::vector<Vertex>> goalVerts;
     goalVerts.reserve(goals.size());
-    for (auto &gi : goals)
+    for (const auto &goal : goals.toOrderedList())
     {
-        auto verts = createVerticesForGoal(g, gi.second);
+        auto verts = createVerticesForGoal(g, goal);
         // If createVerticesForGoal sets g[v].radius = gi.enclosingRadius,
         // then you have it in the graph
         goalVerts.push_back(verts);
@@ -1230,7 +1249,7 @@ void buildAllEdges(Graph &g, PlanningContext ctx)
     // 0) Init env with obstacles
     // std::unordered_set<ReloPush::State> obs;
     ObjectMap obs = ctx.mo_list;
-    obs.insert(ctx.delivered_list.begin(), ctx.delivered_list.end()); // collect all obstacles for collision checking
+    obs.append(ctx.delivered_list); // collect all obstacles for collision checking
                                                                       //    for(auto& it : ctx.mo_list)
                                                                       //    {
                                                                       //        obs.insert(ReloPush::State(it.second.x, it.second.y, it.second.nominalOrientation));
@@ -1264,6 +1283,12 @@ void buildAllEdges(Graph &g, PlanningContext ctx)
             goalVerts.push_back(v);
         }
     }
+    std::sort(objectVerts.begin(), objectVerts.end(), [&](Vertex a, Vertex b) {
+        return vertex_order_less(g[a], g[b]);
+    });
+    std::sort(goalVerts.begin(), goalVerts.end(), [&](Vertex a, Vertex b) {
+        return vertex_order_less(g[a], g[b]);
+    });
 
     // 2) Connect objects among themselves (object->object).
     //    You can do object->object in both directions or just one direction.

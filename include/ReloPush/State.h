@@ -141,12 +141,12 @@ namespace ReloPush
                 std::cout << ";";
         }
 
-        double x;
-        double y;
-        double yaw;
-        float time;
-        float vel;
-        bool is_pushing;
+        double x = 0.0;
+        double y = 0.0;
+        double yaw = 0.0;
+        float time = 0.0f;
+        float vel = 0.0f;
+        bool is_pushing = false;
 
     private:
         boost::numeric::ublas::matrix<double> rot;

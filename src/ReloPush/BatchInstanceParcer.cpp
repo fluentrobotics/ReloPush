@@ -136,7 +136,8 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
                 std::stod(mo_elem_sp[2]),
                 std::stod(mo_elem_sp[3]),
                 std::stoi(mo_elem_sp[4]),
-                obs_rad
+                obs_rad,
+                i
                 );
         }
         catch (const std::exception& e) {
@@ -200,7 +201,8 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
                 std::stof(goal_elem_sp[2]),
                 std::stof(goal_elem_sp[3]),
                 std::stoi(goal_elem_sp[4]),
-                obs_rad
+                obs_rad,
+                i
                 );
         }
         catch (const std::exception& e) {
@@ -216,13 +218,14 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
     // parse assignment
     auto assign_sp = split(assign_str,object_delim);
     objGoalPairs.clear();
-    for(auto& it : assign_sp)
+    for(size_t i = 0; i < assign_sp.size(); i++)
     {
+        auto& it = assign_sp[i];
         auto assign_elem_sp = split(it,elem_delilm);
         if (assign_elem_sp.size() < 2) {
             throw std::runtime_error("Malformed assignment entry: " + it);
         }
-        objGoalPairs.insert({assign_elem_sp[0], ObjectGoalPair(assign_elem_sp[0],assign_elem_sp[1])});
+        objGoalPairs.insert({assign_elem_sp[0], ObjectGoalPair(assign_elem_sp[0],assign_elem_sp[1], i)});
     }
 
     return true;
