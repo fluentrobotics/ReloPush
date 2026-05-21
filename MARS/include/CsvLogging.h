@@ -105,6 +105,7 @@ void write_instance_run_record_csv(
     int lns_failed_iterations,
     double greedy_allocation_planning_time_s,
     const std::vector<double> &lns_batch_planning_times_s,
+    const std::vector<double> &lns_batch_best_makespans,
     const std::vector<int> &lns_batch_failed_iterations,
     int path_max_search_iterations_default,
     int path_max_search_iterations_fine,
@@ -112,6 +113,7 @@ void write_instance_run_record_csv(
     int lns_threads,
     int robot_count,
     const std::string &lns_mode,
+    const std::string &order_constraint_learning,
     const std::string &best_overall_label,
     double best_overall_makespan);
 

@@ -66,6 +66,12 @@ namespace
     return oss.str();
   }
 
+  std::string format_lns_batch_makespans(
+      const std::vector<double> &lns_batch_best_makespans)
+  {
+    return format_lns_batch_times(lns_batch_best_makespans);
+  }
+
   double sum_lns_batch_times(
       const std::vector<double> &lns_batch_planning_times_s)
   {
@@ -558,6 +564,7 @@ void write_instance_run_record_csv(
     int lns_failed_iterations,
     double greedy_allocation_planning_time_s,
     const std::vector<double> &lns_batch_planning_times_s,
+    const std::vector<double> &lns_batch_best_makespans,
     const std::vector<int> &lns_batch_failed_iterations,
     int path_max_search_iterations_default,
     int path_max_search_iterations_fine,
@@ -565,6 +572,7 @@ void write_instance_run_record_csv(
     int lns_threads,
     int robot_count,
     const std::string &lns_mode,
+    const std::string &order_constraint_learning,
     const std::string &best_overall_label,
     double best_overall_makespan)
 {
@@ -573,10 +581,11 @@ void write_instance_run_record_csv(
       "greedy_allocation_makespan,lns_best_makespan,lns_iterations,"
       "lns_failed_iterations,"
       "greedy_allocation_planning_time_s,lns_batch_planning_times_s,"
-      "lns_total_planning_time_s,lns_batch_failed_iterations,"
+      "lns_total_planning_time_s,lns_batch_best_makespans,"
+      "lns_batch_failed_iterations,"
       "path_max_search_iterations_default,path_max_search_iterations_fine,"
       "safe_parking_max_search_iterations,lns_threads,robot_count,lns_mode,"
-      "best_overall_label,best_overall_makespan";
+      "order_constraint_learning,best_overall_label,best_overall_makespan";
 
   bool write_header = false;
   {
@@ -626,6 +635,7 @@ void write_instance_run_record_csv(
       << format_instance_record_number(greedy_allocation_planning_time_s) << ","
       << csv_escape(format_lns_batch_times(lns_batch_planning_times_s)) << ","
       << format_instance_record_number(sum_lns_batch_times(lns_batch_planning_times_s)) << ","
+      << csv_escape(format_lns_batch_makespans(lns_batch_best_makespans)) << ","
       << csv_escape(format_lns_batch_counts(lns_batch_failed_iterations)) << ","
       << path_max_search_iterations_default << ","
       << path_max_search_iterations_fine << ","
@@ -633,6 +643,7 @@ void write_instance_run_record_csv(
       << lns_threads << ","
       << robot_count << ","
       << csv_escape(lns_mode) << ","
+      << csv_escape(order_constraint_learning) << ","
       << csv_escape(best_overall_label) << ","
       << format_instance_record_number(best_overall_makespan) << "\n";
 

@@ -294,6 +294,7 @@ struct SequenceSearchOutcome
   AllocationRunSummary best_partial;
   std::unique_ptr<ExecutedScenario> best_feasible_execution;
   std::vector<double> lns_batch_planning_times_s;
+  std::vector<double> lns_batch_best_makespans;
   std::vector<int> lns_batch_failed_iterations;
   int lns_failed_iterations = 0;
   bool has_feasible = false;

@@ -57,6 +57,11 @@ std::string lns_mode_label(const RuntimeOptions &options)
   return options.lns_reassign_only ? "lns-reassign-only"
                                    : "lns-task-reassign";
 }
+
+std::string order_constraint_learning_label(const RuntimeOptions &options)
+{
+  return options.enable_order_constraint_learning ? "enabled" : "disabled";
+}
 } // namespace
 
 int run_greedy_only_pipeline(
@@ -117,12 +122,14 @@ int run_greedy_only_pipeline(
       greedy_allocation_planning_time_s,
       {},
       {},
+      {},
       options.max_search_iterations,
       effective_fine_path_max_search_iterations(options),
       effective_safe_parking_max_search_iterations(options),
       options.lns_threads,
       static_cast<int>(robot_names.size()),
       lns_mode_label(options),
+      order_constraint_learning_label(options),
       greedy_summary.label,
       greedy_summary.makespan);
 
@@ -741,6 +748,10 @@ SequenceSearchOutcome run_adaptive_lns_search(
       std::cout << std::endl;
     }
     lns_outcome.lns_batch_failed_iterations.push_back(batch_failed_iterations);
+    lns_outcome.lns_batch_best_makespans.push_back(
+        lns_outcome.has_feasible
+            ? lns_outcome.best_feasible.makespan
+            : std::numeric_limits<double>::infinity());
   }
 
   if (out_enforced_constraint_count)
@@ -759,6 +770,7 @@ int finalize_and_replay_best(
     const ExecutedScenario *cached_best_executed,
     double greedy_allocation_planning_time_s,
     const std::vector<double> &lns_batch_planning_times_s,
+    const std::vector<double> &lns_batch_best_makespans,
     const std::vector<int> &lns_batch_failed_iterations,
     int lns_failed_iterations,
     int robot_count,
@@ -798,6 +810,7 @@ int finalize_and_replay_best(
       lns_failed_iterations,
       greedy_allocation_planning_time_s,
       lns_batch_planning_times_s,
+      lns_batch_best_makespans,
       lns_batch_failed_iterations,
       options.max_search_iterations,
       effective_fine_path_max_search_iterations(options),
@@ -805,6 +818,7 @@ int finalize_and_replay_best(
       options.lns_threads,
       robot_count,
       lns_mode_label(options),
+      order_constraint_learning_label(options),
       best_summary.label,
       best_summary.makespan);
 
