@@ -14,6 +14,7 @@
 #include <array>
 #include <SerializeFinalSequence.h>
 #include <ReloPush/FinalSequenceHandoff.h>
+#include <ReloPush/ReloPushBossDiagnostics.hpp>
 
 #ifdef __APPLE__
 // Include the glog header when compiling on MacOS.
@@ -83,7 +84,13 @@ namespace
 // Function to save finalSequence to a file using base64-encoded binary data
 void saveFinalSequenceToFile(const std::vector<FinalAllocation> &finalSequence, const std::string &filename)
 {
-    std::string base64Data = ReloPush::encodeFinalSequenceBase64(finalSequence);
+    const std::string binaryData = serializeFinalSequence(finalSequence);
+    const std::string base64Data =
+        base64_encode(reinterpret_cast<const unsigned char *>(binaryData.data()),
+                      binaryData.size());
+    ReloPushBossDiagnostics::log_serialized_final_sequence(
+        finalSequence, binaryData, base64Data, filename);
+
     std::ofstream outFile(filename);
     if (outFile)
     {
@@ -207,9 +214,9 @@ int main(int argc, char *argv[])
 #endif
     QApplication app(argc, argv);
 
-    std::string filename = "ReloPush-BOSS_10_objects.txt";
+    std::string filename = "ReloPush-BOSS_12_objects.txt";
 
-    int instance_ind = 80; // 32 // 63 //6 //40 //8
+    int instance_ind = 4; // 32 // 63 //6 //40 //8
     bool use_opt = true;
     bool vis = true;
     bool no_init_guess = false;
@@ -246,7 +253,35 @@ int main(int argc, char *argv[])
     handoff_instance_info.file_name = filename;
     handoff_instance_info.instance_index = instance_ind;
 
+    std::string selected_instance_line;
+    try
+    {
+        const auto input_lines = read_file(filename);
+        if (instance_ind >= 0 &&
+            static_cast<std::size_t>(instance_ind) < input_lines.size())
+        {
+            selected_instance_line =
+                input_lines[static_cast<std::size_t>(instance_ind)];
+        }
+    }
+    catch (const std::exception &ex)
+    {
+        std::cerr << "[ReloPushBossDiag] Could not pre-read selected input line: "
+                  << ex.what() << std::endl;
+    }
+    const std::string input_abs_path =
+        std::string(CMAKE_SOURCE_DIR) + "/input/" + filename;
+    ReloPushBossDiagnostics::initialize(
+        filename,
+        instance_ind,
+        use_opt,
+        no_init_guess,
+        use_dfs,
+        input_abs_path,
+        selected_instance_line);
+
     parse_instance_from_file(filename, instance_ind, objects, goals, robots, objGoalPairs);
+    ReloPushBossDiagnostics::log_parsed_input(objects, goals, robots, objGoalPairs);
 
     // send via zeromq
     zeromp_object mqClient;
@@ -457,6 +492,16 @@ int main(int argc, char *argv[])
     outfile << "pre_relocations:" << std::fixed << n_preRelo << "\n";
     outfile.close();
 
+    ReloPushBossDiagnostics::log_planning_outcome(
+        ok,
+        timeout,
+        duration.count(),
+        total_path_length,
+        total_pushing_length,
+        n_obsRelo,
+        n_preRelo,
+        finalSequence);
+
     if (!ok)
     {
         if (mars_integration.enabled)
@@ -477,6 +522,7 @@ int main(int argc, char *argv[])
             }
         }
 
+        ReloPushBossDiagnostics::finish();
         return 1;
     }
 
@@ -530,6 +576,13 @@ int main(int argc, char *argv[])
     {
         try
         {
+            const std::string handoff_binary = serializeFinalSequence(finalSequence);
+            const std::string handoff_base64 =
+                base64_encode(reinterpret_cast<const unsigned char *>(handoff_binary.data()),
+                              handoff_binary.size());
+            ReloPushBossDiagnostics::log_serialized_final_sequence(
+                finalSequence, handoff_binary, handoff_base64, "MARS handoff");
+
             ReloPush::FinalSequenceHandoffClient handoff_client;
             handoff_client.connect(mars_integration.endpoint);
             std::cout << "[Integration] Sending final sequence to MARS at "
@@ -545,6 +598,7 @@ int main(int argc, char *argv[])
             {
                 std::cerr << "[Integration] MARS reported a failure while processing the handed-off sequence."
                           << std::endl;
+                ReloPushBossDiagnostics::finish();
                 return 1;
             }
         }
@@ -552,6 +606,7 @@ int main(int argc, char *argv[])
         {
             std::cerr << "[Integration] Failed to hand off the final sequence to MARS: "
                       << ex.what() << std::endl;
+            ReloPushBossDiagnostics::finish();
             return 1;
         }
     }
@@ -567,8 +622,10 @@ int main(int argc, char *argv[])
 
     if (show_trajectory_window)
     {
+        ReloPushBossDiagnostics::finish();
         return app.exec();
     }
 
+    ReloPushBossDiagnostics::finish();
     return 0;
 }

@@ -1,4 +1,5 @@
 #include <ReloPush/TaskAllocation.hpp>
+#include <ReloPush/ReloPushBossDiagnostics.hpp>
 
 EdgeMatrixEntry PairCostResult::getBestPath()
 {
@@ -1646,9 +1647,13 @@ bool performAllocations_old(const WorkspaceBoundary &boundary,
 
         // (d) Build edges
         buildAllEdges(g, planCtx);
+        const int diag_depth = static_cast<int>(finalSequence.size());
+        ReloPushBossDiagnostics::log_search_state(
+            diag_depth, objects, goals, objGoalPairs, delivered_objs, ReloPush::State(), g);
 
         // (e) Compute cost matrices for all remaining pairs
         auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
+        ReloPushBossDiagnostics::log_pair_results(diag_depth, pairResults);
 
         // We'll store info about the best pick
         LowestCostInfo bestPick;
@@ -1815,6 +1820,12 @@ bool tryAllocation(
     // Pull out required context
     auto &bestPairEntry = pairResults[candidate.objectName];
     EdgeMatrixEntry bestMatEntry = bestPairEntry.matrixResult->getBestPathMatEntry();
+    ReloPushBossDiagnostics::log_try_stage(
+        "matrix_entry_loaded",
+        candidate,
+        "edges=" + std::to_string(bestMatEntry.edgesInfo.size()) +
+            ",vertices=" + std::to_string(bestMatEntry.vertexChain.size()) +
+            ",obs_relo=" + std::to_string(bestMatEntry.obsReloList.size()));
 
     std::vector<EdgePath> ObsReloPathList;
     std::unordered_map<std::string, ReloPush::State> ToUpdate;
@@ -1838,12 +1849,22 @@ bool tryAllocation(
         auto toState_pre = find_pre_push(toState, planCtx.parameters.PrePush_dist);
 
         if (!planCtx.env_push.stateValid(fromState_pre))
+        {
+            ReloPushBossDiagnostics::log_try_stage(
+                "fail_obs_relo_start_invalid", candidate,
+                pivotObjInfo.name + " from=" +
+                    ReloPushBossDiagnostics::state_to_string(fromState_pre));
             return false;
+        }
 
         auto res = attemptObsRelocation(planCtx, fromState_pre, toState_pre, this_pair.first, this_pair.second,
                                         pairResults, candidate, ObsReloPathList, ToUpdate, pivotObjInfo, fromState);
         if (res->validity != PlanValidity::success)
+        {
+            ReloPushBossDiagnostics::log_try_stage(
+                "fail_obs_relo_plan", candidate, pivotObjInfo.name);
             return false;
+        }
 
         // Obs Relo ok
         obsReloUpdate.insert(std::make_pair(pivotObjInfo.name, this_pair.second));
@@ -1865,7 +1886,12 @@ bool tryAllocation(
         auto toState_pre = bestPairEntry.matrixResult->getBestPathMatEntry().edgesInfo[0].paths[0]->getFirstWaypoint();
 
         if (planCtx.env_push.stateValid(fromState_pre).get_validity() == StateValidity::out_of_boundary)
+        {
+            ReloPushBossDiagnostics::log_try_stage(
+                "fail_last_obs_relo_start_boundary", candidate,
+                ReloPushBossDiagnostics::state_to_string(fromState_pre));
             return false;
+        }
 
         planCtx.checkObsCount("\t2");
 
@@ -1874,7 +1900,11 @@ bool tryAllocation(
                                                 bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].toObjectInfo(),
                                                 fromState); // last obs relo to first wpt
         if (res_lastobs->validity != PlanValidity::success)
+        {
+            ReloPushBossDiagnostics::log_try_stage(
+                "fail_last_obs_relo_plan", candidate);
             return false;
+        }
 
         // Obs Relo ok
         obsReloUpdate.insert(std::make_pair(bestMatEntry.vertexChain[bestMatEntry.vertexChain.size() - 2].name, last_pair.second));
@@ -1920,6 +1950,10 @@ bool tryAllocation(
                 }
         */
         planCtx.updateObs(obs_backup);
+        ReloPushBossDiagnostics::log_try_stage(
+            "fail_first_approach", candidate,
+            "robot=" + ReloPushBossDiagnostics::state_to_string(robot) +
+                ",goal=" + ReloPushBossDiagnostics::state_to_string(firstAppGoal));
         return false;
     }
     // transitPaths.push_back(res_app->getPathPtr(true));
@@ -1953,6 +1987,9 @@ bool tryAllocation(
             {
                 // restore obstacles
                 planCtx.updateObs(obs_backup);
+                ReloPushBossDiagnostics::log_try_stage(
+                    "fail_edge_transit", candidate,
+                    "edge_index=" + std::to_string(n));
                 return false;
             }
 
@@ -1993,6 +2030,11 @@ bool tryAllocation(
     }
 
     planCtx.checkObsCount("\t7");
+    ReloPushBossDiagnostics::log_try_stage(
+        "success", candidate,
+        "first_app_wp=" + std::to_string(ReloPushBossDiagnostics::path_size(firstApp)) +
+            ",obs_paths=" + std::to_string(ObsReloPathList.size()) +
+            ",edge_transit=" + std::to_string(transitPaths.size()));
 
     return true;
 }
@@ -2039,11 +2081,14 @@ bool performAllocationsDFS(
     PlanningContext planCtx(params, objects, delivered_objs, use_opt, no_init_guess);
 
     buildAllEdges(g, planCtx);
+    ReloPushBossDiagnostics::log_search_state(
+        depth, objects, goals, objGoalPairs, delivered_objs, robot, g);
 
     // saveGraphState(g, std::string(CMAKE_SOURCE_DIR) + "/gvis4.txt");
 
     // ---- Compute all pairwise assignments/costs ----
     auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
+    ReloPushBossDiagnostics::log_pair_results(depth, pairResults);
 
     planCtx.checkObsCount("0");
 
@@ -2053,12 +2098,14 @@ bool performAllocationsDFS(
         planCtx.checkObsCount("1");
         // Get sorted global candidate list
         auto sortedCandidates = getSortedPairCandidates(pairResults);
+        ReloPushBossDiagnostics::log_candidate_list(depth, sortedCandidates);
         // No more candidates? No solution at this recursion
         if (sortedCandidates.empty())
             return false;
 
         // Pick the best
         auto candidate = sortedCandidates.front();
+        ReloPushBossDiagnostics::log_try_candidate(depth, candidate);
         if (candidate.row == -1 || candidate.col == -1 || candidate.cost == std::numeric_limits<double>::infinity())
             return false;
 
@@ -2072,6 +2119,8 @@ bool performAllocationsDFS(
         FinalAllocation allocation;
         planCtx.checkObsCount("before Alloc");
         bool ok = tryAllocation(candidate, pairResults, planCtx, objects, goals, objGoalPairs, delivered_objs, robot, allocation);
+        ReloPushBossDiagnostics::log_try_result(
+            depth, candidate, ok, ok ? &allocation : nullptr);
         planCtx.checkObsCount("After Alloc " + std::to_string(depth));
 
         if (ok)
@@ -2086,6 +2135,7 @@ bool performAllocationsDFS(
             goals.erase(candidate.goalName);
             objGoalPairs.erase(candidate.objectName);
             finalSequence.push_back(allocation);
+            ReloPushBossDiagnostics::log_commit(depth, allocation);
 
             // update robot pose
             robot = find_pre_push(allocation.goalPose, planCtx.parameters.PrePush_dist);
@@ -2106,6 +2156,7 @@ bool performAllocationsDFS(
 
             planCtx.checkObsCount("Alloc ng");
             // Backtrack
+            ReloPushBossDiagnostics::log_backtrack(depth, allocation);
             finalSequence.pop_back();
             objects = old_objects;
             goals = old_goals;
@@ -2124,6 +2175,7 @@ bool performAllocationsDFS(
                                     [&](const RowColCost &rcc)
                                     { return rcc.row == candidate.row && rcc.col == candidate.col; }),
                      sorted.end());
+        ReloPushBossDiagnostics::log_candidate_invalidated(depth, candidate);
 
         // planCtx.checkObsCount("3");
     }
@@ -2178,9 +2230,13 @@ bool performAllocations(
 
         // (d) Build edges
         buildAllEdges(g, planCtx);
+        const int diag_depth = static_cast<int>(finalSequence.size());
+        ReloPushBossDiagnostics::log_search_state(
+            diag_depth, objects, goals, objGoalPairs, delivered_objs, robot, g);
 
         // (e) Compute cost matrices for all remaining pairs
         auto pairResults = computeMatrixPairs(g, objGoalPairs, planCtx);
+        ReloPushBossDiagnostics::log_pair_results(diag_depth, pairResults);
 
         // We'll store info about the best pick
         LowestCostInfo bestPick;
@@ -2200,6 +2256,8 @@ bool performAllocations(
             isFeasible = findFeasibleAllocation(pairResults, objGoalPairs,
                                                 planCtx, ObsReloPathList,
                                                 bestPick, ToUpdate, bestPick.objectName, objects, bestMatEntry, transitPaths, robot, firstApp);
+            ReloPushBossDiagnostics::log_try_candidate(diag_depth, bestPick);
+            ReloPushBossDiagnostics::log_try_result(diag_depth, bestPick, isFeasible);
             if (isFeasible)
                 break;
 
@@ -2215,6 +2273,7 @@ bool performAllocations(
                 // approach failed. Adjust cost matrix for re-planning.
                 pairResults[bestPick.objectName].matrixResult->sortedEntries.erase(pairResults[bestPick.objectName].matrixResult->sortedEntries.begin()); // pop the first
                 pairResults[bestPick.objectName].matrixResult->costMat(bestPick.row, bestPick.col) = std::numeric_limits<double>::infinity();             // mark inf on cost matrix
+                ReloPushBossDiagnostics::log_candidate_invalidated(diag_depth, bestPick);
                 continue;                                                                                                                                 // try other options
             }
         }
@@ -2264,6 +2323,7 @@ bool performAllocations(
         chosen.firstApproachPath = firstApp;
 
         finalSequence.push_back(chosen);
+        ReloPushBossDiagnostics::log_commit(diag_depth, chosen);
 
         // (h) Remove the chosen pair so we don’t pick it again
         objGoalPairs.erase(bestPick.objectName);

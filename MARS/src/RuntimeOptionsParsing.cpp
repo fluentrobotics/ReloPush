@@ -10,7 +10,7 @@
 
 std::string default_sequence_path()
 {
-  return relopush_sequence_path("ReloPush-BOSS_10_objects.txt", 80);
+  return relopush_sequence_path("ReloPush-BOSS_12_objects.txt", 4);
 }
 
 RuntimeOptions parse_runtime_options(int argc, char **argv)
