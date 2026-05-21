@@ -148,19 +148,19 @@ struct RuntimeOptions
     double default_robot_collision_inflation = 1.005;
     double retraction_distance = 0.11;
     int planner_expansion_threads = 1;
-    int max_search_iterations = 300;
+    int max_search_iterations = 500; // 300;
     bool robot_boundary_origin_only = true;
 
     // Fine segment options (for replanning)
-    int fine_segment_max_search_iterations = 0;
+    int fine_segment_max_search_iterations = 1500; // 0
     double fine_segment_xy_resolution = 0.1;
     double fine_segment_yaw_resolution = 0.523598775598298873; // pi / 6
     double fine_segment_time_step = 1.6;
     double fine_segment_rs_step_size = 0.16;
     double fine_segment_collision_check_time_step = 0.05;
-    int contact_boundary_max_search_iterations = 500;
-    double contact_boundary_xy_resolution = 0.08;   // 0.08
-    double contact_boundary_yaw_resolution = 0.235; // 0.26; // 0.235
+    int contact_boundary_max_search_iterations = 1500; // 500
+    double contact_boundary_xy_resolution = 0.08;      // 0.08
+    double contact_boundary_yaw_resolution = 0.235;    // 0.26; // 0.235
     double contact_boundary_time_step = 1.0;
     double contact_boundary_rs_step_size = 0.10;
     double contact_boundary_reverse_penalty = 2.0;
@@ -189,9 +189,9 @@ struct RuntimeOptions
     int shuffle_sequence_search_iterations = 0;
     int lns_iterations = 10;
     int lns_threads = 5;
-    int robot_count = 3;                        // capped by the predefined MARS robot set
-    bool enable_lns_fine_segment_retry = false; // for LNS
-    bool lns_reassign_only = false;             // false: lns-task-reassign default
+    int robot_count = 3;                       // capped by the predefined MARS robot set
+    bool enable_lns_fine_segment_retry = true; // for LNS
+    bool lns_reassign_only = false;            // false: lns-task-reassign default
 
     std::vector<TransitPlannerStep> initial_transit_methods = {
         {TransitPlannerMethod::PrimaryHybridAStar,

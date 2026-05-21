@@ -113,6 +113,7 @@ void write_instance_run_record_csv(
     int lns_threads,
     int robot_count,
     const std::string &lns_mode,
+    const std::string &lns_fine_segment_retry,
     const std::string &order_constraint_learning,
     const std::string &best_overall_label,
     double best_overall_makespan);

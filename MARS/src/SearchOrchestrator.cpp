@@ -62,6 +62,11 @@ std::string order_constraint_learning_label(const RuntimeOptions &options)
 {
   return options.enable_order_constraint_learning ? "enabled" : "disabled";
 }
+
+std::string lns_fine_segment_retry_label(const RuntimeOptions &options)
+{
+  return options.enable_lns_fine_segment_retry ? "enabled" : "disabled";
+}
 } // namespace
 
 int run_greedy_only_pipeline(
@@ -129,6 +134,7 @@ int run_greedy_only_pipeline(
       options.lns_threads,
       static_cast<int>(robot_names.size()),
       lns_mode_label(options),
+      lns_fine_segment_retry_label(options),
       order_constraint_learning_label(options),
       greedy_summary.label,
       greedy_summary.makespan);
@@ -818,6 +824,7 @@ int finalize_and_replay_best(
       options.lns_threads,
       robot_count,
       lns_mode_label(options),
+      lns_fine_segment_retry_label(options),
       order_constraint_learning_label(options),
       best_summary.label,
       best_summary.makespan);
