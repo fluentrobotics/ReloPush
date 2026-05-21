@@ -21,6 +21,13 @@ struct EdgePath;
 double compute_relopush_single_robot_makespan(
     const std::vector<FinalAllocation> &loaded_sequence);
 
+void write_relopush_makespan_diagnostics(
+    const std::vector<FinalAllocation> &loaded_sequence,
+    const ReloPush::HandoffInstanceInfo &instance_info,
+    const RuntimeOptions &options,
+    const std::string &sequence_path,
+    double reported_makespan);
+
 RobotMeta *make_relopush_robot();
 
 bool find_first_relopush_robot_pose(

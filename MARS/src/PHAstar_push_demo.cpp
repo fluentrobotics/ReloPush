@@ -84,6 +84,17 @@ int phastar_push_demo_main(int argc, char **argv)
               << std::fixed << std::setprecision(2)
               << relopush_single_robot_makespan << "s" << std::endl;
 
+    const std::string relopush_sequence_path =
+        runtime_options.input_sequence_path.empty()
+            ? default_sequence_path()
+            : runtime_options.input_sequence_path;
+    write_relopush_makespan_diagnostics(
+        loadedSequence,
+        instance_info,
+        runtime_options,
+        relopush_sequence_path,
+        relopush_single_robot_makespan);
+
     if (runtime_options.visualize_relopush_plan)
     {
         visualize_relopush_plan(argc, argv, loadedSequence, instance_info, runtime_options);
