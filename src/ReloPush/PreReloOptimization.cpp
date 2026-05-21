@@ -1,5 +1,6 @@
 
 #include <ReloPush/PreReloOptimization.hpp>
+#include <ReloPush/ReloPushBossDiagnostics.hpp>
 
 namespace ReloPush
 {
@@ -435,6 +436,18 @@ namespace ReloPush
         double cost_eval[1];
         double *parameters = &paramSE2[0];
         cost_function_se2->Evaluate(&parameters, cost_eval, nullptr);
+        ReloPushBossDiagnostics::log_prerelo_opt_phase_result(
+            "trust_region",
+            "linear_solver=DENSE_QR,function_tol=1e-4,gradient_tol=1e-4,parameter_tol=1e-4,use_nonmonotonic_steps=1,num_threads=4,initial_trust_region_radius=1",
+            summary.BriefReport(),
+            static_cast<int>(summary.termination_type),
+            static_cast<int>(summary.iterations.size()),
+            summary.initial_cost,
+            summary.final_cost,
+            paramSE2[0],
+            paramSE2[1],
+            paramSE2[2],
+            cost_eval[0]);
         // std::cout << "Final cost = " << cost_eval[0] << "\n";
 
         // second optimization: line search
@@ -448,6 +461,18 @@ namespace ReloPush
         // std::cout << summary.BriefReport() << "\n";
         parameters = &paramSE2[0];
         cost_function_se2->Evaluate(&parameters, cost_eval, nullptr);
+        ReloPushBossDiagnostics::log_prerelo_opt_phase_result(
+            "line_search",
+            "minimizer=LINE_SEARCH,line_search_direction=LBFGS,max_line_search_step_size_iters=5,function_tol=1e-8,gradient_tol=1e-8,parameter_tol=1e-8,use_nonmonotonic_steps=1,num_threads=4",
+            summary.BriefReport(),
+            static_cast<int>(summary.termination_type),
+            static_cast<int>(summary.iterations.size()),
+            summary.initial_cost,
+            summary.final_cost,
+            paramSE2[0],
+            paramSE2[1],
+            paramSE2[2],
+            cost_eval[0]);
 
         // Start Prepush
         // double x_i_prepush = x_i - ctx.parameters.PrePush_dist * cos(th_ip);

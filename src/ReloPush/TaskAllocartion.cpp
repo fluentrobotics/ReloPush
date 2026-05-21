@@ -2089,6 +2089,7 @@ bool performAllocationsDFS(
     params.boundary = boundary;
     PlanningContext planCtx(params, objects, delivered_objs, use_opt, no_init_guess);
 
+    ReloPushBossDiagnostics::set_current_depth(depth);
     buildAllEdges(g, planCtx);
     ReloPushBossDiagnostics::log_search_state(
         depth, objects, goals, objGoalPairs, delivered_objs, robot, g);
@@ -2130,6 +2131,11 @@ bool performAllocationsDFS(
         bool ok = tryAllocation(candidate, pairResults, planCtx, objects, goals, objGoalPairs, delivered_objs, robot, allocation);
         ReloPushBossDiagnostics::log_try_result(
             depth, candidate, ok, ok ? &allocation : nullptr);
+        if (!ok)
+        {
+            ReloPushBossDiagnostics::log_dfs_child_result(
+                depth, candidate, false, false, finalSequence);
+        }
         planCtx.checkObsCount("After Alloc " + std::to_string(depth));
 
         if (ok)
@@ -2158,7 +2164,10 @@ bool performAllocationsDFS(
                 objects.updateObjectPosition(objNameObs, objNewPose);
             }
 
-            if (performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt, no_init_guess, time_start, depth + 1))
+            bool child_success = performAllocationsDFS(boundary, objects, goals, objGoalPairs, delivered_objs, robot, finalSequence, use_opt, no_init_guess, time_start, depth + 1);
+            ReloPushBossDiagnostics::log_dfs_child_result(
+                depth, candidate, true, child_success, finalSequence);
+            if (child_success)
             {
                 return true;
             }
@@ -2184,7 +2193,8 @@ bool performAllocationsDFS(
                                     [&](const RowColCost &rcc)
                                     { return rcc.row == candidate.row && rcc.col == candidate.col; }),
                      sorted.end());
-        ReloPushBossDiagnostics::log_candidate_invalidated(depth, candidate);
+        ReloPushBossDiagnostics::log_candidate_invalidated(
+            depth, candidate, ok ? "child_failed" : "allocation_failed");
 
         // planCtx.checkObsCount("3");
     }

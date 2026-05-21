@@ -5,6 +5,7 @@
 #include <ReloPush/config.h>
 
 #include <algorithm>
+#include <ceres/version.h>
 #include <cctype>
 #include <cfloat>
 #include <cmath>
@@ -19,6 +20,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <Eigen/Core>
 
 namespace ReloPushBossDiagnostics
 {
@@ -168,6 +170,26 @@ inline std::string state_to_string(const ReloPush::State &state)
 {
     std::ostringstream oss;
     canonical_append_state(oss, state);
+    return oss.str();
+}
+
+inline std::string double_to_string(double value)
+{
+    std::ostringstream oss;
+    canonical_append(oss, value);
+    return oss.str();
+}
+
+inline std::string vertex_to_string(const VertexData &vertex)
+{
+    std::ostringstream oss;
+    oss << vertex.name << "[" << vertex.orientationIndex << "]@";
+    canonical_append(oss, vertex.x);
+    oss << ",";
+    canonical_append(oss, vertex.y);
+    oss << ",";
+    canonical_append(oss, vertex.getActualOrientation());
+    oss << ",type=" << static_cast<int>(vertex.type);
     return oss.str();
 }
 
@@ -359,6 +381,26 @@ inline std::string edge_data_hash(const EdgeData &edge)
     return hex_u64(fnv1a_string(oss.str()));
 }
 
+inline std::string edge_summary(const EdgeData &edge)
+{
+    std::ostringstream oss;
+    oss << std::setprecision(17)
+        << "mode=" << static_cast<int>(edge.mode)
+        << ",weight=" << edge.weight
+        << ",src=" << vertex_to_string(edge.srcVertexData)
+        << ",sink=" << vertex_to_string(edge.sinkVertexData)
+        << ",pre_used=" << (edge.preRelo.used ? 1 : 0)
+        << ",pre_obj=(" << edge.preRelo.xRelocated_object
+        << "," << edge.preRelo.yRelocated_object
+        << "," << edge.preRelo.yawRelocated_object << ")"
+        << ",pre_robot=(" << edge.preRelo.xRelocated_robot
+        << "," << edge.preRelo.yRelocated_robot
+        << "," << edge.preRelo.yawReloacted_robot << ")"
+        << ",relocating_index=" << edge.preRelo.relocatingIndex
+        << ",hash=" << edge_data_hash(edge);
+    return oss.str();
+}
+
 inline std::string graph_hash(const Graph &graph)
 {
     std::ostringstream oss;
@@ -511,6 +553,9 @@ inline void initialize(const std::string &filename,
     s.summary << "sizeof_double=" << sizeof(double) << "\n";
     s.summary << "sizeof_long_double=" << sizeof(long double) << "\n";
     s.summary << "FLT_EVAL_METHOD=" << FLT_EVAL_METHOD << "\n";
+    s.summary << "ceres_version=" << CERES_VERSION_STRING << "\n";
+    s.summary << "eigen_version=" << EIGEN_WORLD_VERSION << "."
+              << EIGEN_MAJOR_VERSION << "." << EIGEN_MINOR_VERSION << "\n";
 #if defined(__clang__)
     s.summary << "compiler=clang " << __clang_version__ << "\n";
 #elif defined(__GNUC__)
@@ -536,6 +581,13 @@ inline void initialize(const std::string &filename,
 inline void set_current_depth(int depth)
 {
     session().current_depth = depth;
+}
+
+inline bool prerelo_detail_enabled()
+{
+    // The Mac/Ubuntu divergence under diagnosis first appears in the late DFS
+    // branch around b2/b11/b4, so skip the enormous depth-0 graph build noise.
+    return session().current_depth >= 5;
 }
 
 inline void log_parsed_input(
@@ -621,6 +673,44 @@ inline void log_pair_results(int depth, const PairResultsMap &pair_results)
                      {"goal", result.goalName},
                      {"entry_count", std::to_string(entry_count)},
                      {"top_entries", pair_result_preview(result)}});
+        if (!result.matrixResult || !result.matrixResult->pathMat)
+            continue;
+
+        const auto &entries = result.matrixResult->sortedEntries;
+        const std::size_t n = std::min<std::size_t>(5, entries.size());
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const auto &entry = entries[i];
+            std::ostringstream cost;
+            cost << std::setprecision(17) << entry.cost;
+            std::ostringstream edge_details;
+            const auto &matrix_entry =
+                result.matrixResult->pathMat->at(entry.row).at(entry.col);
+            for (std::size_t j = 0; j < matrix_entry.edgesInfo.size(); ++j)
+            {
+                if (j > 0)
+                    edge_details << ";";
+                edge_details << j << ":" << edge_summary(matrix_entry.edgesInfo[j]);
+            }
+            std::ostringstream vertex_chain;
+            for (std::size_t j = 0; j < matrix_entry.vertexChain.size(); ++j)
+            {
+                if (j > 0)
+                    vertex_chain << ";";
+                vertex_chain << j << ":" << vertex_to_string(matrix_entry.vertexChain[j]);
+            }
+            trace_event("pair_entry_detail",
+                        {{"depth", std::to_string(depth)},
+                         {"object", result.objectName},
+                         {"goal", result.goalName},
+                         {"rank", std::to_string(i)},
+                         {"row", std::to_string(entry.row)},
+                         {"col", std::to_string(entry.col)},
+                         {"cost", cost.str()},
+                         {"obs_relo_count", std::to_string(matrix_entry.obsReloList.size())},
+                         {"vertex_chain", vertex_chain.str()},
+                         {"edges", edge_details.str()}});
+        }
     }
 }
 
@@ -754,6 +844,164 @@ inline void log_candidate_invalidated(int depth, const LowestCostInfo &candidate
                  {"goal", candidate.goalName},
                  {"row", std::to_string(candidate.row)},
                  {"col", std::to_string(candidate.col)}});
+}
+
+inline void log_candidate_invalidated(int depth,
+                                      const LowestCostInfo &candidate,
+                                      const std::string &reason)
+{
+    trace_event("candidate_invalidated",
+                {{"depth", std::to_string(depth)},
+                 {"object", candidate.objectName},
+                 {"goal", candidate.goalName},
+                 {"row", std::to_string(candidate.row)},
+                 {"col", std::to_string(candidate.col)},
+                 {"reason", reason}});
+}
+
+inline void log_dfs_child_result(int depth,
+                                 const LowestCostInfo &candidate,
+                                 bool allocation_ok,
+                                 bool child_success,
+                                 const std::vector<FinalAllocation> &sequence)
+{
+    std::ostringstream sequence_oss;
+    sequence_oss << "size=" << sequence.size();
+    for (const auto &allocation : sequence)
+        sequence_oss << "|" << allocation_hash(allocation);
+    trace_event("dfs_child_result",
+                {{"depth", std::to_string(depth)},
+                 {"object", candidate.objectName},
+                 {"goal", candidate.goalName},
+                 {"row", std::to_string(candidate.row)},
+                 {"col", std::to_string(candidate.col)},
+                 {"allocation_ok", allocation_ok ? "1" : "0"},
+                 {"child_success", child_success ? "1" : "0"},
+                 {"sequence_hash", hex_u64(fnv1a_string(sequence_oss.str()))}});
+}
+
+inline void log_prerelo_opt_begin(const VertexData &source,
+                                  const VertexData &sink,
+                                  int orientation_index,
+                                  const ReloPush::State &start_pose,
+                                  const ReloPush::State &goal_pose,
+                                  double th_ip,
+                                  double turning_radius,
+                                  double x_init_guess,
+                                  double y_init_guess,
+                                  bool no_init_guess,
+                                  const WorkspaceBoundary &boundary)
+{
+    if (!prerelo_detail_enabled())
+        return;
+    trace_event("prerelo_opt_begin",
+                {{"depth", std::to_string(session().current_depth)},
+                 {"source", vertex_to_string(source)},
+                 {"sink", vertex_to_string(sink)},
+                 {"orientation_index", std::to_string(orientation_index)},
+                 {"start_pose", state_to_string(start_pose)},
+                 {"goal_pose", state_to_string(goal_pose)},
+                 {"th_ip", double_to_string(th_ip)},
+                 {"turning_radius", double_to_string(turning_radius)},
+                 {"x_init_guess", double_to_string(x_init_guess)},
+                 {"y_init_guess", double_to_string(y_init_guess)},
+                 {"no_init_guess", no_init_guess ? "1" : "0"},
+                 {"boundary", double_to_string(boundary.xMin) + "," +
+                                  double_to_string(boundary.xMax) + "," +
+                                  double_to_string(boundary.yMin) + "," +
+                                  double_to_string(boundary.yMax)}});
+}
+
+inline void log_prerelo_opt_phase_result(const std::string &phase,
+                                         const std::string &options,
+                                         const std::string &brief_report,
+                                         int termination_type,
+                                         int iterations,
+                                         double initial_cost,
+                                         double final_cost,
+                                         double x,
+                                         double y,
+                                         double yaw,
+                                         double evaluated_residual)
+{
+    if (!prerelo_detail_enabled())
+        return;
+    trace_event("prerelo_opt_phase_result",
+                {{"depth", std::to_string(session().current_depth)},
+                 {"phase", phase},
+                 {"options", options},
+                 {"termination_type", std::to_string(termination_type)},
+                 {"iterations", std::to_string(iterations)},
+                 {"initial_cost", double_to_string(initial_cost)},
+                 {"final_cost", double_to_string(final_cost)},
+                 {"x", double_to_string(x)},
+                 {"y", double_to_string(y)},
+                 {"yaw", double_to_string(yaw)},
+                 {"evaluated_residual", double_to_string(evaluated_residual)},
+                 {"brief_report", brief_report}});
+}
+
+inline void log_prerelo_opt_candidate_result(const VertexData &source,
+                                             const VertexData &sink,
+                                             int orientation_index,
+                                             const ReloPush::State &object_pose,
+                                             const ReloPush::State &robot_pose,
+                                             double change_in_yaw,
+                                             double cost,
+                                             const std::string &decision,
+                                             const std::string &reason)
+{
+    if (!prerelo_detail_enabled())
+        return;
+    trace_event("prerelo_opt_candidate_result",
+                {{"depth", std::to_string(session().current_depth)},
+                 {"source", vertex_to_string(source)},
+                 {"sink", vertex_to_string(sink)},
+                 {"orientation_index", std::to_string(orientation_index)},
+                 {"object_pose", state_to_string(object_pose)},
+                 {"robot_pose", state_to_string(robot_pose)},
+                 {"change_in_yaw", double_to_string(change_in_yaw)},
+                 {"cost", double_to_string(cost)},
+                 {"decision", decision},
+                 {"reason", reason}});
+}
+
+inline void log_prerelo_edge_accept(const VertexData &source,
+                                    const VertexData &sink,
+                                    const EdgeData &edge)
+{
+    if (!prerelo_detail_enabled())
+        return;
+    std::ostringstream path_hashes;
+    for (std::size_t i = 0; i < edge.paths.size(); ++i)
+    {
+        if (i > 0)
+            path_hashes << ";";
+        path_hashes << i << ":" << edge_path_hash(edge.paths[i]);
+    }
+    trace_event("prerelo_edge_accept",
+                {{"depth", std::to_string(session().current_depth)},
+                 {"source", vertex_to_string(source)},
+                 {"sink", vertex_to_string(sink)},
+                 {"edge", edge_summary(edge)},
+                 {"path_hashes", path_hashes.str()}});
+}
+
+inline void log_prerelo_edge_reject(const VertexData &source,
+                                    const VertexData &sink,
+                                    int orientation_index,
+                                    const std::string &reason,
+                                    const std::string &detail = "")
+{
+    if (!prerelo_detail_enabled())
+        return;
+    trace_event("prerelo_edge_reject",
+                {{"depth", std::to_string(session().current_depth)},
+                 {"source", vertex_to_string(source)},
+                 {"sink", vertex_to_string(sink)},
+                 {"orientation_index", std::to_string(orientation_index)},
+                 {"reason", reason},
+                 {"detail", detail}});
 }
 
 inline std::string final_sequence_stable_hash(

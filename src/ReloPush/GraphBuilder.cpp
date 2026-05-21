@@ -1,6 +1,7 @@
 #include <ReloPush/GraphBuilder.hpp>
 #include "ReloPush/DubinsTools.h"
 #include <ReloPush/PathPlanningTools.h>
+#include <ReloPush/ReloPushBossDiagnostics.hpp>
 #include <boost/graph/graphviz.hpp>
 #include <algorithm>
 #include <fstream>
@@ -733,6 +734,10 @@ StateValidity addEdgePrerelocation_Optimization(
 
         // Call your function:
         // (x_i, y_i, th_i, x2, y2, th2, sideAngle, R, x_init_guess, y_init_guess)
+        ReloPushBossDiagnostics::log_prerelo_opt_begin(
+            data1, data2, i, startPose, goalPose, sideAngle, R,
+            x_init_guess, y_init_guess, ctx.no_init_guess,
+            ctx.parameters.boundary);
         ReloPush::OptResult optRes = ReloPush::FindPreRelocationOptimization(
             startPose.x,
             startPose.y,
@@ -758,15 +763,28 @@ StateValidity addEdgePrerelocation_Optimization(
         if (std::isnan(relocationYaw))
         {
             // failed to find yaw. todo: handle far points
+            ReloPushBossDiagnostics::log_prerelo_edge_reject(
+                data1, data2, i, "nan_yaw");
             continue;
         }
 
         if (costOpt > 50)
+        {
+            ReloPushBossDiagnostics::log_prerelo_edge_reject(
+                data1, data2, i, "cost_gt_50",
+                ReloPushBossDiagnostics::double_to_string(costOpt));
             continue;
+        }
 
         // If the cost is infinite or >= bestCost, skip
         if (costOpt >= bestCost)
+        {
+            ReloPushBossDiagnostics::log_prerelo_edge_reject(
+                data1, data2, i, "cost_not_better",
+                "cost=" + ReloPushBossDiagnostics::double_to_string(costOpt) +
+                    ",best=" + ReloPushBossDiagnostics::double_to_string(bestCost));
             continue;
+        }
 
         // 2b) (Optional) boundary or collision checks:
         // if (!ctx.env.inBoundary(relocationX, relocationY)) continue;
@@ -790,7 +808,14 @@ StateValidity addEdgePrerelocation_Optimization(
             auto candidateDubins_prerelo = findDubins(startPose_prepush, candidatePreRelo_robot, ctx.parameters.turning_rad_pair.push);
 
             if (isDubinsValid(candidateDubins_prerelo, ctx) != StateValidity::valid)
+            {
+                ReloPushBossDiagnostics::log_prerelo_opt_candidate_result(
+                    data1, data2, i, obj_prerelo, candidatePreRelo_robot,
+                    delta_yaw, costOpt, "reject", "dubins_prerelo_invalid");
+                ReloPushBossDiagnostics::log_prerelo_edge_reject(
+                    data1, data2, i, "dubins_prerelo_invalid");
                 continue;
+            }
 
             double final_push_orientation = startPose.yaw + temp_opt.change_in_yaw;
             double candidatePreRelo_orientation = movingObject.getNominalPose().yaw + temp_opt.change_in_yaw;
@@ -798,7 +823,18 @@ StateValidity addEdgePrerelocation_Optimization(
 
             auto candidateDubins_final = findDubins(find_pre_push(final_push_pose, ctx.parameters.PrePush_dist), find_pre_push(goalPose, ctx.parameters.PrePush_dist), ctx.parameters.turning_rad_pair.push);
             if (isDubinsValid(candidateDubins_final, ctx) != StateValidity::valid)
+            {
+                ReloPushBossDiagnostics::log_prerelo_opt_candidate_result(
+                    data1, data2, i, obj_prerelo, candidatePreRelo_robot,
+                    delta_yaw, costOpt, "reject", "dubins_final_invalid");
+                ReloPushBossDiagnostics::log_prerelo_edge_reject(
+                    data1, data2, i, "dubins_final_invalid");
                 continue;
+            }
+
+            ReloPushBossDiagnostics::log_prerelo_opt_candidate_result(
+                data1, data2, i, obj_prerelo, candidatePreRelo_robot,
+                delta_yaw, costOpt, "accept", "best_so_far");
 
             // All checks passed — commit this candidate as the new best
             foundAny = true;
@@ -832,6 +868,8 @@ StateValidity addEdgePrerelocation_Optimization(
         if (bestDubins_prerelo.targetState == bestDubins_final.startState)
         {
             // [Rare] Converged to zero change in yaw (invalid prerelocation)
+            ReloPushBossDiagnostics::log_prerelo_edge_reject(
+                data1, data2, bestOrientationIndex, "zero_change_fallback");
             ctx.addObs(data1.toObjectInfo());
             if (data2.type == VertexType::OBJECT_VERTEX)
                 ctx.addObs(data2.toObjectInfo());
@@ -867,6 +905,7 @@ StateValidity addEdgePrerelocation_Optimization(
                 ;
                 g[e].srcVertexData = g[v1];
                 g[e].sinkVertexData = g[v2];
+                ReloPushBossDiagnostics::log_prerelo_edge_accept(data1, data2, g[e]);
 
                 // Possibly store the reason in 'reason_in' or g[e].preRelo.reason
                 // g[e].preRelo.reason = reason_in;
@@ -876,6 +915,8 @@ StateValidity addEdgePrerelocation_Optimization(
         else
         {
             // std::cout << "Approach failed" << std::endl;
+            ReloPushBossDiagnostics::log_prerelo_edge_reject(
+                data1, data2, bestOrientationIndex, "approach_failed");
         }
     }
 
