@@ -205,11 +205,7 @@ on_interrupt() {
 trap cleanup EXIT
 trap on_interrupt INT TERM
 
-if [ "$USE_EXISTING_B64" -eq 1 ]; then
-    LOG_DIR="$REPO_ROOT/results/mars_b64_logs/$(sanitize_name "$INPUT_FILE")"
-else
-    LOG_DIR="$REPO_ROOT/results/integrated_logs/$(sanitize_name "$INPUT_FILE")"
-fi
+LOG_DIR="$REPO_ROOT/results/integrated_logs/$(sanitize_name "$INPUT_FILE")"
 mkdir -p "$LOG_DIR"
 ACTIVE_RUN_DIR=""
 

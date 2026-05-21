@@ -963,10 +963,36 @@ ReloPush::HandoffInstanceInfo default_instance_info(const RuntimeOptions &option
                                ? default_sequence_path()
                                : options.input_sequence_path;
   const std::size_t slash_pos = input_path.find_last_of("/\\");
-  info.file_name = (slash_pos == std::string::npos)
-                       ? input_path
-                       : input_path.substr(slash_pos + 1);
+  const std::string basename = (slash_pos == std::string::npos)
+                                   ? input_path
+                                   : input_path.substr(slash_pos + 1);
+  info.file_name = basename;
   info.instance_index = -1;
+
+  const std::string prefix = "result_seq_";
+  const std::string suffix = ".b64";
+  if (basename.rfind(prefix, 0) == 0 &&
+      basename.size() > prefix.size() + suffix.size() &&
+      basename.compare(basename.size() - suffix.size(), suffix.size(), suffix) == 0)
+  {
+    const std::size_t ind_pos = basename.rfind("_ind");
+    if (ind_pos != std::string::npos && ind_pos > prefix.size())
+    {
+      info.file_name = basename.substr(prefix.size(), ind_pos - prefix.size());
+      const std::string index_text =
+          basename.substr(ind_pos + std::string("_ind").size(),
+                          basename.size() - suffix.size() -
+                              (ind_pos + std::string("_ind").size()));
+      try
+      {
+        info.instance_index = std::stoi(index_text);
+      }
+      catch (...)
+      {
+        info.instance_index = -1;
+      }
+    }
+  }
   return info;
 }
 
