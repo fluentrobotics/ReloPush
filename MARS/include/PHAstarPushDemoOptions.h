@@ -123,7 +123,7 @@ inline const char *transit_planner_applicability_name(
 struct RuntimeOptions
 {
     // visualization options
-    bool debug_vis = false;
+    bool debug_vis = true;
     bool visualize_relopush_plan = false;
     bool enable_visualization = true; // show results
     bool print_planning_status = true;

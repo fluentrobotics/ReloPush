@@ -5,7 +5,7 @@ set -u
 usage() {
     cat <<'EOF'
 Usage:
-  ./script/run_all_indices_integrated.sh <input_file> [--mode=f|d|u|o] [--lns-iters=N] [--num-robots=N] [--lns-reassign-only|--lns-task-reassign] [--order-learning|--no-order-learning] [--visualize|--no-visualization] [--start-index=N] [--end-index=N] [--base-port=N] [--continue-on-error] [--mars-arg=ARG]...
+  ./script/run_all_indices_integrated.sh <input_file> [--mode=f|d|u|o] [--lns-iters=N] [--num-robots=N] [--lns-reassign-only|--lns-task-reassign] [--order-learning|--no-order-learning] [--visualize|--no-visualization] [--start-index=N] [--end-index=N] [--base-port=N] [--use-existing-b64] [--b64-dir=DIR] [--continue-on-error] [--mars-arg=ARG]...
 
 Description:
   Runs every non-empty instance index in input/<input_file> using the integrated
@@ -13,6 +13,10 @@ Description:
   1. starts phastar_push_demo in integrated mode as a ZeroMQ server
   2. runs ReloPush-BOSS in integrated mode for that instance index
   3. waits for MARS to finish and stores logs
+
+  With --use-existing-b64, the script skips ReloPush-BOSS and ZeroMQ. For each
+  index, MARS reads an existing sequence file named:
+    <b64-dir>/result_seq_<input_file>_ind<index>.b64
 
 Arguments:
   <input_file>     File name relative to input/
@@ -30,6 +34,8 @@ Options:
   --start-index=N        First instance index to run
   --end-index=N          Last instance index to run, inclusive
   --base-port=N          Base TCP port for ZeroMQ endpoint (default: 5566)
+  --use-existing-b64     Run MARS directly from existing .b64 sequence files
+  --b64-dir=DIR          Directory containing .b64 files (default: results/relopush-out)
   --continue-on-error    Continue to later indices if one run fails
   --mars-arg=ARG         Extra argument forwarded to phastar_push_demo
 
@@ -57,6 +63,8 @@ START_INDEX=""
 END_INDEX=""
 BASE_PORT=5566
 CONTINUE_ON_ERROR=1
+USE_EXISTING_B64=0
+B64_DIR_ARG=""
 MARS_ARGS=()
 
 for arg in "$@"; do
@@ -100,6 +108,12 @@ for arg in "$@"; do
         --base-port=*)
             BASE_PORT="${arg#--base-port=}"
             ;;
+        --use-existing-b64|--existing-b64|--mars-from-b64)
+            USE_EXISTING_B64=1
+            ;;
+        --b64-dir=*)
+            B64_DIR_ARG="${arg#--b64-dir=}"
+            ;;
         --continue-on-error)
             CONTINUE_ON_ERROR=1
             ;;
@@ -132,13 +146,27 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INPUT_PATH="$REPO_ROOT/input/$INPUT_FILE"
 RELOPUSH_BIN="$REPO_ROOT/build/ReloPush-BOSS"
 MARS_BIN="$REPO_ROOT/build/MARS/phastar_push_demo"
+B64_DIR="$REPO_ROOT/results/relopush-out"
+
+resolve_repo_path() {
+    local value="$1"
+    if [[ "$value" = /* ]]; then
+        echo "$value"
+    else
+        echo "$REPO_ROOT/$value"
+    fi
+}
+
+if [ -n "$B64_DIR_ARG" ]; then
+    B64_DIR="$(resolve_repo_path "$B64_DIR_ARG")"
+fi
 
 if [ ! -f "$INPUT_PATH" ]; then
     echo "[Error] Input file not found: $INPUT_PATH" >&2
     exit 1
 fi
 
-if [ ! -x "$RELOPUSH_BIN" ]; then
+if [ "$USE_EXISTING_B64" -ne 1 ] && [ ! -x "$RELOPUSH_BIN" ]; then
     echo "[Error] Missing executable: $RELOPUSH_BIN" >&2
     exit 1
 fi
@@ -177,7 +205,11 @@ on_interrupt() {
 trap cleanup EXIT
 trap on_interrupt INT TERM
 
-LOG_DIR="$REPO_ROOT/results/integrated_logs/$(sanitize_name "$INPUT_FILE")"
+if [ "$USE_EXISTING_B64" -eq 1 ]; then
+    LOG_DIR="$REPO_ROOT/results/mars_b64_logs/$(sanitize_name "$INPUT_FILE")"
+else
+    LOG_DIR="$REPO_ROOT/results/integrated_logs/$(sanitize_name "$INPUT_FILE")"
+fi
 mkdir -p "$LOG_DIR"
 ACTIVE_RUN_DIR=""
 
@@ -190,7 +222,14 @@ if [ "$ENABLE_VISUALIZATION" -eq 1 ]; then
 fi
 
 echo "[Config] input file: $INPUT_FILE"
-echo "[Config] mode: $MODE"
+if [ "$USE_EXISTING_B64" -eq 1 ]; then
+    echo "[Config] run mode: existing-b64"
+    echo "[Config] b64 dir: $B64_DIR"
+else
+    echo "[Config] run mode: integrated"
+    echo "[Config] mode: $MODE"
+    echo "[Config] base port: $BASE_PORT"
+fi
 echo "[Config] visualization: ${VISUALIZATION_ARG#--}"
 echo "[Config] lns iterations: $LNS_ITERS"
 echo "[Config] MARS robots: $NUM_ROBOTS"
@@ -200,7 +239,6 @@ if [ "$ORDER_LEARNING" -eq 1 ]; then
 else
     echo "[Config] order learning: disabled"
 fi
-echo "[Config] base port: $BASE_PORT"
 if [ -n "$START_INDEX" ]; then
     echo "[Config] start index: $START_INDEX"
 fi
@@ -261,6 +299,32 @@ monitor_run() {
     done
 }
 
+monitor_mars_run() {
+    local mars_pid="$1"
+    local mars_log="$2"
+    local last_mars_tail=""
+
+    while true; do
+        local mars_alive=0
+        if kill -0 "$mars_pid" 2>/dev/null; then
+            mars_alive=1
+        fi
+
+        local mars_tail=""
+        mars_tail="$(tail -n 1 "$mars_log" 2>/dev/null || true)"
+        if [ -n "$mars_tail" ] && [ "$mars_tail" != "$last_mars_tail" ]; then
+            printf '  [MARS] %s\n' "$mars_tail"
+            last_mars_tail="$mars_tail"
+        fi
+
+        if [ "$mars_alive" -eq 0 ]; then
+            break
+        fi
+
+        sleep 2
+    done
+}
+
 cd "$REPO_ROOT"
 
 INDEX=0
@@ -290,10 +354,26 @@ while IFS= read -r line || [ -n "$line" ]; do
     ACTIVE_RUN_DIR="$RUN_DIR"
     ACTIVE_RUN_PIDS=()
     mkdir -p "$RUN_DIR"
-    MARS_CMD=(
-        "$MARS_BIN"
-        --integrated-mode
-        "--handoff-endpoint=$ENDPOINT"
+    MARS_CMD=("$MARS_BIN")
+    if [ "$USE_EXISTING_B64" -eq 1 ]; then
+        B64_PATH="$B64_DIR/result_seq_${INPUT_FILE}_ind${INDEX}.b64"
+        if [ ! -f "$B64_PATH" ]; then
+            echo
+            echo "[Error] file=$INPUT_FILE index=$INDEX missing .b64 file: $B64_PATH" >&2
+            if [ "$CONTINUE_ON_ERROR" -ne 1 ]; then
+                exit 1
+            fi
+            INDEX=$((INDEX + 1))
+            continue
+        fi
+        MARS_CMD+=("--sequence-file=$B64_PATH")
+    else
+        MARS_CMD+=(
+            --integrated-mode
+            "--handoff-endpoint=$ENDPOINT"
+        )
+    fi
+    MARS_CMD+=(
         "$VISUALIZATION_ARG"
         "--lns-iters=$LNS_ITERS"
         "--num-robots=$NUM_ROBOTS"
@@ -323,35 +403,50 @@ while IFS= read -r line || [ -n "$line" ]; do
     fi
 
     echo
-    echo "[Run] file=$INPUT_FILE index=$INDEX mode=$MODE endpoint=$ENDPOINT"
+    if [ "$USE_EXISTING_B64" -eq 1 ]; then
+        echo "[Run] file=$INPUT_FILE index=$INDEX sequence=$B64_PATH"
+    else
+        echo "[Run] file=$INPUT_FILE index=$INDEX mode=$MODE endpoint=$ENDPOINT"
+    fi
 
     (
         "${MARS_CMD[@]}"
     ) > "$MARS_LOG" 2>&1 &
     MARS_PID=$!
 
-    sleep 1
+    if [ "$USE_EXISTING_B64" -eq 1 ]; then
+        ACTIVE_RUN_PIDS=("$MARS_PID")
+        monitor_mars_run "$MARS_PID" "$MARS_LOG"
 
-    (
-        "$RELOPUSH_BIN" \
-            "$INPUT_FILE" \
-            "$INDEX" \
-            "$MODE" \
-            --integrated-mode \
-            "--mars-endpoint=$ENDPOINT"
-    ) > "$RELOPUSH_LOG" 2>&1 &
-    RELOPUSH_PID=$!
+        wait "$MARS_PID"
+        MARS_STATUS=$?
+        RELOPUSH_STATUS=0
+        ACTIVE_RUN_DIR=""
+        ACTIVE_RUN_PIDS=()
+    else
+        sleep 1
 
-    ACTIVE_RUN_PIDS=("$MARS_PID" "$RELOPUSH_PID")
+        (
+            "$RELOPUSH_BIN" \
+                "$INPUT_FILE" \
+                "$INDEX" \
+                "$MODE" \
+                --integrated-mode \
+                "--mars-endpoint=$ENDPOINT"
+        ) > "$RELOPUSH_LOG" 2>&1 &
+        RELOPUSH_PID=$!
 
-    monitor_run "$MARS_PID" "$RELOPUSH_PID" "$MARS_LOG" "$RELOPUSH_LOG"
+        ACTIVE_RUN_PIDS=("$MARS_PID" "$RELOPUSH_PID")
 
-    wait "$RELOPUSH_PID"
-    RELOPUSH_STATUS=$?
-    wait "$MARS_PID"
-    MARS_STATUS=$?
-    ACTIVE_RUN_DIR=""
-    ACTIVE_RUN_PIDS=()
+        monitor_run "$MARS_PID" "$RELOPUSH_PID" "$MARS_LOG" "$RELOPUSH_LOG"
+
+        wait "$RELOPUSH_PID"
+        RELOPUSH_STATUS=$?
+        wait "$MARS_PID"
+        MARS_STATUS=$?
+        ACTIVE_RUN_DIR=""
+        ACTIVE_RUN_PIDS=()
+    fi
 
     if [ "$RELOPUSH_STATUS" -eq 0 ] && [ "$MARS_STATUS" -eq 0 ]; then
         PASSED_RUNS=$((PASSED_RUNS + 1))
@@ -359,7 +454,9 @@ while IFS= read -r line || [ -n "$line" ]; do
     else
         echo "[Error] index=$INDEX failed (ReloPush=$RELOPUSH_STATUS, MARS=$MARS_STATUS)" >&2
         echo "[Error] Logs:"
-        echo "  $RELOPUSH_LOG"
+        if [ "$USE_EXISTING_B64" -ne 1 ]; then
+            echo "  $RELOPUSH_LOG"
+        fi
         echo "  $MARS_LOG"
         if [ "$CONTINUE_ON_ERROR" -ne 1 ]; then
             exit 1
