@@ -242,6 +242,7 @@ else()
 endif()
 
 add_subdirectory(MARS)
+add_subdirectory(MPCController)
 
 include(GNUInstallDirs)
 install(TARGETS ReloPush-BOSS

@@ -81,4 +81,8 @@ int finalize_and_replay_best(
     const std::vector<SearchTrialRecord> &trial_records,
     ReloPush::FinalSequenceHandoffServer *handoff_server);
 
+void run_on_robots_pipeline(
+    const RuntimeOptions &options,
+    const TimeTable &timetable);
+
 #endif // SEARCH_ORCHESTRATOR_H

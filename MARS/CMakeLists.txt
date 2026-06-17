@@ -12,6 +12,7 @@ set(PHASTAR_COMMON_INCLUDE_DIRS
 
 set(PHASTAR_SHARED_RELOPUSH_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ReloPush/base64.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BinaryString.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/DubinsTools.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FromOMPL.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/PathPlanningTools.cpp
@@ -101,15 +102,62 @@ add_executable(phastar_unit_tests
 phastar_apply_common_settings(phastar_unit_tests)
 add_dependencies(phastar_unit_tests phastar_push_demo)
 
+add_executable(test_robot_controllers
+    tests/test_robot_controllers.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+phastar_apply_common_settings(test_robot_controllers)
+target_link_libraries(test_robot_controllers PRIVATE Threads::Threads)
+phastar_link_zeromq(test_robot_controllers)
+
+add_executable(test_mpc_full_loop
+    tests/test_mpc_full_loop.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+phastar_apply_common_settings(test_mpc_full_loop)
+target_link_libraries(test_mpc_full_loop PRIVATE Threads::Threads)
+phastar_link_zeromq(test_mpc_full_loop)
+add_dependencies(test_mpc_full_loop mpc_controller)
+
 if(BUILD_TESTING)
     add_test(NAME phastar_unit_tests COMMAND phastar_unit_tests)
-endif()
+    add_test(NAME test_robot_controllers COMMAND test_robot_controllers)
+    add_test(NAME test_mpc_full_loop COMMAND test_mpc_full_loop)
+ENDIF()
 
-install(TARGETS
+INSTALL(TARGETS
     phastar_demo
     phastar_push_demo
     phastar_push_replay_sequence
     phastar_unit_tests
+    test_robot_controllers
+    test_mpc_full_loop
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

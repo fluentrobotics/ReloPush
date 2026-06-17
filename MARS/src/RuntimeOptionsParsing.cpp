@@ -10,7 +10,7 @@
 
 std::string default_sequence_path()
 {
-  return relopush_sequence_path("ReloPush-BOSS_12_objects.txt", 4);
+  return relopush_sequence_path("ReloPush-BOSS_12_objects.txt", 10);
 }
 
 RuntimeOptions parse_runtime_options(int argc, char **argv)
@@ -355,6 +355,58 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
              arg == "--integrated")
     {
       options.integrated_mode = true;
+    }
+    else if (arg == "--run-on-robots" ||
+             arg == "--run-on-robot")
+    {
+      options.run_on_robots = true;
+    }
+    else if (arg.rfind("--robot-port-start=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--robot-port-start=").size());
+      try
+      {
+        options.robot_controller_port_start = std::stoi(value);
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --robot-port-start value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--mpc-vesc-port-start=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--mpc-vesc-port-start=").size());
+      try
+      {
+        options.mpc_vesc_port_start = std::stoi(value);
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --mpc-vesc-port-start value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--mpc-localization-port-start=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--mpc-localization-port-start=").size());
+      try
+      {
+        options.mpc_localization_port_start = std::stoi(value);
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --mpc-localization-port-start value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--mpc-vesc-ip=", 0) == 0)
+    {
+      options.mpc_vesc_ip = arg.substr(std::string("--mpc-vesc-ip=").size());
+    }
+    else if (arg.rfind("--mpc-localization-ip=", 0) == 0)
+    {
+      options.mpc_localization_ip = arg.substr(std::string("--mpc-localization-ip=").size());
     }
     else if (arg.rfind("--handoff-endpoint=", 0) == 0)
     {

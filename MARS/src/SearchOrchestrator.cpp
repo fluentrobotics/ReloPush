@@ -9,6 +9,16 @@
 #include <CsvLogging.h>
 #include <ReloPushSetup.h>
 #include <config.h>
+#include <ReloPush/base64.h>
+#include <ReloPush/trajectory.hpp>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
+#include <thread>
 
 #include <iostream>
 #include <iomanip>
@@ -22,6 +32,54 @@
 
 namespace
 {
+static std::vector<pid_t> g_mpc_pids;
+
+void cleanup_mpc_processes()
+{
+  for (pid_t pid : g_mpc_pids)
+  {
+    if (pid > 0)
+    {
+      std::cout << "[Robots] Cleaning up MPC process PID " << pid << std::endl;
+      kill(pid, SIGINT);
+      int status;
+      waitpid(pid, &status, 0);
+    }
+  }
+  g_mpc_pids.clear();
+}
+
+void mpc_signal_handler(int signum)
+{
+  std::cout << "\n[Robots] Interrupted. Cleaning up MPC processes..." << std::endl;
+  cleanup_mpc_processes();
+  signal(signum, SIG_DFL);
+  raise(signum);
+}
+
+std::string find_mpc_executable()
+{
+  std::vector<std::string> paths = {
+      "./mpc_controller",
+      "./MPCController/mpc_controller",
+      "../MPCController/mpc_controller",
+      "../../MPCController/mpc_controller",
+      "./build/MPCController/mpc_controller",
+      "../build/MPCController/mpc_controller",
+      "/Users/jeeho/InSync/UMich/Fluent_ws/ReloPush_ws/ReloPush_src/build/MPCController/mpc_controller",
+      "/Users/jeeho/InSync/UMich/Fluent_ws/ReloPush_ws/ReloPush_src/build-release/MPCController/mpc_controller"
+  };
+
+  for (const auto &path : paths)
+  {
+    if (access(path.c_str(), X_OK) == 0)
+    {
+      return path;
+    }
+  }
+  return "";
+}
+
 std::string instance_record_csv_path(const ReloPush::HandoffInstanceInfo &instance_info)
 {
   const std::string filename =
@@ -160,6 +218,11 @@ int run_greedy_only_pipeline(
       std::cerr << "[Integration] Failed to send completion reply to ReloPush: "
                 << ex.what() << std::endl;
     }
+  }
+
+  if (options.run_on_robots && greedy_summary.all_tasks_succeeded)
+  {
+    run_on_robots_pipeline(options, greedy_executed.timetable);
   }
 
   if (options.enable_visualization)
@@ -880,6 +943,11 @@ int finalize_and_replay_best(
     }
   }
 
+  if (options.run_on_robots && best_executed->summary.all_tasks_succeeded)
+  {
+    run_on_robots_pipeline(options, best_executed->timetable);
+  }
+
   if (options.enable_visualization)
   {
     show_results(argc, argv, best_executed->timetable, best_executed->entities,
@@ -887,4 +955,230 @@ int finalize_and_replay_best(
   }
 
   return best_executed->summary.all_tasks_succeeded ? 0 : 1;
+}
+
+void run_on_robots_pipeline(
+    const RuntimeOptions &options,
+    const TimeTable &timetable)
+{
+  std::cout << "\n========================================================" << std::endl;
+  std::cout << "[Robots] Running planned trajectories on physical/simulated robots..." << std::endl;
+  std::cout << "========================================================\n" << std::endl;
+
+  // 1. Collect all robot entities from the timetable
+  std::vector<EntityMeta *> robot_entities;
+  for (const auto &[entity, path_map] : timetable.get_database())
+  {
+    if (entity && entity->type == EntityType::ROBOT)
+    {
+      robot_entities.push_back(entity);
+    }
+  }
+
+  // Sort to keep order deterministic
+  std::sort(robot_entities.begin(), robot_entities.end(), [](EntityMeta *a, EntityMeta *b) {
+    return a->name < b->name;
+  });
+
+  if (robot_entities.empty())
+  {
+    std::cout << "[Robots] No robots found in timetable. Exiting robot pipeline." << std::endl;
+    return;
+  }
+
+  const auto &spans = timetable.get_trajectory_spans();
+  std::vector<std::unique_ptr<zeromp_object>> sockets;
+  sockets.reserve(robot_entities.size());
+
+  // Helper lambda to determine if absolute time t is transfer (pushing) mode
+  auto is_pushing_at_time = [&](EntityMeta *robot, double t) {
+    for (const auto &span : spans)
+    {
+      if (span.entity == robot && span.is_transfer)
+      {
+        if (t >= (span.start_time - 1e-4) && t <= (span.end_time + 1e-4))
+        {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // Helper to extract port number
+  auto get_robot_port = [&](const std::string &name, int default_index) {
+    std::string num_str = "";
+    for (int i = static_cast<int>(name.size()) - 1; i >= 0; --i)
+    {
+      if (std::isdigit(name[i]))
+      {
+        num_str = name[i] + num_str;
+      }
+      else
+      {
+        break;
+      }
+    }
+    if (!num_str.empty())
+    {
+      try
+      {
+        return options.robot_controller_port_start + std::stoi(num_str);
+      }
+      catch (...) {}
+    }
+    return options.robot_controller_port_start + default_index;
+  };
+
+  // Phase 0: Spawn MPC Controller Subprocesses
+  if (options.spawn_mpc)
+  {
+    std::string exec_path = find_mpc_executable();
+    if (exec_path.empty())
+    {
+      std::cerr << "[Robots] ERROR: Could not find mpc_controller executable!" << std::endl;
+      return;
+    }
+    std::cout << "[Robots] Found MPC executable at: " << exec_path << std::endl;
+
+    // Register exit cleanup and signal handlers for parent process
+    std::atexit(cleanup_mpc_processes);
+    std::signal(SIGINT, mpc_signal_handler);
+    std::signal(SIGTERM, mpc_signal_handler);
+
+    for (size_t i = 0; i < robot_entities.size(); ++i)
+    {
+      EntityMeta *robot = robot_entities[i];
+      int port = get_robot_port(robot->name, static_cast<int>(i + 1));
+      int idx = port - options.robot_controller_port_start;
+      std::string vesc_endpoint = "tcp://" + options.mpc_vesc_ip + ":" + std::to_string(options.mpc_vesc_port_start + idx);
+      std::string localization_endpoint = "tcp://" + options.mpc_localization_ip + ":" + std::to_string(options.mpc_localization_port_start + idx);
+
+      pid_t pid = fork();
+      if (pid < 0)
+      {
+        std::cerr << "[Robots] Failed to fork process for " << robot->name << std::endl;
+        cleanup_mpc_processes();
+        return;
+      }
+      else if (pid == 0)
+      {
+        // Child process
+        std::vector<std::string> args = {
+            exec_path,
+            "--robot", robot->name,
+            "--port", std::to_string(port),
+            "--vesc-endpoint", vesc_endpoint,
+            "--localization-endpoint", localization_endpoint
+        };
+
+        std::vector<char*> c_args;
+        c_args.reserve(args.size() + 1);
+        for (const auto& arg : args)
+        {
+          c_args.push_back(const_cast<char*>(arg.c_str()));
+        }
+        c_args.push_back(nullptr);
+
+        execvp(c_args[0], c_args.data());
+        std::cerr << "[Robots] Failed to execute " << exec_path << " for " << robot->name << ": " << strerror(errno) << std::endl;
+        std::exit(1);
+      }
+      else
+      {
+        std::cout << "[Robots] Spawned mpc_controller for " << robot->name << " with PID " << pid << std::endl;
+        g_mpc_pids.push_back(pid);
+      }
+    }
+
+    // Give subprocesses a short time to spin up and bind their ZeroMQ REP ports
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  }
+
+  // Phase 1: Connect and upload trajectories
+  for (size_t i = 0; i < robot_entities.size(); ++i)
+  {
+    EntityMeta *robot = robot_entities[i];
+    RobotMeta *robot_meta = dynamic_cast<RobotMeta *>(robot);
+    double speed_transit = robot_meta ? robot_meta->speed_transit : 0.2;
+    double speed_transfer = robot_meta ? robot_meta->speed_transfer : 0.15;
+
+    int port = get_robot_port(robot->name, static_cast<int>(i + 1));
+    std::string endpoint = "tcp://127.0.0.1:" + std::to_string(port);
+
+    std::cout << "[Robots] Extracting trajectory for " << robot->name << "..." << std::endl;
+
+    ReloPush::trajectory rp_traj;
+    rp_traj.time_zero = 0.0f;
+
+    const auto &path_map = timetable.get_database().at(robot);
+    if (!path_map.empty())
+    {
+      double first_t = path_map.begin()->first;
+      for (const auto &[t, pose] : path_map)
+      {
+        float rel_t = static_cast<float>(t - first_t);
+        bool is_push = is_pushing_at_time(robot, t);
+        float ref_vel = static_cast<float>(is_push ? speed_transfer : speed_transit);
+
+        ReloPush::trajectory_elem elem(
+            static_cast<float>(pose.x),
+            static_cast<float>(pose.y),
+            static_cast<float>(pose.yaw),
+            ref_vel,
+            rel_t,
+            is_push
+        );
+        rp_traj.append_waypoint(elem);
+      }
+    }
+
+    std::string serialized = rp_traj.serialize();
+    std::string encoded = base64_encode(serialized);
+
+    std::cout << "[Robots] Connecting to " << robot->name << " at " << endpoint << "..." << std::endl;
+    auto socket_obj = std::make_unique<zeromp_object>();
+    socket_obj->connect(endpoint);
+
+    std::cout << "[Robots] Uploading trajectory (" << rp_traj.trajectory_points->size()
+              << " waypoints) to " << robot->name << "..." << std::endl;
+    
+    std::string reply = socket_obj->send_and_wait(encoded);
+    std::cout << "[Robots] " << robot->name << " upload acknowledgement: " << reply << std::endl;
+
+    sockets.push_back(std::move(socket_obj));
+  }
+
+  // Phase 2: Broadcast START signal synchronously
+  std::cout << "\n[Robots] All trajectories uploaded. Initiating synchronized start..." << std::endl;
+  for (size_t i = 0; i < sockets.size(); ++i)
+  {
+    std::cout << "[Robots] Sending START to " << robot_entities[i]->name << "..." << std::endl;
+    sockets[i]->send("START");
+  }
+
+  // Wait for all start confirmations
+  for (size_t i = 0; i < sockets.size(); ++i)
+  {
+    std::string reply = sockets[i]->wait_for_response();
+    std::cout << "[Robots] " << robot_entities[i]->name << " execution confirmation: " << reply << std::endl;
+  }
+
+  std::cout << "\n[Robots] Synchronized motion started successfully on all robots.\n" << std::endl;
+
+  if (options.spawn_mpc)
+  {
+    // Phase 3: Wait for all MPC controller processes to complete trajectories
+    std::cout << "[Robots] Waiting for MPC controller processes to complete trajectories..." << std::endl;
+    for (pid_t pid : g_mpc_pids)
+    {
+      if (pid > 0)
+      {
+        int status;
+        waitpid(pid, &status, 0);
+      }
+    }
+    g_mpc_pids.clear();
+    std::cout << "[Robots] All MPC controller processes have finished successfully.\n" << std::endl;
+  }
 }

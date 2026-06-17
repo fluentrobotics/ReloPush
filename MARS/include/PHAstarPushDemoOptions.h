@@ -123,7 +123,7 @@ inline const char *transit_planner_applicability_name(
 struct RuntimeOptions
 {
     // visualization options
-    bool debug_vis = true;
+    bool debug_vis = false;
     bool visualize_relopush_plan = false;
     bool enable_visualization = true; // show results
     bool print_planning_status = true;
@@ -254,4 +254,11 @@ struct RuntimeOptions
     bool integrated_mode = false;
     std::string handoff_endpoint = "tcp://127.0.0.1:5566";
     std::string input_sequence_path;
+    bool run_on_robots = false;
+    int robot_controller_port_start = 11110;
+    int mpc_vesc_port_start = 3160;
+    int mpc_localization_port_start = 3260;
+    std::string mpc_vesc_ip = "127.0.0.1";
+    std::string mpc_localization_ip = "127.0.0.1";
+    bool spawn_mpc = true;
 };
