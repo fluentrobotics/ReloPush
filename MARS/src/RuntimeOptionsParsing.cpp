@@ -92,6 +92,14 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     {
       options.enable_order_constraint_learning = false;
     }
+    else if (arg == "--early-abort")
+    {
+      options.early_abort_eval_on_failure = true;
+    }
+    else if (arg == "--no-early-abort")
+    {
+      options.early_abort_eval_on_failure = false;
+    }
     else if (arg == "--search-mode=lns" || arg == "--lns")
     {
       options.search_improvement_mode = SearchImprovementMode::LNS;
@@ -335,6 +343,19 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
       catch (...)
       {
         std::cerr << "[Warn] Invalid --lns-iters value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-iters=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-iters=").size());
+      try
+      {
+        options.dqn_iterations = std::max(1, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-iters value: '" << value
                   << "'. Keeping default." << std::endl;
       }
     }

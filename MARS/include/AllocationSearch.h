@@ -80,7 +80,8 @@ ExecutedScenario execute_allocation_scenario(
     const AllocationScenarioPlan &plan,
     const std::string &label,
     std::uint32_t parking_seed,
-    bool verbose = true);
+    bool verbose = true,
+    bool abort_on_first_failure = false);
 
 std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
     const std::vector<FinalAllocation> &loaded_sequence,

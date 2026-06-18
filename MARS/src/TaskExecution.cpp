@@ -1510,7 +1510,8 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-    const RuntimeOptions &options)
+    const RuntimeOptions &options,
+    bool abort_on_first_failure)
 {
   std::vector<TaskCsvRow> task_rows;
   std::vector<TransferContactWindow> transfer_windows;
@@ -1523,7 +1524,16 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
         task, task_counter, all_robots, timetable, entities, params,
         options,
         transfer_windows);
+    const bool failed = row.status != "SUCCESS";
     task_rows.push_back(std::move(row));
+
+    // Once any task fails, the whole plan is infeasible (makespan = inf) and
+    // will be rejected by the search, so there is no value in planning the
+    // remaining tasks. Aborting here avoids the expensive fallback transit
+    // searches those tasks would otherwise trigger. The first failed task is
+    // still recorded, so order-constraint learning is unaffected.
+    if (abort_on_first_failure && failed)
+      break;
   }
 
   return task_rows;

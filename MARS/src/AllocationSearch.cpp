@@ -505,7 +505,8 @@ ExecutedScenario execute_allocation_scenario(
     const AllocationScenarioPlan &plan,
     const std::string &label,
     std::uint32_t parking_seed,
-    bool verbose)
+    bool verbose,
+    bool abort_on_first_failure)
 {
   ScopedStreamSilencer silencer(!verbose && !options.print_planning_status);
 
@@ -519,7 +520,7 @@ ExecutedScenario execute_allocation_scenario(
                                     all_robots, plan);
   auto task_rows = execute_task_allocation_loop(
       tasks, all_robots, executed.timetable, executed.entities, executed.params,
-      options);
+      options, abort_on_first_failure);
 
   executed.summary = summarize_run(label, plan, parking_seed, task_rows,
                                    executed.timetable);
@@ -545,7 +546,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
     {
       auto executed = execute_allocation_scenario(
           loaded_sequence, options, requests[i].plan, requests[i].label,
-          requests[i].parking_seed, false);
+          requests[i].parking_seed, false, options.early_abort_eval_on_failure);
       results[i].summary = std::move(executed.summary);
     }
     return results;
@@ -571,7 +572,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
 
             auto executed = execute_allocation_scenario(
                 loaded_sequence, worker_options, requests[idx].plan, requests[idx].label,
-                requests[idx].parking_seed, true);
+                requests[idx].parking_seed, true, worker_options.early_abort_eval_on_failure);
             results[idx].summary = std::move(executed.summary);
           }
         });
@@ -1922,7 +1923,8 @@ ExecutedScenario repair_destroyed_tasks_with_sampled_insertion(
 
     auto repaired = execute_allocation_scenario(
         loaded_sequence, lns_options, reassigned_plan, label,
-        parking_seed, disable_local_silencer);
+        parking_seed, disable_local_silencer,
+        lns_options.early_abort_eval_on_failure);
     repaired.summary.label = label;
 
     for (int refine_iter = 0;
@@ -1948,7 +1950,8 @@ ExecutedScenario repair_destroyed_tasks_with_sampled_insertion(
 
       auto refined = execute_allocation_scenario(
           loaded_sequence, lns_options, candidate_plan, label,
-          parking_seed, disable_local_silencer);
+          parking_seed, disable_local_silencer,
+          lns_options.early_abort_eval_on_failure);
       if (is_preferred_search_result(refined.summary, repaired.summary))
       {
         repaired = std::move(refined);
@@ -2062,7 +2065,8 @@ ExecutedScenario repair_destroyed_tasks_with_sampled_insertion(
 
   auto repaired = execute_allocation_scenario(
       loaded_sequence, lns_options, partial_plan, label,
-      parking_seed, disable_local_silencer);
+      parking_seed, disable_local_silencer,
+      lns_options.early_abort_eval_on_failure);
   repaired.summary.label = label;
 
   for (int refine_iter = 0; refine_iter < 2 && !destroyed_tasks.empty(); ++refine_iter)
@@ -2119,7 +2123,8 @@ ExecutedScenario repair_destroyed_tasks_with_sampled_insertion(
 
     auto refined = execute_allocation_scenario(
         loaded_sequence, lns_options, candidate_plan, label,
-        parking_seed, disable_local_silencer);
+        parking_seed, disable_local_silencer,
+        lns_options.early_abort_eval_on_failure);
     if (is_preferred_search_result(refined.summary, repaired.summary))
     {
       repaired = std::move(refined);

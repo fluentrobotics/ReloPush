@@ -134,6 +134,7 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-    const RuntimeOptions &options);
+    const RuntimeOptions &options,
+    bool abort_on_first_failure = false);
 
 #endif // TASK_EXECUTION_H

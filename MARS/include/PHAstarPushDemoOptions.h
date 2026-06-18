@@ -203,14 +203,22 @@ struct RuntimeOptions
     bool lns_reassign_only = false;            // false: lns-task-reassign default
 
     // Allocation-improvement method. LNS (default) keeps the destroy/repair
-    // search; DQN uses the per-instance online Q-learning allocator. The DQN
-    // path reuses lns_iterations (budget) and lns_threads (batch size).
+    // search; DQN uses the per-instance online Q-learning allocator.
     SearchImprovementMode search_improvement_mode = SearchImprovementMode::LNS;
     double dqn_learning_rate = 0.05;
-    double dqn_epsilon_start = 0.9;
-    double dqn_epsilon_end = 0.1;
+    // DQN iteration budget, separate from lns_iterations. DQN needs a warmup
+    // of ~15-20 iterations before the Q-policy becomes useful.
+    int dqn_iterations = 40;
+    double dqn_epsilon_start = 0.3;
+    double dqn_epsilon_end = 0.02;
     int dqn_grad_steps_per_iter = 64;
     int dqn_minibatch_size = 32;
+
+    // During allocation search, abort a candidate plan's evaluation as soon as
+    // one task fails (the plan is already infeasible, so planning the remaining
+    // tasks only wastes time on fallback transit searches). Does not affect the
+    // final best-scenario replay, which always runs a full execution.
+    bool early_abort_eval_on_failure = true;
 
     std::vector<TransitPlannerStep> initial_transit_methods = {
         {TransitPlannerMethod::PrimaryHybridAStar,

@@ -346,7 +346,7 @@ SequenceSearchOutcome run_dqn_search(
   outcome.best_partial = make_placeholder_summary(kDqnLabel, greedy_plan);
 
   const std::size_t task_count = loaded_sequence.size();
-  const int total_iterations = options.lns_iterations;
+  const int total_iterations = options.dqn_iterations;
 
   if (total_iterations <= 0 || !seed_summary.all_tasks_succeeded ||
       task_count <= 1 || robot_names.empty() ||

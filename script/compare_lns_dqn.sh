@@ -24,10 +24,10 @@ SEED="${SEED:-1}"
 ITERS="${ITERS:-10}"
 THREADS="${THREADS:-5}"
 INSTANCE="${INSTANCE:-ReloPush-BOSS_12_objects.txt}"
-# DQN hyperparameters left at program defaults; recorded for provenance.
-DQN_EPS_START="0.9"
-DQN_EPS_END="0.1"
-DQN_LR="0.05"
+# DQN hyperparameters (override via environment); recorded for provenance.
+DQN_EPS_START="${DQN_EPS_START:-0.3}"
+DQN_EPS_END="${DQN_EPS_END:-0.02}"
+DQN_LR="${DQN_LR:-0.05}"
 
 # --- Paths ------------------------------------------------------------------
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -95,8 +95,13 @@ run_one() {
   local meta="# META mode=${mode} index=${idx} instance=${INSTANCE} iterations=${ITERS} threads=${THREADS} seed=${SEED} dqn_eps_start=${DQN_EPS_START} dqn_eps_end=${DQN_EPS_END} dqn_lr=${DQN_LR} timestamp=$(now_utc)"
 
   echo "$meta" > "$log"
+  local dqn_extra=()
+  if [[ "$mode" == "dqn" ]]; then
+    dqn_extra=( --dqn-epsilon-start="$DQN_EPS_START" --dqn-epsilon-end="$DQN_EPS_END" )
+  fi
   /usr/bin/time -p "$BIN" "--${mode}" --no-visualization \
     --random-seed="$SEED" --lns-iters="$ITERS" --lns-threads="$THREADS" \
+    ${dqn_extra[@]+"${dqn_extra[@]}"} \
     --input-sequence="$seqfile" >> "$log" 2>&1
 
   # Preserve the executed best plan for later visual replay.

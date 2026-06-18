@@ -102,11 +102,15 @@ int phastar_push_demo_main(int argc, char **argv)
     }
 
     // Check if greedy-only mode (no search)
+    const int improvement_iters =
+        (runtime_options.search_improvement_mode == SearchImprovementMode::DQN)
+            ? runtime_options.dqn_iterations
+            : runtime_options.lns_iterations;
     const bool greedy_only_run =
         runtime_options.assignment_search_iterations <= 0 &&
         runtime_options.local_sequence_search_iterations <= 0 &&
         runtime_options.shuffle_sequence_search_iterations <= 0 &&
-        runtime_options.lns_iterations <= 0;
+        improvement_iters <= 0;
 
     if (greedy_only_run)
     {
