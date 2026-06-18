@@ -92,6 +92,80 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     {
       options.enable_order_constraint_learning = false;
     }
+    else if (arg == "--search-mode=lns" || arg == "--lns")
+    {
+      options.search_improvement_mode = SearchImprovementMode::LNS;
+    }
+    else if (arg == "--search-mode=dqn" || arg == "--dqn")
+    {
+      options.search_improvement_mode = SearchImprovementMode::DQN;
+    }
+    else if (arg.rfind("--dqn-learning-rate=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-learning-rate=").size());
+      try
+      {
+        options.dqn_learning_rate = std::max(1e-6, std::stod(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-learning-rate value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-epsilon-start=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-epsilon-start=").size());
+      try
+      {
+        options.dqn_epsilon_start =
+            std::min(1.0, std::max(0.0, std::stod(value)));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-epsilon-start value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-epsilon-end=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-epsilon-end=").size());
+      try
+      {
+        options.dqn_epsilon_end = std::min(1.0, std::max(0.0, std::stod(value)));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-epsilon-end value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-grad-steps=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-grad-steps=").size());
+      try
+      {
+        options.dqn_grad_steps_per_iter = std::max(1, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-grad-steps value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-minibatch=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-minibatch=").size());
+      try
+      {
+        options.dqn_minibatch_size = std::max(1, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-minibatch value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
     else if (arg.rfind("--random-seed=", 0) == 0)
     {
       std::string seed_text = arg.substr(std::string("--random-seed=").size());

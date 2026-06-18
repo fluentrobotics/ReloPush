@@ -19,5 +19,6 @@ fi
 # Loop from 0 to 99
 for i in {0..99}
 do
-    ../build/Release/ReloPush "$FILENAME" "$i" "$OPT"
+    #../build/Release/ReloPush "$FILENAME" "$i" "$OPT"
+    build/ReloPush-BOSS "$FILENAME" "$i" "f"
 done

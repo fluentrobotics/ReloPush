@@ -15,6 +15,15 @@ enum class ParkingCandidateMode
     REVERSE_RECENT_SHORTER,
 };
 
+// Method used to improve the greedy allocation. LNS keeps the existing
+// destroy/repair search; DQN replaces it with the per-instance online
+// Q-learning allocator (run_dqn_search).
+enum class SearchImprovementMode
+{
+    LNS,
+    DQN,
+};
+
 enum class TransitPlannerMethod
 {
     PrimaryHybridAStar,
@@ -192,6 +201,16 @@ struct RuntimeOptions
     int robot_count = 3;                       // capped by the predefined MARS robot set
     bool enable_lns_fine_segment_retry = true; // for LNS
     bool lns_reassign_only = false;            // false: lns-task-reassign default
+
+    // Allocation-improvement method. LNS (default) keeps the destroy/repair
+    // search; DQN uses the per-instance online Q-learning allocator. The DQN
+    // path reuses lns_iterations (budget) and lns_threads (batch size).
+    SearchImprovementMode search_improvement_mode = SearchImprovementMode::LNS;
+    double dqn_learning_rate = 0.05;
+    double dqn_epsilon_start = 0.9;
+    double dqn_epsilon_end = 0.1;
+    int dqn_grad_steps_per_iter = 64;
+    int dqn_minibatch_size = 32;
 
     std::vector<TransitPlannerStep> initial_transit_methods = {
         {TransitPlannerMethod::PrimaryHybridAStar,

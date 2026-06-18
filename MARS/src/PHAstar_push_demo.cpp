@@ -28,6 +28,7 @@
 #include <RuntimeOptionsParsing.h>
 #include <DataLoading.h>
 #include <SearchOrchestrator.h>
+#include <DqnAllocationSearch.h>
 #include <QFont>
 #include <QImage>
 #include <QPainterPath>
@@ -209,14 +210,22 @@ int phastar_push_demo_main(int argc, char **argv)
         lns_seed_summary = &full_shuffle_outcome.best_feasible;
     }
 
-    // Run adaptive LNS
+    // Run allocation-improvement search (LNS by default, or DQN online search).
     std::mt19937 lns_rng(
         mix_seed(runtime_options.base_random_seed, 0x1EA5E123u));
-    auto lns_outcome = run_adaptive_lns_search(
-        loadedSequence, runtime_options, *lns_seed_summary,
-        greedy_plan, robot_names, lns_batch_size, lns_rng,
-        disabled_order_constraints,
-        &lns_enforced_constraints);
+    const bool use_dqn_search =
+        runtime_options.search_improvement_mode == SearchImprovementMode::DQN;
+    auto lns_outcome = use_dqn_search
+        ? run_dqn_search(
+              loadedSequence, runtime_options, *lns_seed_summary,
+              greedy_plan, robot_names, lns_batch_size, lns_rng,
+              disabled_order_constraints,
+              &lns_enforced_constraints)
+        : run_adaptive_lns_search(
+              loadedSequence, runtime_options, *lns_seed_summary,
+              greedy_plan, robot_names, lns_batch_size, lns_rng,
+              disabled_order_constraints,
+              &lns_enforced_constraints);
 
     // Print order constraint learning stats
     if (runtime_options.enable_order_constraint_learning)
@@ -227,7 +236,7 @@ int phastar_push_demo_main(int argc, char **argv)
         std::cout << "[Learn][Order] " << sequence_label
                   << " enforced precedence constraints: "
                   << full_shuffle_enforced_constraints << std::endl;
-        std::cout << "[Learn][Order] lns-adaptive"
+        std::cout << "[Learn][Order] " << (use_dqn_search ? "dqn-online" : "lns-adaptive")
                   << " enforced precedence constraints: "
                   << lns_enforced_constraints << std::endl;
     }
@@ -257,7 +266,7 @@ int phastar_push_demo_main(int argc, char **argv)
                                 full_shuffle_outcome.has_partial,
                                 full_shuffle_outcome.best_partial,
                                 greedy_summary.makespan);
-    print_search_method_summary("lns-adaptive",
+    print_search_method_summary(use_dqn_search ? "dqn-online" : "lns-adaptive",
                                 lns_outcome.has_feasible,
                                 lns_outcome.best_feasible,
                                 lns_outcome.has_partial,

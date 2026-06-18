@@ -69,6 +69,7 @@ add_executable(phastar_push_demo
     src/RuntimeOptionsParsing.cpp
     src/DataLoading.cpp
     src/SearchOrchestrator.cpp
+    src/DqnAllocationSearch.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
