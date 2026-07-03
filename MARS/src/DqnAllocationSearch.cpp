@@ -8,6 +8,7 @@
  ******************************************************************/
 
 #include <DqnAllocationSearch.h>
+#include <DqnQModel.h>
 #include <AllocationSearch.h>
 
 #include <algorithm>
@@ -152,22 +153,6 @@ std::vector<double> make_feature_vector(
   return phi;
 }
 
-// Linear Q-function: Q(s,a) = w . phi(s,a).
-struct LinearQModel
-{
-  std::vector<double> weights;
-
-  explicit LinearQModel(std::size_t dim) : weights(dim, 0.0) {}
-
-  double predict(const std::vector<double> &phi) const
-  {
-    double q = 0.0;
-    for (std::size_t i = 0; i < weights.size() && i < phi.size(); ++i)
-      q += weights[i] * phi[i];
-    return q;
-  }
-};
-
 struct Transition
 {
   std::vector<double> phi;
@@ -177,7 +162,7 @@ struct Transition
 // Construct one task order with an epsilon-greedy linear Q-policy. Candidates
 // that would violate enforced precedence are masked out.
 std::vector<std::size_t> construct_order(
-    const LinearQModel &model,
+    const QModel &model,
     std::size_t task_count,
     const std::vector<StaticTaskFeatures> &static_feats,
     const LearnedOrderConstraints &constraints,
@@ -288,10 +273,12 @@ void ingest_rollout(
   }
 }
 
-// Minibatch SGD regression of the linear Q toward stored returns (Huber-clipped
+// Minibatch SGD regression of the Q model toward stored returns (Huber-clipped
 // error + small L2). This is fitted-value regression onto Monte-Carlo returns.
+// For model.hidden == 0 (the default linear model) this reproduces the exact
+// arithmetic and rng draw order of the original hand-rolled linear update.
 void train_model(
-    LinearQModel &model,
+    QModel &model,
     const std::vector<Transition> &replay,
     double learning_rate,
     int grad_steps,
@@ -303,29 +290,20 @@ void train_model(
 
   constexpr double huber_delta = 1.0;
   constexpr double l2 = 1e-4;
-  const std::size_t dim = model.weights.size();
+  const std::size_t num_params = model.num_params();
   std::uniform_int_distribution<std::size_t> pick(0, replay.size() - 1);
   const std::size_t batch =
       std::min<std::size_t>(std::max(1, minibatch_size), replay.size());
 
   for (int step = 0; step < grad_steps; ++step)
   {
-    std::vector<double> grad(dim, 0.0);
+    std::vector<double> grad(num_params, 0.0);
     for (std::size_t b = 0; b < batch; ++b)
     {
       const Transition &tr = replay[pick(rng)];
-      double q = model.predict(tr.phi);
-      double err = q - tr.target;
-      // Huber gradient: clip the error magnitude.
-      double clipped = std::max(-huber_delta, std::min(huber_delta, err));
-      for (std::size_t i = 0; i < dim && i < tr.phi.size(); ++i)
-        grad[i] += clipped * tr.phi[i];
+      model.accumulate_grad(tr.phi, tr.target, huber_delta, grad);
     }
-    for (std::size_t i = 0; i < dim; ++i)
-    {
-      grad[i] = grad[i] / static_cast<double>(batch) + l2 * model.weights[i];
-      model.weights[i] -= learning_rate * grad[i];
-    }
+    model.apply_grad(grad, batch, learning_rate, l2);
   }
 }
 } // namespace
@@ -382,7 +360,7 @@ SequenceSearchOutcome run_dqn_search(
   AllocationRunSummary order_learning_reference = current;
 
   const auto static_feats = build_static_features(loaded_sequence);
-  LinearQModel model(kFeatDim);
+  QModel model(kFeatDim, static_cast<std::size_t>(options.dqn_hidden_units), rng);
   std::vector<Transition> replay;
 
   // Warm-start: treat the feasible seed order as a positive example.

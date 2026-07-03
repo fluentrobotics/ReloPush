@@ -1,4 +1,5 @@
 #include <PHAstar/PHAstar.h>
+#include <DqnQModel.h>
 
 #include <cmath>
 #include <cstring>
@@ -10,6 +11,7 @@
 #include <memory>
 #include <array>
 #include <cstdio>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -1131,6 +1133,147 @@ namespace
     return true;
   }
 
+  double huber_loss_for_test(double pred, double target, double huber_delta)
+  {
+    const double err = pred - target;
+    const double aerr = std::abs(err);
+    if (aerr <= huber_delta)
+      return 0.5 * err * err;
+    return huber_delta * (aerr - 0.5 * huber_delta);
+  }
+
+  // Central-difference gradient check for QModel::accumulate_grad against the
+  // Huber loss it is meant to implement, for both the linear (hidden==0) and
+  // 1-hidden-layer MLP (hidden>0) configurations. huber_delta is set huge so
+  // the loss stays a smooth quadratic-in-error function (no clip kink), which
+  // keeps the finite-difference comparison clean.
+  bool test_qmodel_gradient_check()
+  {
+    auto check_for_hidden = [](std::size_t dim, std::size_t hidden, unsigned seed) -> bool
+    {
+      std::mt19937 rng(seed);
+      QModel model(dim, hidden, rng);
+
+      // Nudge params off the (possibly all-zero) initialization so the check
+      // exercises the model away from a degenerate point.
+      std::uniform_real_distribution<double> param_dist(-0.5, 0.5);
+      std::vector<double> init_params = model.get_params();
+      for (auto &v : init_params)
+        v = param_dist(rng);
+      model.set_params(init_params);
+
+      std::uniform_real_distribution<double> x_dist(-1.0, 1.0);
+      std::vector<double> x(dim);
+      for (auto &v : x)
+        v = x_dist(rng);
+      const double target = x_dist(rng);
+
+      constexpr double huber_delta = 1e9;
+
+      std::vector<double> grad(model.num_params(), 0.0);
+      model.accumulate_grad(x, target, huber_delta, grad);
+
+      const std::vector<double> base_params = model.get_params();
+      constexpr double eps = 1e-6;
+      double max_rel_err = 0.0;
+      for (std::size_t p = 0; p < base_params.size(); ++p)
+      {
+        std::vector<double> perturbed = base_params;
+
+        perturbed[p] = base_params[p] + eps;
+        model.set_params(perturbed);
+        const double loss_plus =
+            huber_loss_for_test(model.predict(x), target, huber_delta);
+
+        perturbed[p] = base_params[p] - eps;
+        model.set_params(perturbed);
+        const double loss_minus =
+            huber_loss_for_test(model.predict(x), target, huber_delta);
+
+        model.set_params(base_params);
+
+        const double numeric_grad = (loss_plus - loss_minus) / (2.0 * eps);
+        const double denom = std::max(1.0, std::abs(numeric_grad));
+        const double rel_err = std::abs(numeric_grad - grad[p]) / denom;
+        max_rel_err = std::max(max_rel_err, rel_err);
+      }
+
+      if (max_rel_err >= 1e-4)
+      {
+        std::cerr << "    QModel gradient check failed for dim=" << dim
+                  << " hidden=" << hidden << ": max_rel_err=" << max_rel_err << "\n";
+        return false;
+      }
+      return true;
+    };
+
+    if (!check_for_hidden(5, 8, 42))
+      return false;
+    if (!check_for_hidden(5, 0, 43))
+      return false;
+    return true;
+  }
+
+  // Demonstrates that the 1-hidden-layer MLP can fit a nonlinear (XOR-like)
+  // target that a linear model could not, via repeated accumulate_grad +
+  // apply_grad minibatch updates.
+  bool test_qmodel_mlp_fits_nonlinear_target()
+  {
+    std::mt19937 rng(7);
+    QModel model(2, 8, rng);
+
+    struct Sample
+    {
+      double x0;
+      double x1;
+      double y;
+    };
+    const std::vector<Sample> data = {
+        {0.0, 0.0, -1.0},
+        {0.0, 1.0, 1.0},
+        {1.0, 0.0, 1.0},
+        {1.0, 1.0, -1.0},
+    };
+
+    auto mse = [&]()
+    {
+      double sum = 0.0;
+      for (const auto &s : data)
+      {
+        const double pred = model.predict({s.x0, s.x1});
+        const double err = pred - s.y;
+        sum += err * err;
+      }
+      return sum / static_cast<double>(data.size());
+    };
+
+    const double initial_mse = mse();
+
+    constexpr double lr = 0.05;
+    constexpr double huber_delta = 1e9; // effectively plain squared error here
+    constexpr int iterations = 2000;
+    for (int it = 0; it < iterations; ++it)
+    {
+      std::vector<double> grad(model.num_params(), 0.0);
+      for (const auto &s : data)
+        model.accumulate_grad({s.x0, s.x1}, s.y, huber_delta, grad);
+      model.apply_grad(grad, data.size(), lr, 0.0);
+    }
+
+    const double final_mse = mse();
+    std::cout << "    [QModel fit] initial MSE=" << initial_mse
+              << " final MSE=" << final_mse << "\n";
+
+    if (!(final_mse < 0.25 * initial_mse))
+    {
+      std::cerr << "    QModel MLP did not learn nonlinear XOR-like function: "
+                << "final MSE " << final_mse << " not < 25% of initial "
+                << initial_mse << "\n";
+      return false;
+    }
+    return true;
+  }
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -1175,6 +1318,8 @@ int main(int argc, char **argv)
        test_expand_safe_parking_mode_finds_feasible_candidate},
       {"Anchor-first contact segment regression",
        test_anchor_first_contact_segment_regression},
+      {"QModel gradient check (linear + MLP)", test_qmodel_gradient_check},
+      {"QModel MLP fits nonlinear target", test_qmodel_mlp_fits_nonlinear_target},
   };
 
   std::vector<std::pair<std::string, TestFn>> all_tests = tests;

@@ -174,6 +174,19 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << "'. Keeping default." << std::endl;
       }
     }
+    else if (arg.rfind("--dqn-hidden=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-hidden=").size());
+      try
+      {
+        options.dqn_hidden_units = std::max(0, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-hidden value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
     else if (arg.rfind("--random-seed=", 0) == 0)
     {
       std::string seed_text = arg.substr(std::string("--random-seed=").size());

@@ -213,6 +213,8 @@ struct RuntimeOptions
     double dqn_epsilon_end = 0.02;
     int dqn_grad_steps_per_iter = 64;
     int dqn_minibatch_size = 32;
+    // 0 = linear Q (default); >0 = 1-hidden-layer MLP with this many units.
+    int dqn_hidden_units = 0;
 
     // During allocation search, abort a candidate plan's evaluation as soon as
     // one task fails (the plan is already infeasible, so planning the remaining
