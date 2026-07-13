@@ -70,6 +70,9 @@ add_executable(phastar_push_demo
     src/DataLoading.cpp
     src/SearchOrchestrator.cpp
     src/DqnAllocationSearch.cpp
+    src/DqnFeaturesV2.cpp
+    src/TransitionLogger.cpp
+    src/GeometryExport.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
@@ -99,8 +102,27 @@ phastar_link_zeromq(phastar_push_replay_sequence)
 
 add_executable(phastar_unit_tests
     tests/phastar_unit_tests.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/DqnAllocationSearch.cpp
+    src/DqnFeaturesV2.cpp
+    src/TransitionLogger.cpp
+    src/GeometryExport.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
 phastar_apply_common_settings(phastar_unit_tests)
+target_link_libraries(phastar_unit_tests PRIVATE Threads::Threads)
+phastar_link_zeromq(phastar_unit_tests)
 add_dependencies(phastar_unit_tests phastar_push_demo)
 
 add_executable(test_robot_controllers

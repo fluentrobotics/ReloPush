@@ -4,6 +4,10 @@
 #include <PHAstarPushDemoTypes.h>
 #include <PHAstarPushDemoOptions.h>
 #include <ReloPush/TaskAllocation.hpp>
+#include <PHAstar/Entities.h>
+#include <DqnQModel.h>
+#include <DqnFeaturesV2.h>
+#include <TransitionLogger.h>
 
 #include <random>
 #include <string>
@@ -33,15 +37,40 @@
 //
 // Returns the same SequenceSearchOutcome type as run_adaptive_lns_search so the
 // orchestrator consumes it identically.
+// `robot_metas` (one entry per robot, homogeneous fleet) is only consulted by
+// the v2 feature path (options.dqn_feature_version >= 2) -- for geometric
+// extraction speeds and the forward schedule simulation's initial poses. The
+// legacy (v1) path never touches it.
 SequenceSearchOutcome run_dqn_search(
     const std::vector<FinalAllocation> &loaded_sequence,
     const RuntimeOptions &options,
     const AllocationRunSummary &seed_summary,
     const AllocationScenarioPlan &greedy_plan,
     const std::vector<std::string> &robot_names,
+    const std::vector<RobotMeta> &robot_metas,
     int batch_size,
     std::mt19937 &rng,
     const LearnedOrderConstraints &disabled_constraints,
     int *out_enforced_constraint_count);
+
+// Constructs one task order with the v2 epsilon-greedy policy (see
+// DqnAllocationSearch.cpp for the full design rationale). Exposed here
+// (rather than kept file-local) so it is directly unit-testable -- see
+// MARS/tests/phastar_unit_tests.cpp. `step_logs`, when non-null, is sized to
+// task_count and filled with every legal candidate's (task, phi, chosen)
+// entry at each step; passing nullptr (the default) is byte-for-byte
+// identical, including the RNG draw sequence, to omitting the parameter.
+std::vector<std::size_t> construct_order_v2(
+    const QModel &model,
+    std::size_t task_count,
+    const std::vector<DqnV2::TaskGeom> &geoms,
+    const DqnV2::PairwiseGeometry &geometry,
+    const LearnedOrderConstraints &constraints,
+    const std::vector<RobotMeta> &robot_metas,
+    double seed_makespan,
+    double epsilon,
+    const RuntimeOptions &options,
+    std::mt19937 &rng,
+    std::vector<std::vector<StepCandidateEntry>> *step_logs = nullptr);
 
 #endif // DQN_ALLOCATION_SEARCH_H

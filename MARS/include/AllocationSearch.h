@@ -236,6 +236,13 @@ std::vector<std::string> collect_robot_names(
     const std::vector<FinalAllocation> &loaded_sequence,
     const RuntimeOptions &options);
 
+// Same throwaway-environment pattern as collect_robot_names(), but harvests
+// full RobotMeta values (speeds, turning radii, size, initial pose) instead
+// of just names. Used by the DQN v2 feature path.
+std::vector<RobotMeta> collect_robot_metas(
+    const std::vector<FinalAllocation> &loaded_sequence,
+    const RuntimeOptions &options);
+
 AllocationRunSummary make_placeholder_summary(
     const std::string &label,
     const AllocationScenarioPlan &plan);

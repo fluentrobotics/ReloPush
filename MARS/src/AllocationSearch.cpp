@@ -2187,6 +2187,31 @@ std::vector<std::string> collect_robot_names(
   return robot_names;
 }
 
+std::vector<RobotMeta> collect_robot_metas(
+    const std::vector<FinalAllocation> &loaded_sequence,
+    const RuntimeOptions &options)
+{
+  ScopedStreamSilencer silencer(true);
+  Params params;
+  std::unordered_map<std::string, EntityMeta *> entities;
+  TimeTable timetable(0.5);
+  std::vector<RobotMeta *> all_robots;
+  initialize_environment(loaded_sequence, options,
+                         mix_seed(options.base_random_seed, 0x13579bdu),
+                         params, entities, timetable, all_robots, false);
+
+  std::vector<RobotMeta> metas;
+  metas.reserve(all_robots.size());
+  for (auto *robot : all_robots)
+  {
+    if (robot)
+      metas.push_back(*robot);
+  }
+
+  cleanup_entities(entities);
+  return metas;
+}
+
 AllocationRunSummary make_placeholder_summary(
     const std::string &label,
     const AllocationScenarioPlan &plan)

@@ -157,17 +157,17 @@ struct RuntimeOptions
     double default_robot_collision_inflation = 1.005;
     double retraction_distance = 0.11;
     int planner_expansion_threads = 1;
-    int max_search_iterations = 500; // 300;
+    int max_search_iterations = 250; // 300;
     bool robot_boundary_origin_only = true;
 
     // Fine segment options (for replanning)
-    int fine_segment_max_search_iterations = 1500; // 0
+    int fine_segment_max_search_iterations = 750; // 0
     double fine_segment_xy_resolution = 0.1;
     double fine_segment_yaw_resolution = 0.523598775598298873; // pi / 6
     double fine_segment_time_step = 1.6;
     double fine_segment_rs_step_size = 0.16;
     double fine_segment_collision_check_time_step = 0.05;
-    int contact_boundary_max_search_iterations = 1500; // 500
+    int contact_boundary_max_search_iterations = 750; // 500
     double contact_boundary_xy_resolution = 0.08;      // 0.08
     double contact_boundary_yaw_resolution = 0.235;    // 0.26; // 0.235
     double contact_boundary_time_step = 1.0;
@@ -215,6 +215,51 @@ struct RuntimeOptions
     int dqn_minibatch_size = 32;
     // 0 = linear Q (default); >0 = 1-hidden-layer MLP with this many units.
     int dqn_hidden_units = 0;
+    // Feature-set version for the DQN allocator. 1 = legacy 7-feature set
+    // (bit-identical to the original implementation). 2 = redesigned 9-dim
+    // feature vector + geometric precompute + forward schedule simulation +
+    // new masking rule + exploration shaping (see MARS/08dqn-feature-redesign.md).
+    int dqn_feature_version = 1;
+    // v2 only: fraction of the epsilon-random branch that follows the
+    // reference (seed) order's next pick instead of sampling uniformly.
+    double dqn_explore_ref_bias = 0.5;
+    // v2 only: a learned-precedence edge only hard-masks a candidate once its
+    // evidence count reaches this threshold; below it, it only feeds the
+    // learned_risk feature.
+    int dqn_learned_hard_evidence = 3;
+    // v2 only: when non-empty, appends one CSV row per legal candidate at
+    // every construction step to this path (see MARS/09rl-pretrained-study-plan.md
+    // section 3.1). Empty = disabled (default).
+    std::string dqn_log_transitions_path;
+
+    // Fine-tune mode (see MARS/09rl-pretrained-study-plan.md section 3.4):
+    // when non-empty, run_dqn_search loads pretrained weights from this path
+    // via QModel::load and, on success, uses the dqn_finetune_* hyperparameters
+    // below instead of the cold-start dqn_learning_rate/dqn_epsilon_* for the
+    // rest of the run. Empty = disabled (cold start, default).
+    std::string dqn_init_weights_path;
+    // Fine-tune learning rate: 1/5 of the cold-start dqn_learning_rate default
+    // (0.05), since a pretrained model already has useful weights and only
+    // needs small adjustments rather than starting from scratch.
+    double dqn_finetune_learning_rate = 0.01;
+    double dqn_finetune_epsilon_start = 0.1;
+    double dqn_finetune_epsilon_end = 0.02;
+
+    // When non-empty, skip search entirely and dump per-instance geometry
+    // (task paths, poses, workspace, robots) as JSON to this path (see
+    // MARS/09rl-pretrained-study-plan.md section 3.2). Empty = disabled.
+    std::string export_geometry_path;
+    // Number of arclength-resampled points per task reference path in the
+    // geometry export.
+    int geometry_export_k = 16;
+
+    // When non-empty, skip search entirely and execute this single, explicitly
+    // given task order (a comma-separated list of task indices, e.g.
+    // "0,1,2,3") through the real multi-robot executor, reporting its true
+    // makespan/feasibility. Used by external pipelines (e.g. a trained model)
+    // that construct a task order and need ground-truth evaluation rather than
+    // a proxy. Empty = disabled (default).
+    std::string fixed_order_path_or_list;
 
     // During allocation search, abort a candidate plan's evaluation as soon as
     // one task fails (the plan is already infeasible, so planning the remaining

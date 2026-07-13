@@ -29,6 +29,8 @@
 #include <DataLoading.h>
 #include <SearchOrchestrator.h>
 #include <DqnAllocationSearch.h>
+#include <TransitionLogger.h>
+#include <GeometryExport.h>
 #include <QFont>
 #include <QImage>
 #include <QPainterPath>
@@ -76,6 +78,121 @@ int phastar_push_demo_main(int argc, char **argv)
 
     const double relopush_single_robot_makespan =
         compute_relopush_single_robot_makespan(loadedSequence);
+
+    // Fixed-order evaluation mode: execute one explicitly-given task order
+    // through the real multi-robot executor with no search loop, and report
+    // its true makespan/feasibility. Used by external pipelines (e.g. a
+    // trained model) that construct a task order and need ground-truth
+    // evaluation rather than a proxy. Placed here (right after load_data and
+    // the (side-effecting -- see below) single-robot makespan computation,
+    // before the greedy baseline / robot_metas collection) since this mode
+    // needs neither of the latter.
+    //
+    // IMPORTANT: compute_relopush_single_robot_makespan() above must run
+    // before this block, even though this mode does not use its return
+    // value. It has a load-bearing side effect: EdgePath::toStatePath()
+    // (include/ReloPush/GraphData.hpp:27) returns a shared_ptr aliasing the
+    // *same* underlying path vector on every call, and
+    // compute_relopush_single_robot_makespan() (MARS/src/ReloPushSetup.cpp)
+    // does an in-place push_back onto that shared vector the first time each
+    // path is converted. The real executor (build_tasks_for_plan /
+    // execute_task_allocation_loop) reads the same shared path objects, so
+    // skipping this call here previously made --fixed-order evaluate a
+    // subtly different (unextended) path than every other mode, giving a
+    // makespan a few hundredths of a second off. Confirmed empirically:
+    // calling this line first is necessary and sufficient to make a fixed
+    // identity order reproduce the greedy path's makespan bit-for-bit.
+    if (!runtime_options.fixed_order_path_or_list.empty())
+    {
+        const std::size_t task_count = loadedSequence.size();
+        std::vector<std::size_t> fixed_order;
+        bool parse_ok = true;
+        std::string parse_error;
+
+        std::stringstream ss(runtime_options.fixed_order_path_or_list);
+        std::string token;
+        while (std::getline(ss, token, ','))
+        {
+            token.erase(std::remove_if(token.begin(), token.end(),
+                                       [](unsigned char ch)
+                                       { return std::isspace(ch); }),
+                        token.end());
+            if (token.empty())
+            {
+                continue;
+            }
+            try
+            {
+                std::size_t parsed_chars = 0;
+                unsigned long long value = std::stoull(token, &parsed_chars);
+                if (parsed_chars != token.size())
+                {
+                    throw std::invalid_argument("trailing characters");
+                }
+                fixed_order.push_back(static_cast<std::size_t>(value));
+            }
+            catch (const std::exception &)
+            {
+                parse_ok = false;
+                parse_error = "could not parse '" + token + "' as an integer index";
+                break;
+            }
+        }
+
+        if (parse_ok && fixed_order.size() != task_count)
+        {
+            parse_ok = false;
+            std::ostringstream oss;
+            oss << "wrong length: got " << fixed_order.size()
+                << " indices, expected " << task_count;
+            parse_error = oss.str();
+        }
+
+        if (parse_ok)
+        {
+            std::vector<bool> seen(task_count, false);
+            for (std::size_t idx : fixed_order)
+            {
+                if (idx >= task_count)
+                {
+                    parse_ok = false;
+                    std::ostringstream oss;
+                    oss << "out-of-range index " << idx << " (valid range is 0.."
+                        << (task_count - 1) << ")";
+                    parse_error = oss.str();
+                    break;
+                }
+                if (seen[idx])
+                {
+                    parse_ok = false;
+                    std::ostringstream oss;
+                    oss << "duplicate index " << idx;
+                    parse_error = oss.str();
+                    break;
+                }
+                seen[idx] = true;
+            }
+        }
+
+        if (!parse_ok)
+        {
+            std::cerr << "[FixedOrder] Invalid --fixed-order value '"
+                      << runtime_options.fixed_order_path_or_list << "': "
+                      << parse_error << std::endl;
+            return 2;
+        }
+
+        AllocationScenarioPlan plan;
+        plan.task_order = fixed_order;
+
+        ExecutedScenario result = execute_allocation_scenario(
+            loadedSequence, runtime_options, plan, "fixed-order",
+            /*parking_seed=*/1u, /*verbose=*/true);
+
+        print_comparison_line(result.summary, result.summary.makespan);
+
+        return result.summary.all_tasks_succeeded ? 0 : 1;
+    }
 
     DEBUG_VIS = runtime_options.debug_vis;
     // print_runtime_options(runtime_options);
@@ -141,6 +258,30 @@ int phastar_push_demo_main(int argc, char **argv)
 
     std::vector<std::string> robot_names = collect_robot_names(
         loadedSequence, runtime_options);
+    std::vector<RobotMeta> robot_metas = collect_robot_metas(
+        loadedSequence, runtime_options);
+
+    // Geometry export short-circuits before any search: not compatible with
+    // --greedy-only mode (which returns earlier, before robot_metas exists) --
+    // an accepted known scope limit.
+    if (!runtime_options.export_geometry_path.empty())
+    {
+        std::string geometry_family = "unknown";
+        int geometry_index = -1;
+        parse_family_index(runtime_options.input_sequence_path, geometry_family,
+                           geometry_index);
+        const bool export_ok = export_instance_geometry(
+            runtime_options.export_geometry_path, geometry_family, geometry_index,
+            loadedSequence, robot_metas, runtime_options.geometry_export_k);
+        if (export_ok)
+            std::cout << "[GeometryExport] Wrote geometry to "
+                      << runtime_options.export_geometry_path << std::endl;
+        else
+            std::cerr << "[GeometryExport] Failed to write geometry to "
+                      << runtime_options.export_geometry_path << std::endl;
+        return export_ok ? 0 : 1;
+    }
+
     std::mt19937 search_rng(
         mix_seed(runtime_options.base_random_seed, 0x51A7BEEFu));
     const int lns_batch_size = std::max(1, runtime_options.lns_threads);
@@ -222,7 +363,7 @@ int phastar_push_demo_main(int argc, char **argv)
     auto lns_outcome = use_dqn_search
         ? run_dqn_search(
               loadedSequence, runtime_options, *lns_seed_summary,
-              greedy_plan, robot_names, lns_batch_size, lns_rng,
+              greedy_plan, robot_names, robot_metas, lns_batch_size, lns_rng,
               disabled_order_constraints,
               &lns_enforced_constraints)
         : run_adaptive_lns_search(

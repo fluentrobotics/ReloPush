@@ -2073,7 +2073,7 @@ bool performAllocationsDFS(
     auto time_now = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_now - time_start);
 
-    if (duration.count() > 1200000) // 1200 seconds
+    if (duration.count() > 180000) // 180 seconds
     {
         // timeout
         return false;
@@ -2227,7 +2227,7 @@ bool performAllocations(
         auto time_now = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_now - time_start);
 
-        if (duration.count() > 1200000) // 1200 seconds
+        if (duration.count() > 180000) // 180 seconds
         {
             // timeout
             return false;

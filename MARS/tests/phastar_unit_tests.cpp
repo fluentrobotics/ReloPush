@@ -1,6 +1,10 @@
 #include <PHAstar/PHAstar.h>
 #include <DqnQModel.h>
+#include <DqnFeaturesV2.h>
+#include <DqnAllocationSearch.h>
+#include <GeometryExport.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -12,6 +16,7 @@
 #include <array>
 #include <cstdio>
 #include <random>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -1274,6 +1279,868 @@ namespace
     return true;
   }
 
+  // QModel::save/load round-trip, for both the linear (hidden==0) and
+  // 1-hidden-layer MLP (hidden>0) configurations. setprecision(17) should
+  // round-trip doubles essentially exactly, but compares with a tight epsilon
+  // rather than exact `==` to be safe against any formatting/parsing rounding.
+  bool test_qmodel_save_load_roundtrip()
+  {
+    auto check_for_hidden = [](std::size_t dim, std::size_t hidden, unsigned seed) -> bool
+    {
+      const auto tmp_path = std::filesystem::temp_directory_path() /
+                           ("phastar_unit_tests_qmodel_" + std::to_string(hidden) + ".weights");
+      std::filesystem::remove(tmp_path);
+
+      std::mt19937 rng(seed);
+      QModel model(dim, hidden, rng);
+      std::uniform_real_distribution<double> param_dist(-1.0, 1.0);
+      std::vector<double> params = model.get_params();
+      for (auto &v : params)
+        v = param_dist(rng);
+      model.set_params(params);
+
+      if (!model.save(tmp_path.string()))
+      {
+        std::cerr << "    QModel::save failed for dim=" << dim << " hidden=" << hidden << "\n";
+        return false;
+      }
+
+      std::mt19937 rng2(seed + 1);
+      QModel loaded(dim, hidden, rng2);
+      if (!loaded.load(tmp_path.string()))
+      {
+        std::cerr << "    QModel::load failed for dim=" << dim << " hidden=" << hidden << "\n";
+        std::filesystem::remove(tmp_path);
+        return false;
+      }
+      std::filesystem::remove(tmp_path);
+
+      const std::vector<double> loaded_params = loaded.get_params();
+      if (loaded_params.size() != params.size())
+      {
+        std::cerr << "    QModel round-trip param count mismatch: expected "
+                  << params.size() << " got " << loaded_params.size() << "\n";
+        return false;
+      }
+      for (std::size_t i = 0; i < params.size(); ++i)
+      {
+        if (std::abs(params[i] - loaded_params[i]) > 1e-12)
+        {
+          std::cerr << "    QModel round-trip param mismatch at index " << i
+                    << ": expected " << params[i] << " got " << loaded_params[i] << "\n";
+          return false;
+        }
+      }
+      return true;
+    };
+
+    if (!check_for_hidden(5, 0, 101))
+      return false;
+    if (!check_for_hidden(5, 8, 102))
+      return false;
+    return true;
+  }
+
+  // A load() into a QModel with a different dim/hidden than the saved file
+  // must fail gracefully (return false, no crash) and must not modify the
+  // target model's existing params.
+  bool test_qmodel_load_dim_hidden_mismatch()
+  {
+    const auto tmp_path = std::filesystem::temp_directory_path() /
+                         "phastar_unit_tests_qmodel_mismatch.weights";
+    std::filesystem::remove(tmp_path);
+
+    std::mt19937 rng(201);
+    QModel source(5, 0, rng);
+    std::uniform_real_distribution<double> param_dist(-1.0, 1.0);
+    std::vector<double> source_params = source.get_params();
+    for (auto &v : source_params)
+      v = param_dist(rng);
+    source.set_params(source_params);
+    if (!source.save(tmp_path.string()))
+    {
+      std::cerr << "    Failed to save source QModel for mismatch test.\n";
+      return false;
+    }
+
+    std::mt19937 rng2(202);
+    QModel target(5, 8, rng2); // different hidden -> dim/hidden mismatch
+    const std::vector<double> target_params_before = target.get_params();
+
+    if (target.load(tmp_path.string()))
+    {
+      std::cerr << "    QModel::load unexpectedly succeeded on a dim/hidden mismatch.\n";
+      std::filesystem::remove(tmp_path);
+      return false;
+    }
+    std::filesystem::remove(tmp_path);
+
+    const std::vector<double> target_params_after = target.get_params();
+    if (target_params_after != target_params_before)
+    {
+      std::cerr << "    QModel params were modified after a failed (mismatched) load.\n";
+      return false;
+    }
+    return true;
+  }
+
+  // load() from a path that does not exist must fail gracefully (return
+  // false, no crash/exception) and leave the model's params untouched.
+  bool test_qmodel_load_missing_file()
+  {
+    const auto tmp_path = std::filesystem::temp_directory_path() /
+                         "phastar_unit_tests_qmodel_missing_does_not_exist.weights";
+    std::filesystem::remove(tmp_path);
+
+    std::mt19937 rng(301);
+    QModel model(5, 0, rng);
+    const std::vector<double> params_before = model.get_params();
+
+    if (model.load(tmp_path.string()))
+    {
+      std::cerr << "    QModel::load unexpectedly succeeded on a missing file.\n";
+      return false;
+    }
+
+    const std::vector<double> params_after = model.get_params();
+    if (params_after != params_before)
+    {
+      std::cerr << "    QModel params were modified after a failed (missing file) load.\n";
+      return false;
+    }
+    return true;
+  }
+
+// ==========================================
+// DQN feature-redesign v2 (DqnFeaturesV2.h) pure-math tests. These exercise
+// layer B (geometry/schedule math on plain types) with synthetic data, with
+// no FinalAllocation/EdgePath construction needed.
+// ==========================================
+
+bool test_dqn_v2_confinement_weight()
+{
+  const DqnV2::WorkspaceBounds bounds{0.0, 4.0, 0.0, 5.0};
+
+  // Interior point: clearance >= kClearRef -> confinement weight bottoms out at 1.0.
+  const ReloPush::State interior(2.0, 2.5, 0.0);
+  const double clr_interior = DqnV2::workspace_clearance(interior, bounds);
+  const double conf_interior = DqnV2::confinement_weight(clr_interior);
+  if (!(clr_interior >= DqnV2::kClearRef) || std::abs(conf_interior - 1.0) > 1e-9)
+  {
+    std::cerr << "    interior clearance=" << clr_interior << " conf=" << conf_interior << "\n";
+    return false;
+  }
+
+  // Near-wall point: clearance = 0.1 -> conf = 1 + (1 - 0.1/0.5) = 1.8.
+  const ReloPush::State near_wall(0.1, 2.5, 0.0);
+  const double clr_wall = DqnV2::workspace_clearance(near_wall, bounds);
+  const double conf_wall = DqnV2::confinement_weight(clr_wall);
+  if (std::abs(clr_wall - 0.1) > 1e-9 || std::abs(conf_wall - 1.8) > 1e-9)
+  {
+    std::cerr << "    near-wall clearance=" << clr_wall << " conf=" << conf_wall << "\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_dqn_v2_blockage_weight()
+{
+  const DqnV2::WorkspaceBounds bounds{0.0, 10.0, 0.0, 10.0};
+  const std::vector<ReloPush::State> corridor = {
+      ReloPush::State(1.0, 5.0, 0.0),
+      ReloPush::State(2.0, 5.0, 0.0),
+      ReloPush::State(3.0, 5.0, 0.0),
+  };
+  const double block_dist = 0.5;
+
+  const ReloPush::State near_pose(2.1, 5.1, 0.0);
+  const double w_near = DqnV2::blockage_weight(near_pose, corridor, block_dist, bounds);
+  if (!(w_near >= 1.0 && w_near <= 2.0))
+  {
+    std::cerr << "    expected in-range blockage weight, got " << w_near << "\n";
+    return false;
+  }
+
+  const ReloPush::State far_pose(9.0, 9.0, 0.0);
+  const double w_far = DqnV2::blockage_weight(far_pose, corridor, block_dist, bounds);
+  if (w_far != 0.0)
+  {
+    std::cerr << "    expected zero blockage weight for a far pose, got " << w_far << "\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_dqn_v2_dag_construction()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  std::vector<TaskGeom> geoms(3);
+
+  // Task 0: push corridor near the origin.
+  geoms[0].obj_start = State(0.0, 0.0, 0.0);
+  geoms[0].obj_goal = State(20.0, 20.0, 0.0);
+  geoms[0].push_pts = {State(0.0, 0.0, 0.0), State(1.0, 0.0, 0.0), State(2.0, 0.0, 0.0)};
+
+  // Task 1's goal sits on task 0's push corridor -> hard edge 0 -> 1.
+  geoms[1].obj_start = State(20.0, 20.0, 0.0);
+  geoms[1].obj_goal = State(1.0, 0.02, 0.0);
+  geoms[1].push_pts = {State(20.0, 0.0, 0.0), State(21.0, 0.0, 0.0), State(22.0, 0.0, 0.0)};
+
+  // Task 2's push corridor passes over task 0's start -> hard edge 0 -> 2.
+  geoms[2].obj_start = State(30.0, 30.0, 0.0);
+  geoms[2].obj_goal = State(31.0, 31.0, 0.0);
+  geoms[2].push_pts = {State(0.0, 0.0, 0.0), State(0.0, 1.0, 0.0), State(0.0, 2.0, 0.0)};
+
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry =
+      DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+
+  auto contains = [](const std::vector<std::size_t> &v, std::size_t x)
+  { return std::find(v.begin(), v.end(), x) != v.end(); };
+
+  if (!geometry.hard_pred[0].empty())
+  {
+    std::cerr << "    expected hard_pred[0] empty, size=" << geometry.hard_pred[0].size() << "\n";
+    return false;
+  }
+  if (!(geometry.hard_pred[1].size() == 1 && contains(geometry.hard_pred[1], 0)))
+  {
+    std::cerr << "    expected hard_pred[1] == {0}\n";
+    return false;
+  }
+  if (!(geometry.hard_pred[2].size() == 1 && contains(geometry.hard_pred[2], 0)))
+  {
+    std::cerr << "    expected hard_pred[2] == {0}\n";
+    return false;
+  }
+
+  // No reverse edges: by construction every hard predecessor index is < the
+  // task it precedes (the loop only ever considers x < y).
+  for (std::size_t a = 0; a < geoms.size(); ++a)
+    for (std::size_t p : geometry.hard_pred[a])
+      if (p >= a)
+      {
+        std::cerr << "    reverse hard edge detected: " << p << " -> " << a << "\n";
+        return false;
+      }
+
+  // A topological sort exists (Kahn-style greedy placement must fully drain).
+  std::vector<char> placed(geoms.size(), 0);
+  for (std::size_t step = 0; step < geoms.size(); ++step)
+  {
+    bool progressed = false;
+    for (std::size_t a = 0; a < geoms.size(); ++a)
+    {
+      if (placed[a])
+        continue;
+      bool ready = true;
+      for (std::size_t p : geometry.hard_pred[a])
+        if (!placed[p])
+        {
+          ready = false;
+          break;
+        }
+      if (ready)
+      {
+        placed[a] = 1;
+        progressed = true;
+        break;
+      }
+    }
+    if (!progressed)
+    {
+      std::cerr << "    no topological sort exists for the hard-edge DAG\n";
+      return false;
+    }
+  }
+  return true;
+}
+
+bool test_dqn_v2_forward_sim()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  auto euclid = [](const State &a, const State &b)
+  { return DqnV2::dist2d(a, b); };
+
+  const std::vector<State> initial_poses = {State(0.0, 0.0, 0.0), State(10.0, 0.0, 0.0)};
+  const double speed_transit = 1.0;
+  const std::size_t task_count = 3;
+  DqnV2::ForwardSim sim(initial_poses, speed_transit, euclid, task_count);
+
+  std::vector<TaskGeom> geoms(task_count);
+  geoms[0].approach = State(1.0, 0.0, 0.0);
+  geoms[0].exit = State(2.0, 0.0, 0.0);
+  geoms[0].tau_fixed = 5.0;
+
+  geoms[1].approach = State(12.0, 0.0, 0.0);
+  geoms[1].exit = State(13.0, 0.0, 0.0);
+  geoms[1].tau_fixed = 3.0;
+
+  geoms[2].approach = State(3.0, 0.0, 0.0);
+  geoms[2].exit = State(4.0, 0.0, 0.0);
+  geoms[2].tau_fixed = 2.0;
+
+  constexpr double kTol = 1e-6;
+
+  // Step 0: robots tie at free_time=0 -> pick lowest index (robot 0).
+  auto pv0 = sim.preview(geoms[0]);
+  if (pv0.robot != 0 || std::abs(pv0.start - 0.0) > kTol || std::abs(pv0.finish - 6.0) > kTol)
+  {
+    std::cerr << "    task0 preview mismatch: robot=" << pv0.robot
+              << " start=" << pv0.start << " finish=" << pv0.finish << "\n";
+    return false;
+  }
+  sim.commit(0, geoms[0], pv0);
+  if (std::abs(sim.free_time[0] - 6.0) > kTol || std::abs(sim.free_time[1] - 0.0) > kTol)
+  {
+    std::cerr << "    free_time after task0 mismatch: [" << sim.free_time[0] << ", "
+              << sim.free_time[1] << "]\n";
+    return false;
+  }
+
+  // Step 1: robot 1 is earliest-free (0 < 6).
+  const double m_t_before_task1 = sim.max_free_time();
+  auto pv1 = sim.preview(geoms[1]);
+  if (pv1.robot != 1 || std::abs(pv1.start - 0.0) > kTol || std::abs(pv1.finish - 5.0) > kTol)
+  {
+    std::cerr << "    task1 preview mismatch: robot=" << pv1.robot
+              << " start=" << pv1.start << " finish=" << pv1.finish << "\n";
+    return false;
+  }
+  const double seed_makespan = 10.0;
+  const double d_makespan = std::max(0.0, pv1.finish - m_t_before_task1) / seed_makespan;
+  const double slack = (m_t_before_task1 - pv1.start) / seed_makespan;
+  if (std::abs(d_makespan - 0.0) > kTol || std::abs(slack - 0.6) > kTol)
+  {
+    std::cerr << "    task1 d_makespan/slack mismatch: d_makespan=" << d_makespan
+              << " slack=" << slack << "\n";
+    return false;
+  }
+  sim.commit(1, geoms[1], pv1);
+  if (std::abs(sim.free_time[0] - 6.0) > kTol || std::abs(sim.free_time[1] - 5.0) > kTol)
+  {
+    std::cerr << "    free_time after task1 mismatch: [" << sim.free_time[0] << ", "
+              << sim.free_time[1] << "]\n";
+    return false;
+  }
+
+  // Step 2: robot 1 remains earliest-free (5 < 6).
+  auto pv2 = sim.preview(geoms[2]);
+  if (pv2.robot != 1 || std::abs(pv2.start - 5.0) > kTol || std::abs(pv2.finish - 17.0) > kTol)
+  {
+    std::cerr << "    task2 preview mismatch: robot=" << pv2.robot
+              << " start=" << pv2.start << " finish=" << pv2.finish << "\n";
+    return false;
+  }
+  sim.commit(2, geoms[2], pv2);
+  return true;
+}
+
+bool test_dqn_v2_feature_vector_shape()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  const std::size_t n = 3;
+  std::vector<TaskGeom> geoms(n);
+  geoms[0].obj_start = State(0.0, 0.0, 0.0);
+  geoms[0].obj_goal = State(20.0, 20.0, 0.0);
+  geoms[0].push_pts = {State(0.0, 0.0, 0.0), State(1.0, 0.0, 0.0)};
+  geoms[0].approach = State(0.0, 0.0, 0.0);
+  geoms[0].exit = State(1.0, 0.0, 0.0);
+  geoms[0].tau_fixed = 4.0;
+
+  geoms[1].obj_start = State(20.0, 20.0, 0.0);
+  geoms[1].obj_goal = State(1.0, 0.02, 0.0);
+  geoms[1].push_pts = {State(20.0, 0.0, 0.0), State(21.0, 0.0, 0.0)};
+  geoms[1].approach = State(20.0, 0.0, 0.0);
+  geoms[1].exit = State(21.0, 0.0, 0.0);
+  geoms[1].tau_fixed = 3.0;
+
+  geoms[2].obj_start = State(30.0, 30.0, 0.0);
+  geoms[2].obj_goal = State(31.0, 31.0, 0.0);
+  geoms[2].push_pts = {State(0.0, 0.0, 0.0), State(0.0, 1.0, 0.0)};
+  geoms[2].approach = State(0.0, 1.0, 0.0);
+  geoms[2].exit = State(0.0, 2.0, 0.0);
+  geoms[2].tau_fixed = 2.0;
+
+  const DqnV2::WorkspaceBounds bounds{-100.0, 100.0, -100.0, 100.0};
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, 0.275);
+
+  std::vector<char> is_placed(n, 0);
+  is_placed[0] = 1; // task 0 already placed
+
+  const LearnedOrderConstraints constraints; // empty -> learned_risk term contributes 0
+
+  DqnV2::ForwardSim::Preview pv;
+  pv.robot = 0;
+  pv.start = 6.0;
+  pv.finish = 12.0;
+  const double m_t_before = 6.0;
+  const double seed_makespan = 10.0;
+
+  std::vector<std::pair<double, double>> committed_windows(n, {0.0, 0.0});
+  committed_windows[0] = {0.0, 6.0};
+
+  const auto phi = DqnV2::make_feature_vector_v2(
+      1, pv, m_t_before, geoms[1], geometry, is_placed, committed_windows, constraints,
+      seed_makespan, n);
+
+  if (phi.size() != DqnV2::kFeatDim)
+  {
+    std::cerr << "    expected dim " << DqnV2::kFeatDim << ", got " << phi.size() << "\n";
+    return false;
+  }
+  if (std::abs(phi[0] - 1.0) > 1e-12)
+  {
+    std::cerr << "    expected phi[0] == 1 (bias), got " << phi[0] << "\n";
+    return false;
+  }
+  for (std::size_t i = 0; i < phi.size(); ++i)
+  {
+    if (!std::isfinite(phi[i]))
+    {
+      std::cerr << "    phi[" << i << "] is not finite: " << phi[i] << "\n";
+      return false;
+    }
+  }
+  if (phi[1] < 0.0 || phi[2] < -1e-9 || phi[6] < 0.0 || phi[6] > 1.0 + 1e-9 ||
+      phi[7] < 0.0 || phi[8] < 0.0 || phi[8] > 1.0 + 1e-9)
+  {
+    std::cerr << "    phi values out of expected range: phi[1]=" << phi[1]
+              << " phi[2]=" << phi[2] << " phi[6]=" << phi[6] << " phi[7]=" << phi[7]
+              << " phi[8]=" << phi[8] << "\n";
+    return false;
+  }
+  return true;
+}
+
+// ==========================================
+// Transition logger + geometry exporter tests (see
+// MARS/09rl-pretrained-study-plan.md sections 3.1/3.2).
+// ==========================================
+
+bool test_parse_family_index()
+{
+  std::string family;
+  int index = -1;
+
+  if (!parse_family_index(
+          "/some/path/result_seq_ReloPush-BOSS_12_objects.txt_ind5.b64", family, index) ||
+      family != "ReloPush-BOSS_12_objects.txt" || index != 5)
+  {
+    std::cerr << "    normal path parse failed: family='" << family << "' index=" << index << "\n";
+    return false;
+  }
+
+  if (!parse_family_index("result_seq_Foo_Bar_Baz.txt_ind3.b64", family, index) ||
+      family != "Foo_Bar_Baz.txt" || index != 3)
+  {
+    std::cerr << "    underscore-family parse failed: family='" << family
+              << "' index=" << index << "\n";
+    return false;
+  }
+
+  if (parse_family_index("not_a_matching_path.txt", family, index) ||
+      family != "unknown" || index != -1)
+  {
+    std::cerr << "    non-matching path did not fall back gracefully: family='" << family
+              << "' index=" << index << "\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_transition_logger_csv_roundtrip()
+{
+  const auto tmp_path = std::filesystem::temp_directory_path() /
+                       "phastar_unit_tests_transition_logger.csv";
+  std::filesystem::remove(tmp_path);
+
+  auto make_entry = [](std::size_t step, std::size_t task, bool chosen)
+  {
+    StepCandidateEntry e;
+    e.step = step;
+    e.candidate_task = task;
+    e.chosen = chosen;
+    e.phi.assign(DqnV2::kFeatDim, static_cast<double>(task) + 0.5);
+    return e;
+  };
+
+  {
+    TransitionLogger logger(tmp_path.string());
+    std::vector<StepCandidateEntry> step_log = {
+        make_entry(0, 0, false), make_entry(0, 1, true), make_entry(1, 2, true)};
+    RolloutOutcome outcome;
+    outcome.feasible = true;
+    outcome.makespan = 12.5;
+    outcome.return_target = -1.25;
+    outcome.first_fail_rank = step_log.size();
+    outcome.first_failed_task = -1;
+    logger.log_rollout("ReloPush-BOSS_8_objects.txt", 3, 42u, 1, step_log, outcome);
+  }
+
+  const std::string first_contents = read_text_file(tmp_path);
+  std::istringstream first_stream(first_contents);
+  std::string header_line;
+  std::getline(first_stream, header_line);
+  const std::string expected_header =
+      "family,index,seed,iteration,step,candidate_task,chosen,"
+      "phi0,phi1,phi2,phi3,phi4,phi5,phi6,phi7,phi8,"
+      "feasible,makespan,return_target,first_fail_rank,first_failed_task";
+  if (header_line != expected_header)
+  {
+    std::cerr << "    unexpected header: '" << header_line << "'\n";
+    return false;
+  }
+  int first_row_count = 0;
+  std::string line;
+  while (std::getline(first_stream, line))
+  {
+    if (!line.empty())
+      ++first_row_count;
+  }
+  if (first_row_count != 3)
+  {
+    std::cerr << "    expected 3 rows after first logger, got " << first_row_count << "\n";
+    return false;
+  }
+
+  // A second logger on the same (now non-empty) path must append, not
+  // duplicate the header.
+  {
+    TransitionLogger logger2(tmp_path.string());
+    std::vector<StepCandidateEntry> step_log2 = {make_entry(0, 0, true)};
+    RolloutOutcome outcome2;
+    outcome2.feasible = false;
+    outcome2.makespan = -1.0;
+    outcome2.return_target = -3.0;
+    outcome2.first_fail_rank = 0;
+    outcome2.first_failed_task = 0;
+    logger2.log_rollout("ReloPush-BOSS_8_objects.txt", 3, 42u, 2, step_log2, outcome2);
+  }
+
+  const std::string second_contents = read_text_file(tmp_path);
+  std::istringstream second_stream(second_contents);
+  int header_count = 0;
+  int total_rows = 0;
+  while (std::getline(second_stream, line))
+  {
+    if (line.empty())
+      continue;
+    if (line == expected_header)
+      ++header_count;
+    else
+      ++total_rows;
+  }
+  std::filesystem::remove(tmp_path);
+
+  if (header_count != 1)
+  {
+    std::cerr << "    expected exactly 1 header line after second logger, got "
+              << header_count << "\n";
+    return false;
+  }
+  if (total_rows != 4)
+  {
+    std::cerr << "    expected 4 total data rows after append, got " << total_rows << "\n";
+    return false;
+  }
+
+  return true;
+}
+
+RobotMeta make_test_robot_meta(const std::string &name, double x, double y, double yaw)
+{
+  RobotMeta meta;
+  meta.name = name;
+  meta.type = EntityType::ROBOT;
+  meta.initial_pose = Pose(x, y, yaw);
+  meta.size.front_length = 0.36;
+  meta.size.rear_length = 0.12;
+  meta.size.width = 0.275;
+  meta.min_turning_radius = 1.02;
+  meta.min_turning_radius_transit = 1.02;
+  meta.min_turning_radius_transfer = 1.43;
+  meta.wheel_base = 0.29;
+  meta.speed_transit = 0.2;
+  meta.speed_transfer = 0.15;
+  return meta;
+}
+
+bool test_dqn_v2_construct_order_step_log_completeness()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  const std::size_t n = 4;
+  std::vector<TaskGeom> geoms(n);
+
+  geoms[0].obj_start = State(0.0, 0.0, 0.0);
+  geoms[0].obj_goal = State(20.0, 20.0, 0.0);
+  geoms[0].push_pts = {State(0.0, 0.0, 0.0), State(1.0, 0.0, 0.0)};
+  geoms[0].approach = State(0.0, 0.0, 0.0);
+  geoms[0].exit = State(1.0, 0.0, 0.0);
+  geoms[0].tau_fixed = 4.0;
+
+  // Task 1's goal sits on task 0's push corridor -> hard edge 0 -> 1.
+  geoms[1].obj_start = State(20.0, 20.0, 0.0);
+  geoms[1].obj_goal = State(1.0, 0.02, 0.0);
+  geoms[1].push_pts = {State(20.0, 0.0, 0.0), State(21.0, 0.0, 0.0)};
+  geoms[1].approach = State(20.0, 0.0, 0.0);
+  geoms[1].exit = State(21.0, 0.0, 0.0);
+  geoms[1].tau_fixed = 3.0;
+
+  // Task 2's push corridor passes over task 0's start -> hard edge 0 -> 2.
+  geoms[2].obj_start = State(30.0, 30.0, 0.0);
+  geoms[2].obj_goal = State(31.0, 31.0, 0.0);
+  geoms[2].push_pts = {State(0.0, 1.0, 0.0), State(0.0, 2.0, 0.0)};
+  geoms[2].approach = State(0.0, 1.0, 0.0);
+  geoms[2].exit = State(0.0, 2.0, 0.0);
+  geoms[2].tau_fixed = 2.0;
+
+  // Task 3 has no interaction with any other task.
+  geoms[3].obj_start = State(40.0, 40.0, 0.0);
+  geoms[3].obj_goal = State(41.0, 41.0, 0.0);
+  geoms[3].push_pts = {State(40.0, 40.0, 0.0), State(41.0, 40.0, 0.0)};
+  geoms[3].approach = State(40.0, 40.0, 0.0);
+  geoms[3].exit = State(41.0, 40.0, 0.0);
+  geoms[3].tau_fixed = 1.0;
+
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry =
+      DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+
+  const LearnedOrderConstraints constraints; // empty -> no learned edges
+
+  std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0)};
+
+  RuntimeOptions options; // defaults (dqn_explore_ref_bias=0.5, hard_evidence=3)
+  const double seed_makespan = 10.0;
+  const double epsilon = 0.5; // exercises both explore and exploit branches
+
+  std::mt19937 rng_logged(123);
+  QModel model(DqnV2::kFeatDim, 0, rng_logged);
+
+  std::vector<std::vector<StepCandidateEntry>> step_logs;
+  const auto order_logged = construct_order_v2(
+      model, n, geoms, geometry, constraints, robot_metas, seed_makespan, epsilon,
+      options, rng_logged, &step_logs);
+
+  if (order_logged.size() != n || step_logs.size() != n)
+  {
+    std::cerr << "    order/step_logs size mismatch: order=" << order_logged.size()
+              << " step_logs=" << step_logs.size() << "\n";
+    return false;
+  }
+
+  // Independently recompute the legal set at each step (same mask
+  // is_task_legal_v2 uses) and check step_logs[t] captured every legal
+  // candidate exactly once, with exactly one entry marked chosen matching
+  // order[t].
+  std::vector<char> is_placed(n, 0);
+  for (std::size_t t = 0; t < n; ++t)
+  {
+    std::vector<std::size_t> legal;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+      if (is_placed[i])
+        continue;
+      if (DqnV2::is_task_legal_v2(i, geometry, is_placed, constraints,
+                                  options.dqn_learned_hard_evidence))
+        legal.push_back(i);
+    }
+
+    if (step_logs[t].size() != legal.size())
+    {
+      std::cerr << "    step " << t << ": expected " << legal.size()
+                << " legal candidates, step_log has " << step_logs[t].size() << "\n";
+      return false;
+    }
+
+    std::size_t chosen_count = 0;
+    std::size_t logged_chosen_task = n; // sentinel (out of range)
+    for (const auto &entry : step_logs[t])
+    {
+      if (entry.step != t)
+      {
+        std::cerr << "    step " << t << ": entry has wrong step field " << entry.step << "\n";
+        return false;
+      }
+      if (std::find(legal.begin(), legal.end(), entry.candidate_task) == legal.end())
+      {
+        std::cerr << "    step " << t << ": logged candidate " << entry.candidate_task
+                  << " is not legal\n";
+        return false;
+      }
+      if (entry.phi.size() != DqnV2::kFeatDim)
+      {
+        std::cerr << "    step " << t << ": phi has wrong dimension " << entry.phi.size() << "\n";
+        return false;
+      }
+      if (entry.chosen)
+      {
+        ++chosen_count;
+        logged_chosen_task = entry.candidate_task;
+      }
+    }
+    if (chosen_count != 1)
+    {
+      std::cerr << "    step " << t << ": expected exactly 1 chosen entry, got "
+                << chosen_count << "\n";
+      return false;
+    }
+    if (logged_chosen_task != order_logged[t])
+    {
+      std::cerr << "    step " << t << ": chosen entry task " << logged_chosen_task
+                << " != order[t] " << order_logged[t] << "\n";
+      return false;
+    }
+
+    is_placed[order_logged[t]] = 1;
+  }
+
+  // Critical invariant: enabling logging must not perturb the RNG draw
+  // sequence. Run again with an identically-seeded rng/model and
+  // step_logs == nullptr; the resulting order must be byte-for-byte
+  // identical.
+  std::mt19937 rng_unlogged(123);
+  QModel model_unlogged(DqnV2::kFeatDim, 0, rng_unlogged);
+  const auto order_unlogged = construct_order_v2(
+      model_unlogged, n, geoms, geometry, constraints, robot_metas, seed_makespan,
+      epsilon, options, rng_unlogged, nullptr);
+
+  if (order_logged != order_unlogged)
+  {
+    std::cerr << "    logging perturbed the RNG draw sequence: logged/unlogged orders differ\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_resample_to_k_points()
+{
+  // Straight line (0,0) -> (4,0) -> (10,0), uneven segment spacing so the
+  // bracketing-segment search must advance mid-resample. First segment is
+  // non-pushing, second is pushing.
+  const std::vector<PathPoint> path = {
+      {0.0, 0.0, 0.1, false},
+      {4.0, 0.0, 0.2, false},
+      {10.0, 0.0, 0.3, true},
+  };
+
+  const auto resampled = resample_to_k_points(path, 5);
+  if (resampled.size() != 5)
+  {
+    std::cerr << "    expected 5 resampled points, got " << resampled.size() << "\n";
+    return false;
+  }
+
+  const std::vector<double> expected_x = {0.0, 2.5, 5.0, 7.5, 10.0};
+  const std::vector<double> expected_yaw = {0.1, 0.2, 0.2, 0.3, 0.3};
+  const std::vector<bool> expected_pushing = {false, false, false, true, true};
+  for (std::size_t i = 0; i < resampled.size(); ++i)
+  {
+    if (std::abs(resampled[i].x - expected_x[i]) > 1e-9 || std::abs(resampled[i].y) > 1e-9)
+    {
+      std::cerr << "    point " << i << " position mismatch: (" << resampled[i].x << ", "
+                << resampled[i].y << "), expected x=" << expected_x[i] << "\n";
+      return false;
+    }
+    if (std::abs(resampled[i].yaw - expected_yaw[i]) > 1e-9)
+    {
+      std::cerr << "    point " << i << " yaw mismatch: " << resampled[i].yaw
+                << ", expected " << expected_yaw[i] << "\n";
+      return false;
+    }
+    if (resampled[i].is_pushing != expected_pushing[i])
+    {
+      std::cerr << "    point " << i << " is_pushing mismatch: got "
+                << resampled[i].is_pushing << ", expected " << expected_pushing[i] << "\n";
+      return false;
+    }
+  }
+
+  // K=1 -> just the first point.
+  const auto single = resample_to_k_points(path, 1);
+  if (single.size() != 1 || std::abs(single[0].x - 0.0) > 1e-9)
+  {
+    std::cerr << "    K=1 did not return just the first point\n";
+    return false;
+  }
+
+  // Zero-length (all-coincident) input -> K copies of the single point.
+  const std::vector<PathPoint> coincident = {{2.0, 3.0, 1.0, true}, {2.0, 3.0, 1.0, true}};
+  const auto zero_length = resample_to_k_points(coincident, 4);
+  if (zero_length.size() != 4)
+  {
+    std::cerr << "    zero-length input did not return K points, got "
+              << zero_length.size() << "\n";
+    return false;
+  }
+  for (const auto &p : zero_length)
+  {
+    if (std::abs(p.x - 2.0) > 1e-9 || std::abs(p.y - 3.0) > 1e-9)
+    {
+      std::cerr << "    zero-length resample point mismatch: (" << p.x << ", " << p.y << ")\n";
+      return false;
+    }
+  }
+
+  // Empty input -> empty output.
+  const auto empty_result = resample_to_k_points({}, 5);
+  if (!empty_result.empty())
+  {
+    std::cerr << "    empty input did not return empty output\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_json_escape_string()
+{
+  const std::string input = "he said \"hi\"\\ and\tmore";
+  const std::string escaped = json_escape_string(input);
+
+  if (escaped.find("\\\"") == std::string::npos)
+  {
+    std::cerr << "    escaped output missing \\\" for embedded quote: '" << escaped << "'\n";
+    return false;
+  }
+  if (escaped.find("\\\\") == std::string::npos)
+  {
+    std::cerr << "    escaped output missing \\\\ for embedded backslash: '" << escaped << "'\n";
+    return false;
+  }
+
+  // A control character (0x01) must not crash and must not appear literally.
+  const std::string control_input = std::string("before") + static_cast<char>(0x01) + "after";
+  const std::string control_escaped = json_escape_string(control_input);
+  if (control_escaped.find(static_cast<char>(0x01)) != std::string::npos)
+  {
+    std::cerr << "    control character was not escaped: '" << control_escaped << "'\n";
+    return false;
+  }
+  if (control_escaped.find("\\u0001") == std::string::npos)
+  {
+    std::cerr << "    expected \\u0001 escape sequence, got '" << control_escaped << "'\n";
+    return false;
+  }
+
+  return true;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -1320,6 +2187,20 @@ int main(int argc, char **argv)
        test_anchor_first_contact_segment_regression},
       {"QModel gradient check (linear + MLP)", test_qmodel_gradient_check},
       {"QModel MLP fits nonlinear target", test_qmodel_mlp_fits_nonlinear_target},
+      {"QModel save/load round-trip (linear + MLP)", test_qmodel_save_load_roundtrip},
+      {"QModel load dim/hidden mismatch handling", test_qmodel_load_dim_hidden_mismatch},
+      {"QModel load missing-file handling", test_qmodel_load_missing_file},
+      {"DQN v2 confinement weight", test_dqn_v2_confinement_weight},
+      {"DQN v2 blockage weight", test_dqn_v2_blockage_weight},
+      {"DQN v2 DAG construction", test_dqn_v2_dag_construction},
+      {"DQN v2 forward schedule simulation", test_dqn_v2_forward_sim},
+      {"DQN v2 feature vector shape", test_dqn_v2_feature_vector_shape},
+      {"Parse family/index from sequence path", test_parse_family_index},
+      {"TransitionLogger CSV round-trip", test_transition_logger_csv_roundtrip},
+      {"DQN v2 construct_order_v2 step_log completeness + RNG invariance",
+       test_dqn_v2_construct_order_step_log_completeness},
+      {"Geometry export: resample_to_k_points", test_resample_to_k_points},
+      {"Geometry export: JSON string escaping", test_json_escape_string},
   };
 
   std::vector<std::pair<std::string, TestFn>> all_tests = tests;

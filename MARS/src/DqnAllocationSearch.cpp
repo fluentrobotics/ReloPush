@@ -9,6 +9,8 @@
 
 #include <DqnAllocationSearch.h>
 #include <DqnQModel.h>
+#include <DqnFeaturesV2.h>
+#include <TransitionLogger.h>
 #include <AllocationSearch.h>
 
 #include <algorithm>
@@ -17,6 +19,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -273,6 +276,260 @@ void ingest_rollout(
   }
 }
 
+// ==========================================
+// v2 feature path (options.dqn_feature_version >= 2). See
+// MARS/08dqn-feature-redesign.md and DqnFeaturesV2.h. Kept entirely separate
+// from the v1 functions above so the legacy path is untouched.
+// ==========================================
+
+// Builds a ForwardSim seeded with each robot's initial pose, using a
+// Reeds-Shepp transit-length distance function (metas are homogeneous, so
+// metas[0] supplies the turning radius/wheel base/speed).
+DqnV2::ForwardSim make_forward_sim_v2(
+    const std::vector<RobotMeta> &robot_metas,
+    std::size_t task_count)
+{
+  std::vector<ReloPush::State> initial_poses;
+  initial_poses.reserve(robot_metas.size());
+  for (const auto &meta : robot_metas)
+    initial_poses.emplace_back(meta.initial_pose.x, meta.initial_pose.y, meta.initial_pose.yaw);
+
+  const double maxc = 1.0 / std::max(robot_metas[0].min_turning_radius_transit, 1e-6);
+  const double wb = robot_metas[0].wheel_base;
+  DqnV2::DistanceFn distance = [maxc, wb](const ReloPush::State &from, const ReloPush::State &to)
+  {
+    return DqnV2::reeds_shepp_length(from, to, maxc, 0.5, wb);
+  };
+
+  return DqnV2::ForwardSim(std::move(initial_poses), robot_metas[0].speed_transit,
+                          std::move(distance), task_count);
+}
+
+} // namespace
+
+// Construct one task order with the v2 epsilon-greedy policy: legality uses
+// the hard-edge DAG + learned-hard-evidence mask; the epsilon branch splits
+// into a uniform portion and a reference-order-following portion; the greedy
+// branch scores legal candidates via the forward-sim-derived v2 features.
+// `step_logs`, when non-null, is sized to task_count and filled with every
+// legal candidate's (task, phi, chosen) entry at each step. When null (the
+// default / current callers), behavior and RNG draw sequence are byte-for-
+// byte identical to before this parameter existed -- see the exploit/explore
+// branches below for how each avoids extra rng() calls or recomputation.
+// Declared in DqnAllocationSearch.h (external linkage) so it is directly
+// unit-testable; see MARS/tests/phastar_unit_tests.cpp.
+std::vector<std::size_t> construct_order_v2(
+    const QModel &model,
+    std::size_t task_count,
+    const std::vector<DqnV2::TaskGeom> &geoms,
+    const DqnV2::PairwiseGeometry &geometry,
+    const LearnedOrderConstraints &constraints,
+    const std::vector<RobotMeta> &robot_metas,
+    double seed_makespan,
+    double epsilon,
+    const RuntimeOptions &options,
+    std::mt19937 &rng,
+    std::vector<std::vector<StepCandidateEntry>> *step_logs)
+{
+  std::vector<std::size_t> order;
+  order.reserve(task_count);
+  std::vector<char> is_placed(task_count, 0);
+  DqnV2::ForwardSim sim = make_forward_sim_v2(robot_metas, task_count);
+
+  std::uniform_real_distribution<double> coin(0.0, 1.0);
+  std::uniform_real_distribution<double> ref_bias_coin(0.0, 1.0);
+
+  if (step_logs != nullptr)
+    step_logs->assign(task_count, {});
+
+  for (std::size_t step = 0; step < task_count; ++step)
+  {
+    std::vector<std::size_t> legal;
+    legal.reserve(task_count - step);
+    for (std::size_t i = 0; i < task_count; ++i)
+    {
+      if (is_placed[i])
+        continue;
+      if (DqnV2::is_task_legal_v2(i, geometry, is_placed, constraints,
+                                  options.dqn_learned_hard_evidence))
+        legal.push_back(i);
+    }
+    if (legal.empty())
+    {
+      // Degenerate (should not happen: the hard-edge graph is acyclic by
+      // construction): fall back to any remaining task.
+      for (std::size_t i = 0; i < task_count; ++i)
+        if (!is_placed[i])
+          legal.push_back(i);
+    }
+
+    std::size_t chosen = legal.front();
+    std::vector<StepCandidateEntry> step_entries; // only populated when logging
+
+    if (coin(rng) < epsilon)
+    {
+      if (ref_bias_coin(rng) < options.dqn_explore_ref_bias)
+      {
+        chosen = legal.front(); // legal is index-ascending -> reference order's next pick
+      }
+      else
+      {
+        std::uniform_int_distribution<std::size_t> pick(0, legal.size() - 1);
+        chosen = legal[pick(rng)];
+      }
+
+      // Logging-only: computed AFTER the pick, so it never perturbs the rng
+      // draw sequence above. No rng() calls below this point.
+      if (step_logs != nullptr)
+      {
+        step_entries.reserve(legal.size());
+        for (std::size_t i : legal)
+        {
+          const auto pv = sim.preview(geoms[i]);
+          const double m_t = sim.max_free_time();
+          StepCandidateEntry entry;
+          entry.step = step;
+          entry.candidate_task = i;
+          entry.chosen = (i == chosen);
+          entry.phi = DqnV2::make_feature_vector_v2(i, pv, m_t, geoms[i], geometry, is_placed,
+                                                    sim.window, constraints, seed_makespan, task_count);
+          step_entries.push_back(std::move(entry));
+        }
+      }
+    }
+    else
+    {
+      double best_q = -std::numeric_limits<double>::infinity();
+      if (step_logs != nullptr)
+        step_entries.reserve(legal.size());
+      for (std::size_t i : legal)
+      {
+        const auto pv = sim.preview(geoms[i]);
+        const double m_t = sim.max_free_time();
+        auto phi = DqnV2::make_feature_vector_v2(i, pv, m_t, geoms[i], geometry, is_placed,
+                                                 sim.window, constraints, seed_makespan, task_count);
+        const double q = model.predict(phi);
+        if (step_logs != nullptr)
+        {
+          // Reuse the phi already computed above for the argmax -- no
+          // second computation.
+          StepCandidateEntry entry;
+          entry.step = step;
+          entry.candidate_task = i;
+          entry.chosen = false;
+          entry.phi = phi;
+          step_entries.push_back(std::move(entry));
+        }
+        if (q > best_q)
+        {
+          best_q = q;
+          chosen = i;
+        }
+      }
+      if (step_logs != nullptr)
+      {
+        for (auto &entry : step_entries)
+          entry.chosen = (entry.candidate_task == chosen);
+      }
+    }
+
+    if (step_logs != nullptr)
+      (*step_logs)[step] = std::move(step_entries);
+
+    const auto pv = sim.preview(geoms[chosen]);
+    sim.commit(chosen, geoms[chosen], pv);
+
+    order.push_back(chosen);
+    is_placed[chosen] = 1;
+  }
+  return order;
+}
+
+namespace
+{
+
+// Retrospective feasibility/target/first-fail computation shared by
+// ingest_rollout_v2 and the transition logger (so the two never compute
+// outcome differently). See RolloutOutcome in TransitionLogger.h.
+RolloutOutcome compute_rollout_outcome(
+    const std::vector<std::size_t> &order,
+    const AllocationRunSummary &summary,
+    double seed_makespan, double fail_return)
+{
+  RolloutOutcome outcome;
+  const std::size_t n = order.size();
+  outcome.feasible = summary.all_tasks_succeeded;
+
+  std::size_t fail_pos = n;
+  if (!outcome.feasible)
+  {
+    fail_pos = 0;
+    for (std::size_t t = 0; t < summary.task_rows.size(); ++t)
+    {
+      if (summary.task_rows[t].status != "SUCCESS")
+      {
+        fail_pos = t;
+        break;
+      }
+    }
+  }
+
+  outcome.makespan = outcome.feasible ? summary.makespan : -1.0;
+  outcome.return_target =
+      outcome.feasible ? -safe_div(summary.makespan, seed_makespan) : -fail_return;
+  outcome.first_fail_rank = fail_pos;
+  outcome.first_failed_task =
+      (!outcome.feasible && fail_pos < n) ? static_cast<long>(order[fail_pos]) : -1;
+  return outcome;
+}
+
+// Replays the forward simulation over an executed order to recompute phi
+// identically to construction time (same preview/commit sequence per step,
+// no RNG use), turning the rollout into per-step training transitions.
+void ingest_rollout_v2(
+    const std::vector<std::size_t> &order,
+    const AllocationRunSummary &summary,
+    double seed_makespan,
+    double fail_return,
+    const std::vector<DqnV2::TaskGeom> &geoms,
+    const DqnV2::PairwiseGeometry &geometry,
+    const LearnedOrderConstraints &constraints,
+    const std::vector<RobotMeta> &robot_metas,
+    std::vector<Transition> &replay)
+{
+  const std::size_t n = order.size();
+  if (n == 0)
+    return;
+
+  const RolloutOutcome outcome =
+      compute_rollout_outcome(order, summary, seed_makespan, fail_return);
+  const bool feasible = outcome.feasible;
+  const std::size_t fail_pos = outcome.first_fail_rank; // == n if feasible
+  const double target = outcome.return_target;
+
+  DqnV2::ForwardSim sim = make_forward_sim_v2(robot_metas, n);
+  std::vector<char> is_placed(n, 0);
+
+  for (std::size_t t = 0; t < n; ++t)
+  {
+    const std::size_t task = order[t];
+    const auto pv = sim.preview(geoms[task]);
+    const double m_t = sim.max_free_time();
+
+    if (feasible || t <= fail_pos)
+    {
+      Transition tr;
+      tr.phi = DqnV2::make_feature_vector_v2(task, pv, m_t, geoms[task], geometry, is_placed,
+                                             sim.window, constraints, seed_makespan, n);
+      tr.target = target;
+      replay.push_back(std::move(tr));
+    }
+
+    sim.commit(task, geoms[task], pv);
+    is_placed[task] = 1;
+  }
+}
+
 // Minibatch SGD regression of the Q model toward stored returns (Huber-clipped
 // error + small L2). This is fitted-value regression onto Monte-Carlo returns.
 // For model.hidden == 0 (the default linear model) this reproduces the exact
@@ -314,6 +571,7 @@ SequenceSearchOutcome run_dqn_search(
     const AllocationRunSummary &seed_summary,
     const AllocationScenarioPlan &greedy_plan,
     const std::vector<std::string> &robot_names,
+    const std::vector<RobotMeta> &robot_metas,
     int batch_size,
     std::mt19937 &rng,
     const LearnedOrderConstraints &disabled_constraints,
@@ -325,9 +583,11 @@ SequenceSearchOutcome run_dqn_search(
 
   const std::size_t task_count = loaded_sequence.size();
   const int total_iterations = options.dqn_iterations;
+  const bool use_v2 = options.dqn_feature_version >= 2;
 
   if (total_iterations <= 0 || !seed_summary.all_tasks_succeeded ||
       task_count <= 1 || robot_names.empty() ||
+      (use_v2 && robot_metas.empty()) ||
       !std::isfinite(seed_summary.makespan) || seed_summary.makespan <= 0.0)
   {
     if (out_enforced_constraint_count)
@@ -352,6 +612,27 @@ SequenceSearchOutcome run_dqn_search(
   // return so the policy strongly avoids insertions that lead to infeasibility.
   const double fail_return = 3.0;
 
+  // Transition logging (v2 only). See MARS/09rl-pretrained-study-plan.md 3.1.
+  std::unique_ptr<TransitionLogger> transition_logger;
+  std::string log_family = "unknown";
+  int log_index = -1;
+  if (!options.dqn_log_transitions_path.empty())
+  {
+    if (use_v2)
+    {
+      transition_logger =
+          std::make_unique<TransitionLogger>(options.dqn_log_transitions_path);
+      parse_family_index(options.input_sequence_path, log_family, log_index);
+    }
+    else
+    {
+      std::cerr << "[TransitionLogger] --dqn-log-transitions requires "
+                   "--dqn-features=2, ignoring."
+                << std::endl;
+    }
+  }
+  const bool logging_active = static_cast<bool>(transition_logger);
+
   const bool learn_order = options.enable_order_constraint_learning;
   LearnedOrderConstraints dqn_constraints =
       make_learned_order_constraints(task_count);
@@ -359,17 +640,63 @@ SequenceSearchOutcome run_dqn_search(
       learn_order ? dqn_constraints : disabled_constraints;
   AllocationRunSummary order_learning_reference = current;
 
-  const auto static_feats = build_static_features(loaded_sequence);
-  QModel model(kFeatDim, static_cast<std::size_t>(options.dqn_hidden_units), rng);
+  // v1: static per-task features (cost/obsRelo/numPaths). v2: geometric
+  // precompute (per-task corridor geometry + reference-order-consistent
+  // DAG/congestion/boundary matrices), built once and reused by every
+  // rollout. Only one of the two is populated, matching dqn_feature_version.
+  const auto static_feats = use_v2 ? std::vector<StaticTaskFeatures>()
+                                   : build_static_features(loaded_sequence);
+  std::vector<DqnV2::TaskGeom> v2_geoms;
+  DqnV2::PairwiseGeometry v2_geometry;
+  if (use_v2)
+  {
+    v2_geoms = DqnV2::extract_task_geoms(loaded_sequence, robot_metas[0]);
+    const auto &boundary = loaded_sequence[0].snapshot.parameters.boundary;
+    DqnV2::WorkspaceBounds workspace{boundary.xMin, boundary.xMax, boundary.yMin, boundary.yMax};
+    v2_geometry = DqnV2::build_pairwise_geometry(v2_geoms, workspace, robot_metas[0].size.width);
+  }
+
+  QModel model(use_v2 ? DqnV2::kFeatDim : kFeatDim,
+              static_cast<std::size_t>(options.dqn_hidden_units), rng);
   std::vector<Transition> replay;
+
+  // Fine-tune mode: load pretrained weights if requested. On success, use the
+  // fine-tune learning-rate/epsilon schedule for the rest of this run instead
+  // of the cold-start hyperparameters; on failure (missing file or dim/hidden
+  // mismatch), QModel::load already left `model` untouched, so we just fall
+  // back to the normal cold start.
+  bool finetune_mode = false;
+  if (!options.dqn_init_weights_path.empty())
+  {
+    if (model.load(options.dqn_init_weights_path))
+    {
+      finetune_mode = true;
+    }
+    else
+    {
+      std::cerr << "[QModel] Failed to load init weights from "
+                << options.dqn_init_weights_path
+                << ", falling back to cold start." << std::endl;
+    }
+  }
+  const double learning_rate = finetune_mode ? options.dqn_finetune_learning_rate
+                                             : options.dqn_learning_rate;
+  const double epsilon_start = finetune_mode ? options.dqn_finetune_epsilon_start
+                                             : options.dqn_epsilon_start;
+  const double epsilon_end = finetune_mode ? options.dqn_finetune_epsilon_end
+                                           : options.dqn_epsilon_end;
 
   // Warm-start: treat the feasible seed order as a positive example.
   {
     const auto seed_order =
         normalized_task_order(seed_summary.plan, task_count);
-    ingest_rollout(seed_order, seed_summary, seed_makespan, fail_return,
-                   static_feats, active_constraints, replay);
-    train_model(model, replay, options.dqn_learning_rate,
+    if (use_v2)
+      ingest_rollout_v2(seed_order, seed_summary, seed_makespan, fail_return,
+                        v2_geoms, v2_geometry, active_constraints, robot_metas, replay);
+    else
+      ingest_rollout(seed_order, seed_summary, seed_makespan, fail_return,
+                     static_feats, active_constraints, replay);
+    train_model(model, replay, learning_rate,
                 options.dqn_grad_steps_per_iter, options.dqn_minibatch_size, rng);
   }
 
@@ -386,23 +713,31 @@ SequenceSearchOutcome run_dqn_search(
             ? static_cast<double>(iter) / static_cast<double>(total_iterations - 1)
             : 1.0;
     const double epsilon =
-        options.dqn_epsilon_end +
-        (options.dqn_epsilon_start - options.dqn_epsilon_end) * (1.0 - progress);
+        epsilon_end + (epsilon_start - epsilon_end) * (1.0 - progress);
 
     // Build a batch of constructed candidate plans.
     std::vector<ScenarioEvaluationRequest> requests;
     std::vector<std::vector<std::size_t>> batch_orders;
     std::vector<int> batch_iters;
+    // Per-request step_logs (only populated when logging_active), indexed
+    // the same as requests/batch_orders/batch_iters.
+    std::vector<std::vector<std::vector<StepCandidateEntry>>> batch_step_logs;
     const int batch_end = std::min(total_iterations, iter + effective_batch);
     for (; iter < batch_end; ++iter)
     {
       std::vector<std::size_t> order;
+      std::vector<std::vector<StepCandidateEntry>> order_step_log;
       // Try a few times to produce an order not already evaluated.
       for (int attempt = 0; attempt < 8; ++attempt)
       {
         double eps = attempt == 0 ? epsilon : std::max(epsilon, 0.5);
-        order = construct_order(model, task_count, static_feats,
-                                active_constraints, eps, rng);
+        order = use_v2
+            ? construct_order_v2(model, task_count, v2_geoms, v2_geometry,
+                                 active_constraints, robot_metas, seed_makespan,
+                                 eps, options, rng,
+                                 logging_active ? &order_step_log : nullptr)
+            : construct_order(model, task_count, static_feats,
+                             active_constraints, eps, rng);
         AllocationScenarioPlan probe;
         probe.task_order = order;
         if (tried_signatures.insert(task_order_signature(probe)).second)
@@ -416,6 +751,8 @@ SequenceSearchOutcome run_dqn_search(
       requests.push_back(std::move(req));
       batch_orders.push_back(std::move(order));
       batch_iters.push_back(iter + 1);
+      if (logging_active)
+        batch_step_logs.push_back(std::move(order_step_log));
     }
 
     const auto batch_start = std::chrono::steady_clock::now();
@@ -440,8 +777,25 @@ SequenceSearchOutcome run_dqn_search(
         }
       }
 
-      ingest_rollout(batch_orders[b], candidate, seed_makespan, fail_return,
-                     static_feats, active_constraints, replay);
+      if (use_v2)
+        ingest_rollout_v2(batch_orders[b], candidate, seed_makespan, fail_return,
+                          v2_geoms, v2_geometry, active_constraints, robot_metas, replay);
+      else
+        ingest_rollout(batch_orders[b], candidate, seed_makespan, fail_return,
+                       static_feats, active_constraints, replay);
+
+      if (logging_active)
+      {
+        const RolloutOutcome rollout_outcome = compute_rollout_outcome(
+            batch_orders[b], candidate, seed_makespan, fail_return);
+        std::vector<StepCandidateEntry> flattened;
+        for (auto &step_entries : batch_step_logs[b])
+          for (auto &entry : step_entries)
+            flattened.push_back(std::move(entry));
+        transition_logger->log_rollout(log_family, log_index,
+                                       options.base_random_seed, batch_iters[b],
+                                       flattened, rollout_outcome);
+      }
 
       if (!outcome.has_partial ||
           is_preferred_search_result(candidate, outcome.best_partial))
@@ -487,7 +841,7 @@ SequenceSearchOutcome run_dqn_search(
     outcome.lns_batch_failed_iterations.push_back(batch_failed);
 
     // Learn from the batch.
-    train_model(model, replay, options.dqn_learning_rate,
+    train_model(model, replay, learning_rate,
                 options.dqn_grad_steps_per_iter, options.dqn_minibatch_size, rng);
   }
 

@@ -187,6 +187,118 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << "'. Keeping default." << std::endl;
       }
     }
+    else if (arg.rfind("--dqn-features=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-features=").size());
+      try
+      {
+        int parsed = std::stoi(value);
+        options.dqn_feature_version = std::max(1, std::min(2, parsed));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-features value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-explore-ref-bias=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-explore-ref-bias=").size());
+      try
+      {
+        options.dqn_explore_ref_bias =
+            std::min(1.0, std::max(0.0, std::stod(value)));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-explore-ref-bias value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-learned-hard-evidence=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-learned-hard-evidence=").size());
+      try
+      {
+        options.dqn_learned_hard_evidence = std::max(1, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-learned-hard-evidence value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-log-transitions=", 0) == 0)
+    {
+      options.dqn_log_transitions_path =
+          arg.substr(std::string("--dqn-log-transitions=").size());
+    }
+    else if (arg.rfind("--dqn-init-weights=", 0) == 0)
+    {
+      options.dqn_init_weights_path =
+          arg.substr(std::string("--dqn-init-weights=").size());
+    }
+    else if (arg.rfind("--dqn-finetune-lr=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-finetune-lr=").size());
+      try
+      {
+        options.dqn_finetune_learning_rate = std::max(1e-6, std::stod(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-finetune-lr value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-finetune-epsilon-start=", 0) == 0)
+    {
+      std::string value =
+          arg.substr(std::string("--dqn-finetune-epsilon-start=").size());
+      try
+      {
+        options.dqn_finetune_epsilon_start =
+            std::min(1.0, std::max(0.0, std::stod(value)));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-finetune-epsilon-start value: '"
+                  << value << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-finetune-epsilon-end=", 0) == 0)
+    {
+      std::string value =
+          arg.substr(std::string("--dqn-finetune-epsilon-end=").size());
+      try
+      {
+        options.dqn_finetune_epsilon_end =
+            std::min(1.0, std::max(0.0, std::stod(value)));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-finetune-epsilon-end value: '"
+                  << value << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--export-geometry=", 0) == 0)
+    {
+      options.export_geometry_path =
+          arg.substr(std::string("--export-geometry=").size());
+    }
+    else if (arg.rfind("--geometry-k=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--geometry-k=").size());
+      try
+      {
+        options.geometry_export_k = std::max(1, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --geometry-k value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
     else if (arg.rfind("--random-seed=", 0) == 0)
     {
       std::string seed_text = arg.substr(std::string("--random-seed=").size());
@@ -436,6 +548,11 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
         std::cerr << "[Warn] Invalid --result-summary-gap value: '" << value
                   << "'. Keeping default." << std::endl;
       }
+    }
+    else if (arg.rfind("--fixed-order=", 0) == 0)
+    {
+      options.fixed_order_path_or_list =
+          arg.substr(std::string("--fixed-order=").size());
     }
     else if (arg.rfind("--robot-trace-colors=", 0) == 0)
     {
