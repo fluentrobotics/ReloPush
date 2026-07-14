@@ -974,7 +974,7 @@ bool plan_initial_transit(
                                              options,
                                              &wait_added, &last_collision,
                                              &last_check_time,
-                                             IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt);
+                                             IdleBlockerRelocationPolicy::RelocateAnyIdle);
     if (safe_start < 0.0)
     {
       PlanningResult sched_fail;
@@ -1080,7 +1080,8 @@ bool plan_initial_transit(
               << std::endl;
 
     if (!relocate_blocking_robot(robot, timetable, params, entities,
-                                 options, &blocked_hint))
+                                 options, &blocked_hint, planning_start_time,
+                                 "self-park"))
     {
       std::cerr << "  [Transit] Self safe parking FAILED for " << robot->name
                 << "." << std::endl;
@@ -1151,6 +1152,11 @@ bool plan_initial_transit(
     }
 
     Trajectory blocked_pose_hint = make_blocked_pose_hint(blocked_pose);
+    // For a goal block, planning_start_time (the candidate's departure time)
+    // understates when blocked_pose actually needs to be clear; the real
+    // window is when the candidate arrives/collides there, i.e. blocker_time.
+    // Override so downstream clearance checks validate the correct window.
+    blocked_pose_hint.start_time = blocker_time;
     std::cout << "  [Transit] " << blocked_label << " blocked by idle robot "
               << blocker->name;
     if (res.colliding_entity != blocker->name)
@@ -1158,6 +1164,37 @@ bool plan_initial_transit(
       std::cout << " (reported as " << res.colliding_entity << ")";
     }
     std::cout << ". Keeping earlier reservation priority." << std::endl;
+
+    if (!is_start_blocker)
+    {
+      // The blocker, not the candidate, is sitting on the target/staging
+      // pose: try moving the actual blocker out of the way first, so the
+      // candidate can still reach its intended target. Self safe parking
+      // (below) would otherwise replan to the SAME pose the blocker still
+      // occupies.
+      std::cout << "  [Transit] Attempting to relocate blocking robot "
+                << blocker->name << " off the " << blocked_label
+                << " pose before falling back to self safe parking."
+                << std::endl;
+      if (relocate_blocking_robot(blocker, timetable, params, entities,
+                                  options, &blocked_pose_hint, blocker_time))
+      {
+        std::cout << "  [Transit] " << blocker->name << " relocated off the "
+                  << blocked_label << " pose. Replanning " << robot->name
+                  << " initial transit to (" << std::fixed
+                  << std::setprecision(2) << active_target_pose.x << ", "
+                  << active_target_pose.y << ", " << active_target_pose.yaw
+                  << ")." << std::endl;
+        res = run_initial_transit_method_list(
+            "Initial transit after blocker relocation");
+        if (!res.waypoints.empty())
+          append_attempt(retry_stage, res);
+        return true;
+      }
+      std::cout << "  [Transit] Could not relocate " << blocker->name
+                << "; falling back to self safe parking." << std::endl;
+    }
+
     return attempt_self_safe_parking(
         res, blocked_pose_hint,
         std::string(blocked_label) + " is occupied by higher-priority idle robot " +
@@ -1469,7 +1506,7 @@ bool plan_initial_transit(
       double safe_start = find_safe_start_time(&geom_traj, planning_start_time, timetable,
                                                params, entities, options, &wait_added,
                                                nullptr, nullptr,
-                                               IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt);
+                                               IdleBlockerRelocationPolicy::RelocateAnyIdle);
       if (safe_start >= 0.0)
       {
         double delta = safe_start - planning_start_time;
@@ -1526,7 +1563,7 @@ bool plan_initial_transit(
       double safe_start = find_safe_start_time(&rs_traj, planning_start_time, timetable,
                                                params, entities, options, &wait_added,
                                                &last_collision, &last_check_time,
-                                               IdleBlockerRelocationPolicy::RelocateIfBecameIdleDuringAttempt);
+                                               IdleBlockerRelocationPolicy::RelocateAnyIdle);
       if (safe_start >= 0.0)
       {
         path_res.waypoints = rs_waypoints;

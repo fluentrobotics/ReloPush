@@ -3,6 +3,9 @@
 #include <DqnFeaturesV2.h>
 #include <DqnAllocationSearch.h>
 #include <GeometryExport.h>
+#include <PlanningHelpers.h>
+#include <CollisionScheduling.h>
+#include <TaskExecution.h>
 
 #include <algorithm>
 #include <cmath>
@@ -716,6 +719,72 @@ namespace
     return true;
   }
 
+  // Regression test for MARS/11path-planning-conflict-review.md Findings 1/2:
+  // an idle robot parked directly on another robot's initial-transit goal
+  // pose must itself be relocated (mechanism A, via relocate_blocking_robot)
+  // rather than the task robot self-parking next to a goal that remains
+  // occupied (a near-no-op, pre-fix). Exercises the GOAL_INVALID_COLLISION
+  // branch of attempt_validation_blocker_recovery inside plan_initial_transit.
+  bool test_idle_blocker_relocated_off_initial_transit_goal()
+  {
+    Params params = make_push_demo_params();
+    RuntimeOptions options; // defaults: initial_transit_methods, safe parking, etc.
+
+    EntityStore store;
+    const Pose start_pose(0.5, 1.0, 0.0);
+    const Pose goal_pose(3.0, 1.0, 0.0);
+    RobotMeta *robot1 = store.add_mars_runtime_robot("robot1", start_pose);
+    RobotMeta *robot2 = store.add_mars_runtime_robot("robot2", goal_pose);
+
+    TimeTable timetable(0.5);
+    timetable.add_initial(store.entities);
+
+    const Pose blocker_initial_pose = timetable.get_pose(robot2, 0.0);
+
+    double out_abs_start = -1.0;
+    double out_abs_end = -1.0;
+    const bool succeeded = plan_initial_transit(
+        robot1, goal_pose, 0.0, timetable, store.entities, params, options,
+        &out_abs_start, &out_abs_end);
+
+    if (!succeeded)
+    {
+      std::cerr << "    plan_initial_transit failed; expected the idle "
+                   "blocker on the goal pose to be relocated instead.\n";
+      return false;
+    }
+
+    const double robot1_final_time = timetable.get_entity_max_time(robot1);
+    const Pose robot1_final_pose = timetable.get_pose(robot1, robot1_final_time);
+    if (!near(robot1_final_pose.x, goal_pose.x, 0.15) ||
+        !near(robot1_final_pose.y, goal_pose.y, 0.15))
+    {
+      std::cerr << "    robot1 did not reach the intended goal pose ("
+                << robot1_final_pose.x << ", " << robot1_final_pose.y
+                << ") vs goal (" << goal_pose.x << ", " << goal_pose.y
+                << ").\n";
+      return false;
+    }
+
+    const double blocker_final_time = timetable.get_entity_max_time(robot2);
+    const Pose blocker_final_pose = timetable.get_pose(robot2, blocker_final_time);
+    const double blocker_moved_dist =
+        std::hypot(blocker_final_pose.x - blocker_initial_pose.x,
+                  blocker_final_pose.y - blocker_initial_pose.y);
+    if (blocker_moved_dist < 0.2)
+    {
+      std::cerr << "    Idle blocker robot2 was not relocated off the goal "
+                   "pose (moved "
+                << blocker_moved_dist << "m); expected a mechanism-A "
+                   "relocation, not a self-park no-op.\n";
+      return false;
+    }
+
+    maybe_show_results("Idle blocker relocated off initial transit goal",
+                       timetable, store.entities, {}, params);
+    return true;
+  }
+
   bool test_rearranged_object_is_static_obstacle()
   {
     Params params = make_push_demo_params();
@@ -973,6 +1042,190 @@ namespace
     maybe_show_results("Expand safe parking mode finds feasible candidate",
                        viz_timetable, store.entities,
                        {mover_traj, parking_traj}, params);
+    return true;
+  }
+
+  bool test_clear_hint_validates_real_scheduling_window()
+  {
+    Params params = make_push_demo_params();
+    EntityStore store;
+
+    RobotMeta *blocker =
+        store.add_mars_runtime_robot("blocker", Pose(0.3, 0.3, 0.0));
+    RobotMeta *hint_robot =
+        store.add_mars_runtime_robot("hint_robot", Pose(1.2, 2.0, 0.0));
+
+    TimeTable timetable(0.5);
+    timetable.add_initial(store.entities);
+
+    // Blocker holds its original pose, then relocates and settles onto the
+    // candidate parking pose only late in the schedule (mirrors the
+    // reported bug: relocations typically land 150-300s into the
+    // simulation, not at t=0).
+    constexpr double kRealWindow = 200.0;
+    const Pose candidate_pose(2.0, 2.0, 0.0);
+
+    Trajectory hold_at_origin;
+    hold_at_origin.entity = blocker;
+    hold_at_origin.start_time = 0.0;
+    hold_at_origin.is_transfer = false;
+    hold_at_origin.waypoints = {make_waypoint(0.3, 0.3, 0.0, 0.0),
+                                make_waypoint(0.3, 0.3, 0.0, kRealWindow - 1.0)};
+    timetable.add_trajectory(hold_at_origin);
+
+    Trajectory arrive_at_candidate;
+    arrive_at_candidate.entity = blocker;
+    arrive_at_candidate.start_time = kRealWindow - 1.0;
+    arrive_at_candidate.is_transfer = false;
+    arrive_at_candidate.waypoints = {
+        make_waypoint(0.3, 0.3, 0.0, 0.0),
+        make_waypoint(candidate_pose.x, candidate_pose.y, candidate_pose.yaw,
+                      1.0)};
+    timetable.add_trajectory(arrive_at_candidate);
+
+    // blocked_traj_hint: a segment trajectory with an unassigned start_time
+    // (-1), exactly as ReloPushPath2TrajPtr leaves it before scheduling
+    // succeeds (Task.h). Its (already-relative) waypoints cut straight
+    // through candidate_pose.
+    Trajectory hint;
+    hint.entity = hint_robot;
+    hint.start_time = -1.0;
+    hint.is_transfer = false;
+    hint.waypoints = {make_waypoint(1.2, 2.0, 0.0, 0.0),
+                      make_waypoint(candidate_pose.x, candidate_pose.y,
+                                    candidate_pose.yaw, 1.0),
+                      make_waypoint(2.8, 2.0, 0.0, 2.0)};
+
+    // Sub-case 1 (fixed behavior): validated at the real scheduling window,
+    // the blocker is sitting on the hint's path -> must be rejected.
+    CollisionInfo collision_fixed;
+    double check_time_fixed = 0.0;
+    const bool clears_with_fix = parking_candidate_clears_blocked_hint(
+        &hint, blocker, timetable, params, &collision_fixed, &check_time_fixed,
+        kRealWindow);
+    if (clears_with_fix)
+    {
+      std::cerr << "    Candidate was accepted even though the blocker "
+                   "occupies the hint's path during the real scheduling "
+                   "window (t="
+                << kRealWindow << "s); hint_reference_time was not honored.\n";
+      return false;
+    }
+
+    // Confirm this is genuinely the reported bug: with no reference time
+    // available (the only behavior possible before hint_reference_time
+    // existed), the legacy fallback derives its window from the hint's own
+    // near-zero waypoint time and wrongly accepts the candidate because the
+    // blocker hasn't relocated there yet at t=0.
+    CollisionInfo collision_prefix;
+    double check_time_prefix = 0.0;
+    const bool clears_prefix_logic = parking_candidate_clears_blocked_hint(
+        &hint, blocker, timetable, params, &collision_prefix, &check_time_prefix,
+        -1.0);
+    if (!clears_prefix_logic)
+    {
+      std::cerr << "    Expected the pre-fix (no reference time) code path "
+                   "to still wrongly accept this candidate; scenario no "
+                   "longer isolates the original bug.\n";
+      return false;
+    }
+
+    // Sub-case 2: a candidate that genuinely clears the hint's path, even
+    // when validated at the real scheduling window, must still be accepted.
+    const Pose clear_candidate_pose(0.6, 4.6, 0.0);
+    TimeTable clear_timetable(0.5);
+    clear_timetable.add_initial(store.entities);
+    clear_timetable.add_trajectory(hold_at_origin);
+
+    Trajectory arrive_at_clear_candidate;
+    arrive_at_clear_candidate.entity = blocker;
+    arrive_at_clear_candidate.start_time = kRealWindow - 1.0;
+    arrive_at_clear_candidate.is_transfer = false;
+    arrive_at_clear_candidate.waypoints = {
+        make_waypoint(0.3, 0.3, 0.0, 0.0),
+        make_waypoint(clear_candidate_pose.x, clear_candidate_pose.y,
+                      clear_candidate_pose.yaw, 1.0)};
+    clear_timetable.add_trajectory(arrive_at_clear_candidate);
+
+    CollisionInfo collision_clear;
+    double check_time_clear = 0.0;
+    const bool clears_when_actually_clear = parking_candidate_clears_blocked_hint(
+        &hint, blocker, clear_timetable, params, &collision_clear,
+        &check_time_clear, kRealWindow);
+    if (!clears_when_actually_clear)
+    {
+      std::cerr << "    A candidate that genuinely clears the hint's path "
+                   "during the real scheduling window was incorrectly "
+                   "rejected.\n";
+      return false;
+    }
+
+    return true;
+  }
+
+  bool test_replan_transit_segment_after_failed_schedule_avoids_new_object()
+  {
+    Params params = make_push_demo_params();
+    RuntimeOptions options; // defaults: initial_transit_methods, etc.
+
+    EntityStore store;
+    RobotMeta *robot =
+        store.add_mars_runtime_robot("robot1", Pose(0.4, 2.6, 0.0));
+    // Committed directly on the straight-line path the stale geometry below
+    // assumes was still clear -- mimics a concurrently-delivered object
+    // permanently occupying a connector path planned against an earlier
+    // world snapshot.
+    store.add_object("obj_new_delivery", Pose(2.0, 2.6, 0.0));
+
+    TimeTable timetable(0.5);
+    timetable.add_initial(store.entities);
+
+    Trajectory traj;
+    traj.entity = robot;
+    traj.start_time = 0.0;
+    traj.is_transfer = false;
+    traj.kind = TrajectoryKind::TRANSIT;
+    traj.waypoints = {make_waypoint(0.4, 2.6, 0.0, 0.0),
+                      make_waypoint(3.6, 2.6, 0.0, 16.0)};
+
+    if (path_is_collision_free(robot, traj.waypoints, timetable, store.entities,
+                               params))
+    {
+      std::cerr << "    Test setup invalid: stale straight-line path does "
+                   "not actually collide with obj_new_delivery.\n";
+      return false;
+    }
+
+    std::string failure_reason;
+    const bool replanned = replan_transit_segment_after_failed_schedule(
+        &traj, robot, 0.0, timetable, store.entities, params, options,
+        &failure_reason);
+
+    if (!replanned)
+    {
+      std::cerr << "    Transit replanning after failed schedule did not "
+                   "find a path around the newly-delivered object ("
+                << failure_reason << ").\n";
+      return false;
+    }
+
+    if (traj.is_transfer || traj.waypoints.size() < 2)
+    {
+      std::cerr << "    Replanned segment is not a valid transit path.\n";
+      return false;
+    }
+
+    if (!path_is_collision_free(robot, traj.waypoints, timetable, store.entities,
+                                params))
+    {
+      std::cerr << "    Replanned segment still collides with the "
+                   "newly-delivered object.\n";
+      return false;
+    }
+
+    maybe_show_results(
+        "Transit segment replans around newly-delivered object", timetable,
+        store.entities, {traj}, params);
     return true;
   }
 
@@ -2177,12 +2430,18 @@ int main(int argc, char **argv)
        test_other_robot_avoids_temporarily_relocated_object},
       {"Rearranged object becomes static obstacle",
        test_rearranged_object_is_static_obstacle},
+      {"Idle blocker relocated off initial transit goal",
+       test_idle_blocker_relocated_off_initial_transit_goal},
       {"Safe parking pose remains safe until last timestamp",
        test_safe_parking_pose_safe_until_last_timestamp},
       {"Safe parking trajectory is collision-free",
        test_safe_parking_trajectory_collision_free},
       {"Expand safe parking mode finds feasible candidate",
        test_expand_safe_parking_mode_finds_feasible_candidate},
+      {"ClearHint validates the real scheduling window",
+       test_clear_hint_validates_real_scheduling_window},
+      {"Transit segment replan avoids newly-delivered object",
+       test_replan_transit_segment_after_failed_schedule_avoids_new_object},
       {"Anchor-first contact segment regression",
        test_anchor_first_contact_segment_regression},
       {"QModel gradient check (linear + MLP)", test_qmodel_gradient_check},

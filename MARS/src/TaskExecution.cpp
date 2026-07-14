@@ -85,7 +85,9 @@ bool relocate_blocking_robot(
     const Params &params,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const RuntimeOptions &options,
-    const Trajectory *blocked_traj_hint = nullptr);
+    const Trajectory *blocked_traj_hint = nullptr,
+    double hint_reference_time = -1.0,
+    const char *context = "blocker");
 
 // ==========================================
 // Forward declarations: CollisionScheduling still in monolith
@@ -503,6 +505,53 @@ bool replan_transfer_segment_after_failed_schedule(
   return true;
 }
 
+bool replan_transit_segment_after_failed_schedule(
+    Trajectory *traj,
+    RobotMeta *robot,
+    double segment_ready_time,
+    TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params,
+    const RuntimeOptions &options,
+    std::string *out_failure_reason)
+{
+  if (!traj || !robot || traj->is_transfer || traj->waypoints.empty())
+  {
+    if (out_failure_reason)
+      *out_failure_reason = "transit replanning skipped: invalid segment";
+    return false;
+  }
+
+  const Pose goal_pose = traj->waypoints.back();
+  robot->initial_pose = timetable.get_pose(robot, segment_ready_time);
+
+  std::cout << "  [Segment] Given transit path is not schedulable; "
+            << "attempting replanning against the current world state for "
+            << robot->name << "." << std::endl;
+
+  std::vector<Waypoint> replanned_rel;
+  if (!replan_transit_segment(robot, goal_pose, segment_ready_time,
+                              timetable, entities, params, options,
+                              replanned_rel, SegmentReplanContext{},
+                              traj->approach_goal_entity, nullptr))
+  {
+    if (out_failure_reason)
+      *out_failure_reason =
+          "transit replanning failed: no schedulable geometry found";
+    std::cerr << "  [Segment] Transit replanning failed." << std::endl;
+    return false;
+  }
+
+  traj->waypoints = std::move(replanned_rel);
+  traj->start_time = segment_ready_time;
+  traj->kind = TrajectoryKind::TRANSIT;
+
+  std::cout << "  [Segment] Transit replanning produced "
+            << traj->waypoints.size()
+            << " waypoints; retrying scheduling." << std::endl;
+  return true;
+}
+
 // ==========================================
 // Path Segment Scheduling
 // ==========================================
@@ -558,6 +607,34 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
     else if (out_failure_reason && !transfer_replan_failure.empty())
     {
       *out_failure_reason = transfer_replan_failure;
+    }
+  }
+  else if (!success && !traj->is_transfer)
+  {
+    // The original transit geometry was planned once against a snapshot of
+    // the world at current_avail_time and only ever time-shifted afterward.
+    // If a concurrently-delivered object now permanently occupies that fixed
+    // path, no amount of delay can resolve it. Replan the geometry at/after
+    // the failure time so the planner sees the current world.
+    const double replan_start_time =
+        std::max(segment_failure_start, current_avail_time);
+    std::cout << "  [Segment] Replanning non-transfer segment after failed schedule (blocker="
+              << segment_failure_collision.entity_name << ", t="
+              << std::fixed << std::setprecision(2) << replan_start_time
+              << ")." << std::endl;
+    std::string transit_replan_failure;
+    if (replan_transit_segment_after_failed_schedule(
+            traj.get(), robot, replan_start_time, timetable, entities,
+            params, options, &transit_replan_failure))
+    {
+      success = reserve_and_commit_trajectory(
+          traj.get(), robot, replan_start_time, timetable, params, entities,
+          options, transfer_windows, stats, out_failure_reason,
+          &segment_failure_collision, &segment_failure_start);
+    }
+    else if (out_failure_reason && !transit_replan_failure.empty())
+    {
+      *out_failure_reason = transit_replan_failure;
     }
   }
 
@@ -1246,7 +1323,8 @@ bool attempt_task_with_candidate(
                     << " before replanning the task." << std::endl;
 
           if (relocate_blocking_robot(cand_robot, self_park_base_timetable,
-                                      params, entities, options, &blocked_hint))
+                                      params, entities, options, &blocked_hint,
+                                      verify.time, "self-park"))
           {
             retry_base_timetable = std::move(self_park_base_timetable);
             retry_base_transfer_windows = std::move(self_park_base_transfer_windows);
@@ -1346,7 +1424,8 @@ bool attempt_task_with_candidate(
                 << std::endl;
 
       if (relocate_blocking_robot(cand_robot, self_park_base_timetable,
-                                  params, entities, options, &blocked_hint))
+                                  params, entities, options, &blocked_hint,
+                                  conflict_time, "self-park"))
       {
         retry_base_timetable = std::move(self_park_base_timetable);
         retry_base_transfer_windows = std::move(self_park_base_transfer_windows);
@@ -1441,7 +1520,7 @@ bool maybe_safe_park_repeated_initial_transit_failure(
             << " times; safe-parking before next candidate." << std::endl;
 
   if (!relocate_blocking_robot(robot, timetable, params, entities, options,
-                               &blocked_hint))
+                               &blocked_hint, robot_ready_time, "self-park"))
   {
     std::cout << "         [CandidateRecovery] Safe parking failed for "
               << robot->name << "; keeping existing pose." << std::endl;

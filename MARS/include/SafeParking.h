@@ -148,6 +148,9 @@ struct ConnectedSafeParkingSearchResult
   TimeTable committed_timetable;
 };
 
+// `hint_reference_time` is forwarded to parking_candidate_clears_blocked_hint
+// as the real scheduling-window time to validate blocked_traj_hint against
+// (see CollisionScheduling.h for details); pass -1.0 if unavailable.
 ConnectedSafeParkingSearchResult search_safe_parking_connected_search(
     ParkingCandidateMode mode,
     RobotMeta *blocker,
@@ -157,16 +160,27 @@ ConnectedSafeParkingSearchResult search_safe_parking_connected_search(
     const Params &params,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Trajectory *blocked_traj_hint,
+    double hint_reference_time,
     std::vector<SafeParkingDebugTrial> *debug_trials);
 
 // Thread-local relocation cache (defined in PHAstar_push_demo.cpp, used by relocate_blocking_robot)
 extern thread_local std::unordered_map<std::string, double> g_recent_failed_relocations;
 std::unordered_map<std::string, double> &recent_failed_relocation_cache();
 
+// `context` tags the [Relocate] diagnostic log lines to distinguish
+// mechanism A (relocating an actual idle blocker) from mechanism B
+// (self-parking the robot currently being planned) — purely diagnostic,
+// does not affect relocation behavior.
+// `hint_reference_time` is the real scheduling-window time blocked_traj_hint
+// must be validated against (see parking_candidate_clears_blocked_hint in
+// CollisionScheduling.h); pass -1.0 (default) when no better time is known,
+// which preserves the old best-effort fallback behavior.
 bool relocate_blocking_robot(RobotMeta *blocker, TimeTable &timetable,
     const Params &params,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const RuntimeOptions &options,
-    const Trajectory *blocked_traj_hint = nullptr);
+    const Trajectory *blocked_traj_hint = nullptr,
+    double hint_reference_time = -1.0,
+    const char *context = "blocker");
 
 #endif // SAFE_PARKING_H

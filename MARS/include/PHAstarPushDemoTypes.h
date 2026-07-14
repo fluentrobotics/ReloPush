@@ -325,6 +325,9 @@ struct SegmentReplanContext
 enum class IdleBlockerRelocationPolicy
 {
   RelocateAnyIdle,
+  // Never relocate an idle blocker; only start-time delay may resolve the
+  // conflict. Valid policy value (should_relocate_idle_blocker simply stays
+  // false), but currently unused by any call site.
   WaitOnly,
   RelocateIfBecameIdleDuringAttempt,
 };

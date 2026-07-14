@@ -849,7 +849,8 @@ bool parking_candidate_clears_blocked_hint(
     TimeTable &timetable,
     const Params &params,
     CollisionInfo *out_last_collision,
-    double *out_last_check_time)
+    double *out_last_check_time,
+    double hint_reference_time)
 {
   if (!blocked_traj_hint || !blocker || blocked_traj_hint->waypoints.empty())
   {
@@ -864,16 +865,44 @@ bool parking_candidate_clears_blocked_hint(
   double hint_start_time = hint.start_time;
   if (hint_start_time <= 0.0)
   {
-    hint_start_time = hint.waypoints.front().time;
-    if (hint_start_time > 1e-9)
+    // hint.start_time is unassigned (segment trajectories are built with
+    // start_time = -1 until scheduling succeeds, see ReloPushPath2TrajPtr).
+    // Prefer the caller-supplied real scheduling-window reference time; its
+    // waypoints are already relative to that window in this case. Only fall
+    // back to the legacy waypoint-front-time heuristic (which assumes
+    // blocked_traj_hint carries its own, possibly absolute, timestamps) when
+    // no usable reference time was passed in.
+    if (hint_reference_time > 0.0)
     {
-      make_waypoint_times_relative(hint.waypoints, hint_start_time);
+      hint_start_time = hint_reference_time;
+    }
+    else
+    {
+      hint_start_time = hint.waypoints.front().time;
+      if (hint_start_time > 1e-9)
+      {
+        make_waypoint_times_relative(hint.waypoints, hint_start_time);
+      }
     }
   }
 
+  CollisionInfo local_collision;
+  double local_check_time = hint_start_time;
   double safe_start = find_wait_only_start_time_avoiding_entity(
       hint, hint_start_time, blocker, timetable, params,
-      out_last_collision, out_last_check_time);
+      &local_collision, &local_check_time);
+  if (out_last_collision)
+    *out_last_collision = local_collision;
+  if (out_last_check_time)
+    *out_last_check_time = local_check_time;
+
+  std::cout << "  [ClearHint] blocker=" << blocker->name
+            << " hint_start=" << std::fixed << std::setprecision(2) << hint_start_time
+            << " -> " << (safe_start >= 0.0 ? "CLEARS at t=" : "BLOCKED, last check t=")
+            << std::fixed << std::setprecision(2)
+            << (safe_start >= 0.0 ? safe_start : local_check_time)
+            << std::endl;
+
   return safe_start >= 0.0;
 }
 
@@ -1135,7 +1164,7 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
           }
 
           if (relocate_blocking_robot(blocker, timetable, params, entities,
-                                      options, traj))
+                                      options, traj, check_time))
           {
             last_relocated_robot = blocker->name;
             last_relocation_time = check_time;
@@ -1217,6 +1246,26 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
             << "s). Last collision: "
             << last_collision.reason << " with " << last_collision.entity_name
             << " at t=" << last_collision.time << std::endl;
+  {
+    auto collider_it = entities.find(last_collision.entity_name);
+    const char *collider_kind =
+        (collider_it != entities.end() && collider_it->second)
+            ? (collider_it->second->type == EntityType::ROBOT ? "robot" : "object")
+            : "unknown";
+    std::cerr << "  [Delay] FAILED to find safe start: earliest_start="
+              << std::fixed << std::setprecision(2) << earliest_start
+              << "s, horizon=[" << earliest_start << ".."
+              << timetable_delay_search_horizon(earliest_start, timetable, step)
+              << "], last blocker=" << last_collision.entity_name
+              << " (" << collider_kind << ")";
+    if (!last_relocated_robot.empty() &&
+        last_collision.entity_name == last_relocated_robot)
+    {
+      std::cerr << " [SAME robot just relocated at check_time="
+                << last_relocation_time << "]";
+    }
+    std::cerr << std::endl;
+  }
   write_failure_outputs();
   return -1.0; // Failure signal
 }
@@ -1363,7 +1412,7 @@ bool reserve_and_commit_trajectory(
                       << " conflicts with idle robot " << blocking_robot->name
                       << ". Relocating blocker first." << std::endl;
             if (relocate_blocking_robot(blocking_robot, trial_timetable, params,
-                                        entities, options))
+                                        entities, options, nullptr, arrival_time))
             {
               continue;
             }
@@ -1450,8 +1499,9 @@ bool reserve_and_commit_trajectory(
   }
 
   double wait_added = 0.0;
+  TimeTable trial_timetable = timetable;
   double safe_start_time =
-      find_safe_start_time(traj, earliest_start, timetable, params, entities,
+      find_safe_start_time(traj, earliest_start, trial_timetable, params, entities,
                            options, &wait_added, out_last_collision,
                            out_last_check_time);
   accumulate_wait_stats(stats, wait_added);
@@ -1460,13 +1510,15 @@ bool reserve_and_commit_trajectory(
   {
     if (out_failure_reason)
       *out_failure_reason = "failed to find safe start for scheduled segment";
-    std::cerr << "  [Segment] Failed to find safe start time for path segment."
-              << std::endl;
+    std::cerr << "  [Segment] Failed to find safe start time for path segment"
+              << " (blocker=" << (out_last_collision ? out_last_collision->entity_name : "?")
+              << " at t=" << std::fixed << std::setprecision(2)
+              << (out_last_collision ? out_last_collision->time : -1.0)
+              << ")." << std::endl;
     return false;
   }
 
   traj->start_time = safe_start_time;
-  TimeTable trial_timetable = timetable;
   trial_timetable.add_trajectory(*traj);
 
   CollisionInfo precommit_collision;

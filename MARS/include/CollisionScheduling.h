@@ -123,13 +123,19 @@ double timetable_delay_search_horizon(
 bool parking_pose_conflicts_with_blocked_hint(
     const Pose &candidate_pose, RobotMeta *blocker,
     const Trajectory *blocked_traj_hint);
+// `hint_reference_time` is the real scheduling-window time the caller wants
+// blocked_traj_hint validated against. It is only used when
+// blocked_traj_hint->start_time is unassigned (<= 0.0); the legacy
+// waypoint-front-time fallback is used only if hint_reference_time is also
+// unavailable (<= 0.0).
 bool parking_candidate_clears_blocked_hint(
     const Trajectory *blocked_traj_hint,
     RobotMeta *blocker,
     TimeTable &timetable,
     const Params &params,
     CollisionInfo *out_last_collision = nullptr,
-    double *out_last_check_time = nullptr);
+    double *out_last_check_time = nullptr,
+    double hint_reference_time = -1.0);
 
 // Transfer contact windows
 std::vector<TransferContactWindow> transfer_windows_with_candidate(

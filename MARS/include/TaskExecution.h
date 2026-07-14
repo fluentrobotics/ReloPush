@@ -59,6 +59,13 @@ bool replan_transfer_segment_after_failed_schedule(
     const Params &params, const RuntimeOptions &options,
     std::string *out_failure_reason = nullptr);
 
+bool replan_transit_segment_after_failed_schedule(
+    Trajectory *traj, RobotMeta *robot, double segment_ready_time,
+    TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &params, const RuntimeOptions &options,
+    std::string *out_failure_reason = nullptr);
+
 // ==========================================
 // Path Segment Scheduling
 // ==========================================

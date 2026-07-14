@@ -53,7 +53,8 @@ bool parking_candidate_clears_blocked_hint(
     TimeTable &timetable,
     const Params &params,
     CollisionInfo *out_last_collision = nullptr,
-    double *out_last_check_time = nullptr);
+    double *out_last_check_time = nullptr,
+    double hint_reference_time = -1.0);
 
 CollisionInfo find_stationary_pose_conflict_until_last_timestamp(EntityMeta *entity,
                                                                  const Pose &pose,
@@ -1019,6 +1020,7 @@ ConnectedSafeParkingSearchResult search_safe_parking_connected_search(
     const Params &params,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Trajectory *blocked_traj_hint,
+    double hint_reference_time,
     std::vector<SafeParkingDebugTrial> *debug_trials)
 {
   ConnectedSafeParkingSearchResult result;
@@ -1227,7 +1229,8 @@ ConnectedSafeParkingSearchResult search_safe_parking_connected_search(
               double blocked_hint_check_time = ready_time;
               if (!parking_candidate_clears_blocked_hint(
                       blocked_traj_hint, blocker, trial_timetable, params,
-                      &blocked_hint_collision, &blocked_hint_check_time))
+                      &blocked_hint_collision, &blocked_hint_check_time,
+                      hint_reference_time))
               {
                 trial_res.status = PlanningStatus::NO_PATH_FOUND;
                 std::ostringstream oss;
@@ -1302,7 +1305,9 @@ bool relocate_blocking_robot(RobotMeta *blocker,
                              const Params &params,
                              const std::unordered_map<std::string, EntityMeta *> &entities,
                              const RuntimeOptions &options,
-                             const Trajectory *blocked_traj_hint)
+                             const Trajectory *blocked_traj_hint,
+                             double hint_reference_time,
+                             const char *context)
 {
   auto &recent_failed_relocations = recent_failed_relocation_cache();
 
@@ -1323,12 +1328,16 @@ bool relocate_blocking_robot(RobotMeta *blocker,
 
   std::string fail_key = make_fail_key(start_pose);
   auto fail_it = recent_failed_relocations.find(fail_key);
-  if (fail_it != recent_failed_relocations.end() && (ready_time - fail_it->second) < 10.0)
+  // Directional guard: a negative delta means simulated time regressed
+  // (e.g. a candidate-level rollback) since the failure was recorded, so a
+  // stale entry from a rolled-back future must not suppress a fresh attempt.
+  if (fail_it != recent_failed_relocations.end() &&
+      ready_time >= fail_it->second && (ready_time - fail_it->second) < 10.0)
   {
     return false;
   }
 
-  std::cout << "  [Relocate] Attempting to move " << blocker->name
+  std::cout << "  [Relocate|" << context << "] Attempting to move " << blocker->name
             << " from (" << start_pose.x << ", " << start_pose.y << ")" << std::endl;
 
   TimeTable debug_timetable = timetable;
@@ -1489,7 +1498,8 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       double blocked_hint_check_time = ready_time;
       if (!parking_candidate_clears_blocked_hint(
               blocked_traj_hint, blocker, prefix_timetable, params,
-              &blocked_hint_collision, &blocked_hint_check_time))
+              &blocked_hint_collision, &blocked_hint_check_time,
+              hint_reference_time))
       {
         continue;
       }
@@ -1530,13 +1540,13 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       auto connected_result = search_safe_parking_connected_search(
           candidate_mode, blocker, start_pose, ready_time,
           timetable, params, entities, blocked_traj_hint,
-          DEBUG_VIS ? &debug_trials : nullptr);
+          hint_reference_time, DEBUG_VIS ? &debug_trials : nullptr);
       if (connected_result.found)
       {
         show_debug_trials();
         timetable = std::move(connected_result.committed_timetable);
         recent_failed_relocations.erase(fail_key);
-        std::cout << "  [Relocate] SUCCESS: Moved " << blocker->name
+        std::cout << "  [Relocate|" << context << "] SUCCESS: Moved " << blocker->name
                   << " to (" << connected_result.parking_pose.x << ", "
                   << connected_result.parking_pose.y << ")" << std::endl;
         std::cout << "  [Relocate] Summary: modes=" << relocation_modes_tried
@@ -1696,7 +1706,8 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       double blocked_hint_check_time = ready_time;
       if (!parking_candidate_clears_blocked_hint(
               blocked_traj_hint, blocker, committed_timetable, params,
-              &blocked_hint_collision, &blocked_hint_check_time))
+              &blocked_hint_collision, &blocked_hint_check_time,
+              hint_reference_time))
       {
         relocation_safety_rejections++;
         PlanningResult trial_res = res;
@@ -1751,7 +1762,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
 
       timetable = std::move(committed_timetable);
       recent_failed_relocations.erase(fail_key);
-      std::cout << "  [Relocate] SUCCESS: Moved " << blocker->name
+      std::cout << "  [Relocate|" << context << "] SUCCESS: Moved " << blocker->name
                 << " to (" << selected_parking_pose.x << ", "
                 << selected_parking_pose.y << ")" << std::endl;
       std::cout << "  [Relocate] Summary: modes=" << relocation_modes_tried
@@ -1765,7 +1776,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
   }
   recent_failed_relocations[fail_key] = ready_time;
   show_debug_trials();
-  std::cerr << "  [Relocate] FAILED: Could not find safe parking spot for " << blocker->name << std::endl;
+  std::cerr << "  [Relocate|" << context << "] FAILED: Could not find safe parking spot for " << blocker->name << std::endl;
   std::cerr << "  [Relocate] Summary: modes=" << relocation_modes_tried
             << ", planned_candidates=" << relocation_candidates_planned
             << ", planning_failures=" << relocation_planning_failures
