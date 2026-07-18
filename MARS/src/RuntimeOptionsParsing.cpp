@@ -193,7 +193,7 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
       try
       {
         int parsed = std::stoi(value);
-        options.dqn_feature_version = std::max(1, std::min(2, parsed));
+        options.dqn_feature_version = std::max(1, std::min(4, parsed));
       }
       catch (...)
       {
@@ -233,10 +233,73 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
       options.dqn_log_transitions_path =
           arg.substr(std::string("--dqn-log-transitions=").size());
     }
+    else if (arg.rfind("--dqn-scoring=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-scoring=").size());
+      if (value == "penalty")
+      {
+        options.dqn_scoring_mode = 0;
+      }
+      else if (value == "decomposed")
+      {
+        options.dqn_scoring_mode = 1;
+      }
+      else
+      {
+        std::cerr << "[Warn] Invalid --dqn-scoring value: '" << value
+                  << "'. Keeping default (penalty)." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-fail-threshold=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-fail-threshold=").size());
+      try
+      {
+        options.dqn_fail_threshold = std::min(1.0, std::max(0.0, std::stod(value)));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-fail-threshold value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--dqn-fail-pos-weight=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-fail-pos-weight=").size());
+      try
+      {
+        options.dqn_fail_pos_weight = std::max(0.0, std::stod(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --dqn-fail-pos-weight value: '" << value
+                  << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg == "--dqn-relabel-executed")
+    {
+      options.dqn_relabel_executed = true;
+    }
+    else if (arg.rfind("--dqn-relabel-executed=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--dqn-relabel-executed=").size());
+      if (value == "1" || value == "true")
+        options.dqn_relabel_executed = true;
+      else if (value == "0" || value == "false")
+        options.dqn_relabel_executed = false;
+      else
+        std::cerr << "[Warn] Invalid --dqn-relabel-executed value: '" << value
+                  << "'. Keeping default (off)." << std::endl;
+    }
     else if (arg.rfind("--dqn-init-weights=", 0) == 0)
     {
       options.dqn_init_weights_path =
           arg.substr(std::string("--dqn-init-weights=").size());
+    }
+    else if (arg.rfind("--dqn-init-fail-weights=", 0) == 0)
+    {
+      options.dqn_init_fail_weights_path =
+          arg.substr(std::string("--dqn-init-fail-weights=").size());
     }
     else if (arg.rfind("--dqn-finetune-lr=", 0) == 0)
     {
@@ -281,6 +344,10 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << value << "'. Keeping default." << std::endl;
       }
     }
+    else if (arg == "--dqn-freeze-model")
+    {
+      options.dqn_freeze_model = true;
+    }
     else if (arg.rfind("--export-geometry=", 0) == 0)
     {
       options.export_geometry_path =
@@ -298,6 +365,26 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
         std::cerr << "[Warn] Invalid --geometry-k value: '" << value
                   << "'. Keeping default." << std::endl;
       }
+    }
+    else if (arg.rfind("--export-pg-tables=", 0) == 0)
+    {
+      options.export_pg_tables_path =
+          arg.substr(std::string("--export-pg-tables=").size());
+    }
+    else if (arg.rfind("--eval-plans=", 0) == 0)
+    {
+      options.eval_plans_path =
+          arg.substr(std::string("--eval-plans=").size());
+    }
+    else if (arg.rfind("--eval-plans-out=", 0) == 0)
+    {
+      options.eval_plans_out_path =
+          arg.substr(std::string("--eval-plans-out=").size());
+    }
+    else if (arg.rfind("--export-decision-time-log=", 0) == 0)
+    {
+      options.export_decision_time_log_path =
+          arg.substr(std::string("--export-decision-time-log=").size());
     }
     else if (arg.rfind("--random-seed=", 0) == 0)
     {
@@ -663,6 +750,17 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
   {
     std::random_device rd;
     options.base_random_seed = rd();
+  }
+
+  // Decomposed scoring (Decision 2) needs the v3/v4 (task, robot) explicit
+  // feature machinery; downgrade rather than abort if the flags conflict, so
+  // a single bad combination doesn't kill an otherwise-valid batch run.
+  if (options.dqn_scoring_mode == 1 && options.dqn_feature_version < 3)
+  {
+    std::cerr << "[Warn] --dqn-scoring=decomposed requires --dqn-features=3 or 4 (got "
+              << options.dqn_feature_version << "). Falling back to --dqn-scoring=penalty."
+              << std::endl;
+    options.dqn_scoring_mode = 0;
   }
 
   return options;

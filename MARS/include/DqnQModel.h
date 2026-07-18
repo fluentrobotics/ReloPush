@@ -20,6 +20,21 @@
 #include <string>
 #include <vector>
 
+// Numerically stable logistic sigmoid, shared by QModel::accumulate_grad_logistic
+// and any caller that needs to turn a QModel's raw predict() output (treated
+// as a logit) into a probability (e.g. the decomposed-scoring f_head; see
+// DqnAllocationSearch.cpp construct_order_v3).
+inline double dqn_sigmoid(double z)
+{
+  if (z >= 0.0)
+  {
+    const double e = std::exp(-z);
+    return 1.0 / (1.0 + e);
+  }
+  const double e = std::exp(z);
+  return e / (1.0 + e);
+}
+
 struct QModel
 {
   std::size_t dim = 0;    // input (feature) dimension
@@ -111,6 +126,54 @@ struct QModel
       for (std::size_t i = 0; i < dim && i < x.size(); ++i)
         z += W1[j * dim + i] * x[i];
       a[j] = std::tanh(z);
+    }
+
+    const std::size_t off_W1 = 0;
+    const std::size_t off_b1 = off_W1 + hidden * dim;
+    const std::size_t off_w2 = off_b1 + hidden;
+    const std::size_t off_b2 = off_w2 + hidden;
+
+    grad[off_b2] += e;
+    for (std::size_t j = 0; j < hidden; ++j)
+    {
+      grad[off_w2 + j] += e * a[j];
+      const double delta = e * w2[j] * (1.0 - a[j] * a[j]);
+      grad[off_b1 + j] += delta;
+      for (std::size_t i = 0; i < dim && i < x.size(); ++i)
+        grad[off_W1 + j * dim + i] += delta * x[i];
+    }
+  }
+
+  // Gradient of the weighted logistic (binary cross-entropy on sigmoid(z))
+  // loss wrt all params for ONE sample, ACCUMULATED into `grad` (caller must
+  // zero-init `grad` first). z = predict(x) is treated as a logit; `y` in
+  // {0,1} is the binary label; `weight` is a per-sample loss weight (e.g.
+  // positive-class upweighting -- see DqnAllocationSearch.cpp
+  // train_model_logistic). dL/dz = weight * (sigmoid(z) - y), backpropagated
+  // through the same linear/MLP forward pass as accumulate_grad's Huber path
+  // above -- kept as a separate entry point so that path stays textually
+  // untouched. Same flat grad layout as accumulate_grad/get_params.
+  void accumulate_grad_logistic(const std::vector<double> &x, double y, double weight,
+                                std::vector<double> &grad) const
+  {
+    const double z = predict(x);
+    const double e = weight * (dqn_sigmoid(z) - y);
+
+    if (hidden == 0)
+    {
+      for (std::size_t i = 0; i < dim && i < x.size(); ++i)
+        grad[i] += e * x[i];
+      return;
+    }
+
+    // Recompute the forward activations needed for backprop.
+    std::vector<double> a(hidden, 0.0);
+    for (std::size_t j = 0; j < hidden; ++j)
+    {
+      double zz = b1[j];
+      for (std::size_t i = 0; i < dim && i < x.size(); ++i)
+        zz += W1[j * dim + i] * x[i];
+      a[j] = std::tanh(zz);
     }
 
     const std::size_t off_W1 = 0;

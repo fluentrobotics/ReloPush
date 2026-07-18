@@ -73,6 +73,8 @@ add_executable(phastar_push_demo
     src/DqnFeaturesV2.cpp
     src/TransitionLogger.cpp
     src/GeometryExport.cpp
+    src/PgTableExport.cpp
+    src/EvalPlansCli.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
@@ -117,6 +119,8 @@ add_executable(phastar_unit_tests
     src/DqnFeaturesV2.cpp
     src/TransitionLogger.cpp
     src/GeometryExport.cpp
+    src/PgTableExport.cpp
+    src/EvalPlansCli.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )

@@ -31,6 +31,8 @@
 #include <DqnAllocationSearch.h>
 #include <TransitionLogger.h>
 #include <GeometryExport.h>
+#include <PgTableExport.h>
+#include <EvalPlansCli.h>
 #include <QFont>
 #include <QImage>
 #include <QPainterPath>
@@ -194,6 +196,34 @@ int phastar_push_demo_main(int argc, char **argv)
         return result.summary.all_tasks_succeeded ? 0 : 1;
     }
 
+    // Batch-oracle CLI (policy-gradient PoC, MARS/14pg-poc-design.md section
+    // 4): evaluate a whole file of externally-constructed (order, assignment)
+    // plans through the same evaluate_scenario_batch() pathway the DQN/LNS
+    // search uses, with no search loop of its own. Placed here (same scope as
+    // --fixed-order above, for the same reason: it needs neither the greedy
+    // baseline nor robot_metas) -- see EvalPlansCli.h.
+    if (!runtime_options.eval_plans_path.empty())
+    {
+        if (runtime_options.eval_plans_out_path.empty())
+        {
+            std::cerr << "[EvalPlans] --eval-plans-out=<path.csv> is required together "
+                         "with --eval-plans="
+                      << std::endl;
+            return 2;
+        }
+
+        const bool eval_plans_ok = run_eval_plans_cli(
+            loadedSequence, runtime_options, runtime_options.eval_plans_path,
+            runtime_options.eval_plans_out_path);
+        if (eval_plans_ok)
+            std::cout << "[EvalPlans] Wrote results to "
+                      << runtime_options.eval_plans_out_path << std::endl;
+        else
+            std::cerr << "[EvalPlans] Failed to evaluate plans from "
+                      << runtime_options.eval_plans_path << std::endl;
+        return eval_plans_ok ? 0 : 1;
+    }
+
     DEBUG_VIS = runtime_options.debug_vis;
     // print_runtime_options(runtime_options);
     std::cout << "[Config] Instance file: " << instance_info.file_name << std::endl;
@@ -353,6 +383,54 @@ int phastar_push_demo_main(int argc, char **argv)
         is_better_run(full_shuffle_outcome.best_feasible, *lns_seed_summary))
     {
         lns_seed_summary = &full_shuffle_outcome.best_feasible;
+    }
+
+    // Policy-gradient PoC table export (MARS/14pg-poc-design.md section 4):
+    // short-circuits before the DQN/LNS search itself, but AFTER the seed
+    // plan is finalized above -- unlike --export-geometry= (which runs
+    // earlier and therefore cannot see the seed makespan v4 features
+    // actually normalize by, only the greedy one). Not compatible with
+    // --greedy-only mode (returns even earlier, before greedy_summary
+    // exists) -- the same accepted scope limit --export-geometry= documents.
+    if (!runtime_options.export_pg_tables_path.empty())
+    {
+        std::string pg_family = "unknown";
+        int pg_index = -1;
+        parse_family_index(runtime_options.input_sequence_path, pg_family, pg_index);
+        const bool pg_export_ok = export_pg_tables(
+            runtime_options.export_pg_tables_path, pg_family, pg_index,
+            loadedSequence, robot_names, robot_metas,
+            greedy_summary, *lns_seed_summary);
+        if (pg_export_ok)
+            std::cout << "[PgTableExport] Wrote PG tables to "
+                      << runtime_options.export_pg_tables_path << std::endl;
+        else
+            std::cerr << "[PgTableExport] Failed to write PG tables to "
+                      << runtime_options.export_pg_tables_path << std::endl;
+        return pg_export_ok ? 0 : 1;
+    }
+
+    // Policy-gradient PoC parity validation only (script/pg/parity_check.py):
+    // an independent sibling of --export-pg-tables= above (same hook point,
+    // same "not compatible with --greedy-only" scope limit) -- see
+    // RuntimeOptions::export_decision_time_log_path's doc comment for why
+    // this is a SEPARATE flag/log from --dqn-log-transitions=
+    // --dqn-relabel-executed's relabeled log.
+    if (!runtime_options.export_decision_time_log_path.empty())
+    {
+        std::string dt_family = "unknown";
+        int dt_index = -1;
+        parse_family_index(runtime_options.input_sequence_path, dt_family, dt_index);
+        const bool dt_export_ok = export_decision_time_log(
+            runtime_options.export_decision_time_log_path, dt_family, dt_index,
+            loadedSequence, robot_metas, lns_seed_summary->makespan);
+        if (dt_export_ok)
+            std::cout << "[DecisionTimeLog] Wrote decision-time step log to "
+                      << runtime_options.export_decision_time_log_path << std::endl;
+        else
+            std::cerr << "[DecisionTimeLog] Failed to write decision-time step log to "
+                      << runtime_options.export_decision_time_log_path << std::endl;
+        return dt_export_ok ? 0 : 1;
     }
 
     // Run allocation-improvement search (LNS by default, or DQN online search).

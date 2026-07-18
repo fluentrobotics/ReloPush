@@ -31,6 +31,15 @@ namespace DqnV2
 
 constexpr std::size_t kFeatDim = 9;
 
+// v3: explicit (task, robot) construction. Trimmed robot-conditional feature
+// vector -- see make_feature_vector_v3.
+constexpr std::size_t kFeatDimV3 = 10;
+
+// v4: same (task, robot) action space and construct/ingest machinery as v3,
+// with two additional schedule-state features appended -- see
+// make_feature_vector_v4.
+constexpr std::size_t kFeatDimV4 = 12;
+
 // Confinement reference clearance (~robot full length 0.48 m): at or beyond
 // this clearance from the workspace boundary, confinement weight bottoms
 // out at 1.0.
@@ -77,6 +86,14 @@ struct PairwiseGeometry
   std::vector<std::vector<double>> w_start;        // w_start[j][a]
   std::vector<std::vector<double>> w_goal;         // w_goal[j][a]
   std::vector<double> boundary_risk;               // boundary_risk[a]
+
+  // Workspace bounds and robot width this geometry was built against (the
+  // same inputs build_pairwise_geometry already took as arguments, just also
+  // retained here). Unused by v1/v2/v3; v4's idle_robot_congestion feature
+  // needs them to call blockage_weight() against a candidate task's own
+  // corridor rather than a precomputed pairwise matrix entry.
+  WorkspaceBounds bounds;
+  double robot_width = 0.0;
 };
 
 inline double dist2d(const ReloPush::State &a, const ReloPush::State &b)
@@ -177,6 +194,8 @@ inline PairwiseGeometry build_pairwise_geometry(const std::vector<TaskGeom> &geo
   g.w_start.assign(n, std::vector<double>(n, 0.0));
   g.w_goal.assign(n, std::vector<double>(n, 0.0));
   g.boundary_risk.assign(n, 0.0);
+  g.bounds = bounds;
+  g.robot_width = robot_width;
 
   const double block_dist = 0.5 * robot_width + kObjHalfDiag;
 
@@ -351,6 +370,30 @@ struct ForwardSim
     free_time[pv.robot] = pv.finish;
     pose[pv.robot] = geom.exit;
   }
+
+  // v3: preview committing `geom` to a SPECIFIED robot `r`, instead of
+  // picking the earliest-available one via pick(). Used by the explicit
+  // (task, robot) construction path; pick()/preview()/commit() above are
+  // left untouched for the v1/v2 dispatcher-driven path.
+  Preview preview_for(std::size_t r, const TaskGeom &geom) const
+  {
+    Preview pv;
+    pv.robot = r;
+    const double tau_transit = speed_transit > 1e-9
+                                    ? distance(pose[r], geom.approach) / speed_transit
+                                    : 0.0;
+    pv.start = free_time[r];
+    pv.finish = pv.start + tau_transit + geom.tau_fixed;
+    return pv;
+  }
+
+  // v3: commit a preview_for()-produced preview. Equivalent to commit()
+  // (which already only reads pv.robot, never re-derives it); kept as a
+  // distinctly named entry point for the explicit-assignment path.
+  void commit_for(std::size_t task_index, const TaskGeom &geom, const Preview &pv)
+  {
+    commit(task_index, geom, pv);
+  }
 };
 
 // phi(state, candidate task a). `is_placed`/`committed_windows` reflect the
@@ -426,6 +469,215 @@ inline std::vector<double> make_feature_vector_v2(
   phi[7] = learned_risk / denom_n1;
 
   phi[8] = geometry.boundary_risk[task];
+
+  return phi;
+}
+
+namespace detail
+{
+// Shared dims [0..9] computation for make_feature_vector_v3 and
+// make_feature_vector_v4 (v4 appends dims 10/11 on top of this same core).
+// `phi` must already be sized to at least 10 entries; only indices 0..9 are
+// written. Factored out verbatim from the original make_feature_vector_v3
+// body so both callers stay numerically (indeed bit-for-bit) identical on
+// these dims -- see the callers below for the parameter contract (`pv` from
+// sim.preview_for(r, geoms[task]); `m_t_before`/`min_free_time_before` are
+// state-level quantities shared by every candidate at this step).
+inline void fill_v3_core_features(
+    std::vector<double> &phi,
+    std::size_t task,
+    const ForwardSim::Preview &pv,
+    double m_t_before,
+    double min_free_time_before,
+    const TaskGeom &geom,
+    const PairwiseGeometry &geometry,
+    const std::vector<char> &is_placed,
+    const std::vector<std::pair<double, double>> &committed_windows,
+    const LearnedOrderConstraints &constraints,
+    double seed_makespan,
+    std::size_t task_count)
+{
+  const double S = seed_makespan > 1e-9 ? seed_makespan : 1.0;
+  const std::size_t n = task_count;
+  const double denom_n1 = n > 1 ? static_cast<double>(n - 1) : 1.0;
+
+  phi[0] = 1.0;
+  phi[1] = std::max(0.0, pv.finish - m_t_before) / S;
+  phi[2] = std::max(0.0, m_t_before - pv.finish) / S;
+  // tau_transit = pv.finish - pv.start - geom.tau_fixed (same RS length /
+  // transit speed quantity preview_for() folds into pv.finish).
+  phi[3] = ((pv.finish - pv.start) - geom.tau_fixed) / S;
+  phi[4] = (pv.start - min_free_time_before) / S;
+
+  double cong_static = 0.0;
+  for (std::size_t j = 0; j < n; ++j)
+  {
+    if (j == task)
+      continue;
+    cong_static += is_placed[j] ? geometry.w_goal[j][task] : geometry.w_start[j][task];
+  }
+  phi[5] = cong_static / (2.0 * denom_n1);
+
+  double cong_dynamic = 0.0;
+  const double window_span = std::max(pv.finish - pv.start, 1e-9);
+  for (std::size_t j = 0; j < n; ++j)
+  {
+    if (j == task || !is_placed[j])
+      continue;
+    const auto &wj = committed_windows[j];
+    const double overlap = std::min(pv.finish, wj.second) - std::max(pv.start, wj.first);
+    if (overlap > 0.0)
+      cong_dynamic += geometry.corr_overlap[task][j] * (overlap / window_span);
+  }
+  phi[6] = cong_dynamic;
+
+  phi[7] = geometry.boundary_risk[task];
+
+  std::size_t dag_violations = 0;
+  for (std::size_t p : geometry.soft_pred[task])
+    if (!is_placed[p])
+      ++dag_violations;
+  phi[8] = static_cast<double>(dag_violations) / denom_n1;
+
+  double learned_risk = 0.0;
+  if (constraints.enforced.size() == n)
+  {
+    for (std::size_t p = 0; p < n; ++p)
+    {
+      if (p == task || is_placed[p])
+        continue;
+      if (constraints.enforced[p].size() != n || !constraints.enforced[p][task])
+        continue;
+      const double evidence = (constraints.evidence_counts.size() == n &&
+                               constraints.evidence_counts[p].size() == n)
+                                  ? static_cast<double>(constraints.evidence_counts[p][task])
+                                  : kLearnedRiskCap;
+      learned_risk += std::min(evidence, kLearnedRiskCap) / kLearnedRiskCap;
+    }
+  }
+  phi[9] = learned_risk / denom_n1;
+}
+} // namespace detail
+
+// phi(state, candidate (task, robot) pair) for the v3 explicit-assignment
+// policy. Reuses the same congestion/DAG/boundary/learned-risk math as
+// make_feature_vector_v2 above (identical helper calls), but the schedule
+// terms (dmk+, slack, transit, rel_avail) are conditional on the CHOSEN
+// robot rather than the dispatcher-previewed earliest-available one:
+// `pv` must come from sim.preview_for(r, geoms[task]) for the candidate
+// robot r (pv.robot == r); `m_t_before`/`min_free_time_before` are
+// sim.max_free_time()/sim.free_time[sim.pick()] taken before this
+// candidate is committed -- state-level quantities shared by every
+// candidate considered at this step, not recomputed per candidate. No
+// origin-deviation-style feature, is-earliest flag, or load-imbalance
+// feature (v2 has none of these either); see DqnAllocationSearch.cpp
+// construct_order_v3 for how candidates are enumerated.
+inline std::vector<double> make_feature_vector_v3(
+    std::size_t task,
+    const ForwardSim::Preview &pv,
+    double m_t_before,
+    double min_free_time_before,
+    const TaskGeom &geom,
+    const PairwiseGeometry &geometry,
+    const std::vector<char> &is_placed,
+    const std::vector<std::pair<double, double>> &committed_windows,
+    const LearnedOrderConstraints &constraints,
+    double seed_makespan,
+    std::size_t task_count)
+{
+  std::vector<double> phi(kFeatDimV3, 0.0);
+  detail::fill_v3_core_features(phi, task, pv, m_t_before, min_free_time_before, geom, geometry,
+                                is_placed, committed_windows, constraints, seed_makespan,
+                                task_count);
+  return phi;
+}
+
+// phi(state, candidate (task, robot) pair) for the v4 explicit-assignment
+// policy. Dims [0..9] are IDENTICAL to make_feature_vector_v3 (shared via
+// detail::fill_v3_core_features above); this adds two schedule-state
+// features that make_feature_vector_v3 has none of:
+//
+//   [10] load_imbalance: time-based, post-commit per-robot free-time spread
+//        (max - min)/S after hypothetically committing this candidate. Pure
+//        schedule-state exposure -- no baked-in "balanced is better"
+//        assumption; the model learns the sign. `free_time_before` is
+//        sim.free_time taken before this candidate is committed (state-level,
+//        shared by every candidate at this step, like m_t_before); pv.robot's
+//        entry is replaced by pv.finish to reflect the hypothetical commit.
+//   [11] idle_robot_congestion: parked-robot blockage of the candidate's own
+//        combined push+transit corridor during its [pv.start, pv.finish)
+//        execution window, time-weighted by temporal overlap and normalized
+//        by (robot_count - 1) so it stays a congestion measure rather than a
+//        fleet-size proxy. A robot with free_time_before >= pv.finish is
+//        busy executing elsewhere for the whole window (the dynamic
+//        congestion channel's business, dim 6 -- not this one's) and is
+//        skipped. `pose_before` is sim.pose taken before this candidate is
+//        committed, parallel to `free_time_before`.
+//
+// `geometry.bounds`/`geometry.robot_width` (see PairwiseGeometry) supply the
+// workspace bounds and block_dist inputs blockage_weight() needs, matching
+// exactly what build_pairwise_geometry used to build `geometry` itself.
+inline std::vector<double> make_feature_vector_v4(
+    std::size_t task,
+    const ForwardSim::Preview &pv,
+    double m_t_before,
+    double min_free_time_before,
+    const TaskGeom &geom,
+    const PairwiseGeometry &geometry,
+    const std::vector<char> &is_placed,
+    const std::vector<std::pair<double, double>> &committed_windows,
+    const LearnedOrderConstraints &constraints,
+    double seed_makespan,
+    std::size_t task_count,
+    const std::vector<double> &free_time_before,
+    const std::vector<ReloPush::State> &pose_before)
+{
+  std::vector<double> phi(kFeatDimV4, 0.0);
+  detail::fill_v3_core_features(phi, task, pv, m_t_before, min_free_time_before, geom, geometry,
+                                is_placed, committed_windows, constraints, seed_makespan,
+                                task_count);
+
+  const double S = seed_makespan > 1e-9 ? seed_makespan : 1.0;
+
+  // [10] load_imbalance.
+  double max_f = -std::numeric_limits<double>::infinity();
+  double min_f = std::numeric_limits<double>::infinity();
+  for (std::size_t r = 0; r < free_time_before.size(); ++r)
+  {
+    const double f = (r == pv.robot) ? pv.finish : free_time_before[r];
+    max_f = std::max(max_f, f);
+    min_f = std::min(min_f, f);
+  }
+  phi[10] = (std::isfinite(max_f) && std::isfinite(min_f)) ? (max_f - min_f) / S : 0.0;
+
+  // [11] idle_robot_congestion.
+  double idle_cong = 0.0;
+  const double window_span = pv.finish - pv.start;
+  if (window_span > 1e-9)
+  {
+    std::vector<ReloPush::State> corridor;
+    corridor.reserve(geom.push_pts.size() + geom.transit_pts.size());
+    corridor.insert(corridor.end(), geom.push_pts.begin(), geom.push_pts.end());
+    corridor.insert(corridor.end(), geom.transit_pts.begin(), geom.transit_pts.end());
+    const double block_dist = 0.5 * geometry.robot_width + kObjHalfDiag;
+
+    for (std::size_t r = 0; r < free_time_before.size(); ++r)
+    {
+      if (r == pv.robot || r >= pose_before.size())
+        continue;
+      if (free_time_before[r] >= pv.finish)
+        continue; // busy executing elsewhere for the whole window
+      const double overlap_start = std::max(pv.start, free_time_before[r]);
+      const double overlap = pv.finish - overlap_start;
+      if (overlap <= 0.0)
+        continue;
+      const double w = blockage_weight(pose_before[r], corridor, block_dist, geometry.bounds);
+      idle_cong += w * (overlap / window_span);
+    }
+  }
+  const std::size_t robot_count = free_time_before.size();
+  const double denom_r1 = robot_count > 1 ? static_cast<double>(robot_count - 1) : 1.0;
+  phi[11] = idle_cong / denom_r1;
 
   return phi;
 }

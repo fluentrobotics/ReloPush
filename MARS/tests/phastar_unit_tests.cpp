@@ -1,8 +1,11 @@
 #include <PHAstar/PHAstar.h>
+#include <AllocationSearch.h>
 #include <DqnQModel.h>
 #include <DqnFeaturesV2.h>
 #include <DqnAllocationSearch.h>
 #include <GeometryExport.h>
+#include <PgTableExport.h>
+#include <EvalPlansCli.h>
 #include <PlanningHelpers.h>
 #include <CollisionScheduling.h>
 #include <TaskExecution.h>
@@ -15,6 +18,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <array>
 #include <cstdio>
@@ -2281,6 +2285,2060 @@ bool test_dqn_v2_construct_order_step_log_completeness()
   return true;
 }
 
+// ==========================================
+// DQN feature-redesign v3 (explicit (task, robot) construction) tests. See
+// DqnFeaturesV2.h make_feature_vector_v3/ForwardSim::preview_for/commit_for
+// and DqnAllocationSearch.cpp construct_order_v3.
+// ==========================================
+
+// Shared 4-task synthetic geometry for the v3 construct_order tests below:
+// task0 hard-blocks task1 and task2 (0->1, 0->2); task3 is independent.
+// Identical to test_dqn_v2_construct_order_step_log_completeness's fixture
+// above, so the hard-DAG structure is already validated.
+std::vector<DqnV2::TaskGeom> make_v3_test_geoms()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  std::vector<TaskGeom> geoms(4);
+
+  geoms[0].obj_start = State(0.0, 0.0, 0.0);
+  geoms[0].obj_goal = State(20.0, 20.0, 0.0);
+  geoms[0].push_pts = {State(0.0, 0.0, 0.0), State(1.0, 0.0, 0.0)};
+  geoms[0].approach = State(0.0, 0.0, 0.0);
+  geoms[0].exit = State(1.0, 0.0, 0.0);
+  geoms[0].tau_fixed = 4.0;
+
+  // Task 1's goal sits on task 0's push corridor -> hard edge 0 -> 1.
+  geoms[1].obj_start = State(20.0, 20.0, 0.0);
+  geoms[1].obj_goal = State(1.0, 0.02, 0.0);
+  geoms[1].push_pts = {State(20.0, 0.0, 0.0), State(21.0, 0.0, 0.0)};
+  geoms[1].approach = State(20.0, 0.0, 0.0);
+  geoms[1].exit = State(21.0, 0.0, 0.0);
+  geoms[1].tau_fixed = 3.0;
+
+  // Task 2's push corridor passes over task 0's start -> hard edge 0 -> 2.
+  geoms[2].obj_start = State(30.0, 30.0, 0.0);
+  geoms[2].obj_goal = State(31.0, 31.0, 0.0);
+  geoms[2].push_pts = {State(0.0, 1.0, 0.0), State(0.0, 2.0, 0.0)};
+  geoms[2].approach = State(0.0, 1.0, 0.0);
+  geoms[2].exit = State(0.0, 2.0, 0.0);
+  geoms[2].tau_fixed = 2.0;
+
+  // Task 3 has no interaction with any other task.
+  geoms[3].obj_start = State(40.0, 40.0, 0.0);
+  geoms[3].obj_goal = State(41.0, 41.0, 0.0);
+  geoms[3].push_pts = {State(40.0, 40.0, 0.0), State(41.0, 40.0, 0.0)};
+  geoms[3].approach = State(40.0, 40.0, 0.0);
+  geoms[3].exit = State(41.0, 40.0, 0.0);
+  geoms[3].tau_fixed = 1.0;
+
+  return geoms;
+}
+
+bool test_dqn_v3_feature_vector_properties()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  const std::size_t n = 3;
+  std::vector<TaskGeom> geoms(n);
+  geoms[0].obj_start = State(0.0, 0.0, 0.0);
+  geoms[0].obj_goal = State(20.0, 20.0, 0.0);
+  geoms[0].push_pts = {State(0.0, 0.0, 0.0), State(1.0, 0.0, 0.0)};
+  geoms[0].approach = State(0.0, 0.0, 0.0);
+  geoms[0].exit = State(1.0, 0.0, 0.0);
+  geoms[0].tau_fixed = 4.0;
+
+  geoms[1].obj_start = State(20.0, 20.0, 0.0);
+  geoms[1].obj_goal = State(1.0, 0.02, 0.0);
+  geoms[1].push_pts = {State(20.0, 0.0, 0.0), State(21.0, 0.0, 0.0)};
+  geoms[1].approach = State(5.0, 0.0, 0.0);
+  geoms[1].exit = State(21.0, 0.0, 0.0);
+  geoms[1].tau_fixed = 3.0;
+
+  geoms[2].obj_start = State(30.0, 30.0, 0.0);
+  geoms[2].obj_goal = State(31.0, 31.0, 0.0);
+  geoms[2].push_pts = {State(0.0, 0.0, 0.0), State(0.0, 1.0, 0.0)};
+  geoms[2].approach = State(0.0, 1.0, 0.0);
+  geoms[2].exit = State(0.0, 2.0, 0.0);
+  geoms[2].tau_fixed = 2.0;
+
+  const DqnV2::WorkspaceBounds bounds{-100.0, 100.0, -100.0, 100.0};
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, 0.275);
+
+  std::vector<char> is_placed(n, 0);
+  is_placed[0] = 1;
+  const LearnedOrderConstraints constraints;
+
+  const double maxc = 1.0 / 1.02;
+  const double wheel_base = 0.29;
+  const double speed_transit = 1.0;
+  auto rs_distance = [&](const State &a, const State &b)
+  { return DqnV2::reeds_shepp_length(a, b, maxc, 0.5, wheel_base); };
+
+  // Robot 0 gets a head start (free_time 8.0); robot 1 stays at 0.0 -> robot
+  // 1 is the earliest-available robot.
+  std::vector<State> initial_poses = {State(0.0, 0.0, 0.0), State(-5.0, 0.0, 0.0)};
+  DqnV2::ForwardSim sim(initial_poses, speed_transit, rs_distance, n);
+  sim.free_time[0] = 8.0;
+
+  const double seed_makespan = 10.0;
+  const double m_t_before = sim.max_free_time();
+  const std::size_t earliest_robot = sim.pick();
+  if (earliest_robot != 1)
+  {
+    std::cerr << "    test setup error: expected robot 1 to be earliest, got " << earliest_robot << "\n";
+    return false;
+  }
+  const double min_free_time_before = sim.free_time[earliest_robot];
+
+  std::vector<std::pair<double, double>> committed_windows(n, {0.0, 0.0});
+  committed_windows[0] = {0.0, 6.0};
+
+  const auto pv_earliest = sim.preview_for(earliest_robot, geoms[1]);
+  const auto phi_earliest = DqnV2::make_feature_vector_v3(
+      1, pv_earliest, m_t_before, min_free_time_before, geoms[1], geometry, is_placed,
+      committed_windows, constraints, seed_makespan, n);
+
+  const auto pv_other = sim.preview_for(0, geoms[1]);
+  const auto phi_other = DqnV2::make_feature_vector_v3(
+      1, pv_other, m_t_before, min_free_time_before, geoms[1], geometry, is_placed,
+      committed_windows, constraints, seed_makespan, n);
+
+  if (phi_earliest.size() != DqnV2::kFeatDimV3 || phi_other.size() != DqnV2::kFeatDimV3)
+  {
+    std::cerr << "    expected dim " << DqnV2::kFeatDimV3 << ", got " << phi_earliest.size()
+              << "/" << phi_other.size() << "\n";
+    return false;
+  }
+  for (double v : phi_earliest)
+    if (!std::isfinite(v))
+    {
+      std::cerr << "    phi_earliest has a non-finite entry\n";
+      return false;
+    }
+  for (double v : phi_other)
+    if (!std::isfinite(v))
+    {
+      std::cerr << "    phi_other has a non-finite entry\n";
+      return false;
+    }
+  if (std::abs(phi_earliest[0] - 1.0) > 1e-12 || std::abs(phi_other[0] - 1.0) > 1e-12)
+  {
+    std::cerr << "    expected phi[0] == 1 (bias)\n";
+    return false;
+  }
+
+  // rel_avail (phi[4]): 0 for the earliest robot, > 0 for the other.
+  if (std::abs(phi_earliest[4]) > 1e-9)
+  {
+    std::cerr << "    expected rel_avail == 0 for the earliest robot, got " << phi_earliest[4] << "\n";
+    return false;
+  }
+  if (!(phi_other[4] > 1e-9))
+  {
+    std::cerr << "    expected rel_avail > 0 for the non-earliest robot, got " << phi_other[4] << "\n";
+    return false;
+  }
+
+  // Complementarity dmk_plus(phi[1]) * slack(phi[2]) == 0. Both candidates
+  // above land in the dmk_plus-dominant branch (pv.finish > m_t_before);
+  // construct a third preview -- same robot, a near-zero-duration task --
+  // that lands in the slack-dominant branch to exercise the other side too.
+  if (std::abs(phi_earliest[1] * phi_earliest[2]) > 1e-12 ||
+      std::abs(phi_other[1] * phi_other[2]) > 1e-12)
+  {
+    std::cerr << "    dmk_plus/slack complementarity violated (finish-dominant branch)\n";
+    return false;
+  }
+  TaskGeom near_geom;
+  near_geom.approach = sim.pose[earliest_robot]; // zero transit distance
+  near_geom.exit = sim.pose[earliest_robot];
+  near_geom.tau_fixed = 1.0; // pv.finish = 0 + 0 + 1.0 = 1.0, well below m_t_before (8.0)
+  const auto pv_slack = sim.preview_for(earliest_robot, near_geom);
+  const auto phi_slack = DqnV2::make_feature_vector_v3(
+      1, pv_slack, m_t_before, min_free_time_before, near_geom, geometry, is_placed,
+      committed_windows, constraints, seed_makespan, n);
+  if (std::abs(phi_slack[1]) > 1e-12 || !(phi_slack[2] > 1e-9))
+  {
+    std::cerr << "    expected slack-dominant branch (dmk_plus==0, slack>0), got dmk_plus="
+              << phi_slack[1] << " slack=" << phi_slack[2] << "\n";
+    return false;
+  }
+  if (std::abs(phi_slack[1] * phi_slack[2]) > 1e-12)
+  {
+    std::cerr << "    dmk_plus/slack complementarity violated (slack-dominant branch)\n";
+    return false;
+  }
+
+  // transit (phi[3]): robot 1 starts at (-5,0,0) facing +x; task1's approach
+  // is (5,0,0), also facing +x -- colinear, same heading, so the optimal RS
+  // path is a straight forward segment of length 10.0 (hand-computable as
+  // the Euclidean distance). Cross-checked against the actual RS function.
+  const double hand_len = 10.0;
+  const double rs_len =
+      DqnV2::reeds_shepp_length(State(-5.0, 0.0, 0.0), geoms[1].approach, maxc, 0.5, wheel_base);
+  if (std::abs(rs_len - hand_len) > 1e-6)
+  {
+    std::cerr << "    sanity check failed: RS length for a straight-ahead same-heading pair "
+                 "should be "
+              << hand_len << ", got " << rs_len << "\n";
+    return false;
+  }
+  const double expected_transit_over_S = hand_len / speed_transit / seed_makespan;
+  if (std::abs(phi_earliest[3] - expected_transit_over_S) > 1e-6)
+  {
+    std::cerr << "    transit feature mismatch: expected " << expected_transit_over_S << ", got "
+              << phi_earliest[3] << "\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_dqn_v3_preview_commit_for()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  auto euclid = [](const State &a, const State &b)
+  { return DqnV2::dist2d(a, b); };
+
+  // Robot 2 sits at (0,3,0); task approach at (4,0,0) -- a 3-4-5 triangle so
+  // the transit distance is hand-computable exactly.
+  const std::vector<State> initial_poses = {State(0.0, 0.0, 0.0), State(10.0, 0.0, 0.0),
+                                            State(0.0, 3.0, 0.0)};
+  const double speed_transit = 2.0;
+  const std::size_t task_count = 2;
+  DqnV2::ForwardSim sim(initial_poses, speed_transit, euclid, task_count);
+
+  TaskGeom geom;
+  geom.approach = State(4.0, 0.0, 0.0);
+  geom.exit = State(6.0, 0.0, 0.0);
+  geom.tau_fixed = 3.0;
+
+  // Commit task 0 to robot 2 specifically -- NOT the earliest robot (all
+  // three tie at free_time 0, so pick() would choose robot 0).
+  const auto pv = sim.preview_for(2, geom);
+  const double expected_transit = 5.0 / speed_transit; // hypot(4,3) == 5.0
+  const double expected_finish = expected_transit + geom.tau_fixed;
+  if (pv.robot != 2 || std::abs(pv.start - 0.0) > 1e-9 ||
+      std::abs(pv.finish - expected_finish) > 1e-9)
+  {
+    std::cerr << "    preview_for mismatch: robot=" << pv.robot << " start=" << pv.start
+              << " finish=" << pv.finish << " expected_finish=" << expected_finish << "\n";
+    return false;
+  }
+
+  sim.commit_for(0, geom, pv);
+
+  if (std::abs(sim.free_time[0] - 0.0) > 1e-9 || std::abs(sim.free_time[1] - 0.0) > 1e-9)
+  {
+    std::cerr << "    commit_for perturbed a non-target robot's free_time: ["
+              << sim.free_time[0] << ", " << sim.free_time[1] << ", " << sim.free_time[2] << "]\n";
+    return false;
+  }
+  if (std::abs(sim.free_time[2] - pv.finish) > 1e-9)
+  {
+    std::cerr << "    commit_for did not set free_time[2] to pv.finish: " << sim.free_time[2]
+              << " vs " << pv.finish << "\n";
+    return false;
+  }
+  if (!(sim.pose[0] == initial_poses[0]) || !(sim.pose[1] == initial_poses[1]))
+  {
+    std::cerr << "    commit_for perturbed a non-target robot's pose\n";
+    return false;
+  }
+  if (!(sim.pose[2] == geom.exit))
+  {
+    std::cerr << "    commit_for did not move robot 2's pose to geom.exit\n";
+    return false;
+  }
+  if (std::abs(sim.window[0].first - pv.start) > 1e-9 || std::abs(sim.window[0].second - pv.finish) > 1e-9)
+  {
+    std::cerr << "    commit_for did not record the task window correctly\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_dqn_v3_construct_order_validity()
+{
+  const std::size_t n = 4;
+  const auto geoms = make_v3_test_geoms();
+
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+  const LearnedOrderConstraints constraints;
+
+  std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0)};
+
+  RuntimeOptions options;
+  const double seed_makespan = 10.0;
+  const double epsilon = 0.5;
+
+  std::mt19937 rng1(777);
+  QModel model1(DqnV2::kFeatDimV3, 0, rng1);
+  const auto oa1 = construct_order_v3(model1, n, geoms, geometry, constraints, robot_metas,
+                                      seed_makespan, epsilon, options, rng1, nullptr);
+
+  if (oa1.order.size() != n || oa1.assignment.size() != n)
+  {
+    std::cerr << "    order/assignment size mismatch: order=" << oa1.order.size()
+              << " assignment=" << oa1.assignment.size() << "\n";
+    return false;
+  }
+
+  std::vector<char> seen(n, 0);
+  for (std::size_t task : oa1.order)
+  {
+    if (task >= n || seen[task])
+    {
+      std::cerr << "    order is not a permutation (task " << task << " out of range or repeated)\n";
+      return false;
+    }
+    seen[task] = 1;
+  }
+  for (std::size_t r : oa1.assignment)
+  {
+    if (r >= robot_metas.size())
+    {
+      std::cerr << "    assignment robot index " << r << " out of range\n";
+      return false;
+    }
+  }
+
+  auto position_of = [&](std::size_t task)
+  {
+    return static_cast<std::size_t>(
+        std::find(oa1.order.begin(), oa1.order.end(), task) - oa1.order.begin());
+  };
+  if (position_of(0) >= position_of(1) || position_of(0) >= position_of(2))
+  {
+    std::cerr << "    hard-DAG order violated: pos(0)=" << position_of(0)
+              << " pos(1)=" << position_of(1) << " pos(2)=" << position_of(2) << "\n";
+    return false;
+  }
+
+  // Same seed -> identical (order, assignment).
+  std::mt19937 rng2(777);
+  QModel model2(DqnV2::kFeatDimV3, 0, rng2);
+  const auto oa2 = construct_order_v3(model2, n, geoms, geometry, constraints, robot_metas,
+                                      seed_makespan, epsilon, options, rng2, nullptr);
+
+  if (oa1.order != oa2.order || oa1.assignment != oa2.assignment)
+  {
+    std::cerr << "    same seed produced different (order, assignment)\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_dqn_v3_signature_distinguishes_assignment()
+{
+  AllocationScenarioPlan plan_a;
+  plan_a.task_order = {0, 1, 2};
+  plan_a.preferred_robot_names_by_original_task = {"robot1", "robot2", "robot1"};
+
+  AllocationScenarioPlan plan_b = plan_a;
+  // Same order; only task 0's assigned robot differs.
+  plan_b.preferred_robot_names_by_original_task = {"robot2", "robot2", "robot1"};
+
+  const std::string sig_a = task_order_assignment_signature(plan_a);
+  const std::string sig_b = task_order_assignment_signature(plan_b);
+  if (sig_a == sig_b)
+  {
+    std::cerr << "    expected different signatures for same order/different assignment, both were '"
+              << sig_a << "'\n";
+    return false;
+  }
+
+  AllocationScenarioPlan plan_a2 = plan_a;
+  if (task_order_assignment_signature(plan_a) != task_order_assignment_signature(plan_a2))
+  {
+    std::cerr << "    expected identical signature for identical (order, assignment) plans\n";
+    return false;
+  }
+
+  // v1/v2's task_order_signature (untouched) must stay assignment-blind.
+  if (task_order_signature(plan_a) != task_order_signature(plan_b))
+  {
+    std::cerr << "    task_order_signature unexpectedly differs when only assignment changed\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_dqn_v3_dispatcher_prior_equivalence()
+{
+  using ReloPush::State;
+
+  const std::size_t n = 4;
+  const auto geoms = make_v3_test_geoms();
+
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+  const LearnedOrderConstraints constraints;
+
+  std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0),
+      make_test_robot_meta("robot3", -2.0, -2.0, 0.0)};
+
+  RuntimeOptions options;
+  options.dqn_explore_ref_bias = 1.0;
+  const double seed_makespan = 10.0;
+  const double epsilon = 1.0; // forces the explore branch every step
+
+  std::mt19937 rng(2024);
+  QModel model(DqnV2::kFeatDimV3, 0, rng);
+  const auto oa = construct_order_v3(model, n, geoms, geometry, constraints, robot_metas,
+                                     seed_makespan, epsilon, options, rng, nullptr);
+
+  // epsilon=1.0 + ref_bias=1.0 always follows legal.front(), and legal is
+  // index-ascending with this fixture's hard edges (0->1, 0->2) -> the
+  // reference order is exactly 0,1,2,3.
+  for (std::size_t i = 0; i < n; ++i)
+  {
+    if (oa.order[i] != i)
+    {
+      std::cerr << "    expected reference order 0..n-1, got order[" << i << "]=" << oa.order[i] << "\n";
+      return false;
+    }
+  }
+
+  // Independently replay the same reference order through the v1/v2
+  // dispatcher-driven ForwardSim::pick/preview/commit (mirrors
+  // make_forward_sim_v2 in DqnAllocationSearch.cpp) and check every step's
+  // robot choice matches what construct_order_v3 assigned.
+  std::vector<State> initial_poses;
+  for (const auto &meta : robot_metas)
+    initial_poses.emplace_back(meta.initial_pose.x, meta.initial_pose.y, meta.initial_pose.yaw);
+  const double maxc = 1.0 / std::max(robot_metas[0].min_turning_radius_transit, 1e-6);
+  const double wb = robot_metas[0].wheel_base;
+  DqnV2::DistanceFn distance = [maxc, wb](const State &from, const State &to)
+  { return DqnV2::reeds_shepp_length(from, to, maxc, 0.5, wb); };
+  DqnV2::ForwardSim ref_sim(initial_poses, robot_metas[0].speed_transit, distance, n);
+
+  for (std::size_t t = 0; t < n; ++t)
+  {
+    const std::size_t task = oa.order[t];
+    const std::size_t expected_robot = ref_sim.pick();
+    if (oa.assignment[task] != expected_robot)
+    {
+      std::cerr << "    step " << t << ": v3 assignment[" << task << "]=" << oa.assignment[task]
+                << " != dispatcher pick()=" << expected_robot << "\n";
+      return false;
+    }
+    const auto pv = ref_sim.preview(geoms[task]);
+    ref_sim.commit(task, geoms[task], pv);
+  }
+
+  return true;
+}
+
+bool test_dqn_v3_construct_order_step_log_completeness()
+{
+  const std::size_t n = 4;
+  const auto geoms = make_v3_test_geoms();
+
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+  const LearnedOrderConstraints constraints;
+
+  std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0)};
+
+  RuntimeOptions options; // defaults (dqn_explore_ref_bias=0.5, hard_evidence=3)
+  const double seed_makespan = 10.0;
+  const double epsilon = 0.5; // exercises both explore and exploit branches
+
+  std::mt19937 rng_logged(123);
+  QModel model(DqnV2::kFeatDimV3, 0, rng_logged);
+
+  std::vector<std::vector<StepCandidateEntry>> step_logs;
+  const auto oa_logged = construct_order_v3(model, n, geoms, geometry, constraints, robot_metas,
+                                            seed_makespan, epsilon, options, rng_logged, &step_logs);
+
+  if (oa_logged.order.size() != n || step_logs.size() != n)
+  {
+    std::cerr << "    order/step_logs size mismatch: order=" << oa_logged.order.size()
+              << " step_logs=" << step_logs.size() << "\n";
+    return false;
+  }
+
+  std::vector<char> is_placed(n, 0);
+  for (std::size_t t = 0; t < n; ++t)
+  {
+    std::vector<std::size_t> legal;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+      if (is_placed[i])
+        continue;
+      if (DqnV2::is_task_legal_v2(i, geometry, is_placed, constraints,
+                                  options.dqn_learned_hard_evidence))
+        legal.push_back(i);
+    }
+    const std::size_t expected_candidates = legal.size() * robot_metas.size();
+
+    if (step_logs[t].size() != expected_candidates)
+    {
+      std::cerr << "    step " << t << ": expected " << expected_candidates
+                << " candidates, step_log has " << step_logs[t].size() << "\n";
+      return false;
+    }
+
+    std::size_t chosen_count = 0;
+    std::size_t logged_chosen_task = n;
+    long logged_chosen_robot = -1;
+    for (const auto &entry : step_logs[t])
+    {
+      if (entry.step != t)
+      {
+        std::cerr << "    step " << t << ": entry has wrong step field " << entry.step << "\n";
+        return false;
+      }
+      if (std::find(legal.begin(), legal.end(), entry.candidate_task) == legal.end())
+      {
+        std::cerr << "    step " << t << ": logged candidate " << entry.candidate_task
+                  << " is not legal\n";
+        return false;
+      }
+      if (entry.robot < 0 || static_cast<std::size_t>(entry.robot) >= robot_metas.size())
+      {
+        std::cerr << "    step " << t << ": logged candidate robot " << entry.robot
+                  << " out of range\n";
+        return false;
+      }
+      if (entry.phi.size() != DqnV2::kFeatDimV3)
+      {
+        std::cerr << "    step " << t << ": phi has wrong dimension " << entry.phi.size() << "\n";
+        return false;
+      }
+      if (entry.chosen)
+      {
+        ++chosen_count;
+        logged_chosen_task = entry.candidate_task;
+        logged_chosen_robot = entry.robot;
+      }
+    }
+    if (chosen_count != 1)
+    {
+      std::cerr << "    step " << t << ": expected exactly 1 chosen entry, got " << chosen_count << "\n";
+      return false;
+    }
+    if (logged_chosen_task != oa_logged.order[t] ||
+        static_cast<std::size_t>(logged_chosen_robot) != oa_logged.assignment[oa_logged.order[t]])
+    {
+      std::cerr << "    step " << t << ": chosen entry (" << logged_chosen_task << ","
+                << logged_chosen_robot << ") != order/assignment (" << oa_logged.order[t] << ","
+                << oa_logged.assignment[oa_logged.order[t]] << ")\n";
+      return false;
+    }
+
+    is_placed[oa_logged.order[t]] = 1;
+  }
+
+  // Critical invariant: enabling logging must not perturb the RNG draw
+  // sequence. Run again with an identically-seeded rng/model and
+  // step_logs == nullptr; the resulting (order, assignment) must be
+  // byte-for-byte identical.
+  std::mt19937 rng_unlogged(123);
+  QModel model_unlogged(DqnV2::kFeatDimV3, 0, rng_unlogged);
+  const auto oa_unlogged = construct_order_v3(model_unlogged, n, geoms, geometry, constraints,
+                                              robot_metas, seed_makespan, epsilon, options,
+                                              rng_unlogged, nullptr);
+
+  if (oa_logged.order != oa_unlogged.order || oa_logged.assignment != oa_unlogged.assignment)
+  {
+    std::cerr << "    logging perturbed the RNG draw sequence: logged/unlogged (order, assignment) "
+                 "differ\n";
+    return false;
+  }
+
+  return true;
+}
+
+// ==========================================
+// DQN v4 (12-dim feature vector: v3's dims + load_imbalance +
+// idle_robot_congestion) and Decision 2 (risk-decomposed scoring) tests. See
+// DqnFeaturesV2.h make_feature_vector_v4, DqnQModel.h accumulate_grad_logistic,
+// and DqnAllocationSearch.cpp construct_order_v3/ingest_rollout_v3's
+// decomposed branches.
+// ==========================================
+
+bool test_dqn_v4_feature_vector()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  const std::size_t n = 3;
+  std::vector<TaskGeom> geoms(n);
+  geoms[0].obj_start = State(0.0, 0.0, 0.0);
+  geoms[0].obj_goal = State(20.0, 20.0, 0.0);
+  geoms[0].push_pts = {State(0.0, 0.0, 0.0), State(1.0, 0.0, 0.0)};
+  geoms[0].approach = State(0.0, 0.0, 0.0);
+  geoms[0].exit = State(1.0, 0.0, 0.0);
+  geoms[0].tau_fixed = 4.0;
+
+  geoms[1].obj_start = State(20.0, 20.0, 0.0);
+  geoms[1].obj_goal = State(1.0, 0.02, 0.0);
+  geoms[1].push_pts = {State(20.0, 0.0, 0.0), State(21.0, 0.0, 0.0)};
+  geoms[1].approach = State(5.0, 0.0, 0.0);
+  geoms[1].exit = State(21.0, 0.0, 0.0);
+  geoms[1].tau_fixed = 3.0;
+
+  geoms[2].obj_start = State(30.0, 30.0, 0.0);
+  geoms[2].obj_goal = State(31.0, 31.0, 0.0);
+  geoms[2].push_pts = {State(0.0, 0.0, 0.0), State(0.0, 1.0, 0.0)};
+  geoms[2].approach = State(0.0, 1.0, 0.0);
+  geoms[2].exit = State(0.0, 2.0, 0.0);
+  geoms[2].tau_fixed = 2.0;
+
+  const DqnV2::WorkspaceBounds bounds{-100.0, 100.0, -100.0, 100.0};
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, 0.275);
+
+  std::vector<char> is_placed(n, 0);
+  is_placed[0] = 1;
+  const LearnedOrderConstraints constraints;
+
+  // Three robots (need >= 2 for load_imbalance/idle_robot_congestion to be
+  // meaningful).
+  auto euclid = [](const State &a, const State &b)
+  { return DqnV2::dist2d(a, b); };
+  std::vector<State> initial_poses = {State(0.0, 0.0, 0.0), State(5.0, 0.0, 0.0), State(-5.0, 0.0, 0.0)};
+  DqnV2::ForwardSim sim(initial_poses, 1.0, euclid, n);
+  sim.free_time = {8.0, 0.0, 2.0}; // arbitrary pre-step schedule state
+  sim.window[0] = {0.0, 6.0};
+
+  const double seed_makespan = 10.0;
+  const double m_t_before = sim.max_free_time();
+  const std::size_t earliest_robot = sim.pick();
+  const double min_free_time_before = sim.free_time[earliest_robot];
+  const std::vector<std::pair<double, double>> committed_windows = sim.window;
+
+  const auto pv = sim.preview_for(1, geoms[1]);
+  const auto phi_v3 = DqnV2::make_feature_vector_v3(
+      1, pv, m_t_before, min_free_time_before, geoms[1], geometry, is_placed,
+      committed_windows, constraints, seed_makespan, n);
+  const auto phi_v4 = DqnV2::make_feature_vector_v4(
+      1, pv, m_t_before, min_free_time_before, geoms[1], geometry, is_placed,
+      committed_windows, constraints, seed_makespan, n, sim.free_time, sim.pose);
+
+  if (phi_v3.size() != DqnV2::kFeatDimV3)
+  {
+    std::cerr << "    v3 dim mismatch: expected " << DqnV2::kFeatDimV3 << ", got "
+              << phi_v3.size() << "\n";
+    return false;
+  }
+  if (DqnV2::kFeatDimV4 != 12 || phi_v4.size() != DqnV2::kFeatDimV4)
+  {
+    std::cerr << "    v4 dim mismatch: expected 12, got " << phi_v4.size() << "\n";
+    return false;
+  }
+  // Regression guard: dims 0..9 must be numerically (here, bit-for-bit,
+  // since both funnel through the same detail::fill_v3_core_features helper)
+  // identical to make_feature_vector_v3 on the same synthetic state.
+  for (std::size_t i = 0; i < DqnV2::kFeatDimV3; ++i)
+  {
+    if (std::abs(phi_v3[i] - phi_v4[i]) > 1e-12)
+    {
+      std::cerr << "    dims 0.." << (DqnV2::kFeatDimV3 - 1) << " diverge at index " << i
+                << ": v3=" << phi_v3[i] << " v4=" << phi_v4[i] << "\n";
+      return false;
+    }
+  }
+  for (double v : phi_v4)
+  {
+    if (!std::isfinite(v))
+    {
+      std::cerr << "    phi_v4 has a non-finite entry\n";
+      return false;
+    }
+  }
+
+  // load_imbalance (phi_v4[10]), hand-computed: F' after hypothetically
+  // committing this candidate to robot 1 is {8.0, pv.finish, 2.0} (robot 1's
+  // free_time becomes pv.finish; robots 0/2 unchanged).
+  const double expected_max = std::max({8.0, pv.finish, 2.0});
+  const double expected_min = std::min({8.0, pv.finish, 2.0});
+  const double expected_imbalance = (expected_max - expected_min) / seed_makespan;
+  if (std::abs(phi_v4[10] - expected_imbalance) > 1e-9)
+  {
+    std::cerr << "    load_imbalance mismatch: expected " << expected_imbalance << ", got "
+              << phi_v4[10] << "\n";
+    return false;
+  }
+
+  // Time-not-count property: assigning a short task to the "short-tasks"
+  // robot (lower free_time) yields a SMALLER load_imbalance than assigning
+  // the identical task to the "busy" robot -- driven purely by the
+  // free_time VALUES, with no notion of how many tasks produced them.
+  TaskGeom short_task;
+  short_task.approach = sim.pose[1]; // zero transit from robot 1's pose
+  short_task.exit = sim.pose[1];
+  short_task.tau_fixed = 0.5;
+
+  const std::vector<double> free_time_3 = {10.0, 1.0, 1.0}; // robot 0 busy; 1/2 short-tasks
+  const std::vector<State> pose_3 = sim.pose;
+  const double m_t_before_3 = *std::max_element(free_time_3.begin(), free_time_3.end());
+  const std::size_t earliest_3 =
+      std::min_element(free_time_3.begin(), free_time_3.end()) - free_time_3.begin();
+  const double min_free_time_before_3 = free_time_3[earliest_3];
+
+  DqnV2::ForwardSim::Preview pv_to_short;
+  pv_to_short.robot = 1;
+  pv_to_short.start = free_time_3[1];
+  pv_to_short.finish = free_time_3[1] + short_task.tau_fixed;
+
+  DqnV2::ForwardSim::Preview pv_to_busy;
+  pv_to_busy.robot = 0;
+  pv_to_busy.start = free_time_3[0];
+  pv_to_busy.finish = free_time_3[0] + short_task.tau_fixed;
+
+  const auto phi_to_short = DqnV2::make_feature_vector_v4(
+      1, pv_to_short, m_t_before_3, min_free_time_before_3, short_task, geometry, is_placed,
+      committed_windows, constraints, seed_makespan, n, free_time_3, pose_3);
+  const auto phi_to_busy = DqnV2::make_feature_vector_v4(
+      1, pv_to_busy, m_t_before_3, min_free_time_before_3, short_task, geometry, is_placed,
+      committed_windows, constraints, seed_makespan, n, free_time_3, pose_3);
+
+  const double expected_to_short = (10.0 - 1.0) / seed_makespan; // F'={10.0,1.5,1.0}
+  const double expected_to_busy = (10.5 - 1.0) / seed_makespan;  // F'={10.5,1.0,1.0}
+  if (std::abs(phi_to_short[10] - expected_to_short) > 1e-9 ||
+      std::abs(phi_to_busy[10] - expected_to_busy) > 1e-9)
+  {
+    std::cerr << "    time-not-count hand-computed mismatch: to_short=" << phi_to_short[10]
+              << " (expected " << expected_to_short << "), to_busy=" << phi_to_busy[10]
+              << " (expected " << expected_to_busy << ")\n";
+    return false;
+  }
+  if (!(phi_to_short[10] < phi_to_busy[10]))
+  {
+    std::cerr << "    expected assigning the short task to the short-tasks robot to yield a "
+                 "SMALLER load_imbalance than assigning it to the busy robot: to_short="
+              << phi_to_short[10] << " to_busy=" << phi_to_busy[10] << "\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_dqn_v4_idle_robot_congestion()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  const std::size_t n = 2; // task count; not the focus of this test
+  std::vector<TaskGeom> geoms(n);
+  geoms[0].push_pts = {State(1.0, 5.0, 0.0), State(2.0, 5.0, 0.0), State(3.0, 5.0, 0.0)};
+  geoms[0].obj_start = State(1.0, 5.0, 0.0);
+  geoms[0].obj_goal = State(3.0, 5.0, 0.0);
+  geoms[0].approach = State(1.0, 5.0, 0.0);
+  geoms[0].exit = State(3.0, 5.0, 0.0);
+  geoms[0].tau_fixed = 1.0;
+
+  geoms[1].push_pts = {State(50.0, 50.0, 0.0)};
+  geoms[1].obj_start = State(50.0, 50.0, 0.0);
+  geoms[1].obj_goal = State(51.0, 51.0, 0.0);
+  geoms[1].approach = State(50.0, 50.0, 0.0);
+  geoms[1].exit = State(51.0, 51.0, 0.0);
+  geoms[1].tau_fixed = 1.0;
+
+  const DqnV2::WorkspaceBounds bounds{0.0, 100.0, 0.0, 100.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+
+  std::vector<char> is_placed(n, 0);
+  const LearnedOrderConstraints constraints;
+  const std::vector<std::pair<double, double>> committed_windows(n, {0.0, 0.0});
+  const double seed_makespan = 10.0;
+
+  // Candidate window: robot 0 executes task 0 over [0, 10).
+  DqnV2::ForwardSim::Preview pv;
+  pv.robot = 0;
+  pv.start = 0.0;
+  pv.finish = 10.0;
+
+  auto make_phi = [&](const std::vector<double> &free_time_before,
+                      const std::vector<State> &pose_before)
+  {
+    const double m_t_before = *std::max_element(free_time_before.begin(), free_time_before.end());
+    const std::size_t earliest =
+        std::min_element(free_time_before.begin(), free_time_before.end()) - free_time_before.begin();
+    return DqnV2::make_feature_vector_v4(
+        0, pv, m_t_before, free_time_before[earliest], geoms[0], geometry, is_placed,
+        committed_windows, constraints, seed_makespan, n, free_time_before, pose_before);
+  };
+
+  const double block_dist = 0.5 * robot_width + DqnV2::kObjHalfDiag;
+
+  // Case A: one other robot, parked ON the corridor for the whole window
+  // (its free_time is well before the window even starts).
+  {
+    const std::vector<double> ft = {0.0, -5.0};
+    const std::vector<State> pose = {State(0.0, 0.0, 0.0), State(2.0, 5.0, 0.0)};
+    const double hand_blockage =
+        DqnV2::blockage_weight(pose[1], geoms[0].push_pts, block_dist, bounds);
+    if (!(hand_blockage > 0.0))
+    {
+      std::cerr << "    test setup error: expected a positive hand-computed blockage weight\n";
+      return false;
+    }
+    const auto phi = make_phi(ft, pose);
+    const double expected = hand_blockage / 1.0; // (robot_count - 1) == 1
+    if (!(phi[11] > 0.0) || std::abs(phi[11] - expected) > 1e-9)
+    {
+      std::cerr << "    on-corridor whole-window case: expected " << expected << ", got "
+                << phi[11] << "\n";
+      return false;
+    }
+  }
+
+  // Case B: parked far away from the corridor -> 0 contribution.
+  {
+    const std::vector<double> ft = {0.0, -5.0};
+    const std::vector<State> pose = {State(0.0, 0.0, 0.0), State(90.0, 90.0, 0.0)};
+    const auto phi = make_phi(ft, pose);
+    if (std::abs(phi[11] - 0.0) > 1e-9)
+    {
+      std::cerr << "    far-away case: expected 0, got " << phi[11] << "\n";
+      return false;
+    }
+  }
+
+  // Case C: other robot busy for the entire window (free_time >= finish) ->
+  // 0, even though it is parked exactly on the corridor -- this is the
+  // dynamic-congestion channel's business (dim 6), not idle_robot_congestion's.
+  {
+    const std::vector<double> ft = {0.0, 10.0}; // free_time[1] == pv.finish
+    const std::vector<State> pose = {State(0.0, 0.0, 0.0), State(2.0, 5.0, 0.0)};
+    const auto phi = make_phi(ft, pose);
+    if (std::abs(phi[11] - 0.0) > 1e-9)
+    {
+      std::cerr << "    busy-whole-window case: expected 0, got " << phi[11] << "\n";
+      return false;
+    }
+  }
+
+  // Case D: partial temporal overlap scales linearly with the free fraction
+  // of the window.
+  {
+    const std::vector<State> pose = {State(0.0, 0.0, 0.0), State(2.0, 5.0, 0.0)};
+    const double hand_blockage =
+        DqnV2::blockage_weight(pose[1], geoms[0].push_pts, block_dist, bounds);
+
+    const double phi_25 = make_phi({0.0, 2.5}, pose)[11];
+    const double phi_50 = make_phi({0.0, 5.0}, pose)[11];
+    const double phi_75 = make_phi({0.0, 7.5}, pose)[11];
+
+    const double expected_25 = hand_blockage * (10.0 - 2.5) / 10.0;
+    const double expected_50 = hand_blockage * (10.0 - 5.0) / 10.0;
+    const double expected_75 = hand_blockage * (10.0 - 7.5) / 10.0;
+
+    if (std::abs(phi_25 - expected_25) > 1e-9 || std::abs(phi_50 - expected_50) > 1e-9 ||
+        std::abs(phi_75 - expected_75) > 1e-9)
+    {
+      std::cerr << "    partial-overlap hand-computed mismatch: phi_25=" << phi_25
+                << " (expected " << expected_25 << "), phi_50=" << phi_50 << " (expected "
+                << expected_50 << "), phi_75=" << phi_75 << " (expected " << expected_75
+                << ")\n";
+      return false;
+    }
+    // Equal free_time increments -> equal phi[11] decrements (linear scaling).
+    if (std::abs((phi_25 - phi_50) - (phi_50 - phi_75)) > 1e-9)
+    {
+      std::cerr << "    partial-overlap does not scale linearly: phi_25=" << phi_25
+                << " phi_50=" << phi_50 << " phi_75=" << phi_75 << "\n";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Weighted binary cross-entropy on a logit z: -weight * (y*log(sigmoid(z)) +
+// (1-y)*log(1-sigmoid(z))). d/dz == weight*(sigmoid(z)-y), matching
+// QModel::accumulate_grad_logistic's `e` exactly -- see the central-difference
+// check below.
+double weighted_logistic_loss_for_test(double z, double y, double weight)
+{
+  const double sig = dqn_sigmoid(z);
+  constexpr double clip_eps = 1e-12;
+  const double clipped = std::min(1.0 - clip_eps, std::max(clip_eps, sig));
+  return -weight * (y * std::log(clipped) + (1.0 - y) * std::log(1.0 - clipped));
+}
+
+// Central-difference gradient check for QModel::accumulate_grad_logistic
+// against the weighted logistic loss it is meant to implement, for both the
+// linear (hidden==0) and 1-hidden-layer MLP (hidden>0) configurations, and
+// for weight != 1 (mirrors test_qmodel_gradient_check's structure for the
+// Huber path).
+bool test_qmodel_logistic_gradient_check()
+{
+  auto check_for_hidden = [](std::size_t dim, std::size_t hidden, unsigned seed, double y,
+                             double weight) -> bool
+  {
+    std::mt19937 rng(seed);
+    QModel model(dim, hidden, rng);
+
+    std::uniform_real_distribution<double> param_dist(-0.5, 0.5);
+    std::vector<double> init_params = model.get_params();
+    for (auto &v : init_params)
+      v = param_dist(rng);
+    model.set_params(init_params);
+
+    std::uniform_real_distribution<double> x_dist(-1.0, 1.0);
+    std::vector<double> x(dim);
+    for (auto &v : x)
+      v = x_dist(rng);
+
+    std::vector<double> grad(model.num_params(), 0.0);
+    model.accumulate_grad_logistic(x, y, weight, grad);
+
+    const std::vector<double> base_params = model.get_params();
+    constexpr double eps = 1e-6;
+    double max_rel_err = 0.0;
+    for (std::size_t p = 0; p < base_params.size(); ++p)
+    {
+      std::vector<double> perturbed = base_params;
+
+      perturbed[p] = base_params[p] + eps;
+      model.set_params(perturbed);
+      const double loss_plus = weighted_logistic_loss_for_test(model.predict(x), y, weight);
+
+      perturbed[p] = base_params[p] - eps;
+      model.set_params(perturbed);
+      const double loss_minus = weighted_logistic_loss_for_test(model.predict(x), y, weight);
+
+      model.set_params(base_params);
+
+      const double numeric_grad = (loss_plus - loss_minus) / (2.0 * eps);
+      const double denom = std::max(1.0, std::abs(numeric_grad));
+      const double rel_err = std::abs(numeric_grad - grad[p]) / denom;
+      max_rel_err = std::max(max_rel_err, rel_err);
+    }
+
+    if (max_rel_err >= 1e-4)
+    {
+      std::cerr << "    QModel logistic gradient check failed for dim=" << dim
+                << " hidden=" << hidden << " y=" << y << " weight=" << weight
+                << ": max_rel_err=" << max_rel_err << "\n";
+      return false;
+    }
+    return true;
+  };
+
+  if (!check_for_hidden(5, 0, 401, 1.0, 1.0))
+    return false;
+  if (!check_for_hidden(5, 0, 402, 0.0, 4.0))
+    return false;
+  if (!check_for_hidden(5, 8, 403, 1.0, 3.5))
+    return false;
+  if (!check_for_hidden(5, 8, 404, 0.0, 1.0))
+    return false;
+
+  return true;
+}
+
+bool test_dqn_v3_decomposed_ingest()
+{
+  const std::size_t n = 4;
+  const auto geoms = make_v3_test_geoms();
+
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+  const LearnedOrderConstraints constraints;
+
+  std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0)};
+
+  RuntimeOptions options;
+  options.dqn_feature_version = 3;
+  options.dqn_scoring_mode = 1; // decomposed
+
+  const std::vector<std::size_t> order = {0, 1, 2, 3};
+  const std::vector<std::size_t> assignment = {0, 1, 0, 1};
+
+  const double seed_makespan = 10.0;
+  const double fail_return = 3.0;
+
+  // --- Failed episode, failing at step k=2 (0-indexed). ---
+  {
+    AllocationRunSummary summary;
+    summary.all_tasks_succeeded = false;
+    TaskCsvRow r0;
+    r0.task_id = 1;
+    r0.status = "SUCCESS";
+    TaskCsvRow r1;
+    r1.task_id = 2;
+    r1.status = "SUCCESS";
+    TaskCsvRow r2;
+    r2.task_id = 3;
+    r2.status = "FAILED";
+    summary.task_rows = {r0, r1, r2};
+
+    std::vector<Transition> replay;
+    std::vector<Transition> f_replay;
+    ingest_rollout_v3(order, assignment, summary, seed_makespan, fail_return, geoms, geometry,
+                      constraints, robot_metas, options, replay, &f_replay);
+
+    const std::size_t k = 2;
+    if (f_replay.size() != k + 1)
+    {
+      std::cerr << "    failed-episode: expected f_replay size " << (k + 1) << ", got "
+                << f_replay.size() << "\n";
+      return false;
+    }
+    std::size_t positive_count = 0;
+    std::size_t positive_index = f_replay.size();
+    for (std::size_t i = 0; i < f_replay.size(); ++i)
+    {
+      if (f_replay[i].target >= 0.5)
+      {
+        ++positive_count;
+        positive_index = i;
+      }
+      else if (std::abs(f_replay[i].target) > 1e-12)
+      {
+        std::cerr << "    failed-episode: f_replay[" << i << "].target neither 0 nor 1: "
+                  << f_replay[i].target << "\n";
+        return false;
+      }
+    }
+    if (positive_count != 1 || positive_index != k)
+    {
+      std::cerr << "    failed-episode: expected exactly one positive label at index " << k
+                << ", got count=" << positive_count << " at index=" << positive_index << "\n";
+      return false;
+    }
+    if (!replay.empty())
+    {
+      std::cerr << "    failed-episode: expected q_replay to gain nothing, got " << replay.size()
+                << " entries\n";
+      return false;
+    }
+  }
+
+  // --- Feasible episode. ---
+  {
+    AllocationRunSummary summary;
+    summary.all_tasks_succeeded = true;
+    summary.makespan = 7.5;
+    for (int i = 0; i < 4; ++i)
+    {
+      TaskCsvRow row;
+      row.task_id = i + 1;
+      row.status = "SUCCESS";
+      summary.task_rows.push_back(row);
+    }
+
+    std::vector<Transition> replay;
+    std::vector<Transition> f_replay;
+    ingest_rollout_v3(order, assignment, summary, seed_makespan, fail_return, geoms, geometry,
+                      constraints, robot_metas, options, replay, &f_replay);
+
+    if (f_replay.size() != n)
+    {
+      std::cerr << "    feasible-episode: expected f_replay size " << n << ", got "
+                << f_replay.size() << "\n";
+      return false;
+    }
+    for (std::size_t i = 0; i < f_replay.size(); ++i)
+    {
+      if (std::abs(f_replay[i].target) > 1e-12)
+      {
+        std::cerr << "    feasible-episode: expected all F-labels 0, f_replay[" << i
+                  << "].target=" << f_replay[i].target << "\n";
+        return false;
+      }
+    }
+
+    if (replay.size() != n)
+    {
+      std::cerr << "    feasible-episode: expected q_replay size " << n << ", got "
+                << replay.size() << "\n";
+      return false;
+    }
+    const double expected_target = -summary.makespan / seed_makespan;
+    for (std::size_t i = 0; i < replay.size(); ++i)
+    {
+      if (std::abs(replay[i].target - expected_target) > 1e-9)
+      {
+        std::cerr << "    feasible-episode: q_replay[" << i << "].target=" << replay[i].target
+                  << ", expected " << expected_target << "\n";
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+bool test_dqn_v3_decomposed_selection()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  const std::size_t n = 1; // single task; every candidate differs only by robot
+  std::vector<TaskGeom> geoms(n);
+  geoms[0].approach = State(0.0, 0.0, 0.0);
+  geoms[0].exit = State(0.0, 0.0, 0.0);
+  geoms[0].tau_fixed = 0.0;
+  geoms[0].obj_start = State(0.0, 0.0, 0.0);
+  geoms[0].obj_goal = State(1.0, 0.0, 0.0);
+
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, 0.275);
+  const LearnedOrderConstraints constraints;
+
+  // 5 robots, colinear with task0's approach and same heading (yaw 0) so RS
+  // transit length == Euclidean distance exactly (same trick as
+  // test_dqn_v3_feature_vector_properties). Distances chosen so phi[1]
+  // (dmk_plus) == distance/seed_makespan exactly (tau_fixed=0, fresh sim ->
+  // m_t_before=0): r0/r4 -> 0.0 (an intentional tie pair), r1/r3 -> 0.3 (a
+  // second intentional tie pair), r2 -> 0.6.
+  auto make_robot = [](const std::string &name, double distance)
+  {
+    RobotMeta meta = make_test_robot_meta(name, -distance, 0.0, 0.0);
+    meta.speed_transit = 1.0; // clean unit transit speed
+    return meta;
+  };
+  std::vector<RobotMeta> robot_metas = {make_robot("r0", 0.0), make_robot("r1", 3.0),
+                                        make_robot("r2", 6.0), make_robot("r3", 3.0),
+                                        make_robot("r4", 0.0)};
+
+  // Sanity-check the colinear-same-heading RS-length-equals-Euclidean-distance
+  // assumption directly (mirrors test_dqn_v3_feature_vector_properties)
+  // before relying on it for the rest of this test.
+  const double maxc = 1.0 / robot_metas[0].min_turning_radius_transit;
+  const double wheel_base = robot_metas[0].wheel_base;
+  for (double d : {3.0, 6.0})
+  {
+    const double rs_len =
+        DqnV2::reeds_shepp_length(State(-d, 0.0, 0.0), geoms[0].approach, maxc, 0.5, wheel_base);
+    if (std::abs(rs_len - d) > 1e-6)
+    {
+      std::cerr << "    test setup error: expected RS length " << d
+                << " for a straight-ahead same-heading pair, got " << rs_len << "\n";
+      return false;
+    }
+  }
+
+  const double seed_makespan = 10.0;
+  RuntimeOptions options;
+  options.dqn_feature_version = 3;
+  options.dqn_scoring_mode = 1;
+
+  // q_head picks out phi[1] alone (q == phi[1]). f_head picks out phi[1]
+  // with coefficient 1.5 (p_fail == sigmoid(1.5*phi[1])) -- higher-q
+  // candidates are ALSO higher-risk, so a threshold between them can exclude
+  // the global best-q candidate and force a genuine
+  // filter-then-argmax-among-survivors pick, distinct from both a pure
+  // global argmax and a pure global argmin.
+  std::mt19937 rng_dummy(1); // feeds model construction only; hidden==0 draws nothing from it.
+  QModel q_head(DqnV2::kFeatDimV3, 0, rng_dummy);
+  QModel f_head(DqnV2::kFeatDimV3, 0, rng_dummy);
+  std::vector<double> qw(DqnV2::kFeatDimV3, 0.0);
+  qw[1] = 1.0;
+  q_head.set_params(qw);
+  std::vector<double> fw(DqnV2::kFeatDimV3, 0.0);
+  fw[1] = 1.5;
+  f_head.set_params(fw);
+
+  // Hand-computed (phi[1], p_fail) per robot at distance d: phi[1] = d/S;
+  // p_fail = sigmoid(1.5 * phi[1]).
+  //   r0/r4: phi[1]=0.0 -> p_fail=sigmoid(0.0)  = 0.5
+  //   r1/r3: phi[1]=0.3 -> p_fail=sigmoid(0.45) ~= 0.6107
+  //   r2:    phi[1]=0.6 -> p_fail=sigmoid(0.9)  ~= 0.7109
+  const double p_low = dqn_sigmoid(0.0);
+  const double p_mid = dqn_sigmoid(1.5 * 0.3);
+  const double p_high = dqn_sigmoid(1.5 * 0.6);
+  if (!(p_low < p_mid && p_mid < p_high))
+  {
+    std::cerr << "    test setup error: expected p_low < p_mid < p_high, got " << p_low << " "
+              << p_mid << " " << p_high << "\n";
+    return false;
+  }
+
+  const double epsilon = 0.0; // coin(rng) < 0.0 is always false -> exploit branch every step
+
+  // Case 1: threshold between p_mid and p_high -> survivors = {r0,r1,r3,r4}
+  // (r2 excluded); argmax q among survivors is a tie between r1 and r3
+  // (both phi[1]=0.3) -> first-seen (r1, lower candidate-list index) must win.
+  {
+    options.dqn_fail_threshold = 0.65;
+    std::mt19937 rng_run(42);
+    const auto oa = construct_order_v3(q_head, n, geoms, geometry, constraints, robot_metas,
+                                       seed_makespan, epsilon, options, rng_run, nullptr, &f_head);
+    if (oa.assignment[0] != 1)
+    {
+      std::cerr << "    filter-then-argmax case: expected robot 1, got " << oa.assignment[0]
+                << "\n";
+      return false;
+    }
+    if (oa.decomposed_exploit_steps != 1 || oa.decomposed_fallback_steps != 0)
+    {
+      std::cerr << "    filter-then-argmax case: expected 1 exploit step / 0 fallbacks, got "
+                << oa.decomposed_exploit_steps << "/" << oa.decomposed_fallback_steps << "\n";
+      return false;
+    }
+  }
+
+  // Case 2: threshold below p_low -> no candidate survives -> fallback to
+  // argmin p_fail over ALL candidates, tied between r0 and r4 (both
+  // phi[1]=0.0) -> first-seen (r0) must win.
+  {
+    options.dqn_fail_threshold = 0.4;
+    std::mt19937 rng_run(42);
+    const auto oa = construct_order_v3(q_head, n, geoms, geometry, constraints, robot_metas,
+                                       seed_makespan, epsilon, options, rng_run, nullptr, &f_head);
+    if (oa.assignment[0] != 0)
+    {
+      std::cerr << "    fallback case: expected robot 0, got " << oa.assignment[0] << "\n";
+      return false;
+    }
+    if (oa.decomposed_exploit_steps != 1 || oa.decomposed_fallback_steps != 1)
+    {
+      std::cerr << "    fallback case: expected 1 exploit step / 1 fallback, got "
+                << oa.decomposed_exploit_steps << "/" << oa.decomposed_fallback_steps << "\n";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool test_dqn_v3_scoring_off_invariance()
+{
+  const std::size_t n = 4;
+  const auto geoms = make_v3_test_geoms();
+
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+  const LearnedOrderConstraints constraints;
+
+  std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0)};
+
+  RuntimeOptions options; // dqn_scoring_mode defaults to 0 (penalty)
+  const double seed_makespan = 10.0;
+  std::mt19937 rng_dummy(999); // feeds f_head construction only; hidden==0 draws nothing from it.
+
+  // Run A: pre-Decision-2 call shape (no f_head at all). Run B: identical
+  // seed/setup, but with a REAL (non-null) f_head passed in penalty mode
+  // (dqn_scoring_mode == 0) -- the hard invariant is that penalty mode
+  // ignores f_head entirely, so both the result AND the post-call RNG state
+  // must be byte-identical to Run A.
+  for (double eps : {0.0, 0.5, 1.0})
+  {
+    std::mt19937 rng_a(555);
+    QModel model_a(DqnV2::kFeatDimV3, 0, rng_a);
+    const auto oa_a = construct_order_v3(model_a, n, geoms, geometry, constraints, robot_metas,
+                                         seed_makespan, eps, options, rng_a, nullptr);
+
+    std::mt19937 rng_b(555);
+    QModel model_b(DqnV2::kFeatDimV3, 0, rng_b);
+    QModel f_head_dummy(DqnV2::kFeatDimV3, 0, rng_dummy);
+    const auto oa_b = construct_order_v3(model_b, n, geoms, geometry, constraints, robot_metas,
+                                         seed_makespan, eps, options, rng_b, nullptr,
+                                         &f_head_dummy);
+
+    if (oa_a.order != oa_b.order || oa_a.assignment != oa_b.assignment)
+    {
+      std::cerr << "    epsilon=" << eps << ": penalty mode's (order, assignment) changed when a "
+                   "non-null f_head was passed\n";
+      return false;
+    }
+    if (!(rng_a == rng_b))
+    {
+      std::cerr << "    epsilon=" << eps << ": penalty mode's post-call RNG state changed when a "
+                   "non-null f_head was passed (extra RNG draws leaked in)\n";
+      return false;
+    }
+    if (oa_b.decomposed_exploit_steps != 0 || oa_b.decomposed_fallback_steps != 0 ||
+        oa_b.decomposed_survivor_fraction_sum != 0.0)
+    {
+      std::cerr << "    epsilon=" << eps
+                << ": penalty mode unexpectedly populated decomposed-scoring diagnostics\n";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool test_assignment_divergence_counts()
+{
+  // Original task indices 0..4; task_order permutes them so row i in
+  // task_rows corresponds to task_order[i], not i itself -- this exercises
+  // the row -> original-task-index mapping rather than just an identity
+  // order.
+  AllocationScenarioPlan intended;
+  intended.task_order = {2, 0, 3, 1, 4};
+  intended.preferred_robot_names_by_original_task = {
+      "robot1", // task 0
+      "robot2", // task 1
+      "robot1", // task 2
+      "robot2", // task 3
+      "",       // task 4: no preference recorded -- must be skipped entirely
+  };
+
+  auto make_row = [](const std::string &status, const std::string &robot)
+  {
+    TaskCsvRow row;
+    row.status = status;
+    row.robot_name = robot;
+    return row;
+  };
+
+  AllocationRunSummary executed;
+  // row0 -> task 2 (intended robot1): SUCCESS with robot1 -- match.
+  executed.task_rows.push_back(make_row("SUCCESS", "robot1"));
+  // row1 -> task 0 (intended robot1): SUCCESS with robot2 -- diverged placement.
+  executed.task_rows.push_back(make_row("SUCCESS", "robot2"));
+  // row2 -> task 3 (intended robot2): FAILED, last attempted robot2 -- match.
+  executed.task_rows.push_back(make_row("FAILED", "robot2"));
+  // row3 -> task 1 (intended robot2): FAILED, last attempted robot1 -- diverged failed.
+  executed.task_rows.push_back(make_row("FAILED", "robot1"));
+  // row4 -> task 4 (no intended preference recorded): SUCCESS -- skipped entirely.
+  executed.task_rows.push_back(make_row("SUCCESS", "robot1"));
+
+  const AssignmentDivergence d = count_assignment_divergence(intended, executed);
+  if (d.counted_placements != 2 || d.diverged_placements != 1 ||
+      d.counted_failed != 2 || d.diverged_failed != 1)
+  {
+    std::cerr << "    expected {counted_placements=2, diverged_placements=1, "
+                 "counted_failed=2, diverged_failed=1}, got {counted_placements="
+              << d.counted_placements << ", diverged_placements=" << d.diverged_placements
+              << ", counted_failed=" << d.counted_failed
+              << ", diverged_failed=" << d.diverged_failed << "}\n";
+    return false;
+  }
+
+  // Defensive: intended.task_order/executed.task_rows length mismatch yields
+  // an all-zero result rather than an out-of-bounds access.
+  AllocationScenarioPlan mismatched_intended = intended;
+  mismatched_intended.task_order = {2, 0, 3}; // shorter than executed.task_rows
+  const AssignmentDivergence d_mismatch =
+      count_assignment_divergence(mismatched_intended, executed);
+  if (d_mismatch.counted_placements != 0 || d_mismatch.diverged_placements != 0 ||
+      d_mismatch.counted_failed != 0 || d_mismatch.diverged_failed != 0)
+  {
+    std::cerr << "    expected an all-zero result on task_order/task_rows length "
+                 "mismatch, got {counted_placements="
+              << d_mismatch.counted_placements
+              << ", diverged_placements=" << d_mismatch.diverged_placements
+              << ", counted_failed=" << d_mismatch.counted_failed
+              << ", diverged_failed=" << d_mismatch.diverged_failed << "}\n";
+    return false;
+  }
+
+  // operator+= accumulates across multiple candidates, as run_dqn_search's
+  // v3/v4 diagnostic accumulation relies on.
+  AssignmentDivergence total;
+  total += d;
+  total += d;
+  if (total.counted_placements != 4 || total.diverged_placements != 2 ||
+      total.counted_failed != 4 || total.diverged_failed != 2)
+  {
+    std::cerr << "    operator+= did not accumulate as expected, got {counted_placements="
+              << total.counted_placements << ", diverged_placements=" << total.diverged_placements
+              << ", counted_failed=" << total.counted_failed
+              << ", diverged_failed=" << total.diverged_failed << "}\n";
+    return false;
+  }
+
+  return true;
+}
+
+// ==========================================
+// D3 offline-pretraining infra: executed-robot relabeled corpus logging
+// (options.dqn_relabel_executed), two-head weight loading, and freeze-model.
+// ==========================================
+
+// Three spatially-independent tasks (no push-corridor overlaps -> no hard
+// edges in build_pairwise_geometry, so every order/step is legal regardless
+// of placement order) -- used by the relabeling tests below, which need a
+// non-trivial construction order (to exercise the row-position ->
+// original-task mapping) without fighting DAG legality.
+std::vector<DqnV2::TaskGeom> make_independent_v3_test_geoms()
+{
+  using DqnV2::TaskGeom;
+  using ReloPush::State;
+
+  std::vector<TaskGeom> geoms(3);
+
+  geoms[0].obj_start = State(0.0, 0.0, 0.0);
+  geoms[0].obj_goal = State(1.0, 1.0, 0.0);
+  geoms[0].push_pts = {State(0.0, 0.0, 0.0), State(1.0, 0.0, 0.0)};
+  geoms[0].approach = State(0.0, 0.0, 0.0);
+  geoms[0].exit = State(1.0, 0.0, 0.0);
+  geoms[0].tau_fixed = 2.0;
+
+  geoms[1].obj_start = State(40.0, 40.0, 0.0);
+  geoms[1].obj_goal = State(41.0, 41.0, 0.0);
+  geoms[1].push_pts = {State(40.0, 40.0, 0.0), State(41.0, 40.0, 0.0)};
+  geoms[1].approach = State(40.0, 40.0, 0.0);
+  geoms[1].exit = State(41.0, 40.0, 0.0);
+  geoms[1].tau_fixed = 1.5;
+
+  geoms[2].obj_start = State(80.0, 80.0, 0.0);
+  geoms[2].obj_goal = State(81.0, 81.0, 0.0);
+  geoms[2].push_pts = {State(80.0, 80.0, 0.0), State(81.0, 80.0, 0.0)};
+  geoms[2].approach = State(80.0, 80.0, 0.0);
+  geoms[2].exit = State(81.0, 80.0, 0.0);
+  geoms[2].tau_fixed = 1.0;
+
+  return geoms;
+}
+
+// Rebuilds the same Reeds-Shepp DistanceFn/ForwardSim construction that
+// make_forward_sim_v2 (file-local to DqnAllocationSearch.cpp, not reachable
+// from here) uses internally, so a test can maintain an independent
+// reference ForwardSim that behaves identically to the one
+// ingest_rollout_v3/ingest_rollout_v3_relabeled build.
+DqnV2::ForwardSim make_reference_forward_sim(const std::vector<RobotMeta> &robot_metas,
+                                             std::size_t task_count)
+{
+  std::vector<ReloPush::State> initial_poses;
+  initial_poses.reserve(robot_metas.size());
+  for (const auto &meta : robot_metas)
+    initial_poses.emplace_back(meta.initial_pose.x, meta.initial_pose.y, meta.initial_pose.yaw);
+
+  const double maxc = 1.0 / std::max(robot_metas[0].min_turning_radius_transit, 1e-6);
+  const double wb = robot_metas[0].wheel_base;
+  DqnV2::DistanceFn distance = [maxc, wb](const ReloPush::State &from, const ReloPush::State &to)
+  { return DqnV2::reeds_shepp_length(from, to, maxc, 0.5, wb); };
+
+  return DqnV2::ForwardSim(std::move(initial_poses), robot_metas[0].speed_transit,
+                          std::move(distance), task_count);
+}
+
+// A 3-task, 2-robot episode where the EXECUTED robot (task_rows[t].robot_name)
+// differs from the INTENDED one (assignment[order[t]]) on exactly one step
+// (step 1: task 0 intended for "robot1" but actually executed by "robot2").
+// Verifies: (a) the chosen row at each step (relabel_step_log) carries phi
+// computed for the INTENDED (task, robot) pair against the CORRECTED
+// (executed-replayed) state, matched bit-for-bit against an independently
+// hand-tracked reference ForwardSim; (b) diverged is 1 exactly on the
+// diverging step's chosen row, 0 elsewhere, and every non-chosen row keeps
+// the executed_robot=-1/diverged=false defaults; (c) the credited
+// replay-buffer transition at each step matches the EXECUTED robot's preview
+// against that same corrected state; (d) the NEXT step (step 2) shows the
+// corrected state carrying the executed commit forward -- "robot1"
+// (intended-but-not-executed at step 1) has free_time/pose UNTOUCHED for the
+// rest of the episode, not advanced as pure intended-only replay would leave
+// it -- confirmed both directly (reference sim's free_time[0] stays 0) and
+// via a cross-check against plain ingest_rollout_v3 on the same input.
+bool test_dqn_v3_relabeled_replay_correctness()
+{
+  const std::size_t n = 3;
+  const auto geoms = make_independent_v3_test_geoms();
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+  const LearnedOrderConstraints constraints;
+
+  const std::vector<std::string> robot_names = {"robot1", "robot2"};
+  const std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0)};
+
+  RuntimeOptions options;
+  options.dqn_feature_version = 3;
+  options.dqn_relabel_executed = true;
+
+  // Construction order: task 1 first, task 0 second, task 2 third.
+  const std::vector<std::size_t> order = {1, 0, 2};
+  // Intended assignment[original_task] = robot index: task0->robot1(0),
+  // task1->robot2(1), task2->robot1(0).
+  const std::vector<std::size_t> assignment = {0, 1, 0};
+  // Executed robot per step (index t <-> order[t]): step0(task1)->robot2
+  // (matches intended); step1(task0)->robot2 (DIVERGES from intended
+  // robot1); step2(task2)->robot1 (matches intended).
+  const std::vector<std::size_t> executed_robot_by_step = {1, 1, 0};
+
+  AllocationRunSummary summary;
+  summary.all_tasks_succeeded = true;
+  summary.makespan = 20.0;
+  {
+    TaskCsvRow r0;
+    r0.task_id = 1; // unused by the relabeled path: row POSITION drives the
+                    // original-task mapping, not task_id (see
+                    // AssignmentDivergence's doc comment).
+    r0.status = "SUCCESS";
+    r0.robot_name = "robot2";
+    TaskCsvRow r1;
+    r1.task_id = 2;
+    r1.status = "SUCCESS";
+    r1.robot_name = "robot2";
+    TaskCsvRow r2;
+    r2.task_id = 3;
+    r2.status = "SUCCESS";
+    r2.robot_name = "robot1";
+    summary.task_rows = {r0, r1, r2};
+  }
+
+  const double seed_makespan = 20.0;
+  const double fail_return = 3.0;
+
+  std::vector<Transition> replay;
+  std::vector<std::vector<StepCandidateEntry>> relabel_log;
+  ingest_rollout_v3_relabeled(order, assignment, summary, seed_makespan, fail_return, geoms,
+                              geometry, constraints, robot_metas, robot_names, options, replay,
+                              nullptr, &relabel_log);
+
+  if (replay.size() != n)
+  {
+    std::cerr << "    expected " << n << " credited replay transitions, got " << replay.size() << "\n";
+    return false;
+  }
+  if (relabel_log.size() != n)
+  {
+    std::cerr << "    expected relabel_log sized to " << n << " steps, got " << relabel_log.size() << "\n";
+    return false;
+  }
+
+  DqnV2::ForwardSim ref_sim = make_reference_forward_sim(robot_metas, n);
+  std::vector<char> is_placed(n, 0);
+  double robot0_free_time_entering_step2 = -1.0;
+
+  for (std::size_t t = 0; t < n; ++t)
+  {
+    const std::size_t task = order[t];
+    const std::size_t intended_robot = assignment[task];
+    const std::size_t executed_robot = executed_robot_by_step[t];
+    const bool expect_diverged = executed_robot != intended_robot;
+
+    // Snapshot robot0 ("robot1")'s free_time on entry to step 2: it was the
+    // INTENDED (but not executed) robot at step 1, and is not used again
+    // until it legitimately executes task 2 at this very step -- so it must
+    // still read 0 here, proving the executed commit at step 1 (to robot1's
+    // idx1 "robot2") left robot0 completely untouched rather than advancing
+    // it as pure intended-only replay would have.
+    if (t == 2)
+      robot0_free_time_entering_step2 = ref_sim.free_time[0];
+
+    const double m_t_before = ref_sim.max_free_time();
+    const double min_free_time_before = ref_sim.free_time[ref_sim.pick()];
+
+    const auto intended_pv = ref_sim.preview_for(intended_robot, geoms[task]);
+    const auto expected_chosen_phi = DqnV2::make_feature_vector_v3(
+        task, intended_pv, m_t_before, min_free_time_before, geoms[task], geometry, is_placed,
+        ref_sim.window, constraints, seed_makespan, n);
+
+    const auto executed_pv = ref_sim.preview_for(executed_robot, geoms[task]);
+    const auto expected_credit_phi = DqnV2::make_feature_vector_v3(
+        task, executed_pv, m_t_before, min_free_time_before, geoms[task], geometry, is_placed,
+        ref_sim.window, constraints, seed_makespan, n);
+
+    if (replay[t].phi.size() != expected_credit_phi.size())
+    {
+      std::cerr << "    step " << t << ": credit phi size mismatch\n";
+      return false;
+    }
+    for (std::size_t i = 0; i < expected_credit_phi.size(); ++i)
+    {
+      if (std::abs(replay[t].phi[i] - expected_credit_phi[i]) > 1e-9)
+      {
+        std::cerr << "    step " << t << ": credit phi[" << i << "] = " << replay[t].phi[i]
+                  << ", expected " << expected_credit_phi[i] << " (executed robot preview)\n";
+        return false;
+      }
+    }
+
+    const auto &step_entries = relabel_log[t];
+    std::size_t chosen_count = 0;
+    bool found_expected_chosen = false;
+    for (const auto &entry : step_entries)
+    {
+      if (!entry.chosen)
+      {
+        if (entry.executed_robot != -1 || entry.diverged)
+        {
+          std::cerr << "    step " << t << ": non-chosen entry (task=" << entry.candidate_task
+                    << ", robot=" << entry.robot << ") has non-default executed_robot/diverged\n";
+          return false;
+        }
+        continue;
+      }
+      ++chosen_count;
+      if (entry.candidate_task != task || entry.robot != static_cast<long>(intended_robot))
+      {
+        std::cerr << "    step " << t << ": chosen row is (task=" << entry.candidate_task
+                  << ", robot=" << entry.robot << "), expected (task=" << task
+                  << ", robot=" << intended_robot << ")\n";
+        return false;
+      }
+      if (entry.phi.size() != expected_chosen_phi.size())
+      {
+        std::cerr << "    step " << t << ": chosen phi size mismatch\n";
+        return false;
+      }
+      for (std::size_t i = 0; i < expected_chosen_phi.size(); ++i)
+      {
+        if (std::abs(entry.phi[i] - expected_chosen_phi[i]) > 1e-9)
+        {
+          std::cerr << "    step " << t << ": chosen phi[" << i << "] = " << entry.phi[i]
+                    << ", expected " << expected_chosen_phi[i]
+                    << " (intended robot preview against corrected state)\n";
+          return false;
+        }
+      }
+      if (entry.executed_robot != static_cast<long>(executed_robot))
+      {
+        std::cerr << "    step " << t << ": chosen row executed_robot=" << entry.executed_robot
+                  << ", expected " << executed_robot << "\n";
+        return false;
+      }
+      if (entry.diverged != expect_diverged)
+      {
+        std::cerr << "    step " << t << ": chosen row diverged=" << entry.diverged
+                  << ", expected " << expect_diverged << "\n";
+        return false;
+      }
+      found_expected_chosen = true;
+    }
+    if (chosen_count != 1 || !found_expected_chosen)
+    {
+      std::cerr << "    step " << t << ": expected exactly 1 chosen row matching the intended "
+                << "pair, found " << chosen_count << "\n";
+      return false;
+    }
+
+    ref_sim.commit_for(task, geoms[task], executed_pv);
+    is_placed[task] = 1;
+  }
+
+  if (std::abs(robot0_free_time_entering_step2 - 0.0) > 1e-9)
+  {
+    std::cerr << "    robot1 (index 0) free_time entering step 2 should still be 0 (untouched by "
+              << "step 1's executed commit to robot2), got " << robot0_free_time_entering_step2
+              << "\n";
+    return false;
+  }
+
+  // Cross-check against ingest_rollout_v3 (the INTENDED-only path, entirely
+  // unchanged by this patch): step 0 (no divergence) must still match; steps
+  // 1 and 2 must differ (different credited robot at step 1; step 2's state
+  // still carries robot1's stale free_time=0 under relabeling vs. an
+  // advanced one under pure-intended replay).
+  std::vector<Transition> intended_only_replay;
+  ingest_rollout_v3(order, assignment, summary, seed_makespan, fail_return, geoms, geometry,
+                    constraints, robot_metas, options, intended_only_replay, nullptr);
+  if (intended_only_replay.size() != n)
+  {
+    std::cerr << "    ingest_rollout_v3 (comparison): expected " << n << " transitions, got "
+              << intended_only_replay.size() << "\n";
+    return false;
+  }
+  bool step0_matches = true, step1_differs = false, step2_differs = false;
+  for (std::size_t i = 0; i < replay[0].phi.size(); ++i)
+    if (std::abs(replay[0].phi[i] - intended_only_replay[0].phi[i]) > 1e-9)
+      step0_matches = false;
+  for (std::size_t i = 0; i < replay[1].phi.size(); ++i)
+    if (std::abs(replay[1].phi[i] - intended_only_replay[1].phi[i]) > 1e-9)
+      step1_differs = true;
+  for (std::size_t i = 0; i < replay[2].phi.size(); ++i)
+    if (std::abs(replay[2].phi[i] - intended_only_replay[2].phi[i]) > 1e-9)
+      step2_differs = true;
+  if (!step0_matches)
+  {
+    std::cerr << "    step 0 (no divergence) should match plain ingest_rollout_v3 exactly\n";
+    return false;
+  }
+  if (!step1_differs)
+  {
+    std::cerr << "    step 1 (diverging step) should differ from plain ingest_rollout_v3\n";
+    return false;
+  }
+  if (!step2_differs)
+  {
+    std::cerr << "    step 2 should differ from plain ingest_rollout_v3 (relabeled state has "
+                 "robot1's free_time still 0; intended-only replay would have advanced it)\n";
+    return false;
+  }
+
+  return true;
+}
+
+// Executed-robot fallback when there is no definite executed robot for a step
+// (a FAILED row, or a failing step under early abort leaving later steps'
+// task_rows entirely absent -- an "unexecuted tail"). Verifies the chosen row
+// at such a step falls back to the intended robot with executed_robot=-1 (no
+// definite answer) and diverged=false, exactly as documented for
+// options.dqn_relabel_executed.
+bool test_dqn_v3_relabeled_replay_unexecuted_tail_fallback()
+{
+  const std::size_t n = 3;
+  const auto geoms = make_independent_v3_test_geoms();
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+  const LearnedOrderConstraints constraints;
+
+  const std::vector<std::string> robot_names = {"robot1", "robot2"};
+  const std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0)};
+
+  RuntimeOptions options;
+  options.dqn_feature_version = 3;
+  options.dqn_relabel_executed = true;
+
+  const std::vector<std::size_t> order = {0, 1, 2};
+  const std::vector<std::size_t> assignment = {0, 1, 0};
+
+  // Infeasible episode: task_rows only covers step 0 (which itself FAILED),
+  // simulating early-abort -- steps 1 and 2 have no row at all (unexecuted
+  // tail).
+  AllocationRunSummary summary;
+  summary.all_tasks_succeeded = false;
+  {
+    TaskCsvRow r0;
+    r0.task_id = 1;
+    r0.status = "FAILED";
+    r0.robot_name = "robot1";
+    summary.task_rows = {r0};
+  }
+
+  const double seed_makespan = 20.0;
+  const double fail_return = 3.0;
+
+  std::vector<Transition> replay;
+  std::vector<std::vector<StepCandidateEntry>> relabel_log;
+  ingest_rollout_v3_relabeled(order, assignment, summary, seed_makespan, fail_return, geoms,
+                              geometry, constraints, robot_metas, robot_names, options, replay,
+                              nullptr, &relabel_log);
+
+  if (relabel_log.size() != n)
+  {
+    std::cerr << "    expected relabel_log sized to " << n << " steps, got " << relabel_log.size() << "\n";
+    return false;
+  }
+
+  for (std::size_t t = 0; t < n; ++t)
+  {
+    const std::size_t task = order[t];
+    const std::size_t intended_robot = assignment[task];
+    bool found = false;
+    for (const auto &entry : relabel_log[t])
+    {
+      if (!entry.chosen)
+        continue;
+      found = true;
+      if (entry.candidate_task != task || entry.robot != static_cast<long>(intended_robot))
+      {
+        std::cerr << "    step " << t << ": chosen row is (task=" << entry.candidate_task
+                  << ", robot=" << entry.robot << "), expected the intended pair (task=" << task
+                  << ", robot=" << intended_robot << ")\n";
+        return false;
+      }
+      if (entry.executed_robot != -1)
+      {
+        std::cerr << "    step " << t << ": expected executed_robot=-1 (no definite executed "
+                     "robot), got "
+                  << entry.executed_robot << "\n";
+        return false;
+      }
+      if (entry.diverged)
+      {
+        std::cerr << "    step " << t << ": expected diverged=false when there is no definite "
+                     "executed robot to compare against\n";
+        return false;
+      }
+    }
+    if (!found)
+    {
+      std::cerr << "    step " << t << ": no chosen row found\n";
+      return false;
+    }
+  }
+
+  // Credit gating is unchanged/inherited from compute_rollout_outcome
+  // (fail_pos=0 -> only step 0 credited in penalty mode); already covered by
+  // test_dqn_v3_decomposed_ingest's fail_pos tests, just sanity-checked here.
+  if (replay.size() != 1)
+  {
+    std::cerr << "    expected exactly 1 credited transition (fail_pos=0 gate), got "
+              << replay.size() << "\n";
+    return false;
+  }
+
+  return true;
+}
+
+// With options.dqn_relabel_executed at its default (false), run_dqn_search
+// dispatches to plain ingest_rollout_v3 -- untouched by this patch (which
+// only adds a new sibling, ingest_rollout_v3_relabeled). Confirms that
+// function's output on a run summary containing executed-robot divergence is
+// EXACTLY the "intended robot replay" it always was: divergence recorded in
+// task_rows is simply never consulted for robot identity when relabeling is
+// off.
+bool test_dqn_v3_relabel_off_invariance()
+{
+  RuntimeOptions default_options;
+  if (default_options.dqn_relabel_executed)
+  {
+    std::cerr << "    dqn_relabel_executed should default to false\n";
+    return false;
+  }
+
+  const std::size_t n = 3;
+  const auto geoms = make_independent_v3_test_geoms();
+  const DqnV2::WorkspaceBounds bounds{-1000.0, 1000.0, -1000.0, 1000.0};
+  const double robot_width = 0.275;
+  const DqnV2::PairwiseGeometry geometry = DqnV2::build_pairwise_geometry(geoms, bounds, robot_width);
+  const LearnedOrderConstraints constraints;
+
+  const std::vector<RobotMeta> robot_metas = {
+      make_test_robot_meta("robot1", 0.5, 0.45, 0.0),
+      make_test_robot_meta("robot2", 3.5, 4.5, 0.0)};
+
+  RuntimeOptions options;
+  options.dqn_feature_version = 3;
+  options.dqn_relabel_executed = false; // explicit, though this is the default
+
+  const std::vector<std::size_t> order = {1, 0, 2};
+  const std::vector<std::size_t> assignment = {0, 1, 0};
+
+  // Same divergent summary as the relabeled-replay-correctness test above
+  // (task 0 actually executed by "robot2", not the intended "robot1"). With
+  // relabeling off, this must be irrelevant.
+  AllocationRunSummary summary;
+  summary.all_tasks_succeeded = true;
+  summary.makespan = 20.0;
+  {
+    TaskCsvRow r0;
+    r0.status = "SUCCESS";
+    r0.robot_name = "robot2";
+    TaskCsvRow r1;
+    r1.status = "SUCCESS";
+    r1.robot_name = "robot2"; // diverges from intended "robot1" -- must be ignored
+    TaskCsvRow r2;
+    r2.status = "SUCCESS";
+    r2.robot_name = "robot1";
+    summary.task_rows = {r0, r1, r2};
+  }
+
+  const double seed_makespan = 20.0;
+  const double fail_return = 3.0;
+
+  std::vector<Transition> replay;
+  ingest_rollout_v3(order, assignment, summary, seed_makespan, fail_return, geoms, geometry,
+                    constraints, robot_metas, options, replay, nullptr);
+
+  if (replay.size() != n)
+  {
+    std::cerr << "    expected " << n << " credited transitions, got " << replay.size() << "\n";
+    return false;
+  }
+
+  DqnV2::ForwardSim ref_sim = make_reference_forward_sim(robot_metas, n);
+  std::vector<char> is_placed(n, 0);
+  for (std::size_t t = 0; t < n; ++t)
+  {
+    const std::size_t task = order[t];
+    const std::size_t intended_robot = assignment[task];
+    const double m_t_before = ref_sim.max_free_time();
+    const double min_free_time_before = ref_sim.free_time[ref_sim.pick()];
+    const auto pv = ref_sim.preview_for(intended_robot, geoms[task]);
+    const auto expected_phi = DqnV2::make_feature_vector_v3(
+        task, pv, m_t_before, min_free_time_before, geoms[task], geometry, is_placed,
+        ref_sim.window, constraints, seed_makespan, n);
+
+    if (replay[t].phi.size() != expected_phi.size())
+    {
+      std::cerr << "    step " << t << ": phi size mismatch\n";
+      return false;
+    }
+    for (std::size_t i = 0; i < expected_phi.size(); ++i)
+    {
+      if (std::abs(replay[t].phi[i] - expected_phi[i]) > 1e-9)
+      {
+        std::cerr << "    step " << t << ": phi[" << i << "] = " << replay[t].phi[i]
+                  << ", expected " << expected_phi[i] << " (pure intended-robot replay, "
+                  << "ignoring the executed-robot divergence recorded in task_rows)\n";
+        return false;
+      }
+    }
+
+    ref_sim.commit_for(task, geoms[task], pv);
+    is_placed[task] = 1;
+  }
+
+  return true;
+}
+
+// options.dqn_freeze_model's effect in run_dqn_search is simply "don't call
+// train_model/train_model_logistic"; this directly verifies the property
+// that skip relies on: calling either function is the only thing that
+// changes a QModel's params, so omitting the call (what dqn_freeze_model
+// does at each of run_dqn_search's 4 call sites) leaves params bit-identical,
+// while actually calling it does not (sanity check that the calls used here
+// are not accidentally no-ops).
+bool test_dqn_freeze_model_flag()
+{
+  std::mt19937 rng(42);
+  QModel model(5, 0, rng);
+  const std::vector<double> params_before = model.get_params();
+
+  std::vector<Transition> replay;
+  for (int i = 0; i < 10; ++i)
+  {
+    Transition tr;
+    tr.phi = {1.0, 0.2, 0.3, 0.4, 0.5};
+    tr.target = 0.7;
+    replay.push_back(tr);
+  }
+
+  // Simulates run_dqn_search's `if (!options.dqn_freeze_model) train_model(...)`
+  // with dqn_freeze_model == true: the call is skipped entirely.
+  const bool dqn_freeze_model = true;
+  if (!dqn_freeze_model)
+    train_model(model, replay, 0.05, 64, 32, rng);
+  if (model.get_params() != params_before)
+  {
+    std::cerr << "    freeze_model=true: q_head params changed after a skipped train_model call\n";
+    return false;
+  }
+
+  std::mt19937 rng_f(43);
+  QModel f_head(5, 0, rng_f);
+  const std::vector<double> f_params_before = f_head.get_params();
+  std::vector<Transition> f_replay;
+  for (int i = 0; i < 10; ++i)
+  {
+    Transition tr;
+    tr.phi = {1.0, 0.2, 0.3, 0.4, 0.5};
+    tr.target = (i % 2 == 0) ? 1.0 : 0.0;
+    f_replay.push_back(tr);
+  }
+  if (!dqn_freeze_model)
+    train_model_logistic(f_head, f_replay, 0.05, 64, 32, 0.0, rng_f);
+  if (f_head.get_params() != f_params_before)
+  {
+    std::cerr << "    freeze_model=true: f_head params changed after a skipped "
+                 "train_model_logistic call\n";
+    return false;
+  }
+
+  // Sanity: WITHOUT freezing, the same calls DO change params (proves the
+  // skips above were meaningful, not accidental no-ops).
+  train_model(model, replay, 0.05, 64, 32, rng);
+  if (model.get_params() == params_before)
+  {
+    std::cerr << "    sanity check failed: train_model did not change q_head params at all\n";
+    return false;
+  }
+  train_model_logistic(f_head, f_replay, 0.05, 64, 32, 0.0, rng_f);
+  if (f_head.get_params() == f_params_before)
+  {
+    std::cerr << "    sanity check failed: train_model_logistic did not change f_head params\n";
+    return false;
+  }
+
+  return true;
+}
+
+// options.dqn_init_fail_weights_path: mirrors run_dqn_search's f_head loading
+// block (construct f_head, then f_head->load(path) if the path is
+// non-empty). A well-formed matching-dim file loads exactly; a dim-mismatch
+// file fails to load and leaves params untouched (QModel::load's existing
+// contract, verified here specifically against the v3 (10-dim) f_head shape
+// this option targets).
+bool test_dqn_init_fail_weights_load()
+{
+  const auto tmp_path = std::filesystem::temp_directory_path() /
+                       "phastar_unit_tests_dqn_fail_weights.weights";
+  std::filesystem::remove(tmp_path);
+
+  std::mt19937 rng(501);
+  QModel source(DqnV2::kFeatDimV3, 0, rng);
+  std::uniform_real_distribution<double> param_dist(-1.0, 1.0);
+  std::vector<double> source_params = source.get_params();
+  for (auto &v : source_params)
+    v = param_dist(rng);
+  source.set_params(source_params);
+  if (!source.save(tmp_path.string()))
+  {
+    std::cerr << "    Failed to save source f_head weights.\n";
+    return false;
+  }
+
+  RuntimeOptions options;
+  options.dqn_init_fail_weights_path = tmp_path.string();
+
+  std::mt19937 rng2(502);
+  QModel f_head(DqnV2::kFeatDimV3, 0, rng2);
+  const bool loaded = f_head.load(options.dqn_init_fail_weights_path);
+  std::filesystem::remove(tmp_path);
+  if (!loaded)
+  {
+    std::cerr << "    f_head.load unexpectedly failed for a well-formed matching file.\n";
+    return false;
+  }
+  const std::vector<double> f_head_params = f_head.get_params();
+  if (f_head_params.size() != source_params.size())
+  {
+    std::cerr << "    f_head param count mismatch: expected " << source_params.size() << " got "
+              << f_head_params.size() << "\n";
+    return false;
+  }
+  for (std::size_t i = 0; i < source_params.size(); ++i)
+  {
+    if (std::abs(source_params[i] - f_head_params[i]) > 1e-12)
+    {
+      std::cerr << "    f_head param mismatch at index " << i << ": expected " << source_params[i]
+                << " got " << f_head_params[i] << "\n";
+      return false;
+    }
+  }
+
+  // Dim-mismatch file: load must fail and leave params untouched.
+  const auto mismatch_path = std::filesystem::temp_directory_path() /
+                            "phastar_unit_tests_dqn_fail_weights_mismatch.weights";
+  std::filesystem::remove(mismatch_path);
+  std::mt19937 rng3(503);
+  QModel mismatched_source(DqnV2::kFeatDimV4, 0, rng3); // 12-dim, not 10
+  mismatched_source.save(mismatch_path.string());
+
+  std::mt19937 rng4(504);
+  QModel f_head2(DqnV2::kFeatDimV3, 0, rng4); // 10-dim target
+  const std::vector<double> f_head2_before = f_head2.get_params();
+  RuntimeOptions options2;
+  options2.dqn_init_fail_weights_path = mismatch_path.string();
+  const bool loaded2 = f_head2.load(options2.dqn_init_fail_weights_path);
+  std::filesystem::remove(mismatch_path);
+  if (loaded2)
+  {
+    std::cerr << "    f_head.load unexpectedly succeeded on a dim mismatch.\n";
+    return false;
+  }
+  if (f_head2.get_params() != f_head2_before)
+  {
+    std::cerr << "    f_head params were modified after a failed (mismatched) load.\n";
+    return false;
+  }
+
+  return true;
+}
+
 bool test_resample_to_k_points()
 {
   // Straight line (0,0) -> (4,0) -> (10,0), uneven segment spacing so the
@@ -2394,6 +4452,667 @@ bool test_json_escape_string()
   return true;
 }
 
+// ==========================================
+// Policy-gradient PoC P0: batch-oracle CLI (EvalPlansCli.h) unit tests.
+// ==========================================
+
+bool test_parse_eval_plan_line_valid()
+{
+  EvalPlanRequest req;
+  std::string error;
+  const std::string line = R"({"id": "case-1", "order": [2, 0, 1], "assign": [1, 0, 0]})";
+  if (!parse_eval_plan_line(line, req, error))
+  {
+    std::cerr << "    expected parse success, got error: " << error << "\n";
+    return false;
+  }
+  if (req.id != "case-1")
+  {
+    std::cerr << "    id mismatch: got '" << req.id << "'\n";
+    return false;
+  }
+  if (req.order != std::vector<std::size_t>({2, 0, 1}))
+  {
+    std::cerr << "    order mismatch\n";
+    return false;
+  }
+  if (req.assign != std::vector<std::size_t>({1, 0, 0}))
+  {
+    std::cerr << "    assign mismatch\n";
+    return false;
+  }
+
+  // Key order and extra whitespace must not matter.
+  EvalPlanRequest req2;
+  const std::string line2 = "{ \"assign\":[0],\"order\" : [ 0 ] , \"id\":\"x\" }";
+  if (!parse_eval_plan_line(line2, req2, error))
+  {
+    std::cerr << "    expected parse success for reordered/whitespace variant, got error: "
+              << error << "\n";
+    return false;
+  }
+  if (req2.id != "x" || req2.order != std::vector<std::size_t>({0}) ||
+      req2.assign != std::vector<std::size_t>({0}))
+  {
+    std::cerr << "    reordered/whitespace variant field mismatch\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_parse_eval_plan_line_malformed()
+{
+  EvalPlanRequest req;
+  std::string error;
+
+  if (parse_eval_plan_line(R"({"id": "a", "order": [0, 1]})", req, error))
+  {
+    std::cerr << "    expected failure for missing \"assign\" key\n";
+    return false;
+  }
+
+  if (parse_eval_plan_line(R"({"id": "a", "order": [0, 1], "assign": [0]})", req, error))
+  {
+    std::cerr << "    expected failure for order/assign length mismatch\n";
+    return false;
+  }
+
+  if (parse_eval_plan_line(R"({"id": "a", "order": [0, x], "assign": [0, 0]})", req, error))
+  {
+    std::cerr << "    expected failure for non-numeric order element\n";
+    return false;
+  }
+
+  if (parse_eval_plan_line(R"({"id": "a", "order": [-1, 0], "assign": [0, 0]})", req, error))
+  {
+    std::cerr << "    expected failure for negative order element\n";
+    return false;
+  }
+
+  // No opening quote at all around the id value.
+  if (parse_eval_plan_line(R"({"id": a, "order": [0], "assign": [0]})", req, error))
+  {
+    std::cerr << "    expected failure for malformed (unquoted) id\n";
+    return false;
+  }
+
+  return true;
+}
+
+bool test_validate_plan_order()
+{
+  std::string error;
+  if (!validate_plan_order({0, 1, 2}, 3, error))
+  {
+    std::cerr << "    expected a valid permutation to pass: " << error << "\n";
+    return false;
+  }
+  if (validate_plan_order({0, 1}, 3, error))
+  {
+    std::cerr << "    expected wrong-length order to fail\n";
+    return false;
+  }
+  if (validate_plan_order({0, 1, 3}, 3, error))
+  {
+    std::cerr << "    expected out-of-range index to fail\n";
+    return false;
+  }
+  if (validate_plan_order({0, 1, 1}, 3, error))
+  {
+    std::cerr << "    expected duplicate index to fail\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_parse_robot_index_from_name()
+{
+  const std::vector<std::pair<std::string, long>> cases = {
+      {"robot1", 0}, {"robot3", 2}, {"robot12", 11}, {"", -1},
+      {"robot0", -1}, {"robotX", -1}, {"bot1", -1}, {"robot", -1},
+  };
+  for (const auto &[name, expected] : cases)
+  {
+    const long got = parse_robot_index_from_name(name);
+    if (got != expected)
+    {
+      std::cerr << "    parse_robot_index_from_name('" << name << "') = " << got
+                << ", expected " << expected << "\n";
+      return false;
+    }
+  }
+  return true;
+}
+
+bool test_csv_escape_field()
+{
+  if (csv_escape_field("plain") != "plain")
+  {
+    std::cerr << "    plain field should be returned unchanged\n";
+    return false;
+  }
+  if (csv_escape_field("a,b") != "\"a,b\"")
+  {
+    std::cerr << "    comma field mismatch: '" << csv_escape_field("a,b") << "'\n";
+    return false;
+  }
+  if (csv_escape_field("a\"b") != "\"a\"\"b\"")
+  {
+    std::cerr << "    quote field mismatch: '" << csv_escape_field("a\"b") << "'\n";
+    return false;
+  }
+  if (csv_escape_field("a\nb") != "\"a\nb\"")
+  {
+    std::cerr << "    newline field mismatch: '" << csv_escape_field("a\nb") << "'\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_eval_plans_cli_end_to_end()
+{
+  const std::filesystem::path exe_dir = g_test_executable_path.parent_path();
+  const std::filesystem::path demo_path = exe_dir / "phastar_push_demo";
+  if (!std::filesystem::exists(demo_path))
+  {
+    std::cerr << "    Missing phastar_push_demo executable at " << demo_path << "\n";
+    return false;
+  }
+
+  const std::filesystem::path instance_path =
+      std::filesystem::path(CMAKE_SOURCE_DIR) /
+      "results/relopush-out/result_seq_ReloPush-BOSS_8_objects.txt_ind1.b64";
+  if (!std::filesystem::exists(instance_path))
+  {
+    std::cerr << "    Missing instance file at " << instance_path << "\n";
+    return false;
+  }
+
+  const std::filesystem::path plans_path =
+      std::filesystem::temp_directory_path() / "eval_plans_cli_test_input.jsonl";
+  const std::filesystem::path out_path =
+      std::filesystem::temp_directory_path() / "eval_plans_cli_test_output.csv";
+  std::error_code rm_ec;
+  std::filesystem::remove(plans_path, rm_ec);
+  std::filesystem::remove(out_path, rm_ec);
+
+  // BOSS_8 has 8 tasks (0..7). Line 1: the identity order, all on robot1
+  // (index 0) -- a well-formed, plausible plan. Line 2: deliberately
+  // malformed (order/assign length mismatch).
+  {
+    std::ofstream plans_out(plans_path);
+    plans_out << R"({"id": "identity", "order": [0,1,2,3,4,5,6,7], )"
+              << R"("assign": [0,0,0,0,0,0,0,0]})" << "\n";
+    plans_out << R"({"id": "bad", "order": [0,1], "assign": [0]})" << "\n";
+  }
+
+  std::string command =
+      demo_path.string() +
+      " --no-visualization --no-visualize-relopush-plan --no-debug-vis"
+      " --random-seed=1"
+      " --eval-plans=" + plans_path.string() +
+      " --eval-plans-out=" + out_path.string() +
+      " --input-sequence=" + instance_path.string() + " 2>&1";
+
+  int exit_code = 0;
+  const std::string output = run_command_capture(command, exit_code);
+  if (exit_code != 0)
+  {
+    std::cerr << "    --eval-plans command failed with exit code " << exit_code
+              << "\n    output: " << output << "\n";
+    return false;
+  }
+
+  if (!std::filesystem::exists(out_path))
+  {
+    std::cerr << "    Expected output CSV was not created at " << out_path << "\n";
+    return false;
+  }
+
+  const std::string csv = read_text_file(out_path);
+  std::istringstream csv_stream(csv);
+  std::string header;
+  std::getline(csv_stream, header);
+  if (header.find("id,feasible,makespan,first_fail_step,executed_robots,eval_wall_s") ==
+      std::string::npos)
+  {
+    std::cerr << "    Unexpected CSV header: '" << header << "'\n";
+    return false;
+  }
+
+  std::string identity_row, bad_row;
+  std::getline(csv_stream, identity_row);
+  std::getline(csv_stream, bad_row);
+
+  if (identity_row.rfind("identity,", 0) != 0)
+  {
+    std::cerr << "    Expected first data row to start with 'identity,', got: '" << identity_row
+              << "'\n";
+    return false;
+  }
+  if (identity_row.find(",-1,-1,-1,,") != std::string::npos)
+  {
+    std::cerr << "    identity plan row looks like the malformed-line placeholder: '"
+              << identity_row << "'\n";
+    return false;
+  }
+
+  if (bad_row.rfind("bad,-1,-1,-1,,", 0) != 0)
+  {
+    std::cerr << "    Expected malformed-line row 'bad,-1,-1,-1,,...', got: '" << bad_row
+              << "'\n";
+    return false;
+  }
+
+  std::filesystem::remove(plans_path, rm_ec);
+  std::filesystem::remove(out_path, rm_ec);
+  return true;
+}
+
+// ==========================================
+// Policy-gradient PoC P0: per-instance PG table exporter (PgTableExport.h)
+// unit test.
+// ==========================================
+
+namespace
+{
+
+// Test-local, deliberately minimal JSON scalar readers (mirrors the "small
+// hand-rolled parser for a known, controlled format" approach the production
+// code itself uses -- see EvalPlansCli.cpp/GeometryExport.cpp -- rather than
+// pulling in a JSON library just for this regression test).
+double read_number_after_key(const std::string &text, std::size_t key_pos)
+{
+  const auto colon = text.find(':', key_pos);
+  if (colon == std::string::npos)
+    return std::numeric_limits<double>::quiet_NaN();
+  std::size_t p = colon + 1;
+  while (p < text.size() && std::isspace(static_cast<unsigned char>(text[p])))
+    ++p;
+  const auto end = text.find_first_of(",\n}]", p);
+  try
+  {
+    return std::stod(text.substr(p, end == std::string::npos ? std::string::npos : end - p));
+  }
+  catch (const std::exception &)
+  {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+}
+
+double read_scalar_field(const std::string &text, const std::string &key)
+{
+  const auto key_pos = text.find("\"" + key + "\"");
+  if (key_pos == std::string::npos)
+    return std::numeric_limits<double>::quiet_NaN();
+  return read_number_after_key(text, key_pos);
+}
+
+bool extract_xyz_after(const std::string &text, std::size_t from_pos, double &x, double &y,
+                      double &yaw)
+{
+  const auto x_pos = text.find("\"x\"", from_pos);
+  if (x_pos == std::string::npos)
+    return false;
+  const auto y_pos = text.find("\"y\"", x_pos);
+  if (y_pos == std::string::npos)
+    return false;
+  const auto yaw_pos = text.find("\"yaw\"", y_pos);
+  if (yaw_pos == std::string::npos)
+    return false;
+  x = read_number_after_key(text, x_pos);
+  y = read_number_after_key(text, y_pos);
+  yaw = read_number_after_key(text, yaw_pos);
+  return std::isfinite(x) && std::isfinite(y) && std::isfinite(yaw);
+}
+
+// First entry of the first row of a "key": [[...], [...], ...] matrix.
+double extract_first_matrix_entry(const std::string &text, const std::string &key)
+{
+  const auto key_pos = text.find("\"" + key + "\"");
+  if (key_pos == std::string::npos)
+    return std::numeric_limits<double>::quiet_NaN();
+  const auto outer_bracket = text.find('[', key_pos);
+  if (outer_bracket == std::string::npos)
+    return std::numeric_limits<double>::quiet_NaN();
+  const auto row_bracket = text.find('[', outer_bracket + 1);
+  if (row_bracket == std::string::npos)
+    return std::numeric_limits<double>::quiet_NaN();
+  std::size_t p = row_bracket + 1;
+  while (p < text.size() && std::isspace(static_cast<unsigned char>(text[p])))
+    ++p;
+  const auto end = text.find_first_of(",]", p);
+  if (end == std::string::npos)
+    return std::numeric_limits<double>::quiet_NaN();
+  try
+  {
+    return std::stod(text.substr(p, end - p));
+  }
+  catch (const std::exception &)
+  {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+}
+
+} // namespace
+
+bool test_export_pg_tables_end_to_end()
+{
+  const std::filesystem::path exe_dir = g_test_executable_path.parent_path();
+  const std::filesystem::path demo_path = exe_dir / "phastar_push_demo";
+  if (!std::filesystem::exists(demo_path))
+  {
+    std::cerr << "    Missing phastar_push_demo executable at " << demo_path << "\n";
+    return false;
+  }
+
+  const std::filesystem::path instance_path =
+      std::filesystem::path(CMAKE_SOURCE_DIR) /
+      "results/relopush-out/result_seq_ReloPush-BOSS_8_objects.txt_ind1.b64";
+  if (!std::filesystem::exists(instance_path))
+  {
+    std::cerr << "    Missing instance file at " << instance_path << "\n";
+    return false;
+  }
+
+  const std::filesystem::path out_path =
+      std::filesystem::temp_directory_path() / "pg_table_export_test.json";
+  std::error_code rm_ec;
+  std::filesystem::remove(out_path, rm_ec);
+
+  // NOTE: --export-pg-tables= hooks in AFTER the seed-plan selection (see
+  // PHAstar_push_demo.cpp), which sits past the --greedy-only short-circuit
+  // (assignment/local-sequence/shuffle-sequence/lns-or-dqn iterations all
+  // <= 0 -- see run_greedy_only_pipeline). --lns-iters=1 (rather than 0)
+  // keeps this test out of that mode; the LNS search itself never actually
+  // runs since --export-pg-tables= returns before it would be dispatched.
+  std::string command =
+      demo_path.string() +
+      " --no-visualization --no-visualize-relopush-plan --no-debug-vis"
+      " --assignment-search-iters=0 --local-sequence-search-iters=0"
+      " --shuffle-sequence-search-iters=0 --lns-iters=1 --random-seed=1"
+      " --export-pg-tables=" + out_path.string() +
+      " --input-sequence=" + instance_path.string() + " 2>&1";
+
+  int exit_code = 0;
+  const std::string output = run_command_capture(command, exit_code);
+  if (exit_code != 0)
+  {
+    std::cerr << "    --export-pg-tables command failed with exit code " << exit_code
+              << "\n    output: " << output << "\n";
+    return false;
+  }
+
+  if (!std::filesystem::exists(out_path))
+  {
+    std::cerr << "    Expected output JSON file was not created at " << out_path << "\n";
+    return false;
+  }
+
+  const std::string json = read_text_file(out_path);
+  if (json.empty())
+  {
+    std::cerr << "    Exported JSON file is empty.\n";
+    return false;
+  }
+
+  const std::vector<std::string> required_keys = {
+      "\"family\"",       "\"index\"",           "\"task_count\"",   "\"robot_count\"",
+      "\"robot_names\"",  "\"workspace\"",       "\"robot_width\"",  "\"block_dist\"",
+      "\"speed_transit\"", "\"robot_wheel_base\"", "\"robot_min_turning_radius_transit\"",
+      "\"greedy_makespan\"", "\"seed_makespan\"", "\"tasks\"",       "\"tau_fixed\"",
+      "\"approach\"",     "\"exit\"",            "\"obj_start\"",    "\"obj_goal\"",
+      "\"boundary_risk\"", "\"hard_pred\"",       "\"soft_pred\"",   "\"corr_overlap\"",
+      "\"w_start\"",      "\"w_goal\"",          "\"pose_count\"",   "\"poses\"",
+      "\"transit_time\"", "\"parked_blockage\"", "\"ref_order\"",    "\"ref_assign\""};
+  for (const auto &key : required_keys)
+  {
+    if (json.find(key) == std::string::npos)
+    {
+      std::cerr << "    Exported JSON is missing required key: " << key << "\n";
+      return false;
+    }
+  }
+
+  // Spot-check: transit_time[0][0] (poses[0] == robot1's initial pose, since
+  // robot inits are written before task exits -- see PgTableExport.h; ->
+  // task 0's approach pose) must equal reeds_shepp_length(...)/speed_transit
+  // computed directly here from the SAME exported JSON's own poses[0]/
+  // tasks[0].approach/scalar fields (not from hardcoded robot constants).
+  double robot_x = 0.0, robot_y = 0.0, robot_yaw = 0.0;
+  const auto robot_init_pos = json.find("\"kind\": \"robot_init\"");
+  if (robot_init_pos == std::string::npos ||
+      !extract_xyz_after(json, robot_init_pos, robot_x, robot_y, robot_yaw))
+  {
+    std::cerr << "    Failed to locate/parse the first robot_init pose.\n";
+    return false;
+  }
+
+  double task_x = 0.0, task_y = 0.0, task_yaw = 0.0;
+  const auto approach_pos = json.find("\"approach\"");
+  if (approach_pos == std::string::npos ||
+      !extract_xyz_after(json, approach_pos, task_x, task_y, task_yaw))
+  {
+    std::cerr << "    Failed to locate/parse task 0's approach pose.\n";
+    return false;
+  }
+
+  const double speed_transit = read_scalar_field(json, "speed_transit");
+  const double wheel_base = read_scalar_field(json, "robot_wheel_base");
+  const double turning_radius = read_scalar_field(json, "robot_min_turning_radius_transit");
+  if (!(speed_transit > 0.0) || !std::isfinite(wheel_base) || !std::isfinite(turning_radius))
+  {
+    std::cerr << "    Failed to parse speed_transit/robot_wheel_base/"
+                 "robot_min_turning_radius_transit scalars.\n";
+    return false;
+  }
+
+  const ReloPush::State from(robot_x, robot_y, robot_yaw);
+  const ReloPush::State to(task_x, task_y, task_yaw);
+  const double maxc = 1.0 / std::max(turning_radius, 1e-6);
+  const double expected = DqnV2::reeds_shepp_length(from, to, maxc, 0.5, wheel_base) / speed_transit;
+
+  const double exported_entry = extract_first_matrix_entry(json, "transit_time");
+  if (!std::isfinite(exported_entry))
+  {
+    std::cerr << "    Failed to parse transit_time[0][0] from the exported JSON.\n";
+    return false;
+  }
+
+  if (std::abs(exported_entry - expected) > 1e-6)
+  {
+    std::cerr << "    transit_time[0][0] mismatch: exported=" << exported_entry
+              << " expected(reeds_shepp_length/speed)=" << expected << "\n";
+    return false;
+  }
+
+  std::filesystem::remove(out_path, rm_ec);
+  return true;
+}
+
+// ==========================================
+// Policy-gradient PoC P0 (follow-up): --export-decision-time-log= unit test.
+// Added after team-lead review of the parity methodology: this log's whole
+// purpose is to give script/pg/parity_check.py a phi ground truth computed
+// under construct_order_v3's own DECISION-TIME state-advancement rule
+// (chosen_robot, not any executed one -- see PgTableExport.h's doc comment
+// on export_decision_time_log), as a check independent of the RELABELED log
+// --dqn-log-transitions= + --dqn-relabel-executed produces. This test
+// verifies the export is deterministic (all-zero-weight model + epsilon=0.0
+// -> ties always keep the first-seen candidate, so every step's chosen
+// (task, robot) is (lowest legal task index, robot 0)) and that its rows
+// carry no relabel-specific data (executed_robot/diverged stay at their
+// StepCandidateEntry defaults, since construct_order_v3 never sets them).
+// ==========================================
+
+bool test_export_decision_time_log_end_to_end()
+{
+  const std::filesystem::path exe_dir = g_test_executable_path.parent_path();
+  const std::filesystem::path demo_path = exe_dir / "phastar_push_demo";
+  if (!std::filesystem::exists(demo_path))
+  {
+    std::cerr << "    Missing phastar_push_demo executable at " << demo_path << "\n";
+    return false;
+  }
+
+  const std::filesystem::path instance_path =
+      std::filesystem::path(CMAKE_SOURCE_DIR) /
+      "results/relopush-out/result_seq_ReloPush-BOSS_8_objects.txt_ind1.b64";
+  if (!std::filesystem::exists(instance_path))
+  {
+    std::cerr << "    Missing instance file at " << instance_path << "\n";
+    return false;
+  }
+
+  const std::filesystem::path out_path =
+      std::filesystem::temp_directory_path() / "decision_time_log_test.csv";
+  std::error_code rm_ec;
+  std::filesystem::remove(out_path, rm_ec);
+
+  // Same --greedy-only avoidance as test_export_pg_tables_end_to_end (this
+  // flag hooks in at the same point in PHAstar_push_demo.cpp).
+  std::string command =
+      demo_path.string() +
+      " --no-visualization --no-visualize-relopush-plan --no-debug-vis"
+      " --assignment-search-iters=0 --local-sequence-search-iters=0"
+      " --shuffle-sequence-search-iters=0 --lns-iters=1 --random-seed=1"
+      " --export-decision-time-log=" + out_path.string() +
+      " --input-sequence=" + instance_path.string() + " 2>&1";
+
+  int exit_code = 0;
+  const std::string output = run_command_capture(command, exit_code);
+  if (exit_code != 0)
+  {
+    std::cerr << "    --export-decision-time-log command failed with exit code " << exit_code
+              << "\n    output: " << output << "\n";
+    return false;
+  }
+
+  if (!std::filesystem::exists(out_path))
+  {
+    std::cerr << "    Expected output CSV was not created at " << out_path << "\n";
+    return false;
+  }
+
+  const std::string csv = read_text_file(out_path);
+  std::istringstream csv_stream(csv);
+  std::string header;
+  std::getline(csv_stream, header);
+  if (header.find("candidate_task,candidate_robot,chosen,"
+                  "phi0,phi1,phi2,phi3,phi4,phi5,phi6,phi7,phi8,phi9,phi10,phi11,"
+                  "feasible,makespan,return_target,first_fail_rank,first_failed_task,"
+                  "executed_robot,diverged") == std::string::npos)
+  {
+    std::cerr << "    Unexpected CSV header (expected the extended v3/v4 schema): '" << header
+              << "'\n";
+    return false;
+  }
+
+  // BOSS_8 has 8 tasks: with an all-zero-weight model and epsilon=0.0, the
+  // chosen (task, robot) at every step must be (lowest legal task index, 0)
+  // -- see export_decision_time_log's doc comment for why. Collect the
+  // chosen row per step and confirm this exact prediction, plus that
+  // executed_robot/diverged (relabel-only fields) stay at their unset
+  // defaults on every row (this log never runs ingest_rollout_v3_relabeled).
+  std::string line;
+  std::vector<std::vector<std::string>> rows;
+  while (std::getline(csv_stream, line))
+  {
+    if (line.empty())
+      continue;
+    std::vector<std::string> fields;
+    std::stringstream ss(line);
+    std::string field;
+    while (std::getline(ss, field, ','))
+      fields.push_back(field);
+    // getline(..., ',') silently drops the final field when the line ends in
+    // a trailing delimiter (nothing left to "find" once that comma is
+    // consumed, vs. a real empty token between two delimiters, which IS
+    // captured correctly) -- exactly the case for a non-chosen row, whose
+    // line ends in an empty executed_robot field then an empty diverged
+    // field: "...,,". Restore that one missing trailing empty field.
+    if (!line.empty() && line.back() == ',')
+      fields.push_back("");
+    rows.push_back(fields);
+  }
+
+  // Column indices per the header above: 0 family,1 index,2 seed,3 iteration,
+  // 4 step,5 candidate_task,6 candidate_robot,7 chosen,...,25 executed_robot,
+  // 26 diverged.
+  constexpr std::size_t kStepCol = 4, kTaskCol = 5, kRobotCol = 6, kChosenCol = 7,
+                        kExecutedRobotCol = 25, kDivergedCol = 26;
+
+  std::map<int, std::vector<std::size_t>> row_indices_by_step;
+  for (std::size_t i = 0; i < rows.size(); ++i)
+  {
+    if (rows[i].size() <= kDivergedCol)
+    {
+      std::cerr << "    row " << i << " has too few columns (" << rows[i].size() << ")\n";
+      return false;
+    }
+    row_indices_by_step[std::stoi(rows[i][kStepCol])].push_back(i);
+  }
+
+  if (row_indices_by_step.size() != 8)
+  {
+    std::cerr << "    expected 8 steps (BOSS_8), got " << row_indices_by_step.size() << "\n";
+    return false;
+  }
+
+  for (const auto &[step, indices] : row_indices_by_step)
+  {
+    int chosen_count = 0;
+    for (std::size_t i : indices)
+    {
+      const auto &row = rows[i];
+      if (row[kChosenCol] == "1")
+      {
+        ++chosen_count;
+        if (row[kTaskCol] != std::to_string(step))
+        {
+          std::cerr << "    step " << step << ": expected chosen task==" << step
+                    << " (all-zero-weight tie-break keeps the lowest legal task index, "
+                       "and BOSS_8 has no precedence edges blocking the identity order), got "
+                    << row[kTaskCol] << "\n";
+          return false;
+        }
+        if (row[kRobotCol] != "0")
+        {
+          std::cerr << "    step " << step << ": expected chosen robot==0, got " << row[kRobotCol]
+                    << "\n";
+          return false;
+        }
+        if (row[kExecutedRobotCol] != "-1")
+        {
+          std::cerr << "    step " << step
+                    << ": expected executed_robot to stay at its unset default (-1) on a "
+                       "decision-time-only log, got '"
+                    << row[kExecutedRobotCol] << "'\n";
+          return false;
+        }
+        if (row[kDivergedCol] != "0")
+        {
+          std::cerr << "    step " << step
+                    << ": expected diverged to stay at its unset default (0) on a "
+                       "decision-time-only log, got '"
+                    << row[kDivergedCol] << "'\n";
+          return false;
+        }
+      }
+    }
+    if (chosen_count != 1)
+    {
+      std::cerr << "    step " << step << " has " << chosen_count
+                << " chosen rows, expected exactly 1\n";
+      return false;
+    }
+  }
+
+  std::filesystem::remove(out_path, rm_ec);
+  return true;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -2458,8 +5177,51 @@ int main(int argc, char **argv)
       {"TransitionLogger CSV round-trip", test_transition_logger_csv_roundtrip},
       {"DQN v2 construct_order_v2 step_log completeness + RNG invariance",
        test_dqn_v2_construct_order_step_log_completeness},
+      {"DQN v3 feature vector properties (dim/rel_avail/complementarity/transit)",
+       test_dqn_v3_feature_vector_properties},
+      {"DQN v3 ForwardSim preview_for/commit_for", test_dqn_v3_preview_commit_for},
+      {"DQN v3 construct_order_v3 validity + determinism",
+       test_dqn_v3_construct_order_validity},
+      {"DQN v3 signature distinguishes assignment",
+       test_dqn_v3_signature_distinguishes_assignment},
+      {"DQN v3 dispatcher-prior equivalence", test_dqn_v3_dispatcher_prior_equivalence},
+      {"DQN v3 construct_order_v3 step_log completeness + RNG invariance",
+       test_dqn_v3_construct_order_step_log_completeness},
+      {"DQN v4 feature vector (dim12/dims0-9 match v3/load_imbalance/time-not-count)",
+       test_dqn_v4_feature_vector},
+      {"DQN v4 idle_robot_congestion", test_dqn_v4_idle_robot_congestion},
+      {"QModel logistic gradient check (linear + MLP, pos_weight != 1)",
+       test_qmodel_logistic_gradient_check},
+      {"DQN v3 decomposed ingest (f_replay/q_replay)", test_dqn_v3_decomposed_ingest},
+      {"DQN v3 decomposed selection (filter-argmax/fallback/tie-break)",
+       test_dqn_v3_decomposed_selection},
+      {"DQN v3 scoring-off invariance (penalty mode ignores f_head)",
+       test_dqn_v3_scoring_off_invariance},
+      {"DQN diag: assignment divergence counts", test_assignment_divergence_counts},
+      {"DQN v3 relabeled replay correctness (chosen-row features/diverged/state carry-forward)",
+       test_dqn_v3_relabeled_replay_correctness},
+      {"DQN v3 relabeled replay: unexecuted-tail fallback to intended robot",
+       test_dqn_v3_relabeled_replay_unexecuted_tail_fallback},
+      {"DQN v3 relabel-off invariance (ignores executed-robot divergence)",
+       test_dqn_v3_relabel_off_invariance},
+      {"DQN freeze-model flag (skipped train_model/train_model_logistic leaves params untouched)",
+       test_dqn_freeze_model_flag},
+      {"DQN init-fail-weights load (f_head match/dim-mismatch)", test_dqn_init_fail_weights_load},
       {"Geometry export: resample_to_k_points", test_resample_to_k_points},
       {"Geometry export: JSON string escaping", test_json_escape_string},
+      {"EvalPlansCli: parse_eval_plan_line valid inputs", test_parse_eval_plan_line_valid},
+      {"EvalPlansCli: parse_eval_plan_line malformed inputs",
+       test_parse_eval_plan_line_malformed},
+      {"EvalPlansCli: validate_plan_order", test_validate_plan_order},
+      {"EvalPlansCli: parse_robot_index_from_name", test_parse_robot_index_from_name},
+      {"EvalPlansCli: csv_escape_field", test_csv_escape_field},
+      {"EvalPlansCli: --eval-plans end-to-end (CSV shape + malformed-line row)",
+       test_eval_plans_cli_end_to_end},
+      {"PgTableExport: --export-pg-tables end-to-end (required keys + transit_time spot-check)",
+       test_export_pg_tables_end_to_end},
+      {"PgTableExport: --export-decision-time-log end-to-end (deterministic construction + "
+       "no relabel fields)",
+       test_export_decision_time_log_end_to_end},
   };
 
   std::vector<std::pair<std::string, TestFn>> all_tests = tests;

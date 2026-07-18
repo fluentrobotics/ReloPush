@@ -219,6 +219,17 @@ struct RuntimeOptions
     // (bit-identical to the original implementation). 2 = redesigned 9-dim
     // feature vector + geometric precompute + forward schedule simulation +
     // new masking rule + exploration shaping (see MARS/08dqn-feature-redesign.md).
+    // 3 = explicit (task, robot) construction: the policy chooses a candidate
+    // (task, robot) pair at every step (instead of task-only with earliest-
+    // available-robot dispatch), scored by a trimmed 10-dim robot-conditional
+    // feature vector that reuses the v2 geometry/forward-sim machinery (see
+    // DqnFeaturesV2.h make_feature_vector_v3 and DqnAllocationSearch.cpp
+    // construct_order_v3). 4 = same (task, robot) action space and
+    // construct/ingest machinery as 3, with a 12-dim feature vector (see
+    // DqnFeaturesV2.h make_feature_vector_v4) that adds two schedule-state
+    // features: load_imbalance (post-commit per-robot free-time spread) and
+    // idle_robot_congestion (parked-robot blockage of the candidate's own
+    // corridor during its execution window).
     int dqn_feature_version = 1;
     // v2 only: fraction of the epsilon-random branch that follows the
     // reference (seed) order's next pick instead of sampling uniformly.
@@ -232,11 +243,59 @@ struct RuntimeOptions
     // section 3.1). Empty = disabled (default).
     std::string dqn_log_transitions_path;
 
+    // Risk-decomposed scoring (Decision 2), v3/v4 only. 0 = penalty (default):
+    // the original single-model design, a single Q-head regressed onto
+    // -makespan/S (feasible) or a fixed infeasibility penalty (infeasible).
+    // 1 = decomposed: a second model (f_head, same class/dim/hidden as the Q
+    // model) is trained as a binary failure-probability predictor, and the
+    // exploit branch of construct_order_v3/v4 first filters candidates to
+    // those at or below dqn_fail_threshold before taking the Q-argmax among
+    // survivors (falling back to the lowest-p_fail candidate if none
+    // survive) -- see DqnAllocationSearch.cpp construct_order_v3's decomposed
+    // branch. Requires dqn_feature_version >= 3; parse_runtime_options
+    // downgrades an inconsistent --dqn-scoring=decomposed back to penalty
+    // (with a stderr warning) rather than aborting -- see
+    // RuntimeOptionsParsing.cpp.
+    int dqn_scoring_mode = 0;
+    // Decomposed scoring only: a candidate survives the exploit-branch filter
+    // iff sigmoid(f_head.predict(phi)) <= this threshold.
+    double dqn_fail_threshold = 0.5;
+    // Decomposed scoring only: positive-class (the fail_pos step of an
+    // infeasible episode) loss weight for f_head's logistic training. 0 =
+    // auto: recomputed at each training call as clamp(#neg/#pos, 1, 10) over
+    // that call's f_replay buffer. >0 = fixed weight used for every call.
+    double dqn_fail_pos_weight = 0.0;
+
+    // Executed-robot relabeled corpus logging/training (v3/v4 only, requires
+    // dqn_feature_version >= 3; a no-op flag otherwise). false (default):
+    // ingest_rollout_v3 replays and (if --dqn-log-transitions= is set together
+    // with dqn_feature_version == 2) logs against the INTENDED (constructed)
+    // assignment -- byte-identical to today, and v3/v4 + --dqn-log-transitions=
+    // still declines to log (unchanged). true: run_dqn_search recovers, per
+    // task, the robot that ACTUALLY executed it from the run summary (same
+    // row-position -> original-task-index correspondence as
+    // count_assignment_divergence: executed.task_rows[i] <-> plan.task_order[i]
+    // -- see AssignmentDivergence's doc comment in DqnAllocationSearch.h),
+    // falling back to the intended robot for any task with no definite
+    // executed robot (failing step under early abort, unexecuted tail).
+    // ingest_rollout_v3_relabeled replays with commit_for against this
+    // executed-or-intended sequence instead of the intended one, and, when
+    // --dqn-log-transitions= is also set, writes the extended v3/v4 corpus CSV
+    // (candidate_robot/executed_robot/diverged columns, 12 phi columns -- see
+    // TransitionLogger::log_rollout) built from a fresh per-step (task, robot)
+    // candidate enumeration against the corrected state, not the construct-time
+    // step log (which reflects intended-state predictions). See
+    // DqnAllocationSearch.cpp run_dqn_search's relabel branch.
+    bool dqn_relabel_executed = false;
+
     // Fine-tune mode (see MARS/09rl-pretrained-study-plan.md section 3.4):
     // when non-empty, run_dqn_search loads pretrained weights from this path
     // via QModel::load and, on success, uses the dqn_finetune_* hyperparameters
     // below instead of the cold-start dqn_learning_rate/dqn_epsilon_* for the
-    // rest of the run. Empty = disabled (cold start, default).
+    // rest of the run. Empty = disabled (cold start, default). Applies in
+    // every dqn_feature_version (1-4): QModel model_dim already tracks
+    // dqn_feature_version before this load happens, so this loads the correct
+    // 7/9/10/12-dim weights file for whichever version is active.
     std::string dqn_init_weights_path;
     // Fine-tune learning rate: 1/5 of the cold-start dqn_learning_rate default
     // (0.05), since a pretrained model already has useful weights and only
@@ -244,6 +303,23 @@ struct RuntimeOptions
     double dqn_finetune_learning_rate = 0.01;
     double dqn_finetune_epsilon_start = 0.1;
     double dqn_finetune_epsilon_end = 0.02;
+    // Decomposed scoring only (dqn_scoring_mode == 1): when non-empty,
+    // run_dqn_search loads pretrained weights for f_head (the failure-
+    // probability model) from this path via QModel::load, mirroring
+    // dqn_init_weights_path's handling for q_head -- on failure (missing file
+    // or dim/hidden mismatch), QModel::load leaves f_head's freshly
+    // initialized weights untouched and a warning is printed. Empty = f_head
+    // starts from fresh (random) weights (default).
+    std::string dqn_init_fail_weights_path;
+    // Zero-shot evaluation mode: when true, run_dqn_search skips every
+    // train_model/train_model_logistic call (both the warm-start call and the
+    // once-per-batch calls at the end of the episode loop), for both q_head
+    // and f_head. Replay-buffer ingestion and corpus logging still proceed
+    // normally -- only the gradient updates are skipped. Intended for
+    // evaluating loaded weights (dqn_init_weights_path /
+    // dqn_init_fail_weights_path) with no further learning. Default false
+    // (train normally).
+    bool dqn_freeze_model = false;
 
     // When non-empty, skip search entirely and dump per-instance geometry
     // (task paths, poses, workspace, robots) as JSON to this path (see
@@ -252,6 +328,58 @@ struct RuntimeOptions
     // Number of arclength-resampled points per task reference path in the
     // geometry export.
     int geometry_export_k = 16;
+
+    // Policy-gradient PoC (see MARS/14pg-poc-design.md section 4 and 9,
+    // "P0"): when non-empty, skip search entirely (after the seed plan used
+    // by the DQN/LNS search is selected -- see PHAstar_push_demo.cpp) and
+    // dump everything script/pg/rollout_sim.py needs to reproduce
+    // make_feature_vector_v4 purely from table lookups (no Reed-Shepp/
+    // geometry of its own) as one JSON file: static per-task geometry/DAG,
+    // the reference-order-consistent pairwise congestion matrices, and two
+    // precomputed tables (transit_time, parked_blockage) over the finite set
+    // of poses a robot can occupy mid-construction (its own initial pose, or
+    // some task's exit pose). See PgTableExport.h. Empty = disabled
+    // (default).
+    std::string export_pg_tables_path;
+
+    // Policy-gradient PoC batch-oracle CLI (see MARS/14pg-poc-design.md
+    // section 4, "Batch oracle CLI"): when export_eval_plans_path is
+    // non-empty, skip search entirely and evaluate every plan listed in that
+    // JSONL file (one {"id","order","assign"} object per line) through the
+    // same evaluate_scenario_batch() pathway the DQN/LNS search uses
+    // (early-abort per early_abort_eval_on_failure, default on), writing one
+    // CSV row per input line to eval_plans_out_path. See EvalPlansCli.h.
+    // Empty = disabled (default).
+    std::string eval_plans_path;
+    // Output CSV path for --eval-plans=; required (and validated at the
+    // call site) whenever eval_plans_path is non-empty.
+    std::string eval_plans_out_path;
+
+    // Policy-gradient PoC parity validation only (see
+    // script/pg/parity_check.py): when non-empty, skip search entirely and
+    // dump a DECISION-TIME step-candidate log (the exact phi values
+    // construct_order_v3 itself scores candidates against during
+    // construction, via its own step_logs parameter -- see
+    // DqnAllocationSearch.cpp) to this path, using an all-zero-weight linear
+    // model and epsilon=0.0 so the constructed (order, assignment) is fully
+    // deterministic (every step's argmax ties at 0.0 and keeps the
+    // first-seen candidate: lowest legal task index, then lowest robot
+    // index -- no RNG-dependent choice is ever made). This is independent of
+    // (and answers a different question than) --export-pg-tables=: that
+    // exporter's ref_order/ref_assign and this log's own construction both
+    // describe the SAME instance, but --dqn-log-transitions=
+    // --dqn-relabel-executed logs a RELABELED trajectory (ForwardSim state
+    // advanced by the EXECUTED robot at every step, which can differ from
+    // the intended one on divergence -- see ingest_rollout_v3_relabeled),
+    // while this logs the true DECISION-TIME trajectory (ForwardSim state
+    // advanced by construct_order_v3's own chosen_robot at every step,
+    // exactly matching what a real construction/rollout -- including a
+    // future Python-side sampled one -- would see). Written via
+    // TransitionLogger's existing extended v3/v4 schema (same columns as
+    // --dqn-log-transitions= produces in relabel mode), so
+    // script/pg/parity_check.py's existing CSV-reading code reads this with
+    // no format changes. Empty = disabled (default).
+    std::string export_decision_time_log_path;
 
     // When non-empty, skip search entirely and execute this single, explicitly
     // given task order (a comma-separated list of task indices, e.g.
