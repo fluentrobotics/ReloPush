@@ -115,37 +115,11 @@ public:
         }
 
         auto it = per_entity_table.find(ent);
-        if (it == per_entity_table.end() || it->second.empty())
+        if (it == per_entity_table.end())
         {
             return ent->initial_pose;
         }
-        const auto &m = it->second;
-        auto it_upper = m.upper_bound(t);
-        if (it_upper == m.begin())
-        {
-            return m.begin()->second;
-        }
-        if (it_upper == m.end())
-        {
-            auto it_last = m.end();
-            --it_last;
-            return it_last->second;
-        }
-        auto it_lower = it_upper;
-        --it_lower;
-        if (it_lower->first == t)
-        {
-            return it_lower->second;
-        }
-
-        // Object poses are piecewise-constant in the timetable: they stay at the
-        // last known pose until the next explicitly recorded pose exists.
-        if (ent->type == EntityType::OBJECT)
-        {
-            return it_lower->second;
-        }
-
-        return interpolate_pose(it_lower->second, it_lower->first, it_upper->second, it_upper->first, t);
+        return pose_at(ent, it->second, t);
     }
 
     std::unordered_map<EntityMeta *, Pose> get_poses(double t) const
@@ -153,9 +127,35 @@ public:
         std::unordered_map<EntityMeta *, Pose> poses;
         for (const auto &[ent, m] : per_entity_table)
         {
-            poses[ent] = get_pose(ent, t);
+            poses[ent] = pose_at(ent, m, t);
         }
         return poses;
+    }
+
+    // Zero-allocation visitor over every entity's pose at time t. Invokes
+    // fn(EntityMeta *, Pose) once per entity in per_entity_table, using
+    // exactly get_pose's per-entity semantics (both route through the same
+    // private pose_at() helper, so the interpolation logic lives in one
+    // place). This is the hot-path replacement for `get_poses(t)`: callers
+    // that used to iterate a freshly-allocated std::unordered_map now iterate
+    // per_entity_table directly.
+    //
+    // NOTE on iteration order: get_poses(t) builds a *fresh* unordered_map
+    // each call, whose bucket/iteration order need not match
+    // per_entity_table's own (fresh-map bucket layout and collision-chain
+    // ordering can differ from the long-lived table's). Call sites that pick
+    // "the first colliding entity" while iterating and short-circuit on it
+    // are therefore switching tie-break order (in the rare case of multiple
+    // simultaneous colliders at one sample) when moved from get_poses(t) to
+    // for_each_pose(t, ...). See the Stage 2 planner_opt report for exactly
+    // which call sites this applies to.
+    template <class F>
+    void for_each_pose(double t, F &&fn) const
+    {
+        for (const auto &[ent, m] : per_entity_table)
+        {
+            fn(ent, pose_at(ent, m, t));
+        }
     }
 
     // for visualization
@@ -167,6 +167,24 @@ public:
     const std::vector<TrajectorySpan> &get_trajectory_spans() const
     {
         return trajectory_spans;
+    }
+
+    // Rehydration hook for save/replay (see MARS's
+    // ExecutedScenarioSerialization.h): per_entity_table and trajectory_spans
+    // are private and keyed on live EntityMeta* pointers, which a
+    // deserializer cannot reconstruct field-by-field (it has to resolve
+    // names to freshly-allocated entity pointers first, then hand the
+    // already-built containers in here as one shot). Callers are expected to
+    // have already remapped every name back to the EntityMeta* it owns
+    // before calling this.
+    void load_serialized_state(
+        double time_increment_in,
+        std::unordered_map<EntityMeta *, std::map<double, Pose>> per_entity_table_in,
+        std::vector<TrajectorySpan> trajectory_spans_in)
+    {
+        time_increment = time_increment_in;
+        per_entity_table = std::move(per_entity_table_in);
+        trajectory_spans = std::move(trajectory_spans_in);
     }
 
     double get_max_time() const
@@ -313,6 +331,45 @@ public:
 private:
     std::unordered_map<EntityMeta *, std::map<double, Pose>> per_entity_table;
     std::vector<TrajectorySpan> trajectory_spans;
+
+    // Shared lookup behind get_pose()/get_poses()/for_each_pose(): given one
+    // entity's already-located time->Pose submap, return its pose at time t
+    // using the exact same clamp-first/last + piecewise-const-for-objects +
+    // interpolate-for-robots rule. Kept as the single place that encodes this
+    // logic so the hot for_each_pose() path can never drift from get_pose().
+    static Pose pose_at(const EntityMeta *ent, const std::map<double, Pose> &m, double t)
+    {
+        if (m.empty())
+        {
+            return ent->initial_pose;
+        }
+        auto it_upper = m.upper_bound(t);
+        if (it_upper == m.begin())
+        {
+            return m.begin()->second;
+        }
+        if (it_upper == m.end())
+        {
+            auto it_last = m.end();
+            --it_last;
+            return it_last->second;
+        }
+        auto it_lower = it_upper;
+        --it_lower;
+        if (it_lower->first == t)
+        {
+            return it_lower->second;
+        }
+
+        // Object poses are piecewise-constant in the timetable: they stay at the
+        // last known pose until the next explicitly recorded pose exists.
+        if (ent->type == EntityType::OBJECT)
+        {
+            return it_lower->second;
+        }
+
+        return interpolate_pose(it_lower->second, it_lower->first, it_upper->second, it_upper->first, t);
+    }
 
     static Pose interpolate_pose(const Pose &p1, double t1, const Pose &p2, double t2, double t)
     {

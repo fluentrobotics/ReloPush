@@ -41,6 +41,16 @@ struct Params
     bool disable_wait_primitive = false;
     bool enable_holonomic_heuristic = false;
     double holonomic_heuristic_resolution = 0.10;
+
+    // Iteration cap for the safe-parking connected-candidate frontier
+    // sweeps (generate_parking_candidates_connected_primitives and
+    // search_safe_parking_connected_search in SafeParking.cpp) -- these are
+    // custom best-first pose-expansion loops, distinct from a PHAStar
+    // search's own max_search_iterations. Wired from
+    // RuntimeOptions::default_safe_parking_expand_iterations via
+    // initialize_params. Default (3000) matches the previously-hardcoded
+    // constant both call sites used, so default behavior is unchanged.
+    int safe_parking_expand_max_iterations = 3000;
 };
 
 #endif // PARAMS_H

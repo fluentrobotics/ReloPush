@@ -33,6 +33,7 @@
 #include <GeometryExport.h>
 #include <PgTableExport.h>
 #include <EvalPlansCli.h>
+#include <ExecutedScenarioSerialization.h>
 #include <QFont>
 #include <QImage>
 #include <QPainterPath>
@@ -70,6 +71,36 @@ int phastar_push_demo_main(int argc, char **argv)
 {
     // Parse options and load data
     RuntimeOptions runtime_options = parse_runtime_options(argc, argv);
+
+    // Save-and-replay playback (see MARS/16save-replay-implementation.md):
+    // visualize a previously-saved ExecutedScenario with no allocation
+    // search at all. Deliberately placed BEFORE load_data() below: this mode
+    // has nothing to do with any ReloPush sequence file (the scenario being
+    // replayed was already fully executed when it was saved), so it must not
+    // fail just because no --sequence-file= was given / the default sequence
+    // file is missing.
+    if (!runtime_options.play_result_path.empty())
+    {
+        std::ifstream scn_in(runtime_options.play_result_path, std::ios::binary);
+        if (!scn_in.is_open())
+        {
+            std::cerr << "[PlayResult] Failed to open " << runtime_options.play_result_path
+                      << std::endl;
+            return 2;
+        }
+        std::string b64_data((std::istreambuf_iterator<char>(scn_in)),
+                             std::istreambuf_iterator<char>());
+
+        ExecutedScenario scn = deserialize_executed_scenario_b64(b64_data);
+        std::cout << "[PlayResult] Loaded '" << scn.summary.label << "' (makespan="
+                  << scn.summary.makespan << ", feasible="
+                  << (scn.summary.all_tasks_succeeded ? "yes" : "no") << ") from "
+                  << runtime_options.play_result_path << std::endl;
+
+        show_results(argc, argv, scn.timetable, scn.entities, scn.params);
+        return scn.summary.all_tasks_succeeded ? 0 : 1;
+    }
+
     ReloPush::HandoffInstanceInfo instance_info;
     std::vector<FinalAllocation> loadedSequence;
     std::unique_ptr<ReloPush::FinalSequenceHandoffServer> handoff_server;

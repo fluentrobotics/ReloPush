@@ -5,3 +5,12 @@ src/main2.cpp
 src/main_old.cpp
 input/tests/*
 log/*
+/.venv-rl/
+/build/
+/build-release/
+/diagnostics/
+/results/
+/MARS/*.md
+/script/
+build/
+/MARS/figures/

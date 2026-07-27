@@ -381,6 +381,28 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
       options.eval_plans_out_path =
           arg.substr(std::string("--eval-plans-out=").size());
     }
+    else if (arg.rfind("--eval-plans-timing-out=", 0) == 0)
+    {
+      options.eval_plans_timing_out_path =
+          arg.substr(std::string("--eval-plans-timing-out=").size());
+    }
+    else if (arg.rfind("--eval-plans-result-out-dir=", 0) == 0)
+    {
+      // NOTE: checked before "--eval-plans-result-out=" below since that
+      // prefix is a strict prefix of this one.
+      options.eval_plans_result_out_dir =
+          arg.substr(std::string("--eval-plans-result-out-dir=").size());
+    }
+    else if (arg.rfind("--eval-plans-result-out=", 0) == 0)
+    {
+      options.eval_plans_result_out_path =
+          arg.substr(std::string("--eval-plans-result-out=").size());
+    }
+    else if (arg.rfind("--play-result=", 0) == 0)
+    {
+      options.play_result_path =
+          arg.substr(std::string("--play-result=").size());
+    }
     else if (arg.rfind("--export-decision-time-log=", 0) == 0)
     {
       options.export_decision_time_log_path =
@@ -470,6 +492,101 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
       catch (...)
       {
         std::cerr << "[Warn] Invalid --safe-parking-max-search-iters value: '"
+                  << value << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--safe-parking-expand-iters=", 0) == 0)
+    {
+      // Bounds the safe-parking connected-candidate frontier sweeps (see
+      // Params::safe_parking_expand_max_iterations); distinct from
+      // --safe-parking-max-search-iters= above, which only bounds the
+      // PHAStar relocation search's own iteration cap.
+      std::string value =
+          arg.substr(std::string("--safe-parking-expand-iters=").size());
+      try
+      {
+        options.default_safe_parking_expand_iterations =
+            std::max(0, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --safe-parking-expand-iters value: '"
+                  << value << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--fine-segment-max-search-iters=", 0) == 0)
+    {
+      std::string value =
+          arg.substr(std::string("--fine-segment-max-search-iters=").size());
+      try
+      {
+        options.fine_segment_max_search_iterations =
+            std::max(0, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --fine-segment-max-search-iters value: '"
+                  << value << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--contact-boundary-max-search-iters=", 0) == 0)
+    {
+      std::string value = arg.substr(
+          std::string("--contact-boundary-max-search-iters=").size());
+      try
+      {
+        options.contact_boundary_max_search_iterations =
+            std::max(0, std::stoi(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --contact-boundary-max-search-iters value: '"
+                  << value << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg == "--tier-triage")
+    {
+      options.enable_tier_triage = true;
+    }
+    else if (arg == "--no-tier-triage")
+    {
+      options.enable_tier_triage = false;
+    }
+    else if (arg == "--tier-gate")
+    {
+      options.enable_tier_gate = true;
+    }
+    else if (arg == "--no-tier-gate")
+    {
+      options.enable_tier_gate = false;
+    }
+    else if (arg.rfind("--collision-check-time-step=", 0) == 0)
+    {
+      std::string value =
+          arg.substr(std::string("--collision-check-time-step=").size());
+      try
+      {
+        options.default_collision_check_time_step =
+            std::max(1e-6, std::stod(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --collision-check-time-step value: '"
+                  << value << "'. Keeping default." << std::endl;
+      }
+    }
+    else if (arg.rfind("--fine-collision-check-time-step=", 0) == 0)
+    {
+      std::string value =
+          arg.substr(std::string("--fine-collision-check-time-step=").size());
+      try
+      {
+        options.fine_segment_collision_check_time_step =
+            std::max(1e-6, std::stod(value));
+      }
+      catch (...)
+      {
+        std::cerr << "[Warn] Invalid --fine-collision-check-time-step value: '"
                   << value << "'. Keeping default." << std::endl;
       }
     }

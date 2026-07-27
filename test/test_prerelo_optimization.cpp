@@ -2,13 +2,9 @@
 #include <cmath>
 //#include <ReloPush/GraphBuilder.hpp>
 #include "ceres/ceres.h"
-#ifdef __APPLE__
-// Include the glog header when compiling on MacOS.
-    #include <glog/logging.h>
-#else
-// Otherwise, include the Abseil logging header.
-    #include "absl/log/initialize.h"
-#endif
+// Use glog on Linux and macOS; this environment does not provide the
+// Abseil logging headers that the older Linux path expected.
+#include <glog/logging.h>
 
 
 #include <ompl/base/spaces/DubinsStateSpace.h>
@@ -36,14 +32,7 @@ typedef ompl::base::SE2StateSpace::StateType OmplState;
 ////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
-    //google::InitGoogleLogging(argv[0]);
-    #ifdef __APPLE__
-        // For macOS, initialize Google Logging with the program name.
-        google::InitGoogleLogging(argv[0]);
-    #else
-        // For non-macOS systems, initialize Abseil Logging.
-        absl::InitializeLog();
-    #endif
+    google::InitGoogleLogging(argv[0]);
 
 
     // 1) Our "constants" from your example:

@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 
 namespace
@@ -388,13 +389,154 @@ bool run_eval_plans_cli(
   const double per_plan_wall_s =
       requests.empty() ? 0.0 : total_wall_s / static_cast<double>(requests.size());
 
+  // Save-and-replay support (see MARS/16save-replay-implementation.md):
+  // evaluate_scenario_batch() already populated results[k].serialized_result
+  // (base64 ExecutedScenario) for every request iff either result-out flag
+  // below was set; this block only routes those already-computed bytes to
+  // disk, it does not re-execute anything. `results` preserves the input
+  // file's line order for every well-formed, submitted plan, so index k here
+  // doubles as "position in input order" for the best-selection tie-break.
+  if (!options.eval_plans_result_out_dir.empty())
+  {
+    std::error_code mkdir_ec;
+    std::filesystem::create_directories(options.eval_plans_result_out_dir, mkdir_ec);
+    for (std::size_t k = 0; k < results.size(); ++k)
+    {
+      const std::size_t rec_idx = request_to_record[k];
+      const std::filesystem::path scn_path =
+          std::filesystem::path(options.eval_plans_result_out_dir) /
+          (records[rec_idx].id + ".scn.b64");
+      std::ofstream scn_out(scn_path, std::ios::binary);
+      if (!scn_out.is_open())
+      {
+        std::cerr << "[EvalPlans] Failed to open " << scn_path
+                  << " for writing (--eval-plans-result-out-dir=)" << std::endl;
+        continue;
+      }
+      scn_out << results[k].serialized_result;
+    }
+  }
+
+  if (!options.eval_plans_result_out_path.empty())
+  {
+    // Best-selection rule (a Python script will later mirror this exact
+    // rule -- see MARS/16save-replay-implementation.md; do not change one
+    // side without the other): among results whose plan executed ALL tasks
+    // successfully, the plan with the minimum summary.makespan wins; ties
+    // break by first occurrence in input order (strict "<" below keeps the
+    // first plan seen at a given makespan, and `results`/k is already in
+    // input order).
+    long best_k = -1;
+    double best_makespan = std::numeric_limits<double>::infinity();
+    for (std::size_t k = 0; k < results.size(); ++k)
+    {
+      if (!results[k].summary.all_tasks_succeeded)
+        continue;
+      if (results[k].summary.makespan < best_makespan)
+      {
+        best_makespan = results[k].summary.makespan;
+        best_k = static_cast<long>(k);
+      }
+    }
+
+    if (best_k < 0)
+    {
+      std::cerr << "[EvalPlans] No feasible plan found; --eval-plans-result-out="
+                << options.eval_plans_result_out_path << " was not written." << std::endl;
+    }
+    else
+    {
+      const std::size_t best_idx = static_cast<std::size_t>(best_k);
+      std::ofstream scn_out(options.eval_plans_result_out_path, std::ios::binary);
+      if (!scn_out.is_open())
+      {
+        std::cerr << "[EvalPlans] Failed to open " << options.eval_plans_result_out_path
+                  << " for writing (--eval-plans-result-out=)" << std::endl;
+      }
+      else
+      {
+        scn_out << results[best_idx].serialized_result;
+        std::cout << "[EvalPlans] Best plan '" << records[request_to_record[best_idx]].id
+                  << "' (makespan=" << best_makespan << ") saved to "
+                  << options.eval_plans_result_out_path << std::endl;
+      }
+    }
+  }
+
   std::vector<bool> has_result(records.size(), false);
   std::vector<AllocationRunSummary> summaries(records.size());
+  // Stage 1 planner timing instrumentation (opt-in; see PlanTimingStats):
+  // collected unconditionally alongside `summaries` above (cheap -- chrono +
+  // counters only) since evaluate_scenario_batch() always populates it;
+  // written out below only when options.eval_plans_timing_out_path is set.
+  std::vector<PlanTimingStats> timings(records.size());
   for (std::size_t k = 0; k < results.size(); ++k)
   {
     const std::size_t rec_idx = request_to_record[k];
     has_result[rec_idx] = true;
     summaries[rec_idx] = std::move(results[k].summary);
+    timings[rec_idx] = std::move(results[k].timing);
+  }
+
+  if (!options.eval_plans_timing_out_path.empty())
+  {
+    const std::filesystem::path fs_timing_out(options.eval_plans_timing_out_path);
+    const std::filesystem::path timing_parent = fs_timing_out.parent_path();
+    if (!timing_parent.empty())
+      std::filesystem::create_directories(timing_parent);
+
+    std::ofstream timing_out(options.eval_plans_timing_out_path);
+    if (!timing_out.is_open())
+    {
+      std::cerr << "[EvalPlans] Failed to open " << options.eval_plans_timing_out_path
+                << " for writing (--eval-plans-timing-out=)" << std::endl;
+    }
+    else
+    {
+      // Column order is stable and mirrors PlanTimingStats's field
+      // declaration order exactly (MARS/include/PHAstarPushDemoTypes.h) --
+      // do not reorder without updating any downstream reader. The original
+      // 26 columns (id..n_obsrelo_segments) are Stage 1/2; the Stage 3
+      // n_triage_*/n_gate_*/gate_wall_s columns are appended at the end so
+      // existing readers keyed by position on the first 26 columns are
+      // unaffected.
+      timing_out << "id,true_wall_s,"
+                 << "search_wall_s_primary,search_wall_s_fine,search_wall_s_contact,search_wall_s_other,"
+                 << "n_searches_primary,n_searches_fine,n_searches_contact,n_searches_other,"
+                 << "search_iterations_total,n_search_cap_hits,"
+                 << "heuristic_time_s,primitive_collision_time_s,analytic_validation_time_s,holonomic_heuristic_time_s,"
+                 << "sched_wall_s,n_find_safe_start_calls,n_start_candidates_tried,"
+                 << "traj_scan_wall_s,terminal_hold_wall_s,"
+                 << "safe_parking_wall_s,n_parking_relocations,"
+                 << "n_robot_candidate_attempts,n_post_validation_retries,n_obsrelo_segments,"
+                 << "n_triage_blocked_shortcuts,n_triage_primary_retries,"
+                 << "n_triage_retry_successes,n_triage_skips_to_contact,"
+                 << "n_gate_checks,n_gate_skips_fine,n_gate_skips_contact,gate_wall_s\n";
+      timing_out << std::fixed << std::setprecision(6);
+      for (std::size_t i = 0; i < records.size(); ++i)
+      {
+        const PlanTimingStats &t = timings[i];
+        timing_out << csv_escape_field(records[i].id) << ","
+                   << t.true_wall_s << ","
+                   << t.search_wall_s_primary << "," << t.search_wall_s_fine << ","
+                   << t.search_wall_s_contact << "," << t.search_wall_s_other << ","
+                   << t.n_searches_primary << "," << t.n_searches_fine << ","
+                   << t.n_searches_contact << "," << t.n_searches_other << ","
+                   << t.search_iterations_total << "," << t.n_search_cap_hits << ","
+                   << t.heuristic_time_s << "," << t.primitive_collision_time_s << ","
+                   << t.analytic_validation_time_s << "," << t.holonomic_heuristic_time_s << ","
+                   << t.sched_wall_s << "," << t.n_find_safe_start_calls << ","
+                   << t.n_start_candidates_tried << ","
+                   << t.traj_scan_wall_s << "," << t.terminal_hold_wall_s << ","
+                   << t.safe_parking_wall_s << "," << t.n_parking_relocations << ","
+                   << t.n_robot_candidate_attempts << "," << t.n_post_validation_retries << ","
+                   << t.n_obsrelo_segments << ","
+                   << t.n_triage_blocked_shortcuts << "," << t.n_triage_primary_retries << ","
+                   << t.n_triage_retry_successes << "," << t.n_triage_skips_to_contact << ","
+                   << t.n_gate_checks << "," << t.n_gate_skips_fine << ","
+                   << t.n_gate_skips_contact << "," << t.gate_wall_s << "\n";
+      }
+    }
   }
 
   out << "id,feasible,makespan,first_fail_step,executed_robots,eval_wall_s\n";

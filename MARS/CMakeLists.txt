@@ -38,7 +38,7 @@ function(phastar_apply_common_settings target_name)
                 ${OMPL_LIBRARIES}
                 ${Eigen_LIBRARIES}
                 ${QT_WIDGET_TARGET}
-                absl::log_initialize
+                ${RELOPUSH_ABSL_LOG_LIBS}
         )
     endif()
 endfunction()
@@ -95,6 +95,12 @@ add_executable(phastar_push_replay_sequence
     src/RuntimeOptionsParsing.cpp
     src/DataLoading.cpp
     src/SearchOrchestrator.cpp
+    src/DqnAllocationSearch.cpp
+    src/DqnFeaturesV2.cpp
+    src/TransitionLogger.cpp
+    src/GeometryExport.cpp
+    src/PgTableExport.cpp
+    src/EvalPlansCli.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
     ${PHASTAR_SHARED_RELOPUSH_SOURCES}
 )
@@ -128,6 +134,32 @@ phastar_apply_common_settings(phastar_unit_tests)
 target_link_libraries(phastar_unit_tests PRIVATE Threads::Threads)
 phastar_link_zeromq(phastar_unit_tests)
 add_dependencies(phastar_unit_tests phastar_push_demo)
+
+add_executable(test_executed_scenario_serialization
+    ${CMAKE_SOURCE_DIR}/test/test_executed_scenario_serialization.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/DqnAllocationSearch.cpp
+    src/DqnFeaturesV2.cpp
+    src/TransitionLogger.cpp
+    src/GeometryExport.cpp
+    src/PgTableExport.cpp
+    src/EvalPlansCli.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+phastar_apply_common_settings(test_executed_scenario_serialization)
+target_link_libraries(test_executed_scenario_serialization PRIVATE Threads::Threads)
+phastar_link_zeromq(test_executed_scenario_serialization)
 
 add_executable(test_robot_controllers
     tests/test_robot_controllers.cpp

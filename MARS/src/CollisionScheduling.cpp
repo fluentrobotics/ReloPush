@@ -11,6 +11,7 @@
 #include <CsvLogging.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -88,25 +89,42 @@ TimeTableVerificationResult verify_timetable_collision_free(
 
   for (double t = first_sample_time; t <= max_t + 1e-9; t += step)
   {
-    auto poses = timetable.get_poses(t);
-
-    for (const auto &[ent, pose] : poses)
+    // Swept directly off the timetable instead of building a fresh
+    // get_poses(t) map and then re-copying it into `entries` (planner_opt
+    // Stage 2): for_each_pose fills the same reusable vector in one pass.
+    //
+    // NOTE (tie-break): if multiple entities are simultaneously out of
+    // bounds at the same sample, the old code reported whichever one
+    // get_poses(t)'s fresh-map iteration order visited first; this reports
+    // whichever one per_entity_table's own iteration order visits first.
+    // Those orders are not guaranteed identical (see
+    // TimeTable::for_each_pose), so which entity/reason gets reported can
+    // change in that rare case.
+    std::vector<std::pair<EntityMeta *, Pose>> entries;
+    bool out_of_bounds_found = false;
+    timetable.for_each_pose(t, [&](EntityMeta *ent, const Pose &pose)
     {
-      CollisionGeometry geom = setup_collision_geometry(pose, ent->size, 1.0);
-      bool out_of_bounds = check_entity_bounds_collision(ent->type, pose, geom.corners, params);
-
-      if (out_of_bounds)
+      if (!out_of_bounds_found)
       {
-        result.is_valid = false;
-        result.time = t;
-        result.reason = "Boundary collision";
-        result.entity_a = ent->name;
-        result.entity_b = "Boundary";
-        return result;
+        CollisionGeometry geom = setup_collision_geometry(pose, ent->size, 1.0);
+        if (check_entity_bounds_collision(ent->type, pose, geom.corners, params))
+        {
+          out_of_bounds_found = true;
+          result.is_valid = false;
+          result.time = t;
+          result.reason = "Boundary collision";
+          result.entity_a = ent->name;
+          result.entity_b = "Boundary";
+        }
       }
+      entries.emplace_back(ent, pose);
+    });
+
+    if (out_of_bounds_found)
+    {
+      return result;
     }
 
-    std::vector<std::pair<EntityMeta *, Pose>> entries(poses.begin(), poses.end());
     for (size_t i = 0; i < entries.size(); ++i)
     {
       auto [e1, p1] = entries[i];
@@ -247,8 +265,6 @@ CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double
       return {false, "Boundary Collision", "Boundary", abs_t};
     }
 
-    auto others = timetable.get_poses(abs_t);
-
     CollisionGeometry obj_geom;
     Pose obj_pose;
     const CollisionGeometry *obj_geom_ptr = nullptr;
@@ -273,10 +289,16 @@ CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double
       obj_pose_ptr = &obj_pose;
     }
 
-    auto collision_result = check_multiple_entities_collision(
+    // Swept directly off the timetable instead of building a fresh
+    // get_poses(abs_t) map every sample (planner_opt Stage 2). See
+    // TimeTable::for_each_pose for the tie-break caveat: this can only
+    // change which entity is reported in the rare case of multiple
+    // simultaneous colliders at one sample.
+    auto collision_result = check_multiple_entities_collision_visit(
         r_geom, r_pose,
         obj_geom_ptr, obj_pose_ptr,
-        others,
+        [&](auto &&per_entity)
+        { timetable.for_each_pose(abs_t, per_entity); },
         params,
         robot,
         object,
@@ -284,11 +306,13 @@ CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double
     if (collision_result.has_collision)
     {
       EntityMeta *collider = collision_result.colliding_entity;
+      // colliding_pose was captured directly during the sweep above, so no
+      // second others.find(collider) lookup is needed for either excuse
+      // check below.
       if (t <= 0.3 && collider &&
           collider->type == EntityType::OBJECT)
       {
-        auto it = others.find(collider);
-        if (it != others.end() && is_valid_transfer_contact(robot, r_pose, it->first, it->second))
+        if (is_valid_transfer_contact(robot, r_pose, collider, collision_result.colliding_pose))
         {
           continue;
         }
@@ -297,11 +321,9 @@ CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double
           collider == terminal_approach_entity &&
           collider->type == EntityType::OBJECT)
       {
-        auto it = others.find(collider);
         const Pose terminal_pose = traj.waypoints.back();
-        if (it != others.end() &&
-            is_valid_terminal_approach_contact(
-                robot, r_pose, terminal_pose, collider, it->second,
+        if (is_valid_terminal_approach_contact(
+                robot, r_pose, terminal_pose, collider, collision_result.colliding_pose,
                 terminal_approach_entity, params))
         {
           continue;
@@ -328,12 +350,106 @@ bool check_collision_trajectory(const Trajectory &traj, double start_time,
       .is_valid;
 }
 
+// Debug-only A/B escape hatch (planner_opt Stage 2): flip to false to force
+// every check_terminal_hold_detailed call back onto the pre-Stage-2
+// per-candidate forward scan, even when a caller supplies a hold_cache.
+// Callers that pass hold_cache=nullptr (every call site except
+// find_safe_start_time) are completely unaffected by this constant either
+// way, since the cache branch below is only entered when hold_cache is
+// non-null.
+constexpr bool kUseTerminalHoldCache = true;
+
+// TerminalHoldCache itself is defined in CollisionScheduling.h (needs to be
+// a complete type there so find_safe_start_time and unit tests can own an
+// instance). Design summary for the build algorithm below: for a FIXED
+// (trajectory terminal pose, timetable) pair, the set of dt-grid samples
+// from just above 0 through the timetable horizon at which a parked robot
+// would see an unexcused hold collision is fixed; only *which* candidate
+// arrival times end up probing into that set changes across
+// find_safe_start_time's candidate loop. Building it once -- a single
+// backward scan from the horizon, early-exiting at the first (i.e. largest)
+// colliding sample -- turns every candidate's hold decision into an O(1)
+// comparison against max_colliding_sample, instead of a fresh O(horizon/dt)
+// forward scan per candidate.
+//
+// The cached reason/entity_name come from whichever sample the backward
+// scan happened to stop at (the largest colliding one), not necessarily the
+// smallest colliding sample >= a given candidate's first_sample_time (the
+// one the old per-candidate scan would report). This can only make the
+// *reported* CollisionInfo fields differ from the old path for a FAILING
+// candidate when multiple, differently-caused hold conflicts exist at
+// different times; the pass/fail decision itself is always exact (see
+// check_terminal_hold_detailed). See the Stage 2 report for why this is safe
+// in practice: a hold failure's exact entity/reason only ever surfaces in
+// diagnostic text (find_safe_start_time only branches on is_valid for hold
+// failures, via terminal_hold_conflict), and time is always recomputed fresh
+// per query rather than cached.
+//
+// MUST be invalidated (invalidate()) whenever the timetable or the candidate
+// trajectory's terminal pose/duration can have changed -- find_safe_start_time
+// has exactly two such in-loop mutation points; see its body.
+
+namespace
+{
+// Per-sample body shared by check_terminal_hold_detailed's original forward
+// scan and TerminalHoldCache's one-time backward build scan, so the two
+// paths can never disagree on what counts as a hold failure. Returns
+// {true, "Valid", "", abs_t} when abs_t is clear (including "excused"
+// terminal-approach contacts), or {false, reason, entity_name, abs_t} for a
+// genuine (unexcused) collision -- exactly check_terminal_hold_detailed's old
+// per-sample loop body, just factored out and driven by
+// TimeTable::for_each_pose instead of a fresh get_poses(abs_t) map.
+CollisionInfo evaluate_terminal_hold_sample(
+    RobotMeta *robot, const Pose &goal_pose, bool is_transfer,
+    EntityMeta *transferred_object, EntityMeta *terminal_approach_entity,
+    TimeTable &timetable, const Params &params, double abs_t)
+{
+  CollisionGeometry r_geom = setup_collision_geometry_for_type(
+      goal_pose, EntityType::ROBOT, robot->size, params);
+  CollisionGeometry r_geom_bounds =
+      setup_collision_geometry(goal_pose, robot->size, 1.0);
+
+  if (check_robot_bounds_collision(goal_pose, r_geom_bounds.corners, params))
+  {
+    return {false, "Boundary Collision", "Boundary", abs_t};
+  }
+
+  auto collision_result = check_multiple_entities_collision_visit(
+      r_geom, goal_pose,
+      nullptr, nullptr,
+      [&](auto &&per_entity)
+      { timetable.for_each_pose(abs_t, per_entity); },
+      params,
+      robot,
+      is_transfer ? transferred_object : nullptr,
+      nullptr);
+  if (!collision_result.has_collision)
+  {
+    return {true, "Valid", "", abs_t};
+  }
+
+  EntityMeta *collider = collision_result.colliding_entity;
+  if (terminal_approach_entity && collider == terminal_approach_entity &&
+      collider && collider->type == EntityType::OBJECT &&
+      is_valid_terminal_approach_contact(
+          robot, goal_pose, goal_pose, collider, collision_result.colliding_pose,
+          terminal_approach_entity, params))
+  {
+    return {true, "Valid", "", abs_t};
+  }
+
+  return {false, collision_result.collision_type + " Collision",
+          collider ? collider->name : "", abs_t};
+}
+} // namespace
+
 CollisionInfo check_terminal_hold_detailed(
     const Trajectory &traj,
     double start_time,
     TimeTable &timetable,
     const Params &params,
-    EntityMeta *terminal_approach_entity)
+    EntityMeta *terminal_approach_entity,
+    TerminalHoldCache *hold_cache)
 {
   RobotMeta *robot = dynamic_cast<RobotMeta *>(traj.entity);
   if (!robot || traj.waypoints.empty())
@@ -353,46 +469,57 @@ CollisionInfo check_terminal_hold_detailed(
     first_sample_time = std::ceil((first_sample_time - 1e-9) / dt) * dt;
   }
 
+  if (hold_cache && kUseTerminalHoldCache)
+  {
+    if (!hold_cache->valid)
+    {
+      hold_cache->empty = true;
+      hold_cache->max_colliding_sample = 0.0;
+      hold_cache->reason.clear();
+      hold_cache->entity_name.clear();
+
+      // Largest dt-grid index k (abs_t = k*dt) that a forward scan could
+      // ever reach for any arrival time, i.e. the same top-of-range value
+      // the loop below reaches via abs_t <= horizon + 1e-9.
+      const long top_index = static_cast<long>(std::floor((horizon + 1e-9) / dt));
+      for (long k = top_index; k >= 1; --k)
+      {
+        const double abs_t = static_cast<double>(k) * dt;
+        CollisionInfo sample = evaluate_terminal_hold_sample(
+            robot, goal_pose, traj.is_transfer, traj.transferred_object,
+            terminal_approach_entity, timetable, params, abs_t);
+        if (!sample.is_valid)
+        {
+          hold_cache->empty = false;
+          hold_cache->max_colliding_sample = abs_t;
+          hold_cache->reason = sample.reason;
+          hold_cache->entity_name = sample.entity_name;
+          break;
+        }
+      }
+      hold_cache->valid = true;
+    }
+
+    // pass iff first_sample_time is strictly past the largest colliding
+    // sample (mirrors the forward scan's abs_t <= horizon + 1e-9 inclusive
+    // upper bound / first_sample_time inclusive lower bound with the same
+    // 1e-9 tolerance).
+    if (hold_cache->empty || first_sample_time > hold_cache->max_colliding_sample + 1e-9)
+    {
+      return {true, "Valid", "", 0.0};
+    }
+    return {false, hold_cache->reason, hold_cache->entity_name, first_sample_time};
+  }
+
   for (double abs_t = first_sample_time; abs_t <= horizon + 1e-9; abs_t += dt)
   {
-    CollisionGeometry r_geom = setup_collision_geometry_for_type(
-        goal_pose, EntityType::ROBOT, robot->size, params);
-    CollisionGeometry r_geom_bounds =
-        setup_collision_geometry(goal_pose, robot->size, 1.0);
-
-    if (check_robot_bounds_collision(goal_pose, r_geom_bounds.corners, params))
+    CollisionInfo sample = evaluate_terminal_hold_sample(
+        robot, goal_pose, traj.is_transfer, traj.transferred_object,
+        terminal_approach_entity, timetable, params, abs_t);
+    if (!sample.is_valid)
     {
-      return {false, "Boundary Collision", "Boundary", abs_t};
+      return sample;
     }
-
-    auto others = timetable.get_poses(abs_t);
-    auto collision_result = check_multiple_entities_collision(
-        r_geom, goal_pose,
-        nullptr, nullptr,
-        others,
-        params,
-        robot,
-        traj.is_transfer ? traj.transferred_object : nullptr,
-        nullptr);
-    if (!collision_result.has_collision)
-      continue;
-
-    EntityMeta *collider = collision_result.colliding_entity;
-    if (terminal_approach_entity && collider == terminal_approach_entity &&
-        collider && collider->type == EntityType::OBJECT)
-    {
-      auto it = others.find(collider);
-      if (it != others.end() &&
-          is_valid_terminal_approach_contact(
-              robot, goal_pose, goal_pose, collider, it->second,
-              terminal_approach_entity, params))
-      {
-        continue;
-      }
-    }
-
-    return {false, collision_result.collision_type + " Collision",
-            collider ? collider->name : "", abs_t};
   }
 
   return {true, "Valid", "", 0.0};
@@ -403,14 +530,32 @@ CollisionInfo check_trajectory_motion_and_terminal_hold_detailed(
     double start_time,
     TimeTable &timetable,
     const Params &params,
-    EntityMeta *terminal_approach_entity)
+    EntityMeta *terminal_approach_entity,
+    PlanTimingStats *plan_stats,
+    TerminalHoldCache *hold_cache)
 {
+  const auto motion_t0 = std::chrono::steady_clock::now();
   CollisionInfo motion = check_collision_trajectory_detailed(
       traj, start_time, timetable, params, false, terminal_approach_entity);
+  if (plan_stats)
+  {
+    plan_stats->traj_scan_wall_s +=
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - motion_t0)
+            .count();
+  }
   if (!motion.is_valid)
     return motion;
-  return check_terminal_hold_detailed(
-      traj, start_time, timetable, params, terminal_approach_entity);
+
+  const auto hold_t0 = std::chrono::steady_clock::now();
+  CollisionInfo hold = check_terminal_hold_detailed(
+      traj, start_time, timetable, params, terminal_approach_entity, hold_cache);
+  if (plan_stats)
+  {
+    plan_stats->terminal_hold_wall_s +=
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - hold_t0)
+            .count();
+  }
+  return hold;
 }
 
 CollisionInfo check_collision_trajectory_against_entity(
@@ -620,24 +765,31 @@ CollisionInfo check_stationary_pose_collision_at_time(EntityMeta *entity,
     return {false, "Boundary Collision", "Boundary", t};
   }
 
-  auto poses = timetable.get_poses(t);
-  for (const auto &[ent, ent_pose] : poses)
+  // Swept directly off the timetable instead of building a fresh
+  // get_poses(t) map (planner_opt Stage 2). NOTE (tie-break): if multiple
+  // entities collide with `pose` simultaneously, which one gets reported can
+  // change vs. the old fresh-map iteration order -- see
+  // TimeTable::for_each_pose.
+  CollisionInfo result{true, "Valid", "", t};
+  bool collision_found = false;
+  timetable.for_each_pose(t, [&](EntityMeta *ent, const Pose &ent_pose)
   {
-    if (ent == entity)
-      continue;
+    if (collision_found || ent == entity)
+      return;
 
     auto collision = check_entity_collision(geom, pose, ent, ent_pose, params);
     if (collision.has_collision)
     {
-      return {false,
-              std::string(ent->type == EntityType::ROBOT ? "Robot Collision"
-                                                         : "Object Collision"),
-              ent ? ent->name : "",
-              t};
+      collision_found = true;
+      result = {false,
+                std::string(ent->type == EntityType::ROBOT ? "Robot Collision"
+                                                           : "Object Collision"),
+                ent ? ent->name : "",
+                t};
     }
-  }
+  });
 
-  return {true, "Valid", "", t};
+  return result;
 }
 
 CollisionInfo check_stationary_pose_collision_at_time_ignoring(
@@ -659,24 +811,31 @@ CollisionInfo check_stationary_pose_collision_at_time_ignoring(
     return {false, "Boundary Collision", "Boundary", t};
   }
 
-  auto poses = timetable.get_poses(t);
-  for (const auto &[ent, ent_pose] : poses)
+  // Swept directly off the timetable instead of building a fresh
+  // get_poses(t) map (planner_opt Stage 2). NOTE (tie-break): if multiple
+  // entities collide with `pose` simultaneously, which one gets reported can
+  // change vs. the old fresh-map iteration order -- see
+  // TimeTable::for_each_pose.
+  CollisionInfo result{true, "Valid", "", t};
+  bool collision_found = false;
+  timetable.for_each_pose(t, [&](EntityMeta *ent, const Pose &ent_pose)
   {
-    if (ent == entity || ent == ignored_entity)
-      continue;
+    if (collision_found || ent == entity || ent == ignored_entity)
+      return;
 
     auto collision = check_entity_collision(geom, pose, ent, ent_pose, params);
     if (collision.has_collision)
     {
-      return {false,
-              std::string(ent->type == EntityType::ROBOT ? "Robot Collision"
-                                                         : "Object Collision"),
-              ent ? ent->name : "",
-              t};
+      collision_found = true;
+      result = {false,
+                std::string(ent->type == EntityType::ROBOT ? "Robot Collision"
+                                                           : "Object Collision"),
+                ent ? ent->name : "",
+                t};
     }
-  }
+  });
 
-  return {true, "Valid", "", t};
+  return result;
 }
 
 CollisionInfo find_stationary_pose_conflict_until_last_timestamp(EntityMeta *entity,
@@ -1012,8 +1171,13 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
                             double *out_wait_added,
                             CollisionInfo *out_last_collision,
                             double *out_last_check_time,
-                            IdleBlockerRelocationPolicy idle_blocker_policy)
+                            IdleBlockerRelocationPolicy idle_blocker_policy,
+                            PlanTimingStats *plan_stats)
 {
+  ScopedWallTimer sched_timer(plan_stats, &PlanTimingStats::sched_wall_s);
+  if (plan_stats)
+    ++plan_stats->n_find_safe_start_calls;
+
   if (out_wait_added)
     *out_wait_added = 0.0;
   if (out_last_collision)
@@ -1032,6 +1196,15 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
   std::unordered_map<std::string, int> relocate_attempt_count;
   bool tried_boundary_projection = false;
 
+  // Terminal-hold memo (planner_opt Stage 2): built lazily on first use
+  // below. The candidate loop's terminal pose (traj->waypoints.back()) and
+  // `timetable` are fixed for the whole loop *except* at the two explicit
+  // hold_cache.invalidate() call sites below (a successful blocker
+  // relocation committing to `timetable`, and the one-shot boundary
+  // projection mutating `traj->waypoints`) -- both force a lazy rebuild on
+  // the next hold evaluation.
+  TerminalHoldCache hold_cache;
+
   auto write_failure_outputs = [&]()
   {
     if (out_last_collision)
@@ -1044,9 +1217,13 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
          timetable_delay_search_horizon(earliest_start, timetable, step) +
              1e-9)
   {
+    if (plan_stats)
+      ++plan_stats->n_start_candidates_tried;
+
     CollisionInfo col_info =
         check_trajectory_motion_and_terminal_hold_detailed(
-            *traj, check_time, timetable, params, traj->approach_goal_entity);
+            *traj, check_time, timetable, params, traj->approach_goal_entity,
+            plan_stats, &hold_cache);
     last_collision = col_info;
     last_check_time = check_time;
 
@@ -1060,7 +1237,7 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
         CollisionInfo buffered_info =
             check_trajectory_motion_and_terminal_hold_detailed(
                 *traj, buffered_start, timetable, params,
-                traj->approach_goal_entity);
+                traj->approach_goal_entity, plan_stats, &hold_cache);
         if (buffered_info.is_valid)
         {
           check_time = buffered_start;
@@ -1164,8 +1341,12 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
           }
 
           if (relocate_blocking_robot(blocker, timetable, params, entities,
-                                      options, traj, check_time))
+                                      options, traj, check_time, "blocker",
+                                      plan_stats))
           {
+            // relocate_blocking_robot committed a new trajectory into
+            // `timetable`, invalidating any cached terminal-hold verdicts.
+            hold_cache.invalidate();
             last_relocated_robot = blocker->name;
             last_relocation_time = check_time;
             if (idle_blocker_policy ==
@@ -1222,6 +1403,10 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
           {
             traj->waypoints = std::move(projected);
             traj->CalcualteTimeStamps(traj_robot);
+            // The candidate trajectory's terminal pose/duration just
+            // changed, invalidating any cached terminal-hold verdicts (which
+            // were computed against the old goal pose).
+            hold_cache.invalidate();
             std::cout << "  [Adjust] Projected segment path inside bounds and retrying." << std::endl;
             continue;
           }
@@ -1286,7 +1471,8 @@ bool reserve_and_commit_trajectory(
     TaskExecutionStats *stats,
     std::string *out_failure_reason,
     CollisionInfo *out_last_collision,
-    double *out_last_check_time)
+    double *out_last_check_time,
+    PlanTimingStats *plan_stats)
 {
   if (out_last_collision)
     *out_last_collision = CollisionInfo{true, "Not evaluated", "", earliest_start};
@@ -1317,7 +1503,9 @@ bool reserve_and_commit_trajectory(
           find_safe_start_time(traj, candidate_earliest_start,
                                trial_timetable, params, entities, options,
                                &wait_added, &last_schedule_collision,
-                               &last_schedule_check_time);
+                               &last_schedule_check_time,
+                               IdleBlockerRelocationPolicy::RelocateAnyIdle,
+                               plan_stats);
       if (safe_start_time < 0.0)
       {
         if (out_last_collision)
@@ -1412,7 +1600,8 @@ bool reserve_and_commit_trajectory(
                       << " conflicts with idle robot " << blocking_robot->name
                       << ". Relocating blocker first." << std::endl;
             if (relocate_blocking_robot(blocking_robot, trial_timetable, params,
-                                        entities, options, nullptr, arrival_time))
+                                        entities, options, nullptr, arrival_time,
+                                        "blocker", plan_stats))
             {
               continue;
             }
@@ -1503,7 +1692,9 @@ bool reserve_and_commit_trajectory(
   double safe_start_time =
       find_safe_start_time(traj, earliest_start, trial_timetable, params, entities,
                            options, &wait_added, out_last_collision,
-                           out_last_check_time);
+                           out_last_check_time,
+                           IdleBlockerRelocationPolicy::RelocateAnyIdle,
+                           plan_stats);
   accumulate_wait_stats(stats, wait_added);
 
   if (safe_start_time < 0.0)

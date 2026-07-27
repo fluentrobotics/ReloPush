@@ -16,11 +16,11 @@
 #include <ReloPush/FinalSequenceHandoff.h>
 #include <ReloPush/ReloPushBossDiagnostics.hpp>
 
-#ifdef __APPLE__
-// Include the glog header when compiling on MacOS.
+#if defined(__APPLE__) || defined(__linux__)
+// Include glog on platforms where it is available from the build dependencies.
 #include <glog/logging.h>
 #else
-// Otherwise, include the Abseil logging header.
+// Other platforms can use Abseil logging if available.
 #include "absl/log/initialize.h"
 #endif
 
@@ -205,13 +205,9 @@ void save_actions_for_visualizer(const std::vector<FinalAllocation> &finalSequen
 // ---------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-#ifdef __APPLE__
-    // For macOS, initialize Google Logging with the program name.
+    // Use glog on Linux and macOS; the installed Abseil package here does not
+    // ship the logging headers this code path previously relied on.
     google::InitGoogleLogging(argv[0]);
-#else
-    // For non-macOS systems, initialize Abseil Logging.
-    absl::InitializeLog();
-#endif
     QApplication app(argc, argv);
 
     std::string filename = "ReloPush-BOSS_12_objects.txt";

@@ -9,6 +9,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Thread-local state for tracking initial transit failures per robot/pose
@@ -40,7 +41,8 @@ bool prepare_segment_waypoints_for_scheduling(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params, const RuntimeOptions &options,
     const std::string &fallback_message,
-    const SegmentReplanContext &replan_context = SegmentReplanContext{});
+    const SegmentReplanContext &replan_context = SegmentReplanContext{},
+    PlanTimingStats *plan_stats = nullptr);
 
 bool is_empty_noop_connector_between_pushes(
     const std::vector<TrajectoryPtr> &edge_paths, std::size_t connector_idx,
@@ -57,14 +59,16 @@ bool replan_transfer_segment_after_failed_schedule(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params, const RuntimeOptions &options,
-    std::string *out_failure_reason = nullptr);
+    std::string *out_failure_reason = nullptr,
+    PlanTimingStats *plan_stats = nullptr);
 
 bool replan_transit_segment_after_failed_schedule(
     Trajectory *traj, RobotMeta *robot, double segment_ready_time,
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params, const RuntimeOptions &options,
-    std::string *out_failure_reason = nullptr);
+    std::string *out_failure_reason = nullptr,
+    PlanTimingStats *plan_stats = nullptr);
 
 // ==========================================
 // Path Segment Scheduling
@@ -82,7 +86,8 @@ bool schedule_path_segment(
     TaskExecutionStats *stats = nullptr,
     std::string *out_failure_reason = nullptr,
     double *out_scheduled_start_time = nullptr,
-    Trajectory *out_scheduled_trajectory = nullptr);
+    Trajectory *out_scheduled_trajectory = nullptr,
+    PlanTimingStats *plan_stats = nullptr);
 
 // ==========================================
 // Full Task Execution Pipeline
@@ -97,7 +102,14 @@ bool process_task_execution(
     TaskExecutionStats *out_stats = nullptr,
     std::string *out_failure_reason = nullptr,
     double task_start_delay = 0.0,
-    int task_id = -1);
+    int task_id = -1,
+    // Names of target objects whose own delivery task has already succeeded
+    // in this plan's execution so far. Consulted by the ObsRelo loop so a
+    // later task cannot relocate an object that is supposed to be
+    // permanently placed; see execute_task_allocation_loop, which owns and
+    // populates the set once each task's success is confirmed.
+    const std::unordered_set<std::string> *delivered_object_names = nullptr,
+    PlanTimingStats *plan_stats = nullptr);
 
 // ==========================================
 // Task Loop & Allocation
@@ -114,7 +126,12 @@ bool attempt_task_with_candidate(
     std::vector<TransferContactWindow> &transfer_windows,
     TaskCsvRow &row,
     std::string &last_failed_robot,
-    std::string &last_failure_reason);
+    std::string &last_failure_reason,
+    // See process_task_execution: read to guard obstacle relocation, and
+    // written (task.targetObject->name inserted) the moment this task is
+    // confirmed SUCCESS.
+    std::unordered_set<std::string> *delivered_object_names = nullptr,
+    PlanTimingStats *plan_stats = nullptr);
 
 bool maybe_safe_park_repeated_initial_transit_failure(
     RobotMeta *robot,
@@ -123,7 +140,8 @@ bool maybe_safe_park_repeated_initial_transit_failure(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-    const RuntimeOptions &options);
+    const RuntimeOptions &options,
+    PlanTimingStats *plan_stats = nullptr);
 
 TaskCsvRow execute_single_task_with_candidates(
     Task &task,
@@ -133,7 +151,9 @@ TaskCsvRow execute_single_task_with_candidates(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const RuntimeOptions &options,
-    std::vector<TransferContactWindow> &transfer_windows);
+    std::vector<TransferContactWindow> &transfer_windows,
+    std::unordered_set<std::string> *delivered_object_names = nullptr,
+    PlanTimingStats *plan_stats = nullptr);
 
 std::vector<TaskCsvRow> execute_task_allocation_loop(
     std::vector<Task> &tasks,
@@ -142,6 +162,7 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const RuntimeOptions &options,
-    bool abort_on_first_failure = false);
+    bool abort_on_first_failure = false,
+    PlanTimingStats *plan_stats = nullptr);
 
 #endif // TASK_EXECUTION_H

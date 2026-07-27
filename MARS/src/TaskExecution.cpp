@@ -14,6 +14,7 @@
 #include <ReloPush/TaskAllocation.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <iomanip>
@@ -24,6 +25,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 // Global debug flag (defined in PHAstar_push_demo.cpp)
 extern bool DEBUG_VIS;
@@ -87,7 +89,8 @@ bool relocate_blocking_robot(
     const RuntimeOptions &options,
     const Trajectory *blocked_traj_hint = nullptr,
     double hint_reference_time = -1.0,
-    const char *context = "blocker");
+    const char *context = "blocker",
+    PlanTimingStats *plan_stats = nullptr);
 
 // ==========================================
 // Forward declarations: CollisionScheduling still in monolith
@@ -121,7 +124,8 @@ bool reserve_and_commit_trajectory(
     TaskExecutionStats *stats = nullptr,
     std::string *out_failure_reason = nullptr,
     CollisionInfo *out_last_collision = nullptr,
-    double *out_last_check_time = nullptr);
+    double *out_last_check_time = nullptr,
+    PlanTimingStats *plan_stats = nullptr);
 
 CollisionInfo find_robot_waiting_pose_conflict_over_interval(
     RobotMeta *robot, const Pose &wait_pose,
@@ -221,7 +225,8 @@ bool prepare_segment_waypoints_for_scheduling(
     const Params &params,
     const RuntimeOptions &options,
     const std::string &fallback_message,
-    const SegmentReplanContext &replan_context)
+    const SegmentReplanContext &replan_context,
+    PlanTimingStats *plan_stats)
 {
   if (!traj)
     return false;
@@ -279,7 +284,8 @@ bool prepare_segment_waypoints_for_scheduling(
                                 timetable, entities, params, options, replanned_rel,
                                 segment_context,
                                 approach_goal_entity,
-                                &reference_waypoints))
+                                &reference_waypoints,
+                                plan_stats))
     {
       std::cout << fallback_message << std::endl;
       traj->waypoints = original_waypoints;
@@ -446,7 +452,8 @@ bool replan_transfer_segment_after_failed_schedule(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const RuntimeOptions &options,
-    std::string *out_failure_reason)
+    std::string *out_failure_reason,
+    PlanTimingStats *plan_stats)
 {
   if (!traj || !robot || !traj->is_transfer || !traj->transferred_object ||
       traj->waypoints.empty())
@@ -476,7 +483,21 @@ bool replan_transfer_segment_after_failed_schedule(
   planner.max_search_iterations = options.max_search_iterations;
   planner.set_planner_expansion_threads(options.planner_expansion_threads);
 
+  const auto search_t0 = std::chrono::steady_clock::now();
   PlanningResult replanned = planner.Planning_with_res(segment_ready_time);
+  if (plan_stats)
+  {
+    const double elapsed = std::chrono::duration<double>(
+                               std::chrono::steady_clock::now() - search_t0)
+                               .count();
+    plan_stats->record_search(
+        PlanSearchTier::Other, elapsed, replanned.debug_stats.iterations,
+        replanned.debug_stats.search_iteration_limit_hit,
+        replanned.debug_stats.heuristic_time_sec,
+        replanned.debug_stats.primitive_collision_time_sec,
+        replanned.debug_stats.analytic_validation_time_sec,
+        replanned.debug_stats.holonomic_heuristic_time_sec);
+  }
   if (replanned.status != PlanningStatus::SUCCESS ||
       replanned.waypoints.empty())
   {
@@ -513,7 +534,8 @@ bool replan_transit_segment_after_failed_schedule(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const RuntimeOptions &options,
-    std::string *out_failure_reason)
+    std::string *out_failure_reason,
+    PlanTimingStats *plan_stats)
 {
   if (!traj || !robot || traj->is_transfer || traj->waypoints.empty())
   {
@@ -533,7 +555,7 @@ bool replan_transit_segment_after_failed_schedule(
   if (!replan_transit_segment(robot, goal_pose, segment_ready_time,
                               timetable, entities, params, options,
                               replanned_rel, SegmentReplanContext{},
-                              traj->approach_goal_entity, nullptr))
+                              traj->approach_goal_entity, nullptr, plan_stats))
   {
     if (out_failure_reason)
       *out_failure_reason =
@@ -567,7 +589,8 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
                            TaskExecutionStats *stats,
                            std::string *out_failure_reason,
                            double *out_scheduled_start_time,
-                           Trajectory *out_scheduled_trajectory)
+                           Trajectory *out_scheduled_trajectory,
+                           PlanTimingStats *plan_stats)
 {
   double current_avail_time = timetable.get_entity_max_time(robot);
 
@@ -578,7 +601,8 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
   if (!prepare_segment_waypoints_for_scheduling(
           traj.get(), robot, current_avail_time, timetable, entities, params,
           options,
-          "  [Segment] Transit replanning failed; using original transit path with conflict-resolution scheduling."))
+          "  [Segment] Transit replanning failed; using original transit path with conflict-resolution scheduling.",
+          SegmentReplanContext{}, plan_stats))
   {
     if (out_failure_reason)
       *out_failure_reason = "empty transit segment";
@@ -590,19 +614,19 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
   bool success = reserve_and_commit_trajectory(
       traj.get(), robot, current_avail_time, timetable, params, entities,
       options, transfer_windows, stats, out_failure_reason,
-      &segment_failure_collision, &segment_failure_start);
+      &segment_failure_collision, &segment_failure_start, plan_stats);
 
   if (!success && traj->is_transfer && traj->transferred_object)
   {
     std::string transfer_replan_failure;
     if (replan_transfer_segment_after_failed_schedule(
             traj.get(), robot, current_avail_time, timetable, entities,
-            params, options, &transfer_replan_failure))
+            params, options, &transfer_replan_failure, plan_stats))
     {
       success = reserve_and_commit_trajectory(
           traj.get(), robot, current_avail_time, timetable, params, entities,
           options, transfer_windows, stats, out_failure_reason,
-          &segment_failure_collision, &segment_failure_start);
+          &segment_failure_collision, &segment_failure_start, plan_stats);
     }
     else if (out_failure_reason && !transfer_replan_failure.empty())
     {
@@ -625,12 +649,12 @@ bool schedule_path_segment(const EdgePath &edge_path, EntityMeta *obj_meta,
     std::string transit_replan_failure;
     if (replan_transit_segment_after_failed_schedule(
             traj.get(), robot, replan_start_time, timetable, entities,
-            params, options, &transit_replan_failure))
+            params, options, &transit_replan_failure, plan_stats))
     {
       success = reserve_and_commit_trajectory(
           traj.get(), robot, replan_start_time, timetable, params, entities,
           options, transfer_windows, stats, out_failure_reason,
-          &segment_failure_collision, &segment_failure_start);
+          &segment_failure_collision, &segment_failure_start, plan_stats);
     }
     else if (out_failure_reason && !transit_replan_failure.empty())
     {
@@ -661,7 +685,9 @@ bool process_task_execution(
     TaskExecutionStats *out_stats,
     std::string *out_failure_reason,
     double task_start_delay,
-    int task_id)
+    int task_id,
+    const std::unordered_set<std::string> *delivered_object_names,
+    PlanTimingStats *plan_stats)
 {
   if (out_stats)
     *out_stats = TaskExecutionStats{};
@@ -727,7 +753,7 @@ bool process_task_execution(
   double initial_transit_abs_end = -1.0;
   if (!plan_initial_transit(robot, task.TaskStartPoseRobot, robot_avail_time, timetable, entities, params, options, &initial_transit_abs_start, &initial_transit_abs_end, [&](double query_time)
                             { return compute_adjusted_task_start_pose(
-                                  task, robot, query_time, timetable); }, &initial_transit_reference))
+                                  task, robot, query_time, timetable); }, &initial_transit_reference, plan_stats))
   {
     set_failure("initial transit planning failed");
     std::cerr << "Aborting task due to transit failure." << std::endl;
@@ -861,13 +887,34 @@ bool process_task_execution(
     size_t obs_path_base_idx = 0;
     for (size_t obs_ind = 1; obs_ind < task.vertexChain.size() - 1; obs_ind++)
     {
-      std::cout << "Obstacle Relocation" << std::endl;
-
       std::string obs_name = task.vertexChain[obs_ind].name;
       auto obs_meta = entities.at(obs_name);
 
+      std::cout << "Obstacle Relocation: " << obs_name << " (task " << task_id
+                << ", target="
+                << (task.targetObject ? task.targetObject->name : std::string("?"))
+                << ")" << std::endl;
+
       size_t push_path_idx = obs_path_base_idx;
       size_t post_path_idx = obs_path_base_idx + 1;
+
+      // Delivered objects are permanent: a later task's corridor cannot
+      // legally relocate an object some earlier task already placed at its
+      // final goal (the order-constraint premise this whole plan depends
+      // on). Skip scheduling any movement for it but still advance
+      // obs_path_base_idx by the two slots reserved for it in
+      // task.obsReloPaths so indices for subsequent obstacles stay aligned.
+      // The object remains a live obstacle in the timetable, so downstream
+      // segments will route around it or fail naturally -- that failure is
+      // correct order-constraint semantics, not a bug to patch around here.
+      if (delivered_object_names &&
+          delivered_object_names->count(obs_name) > 0)
+      {
+        std::cout << "  [ObsRelo] skip " << obs_name
+                  << ": already delivered (immovable)" << std::endl;
+        obs_path_base_idx += 2;
+        continue;
+      }
 
       if (task.obsReloPaths->size() > post_path_idx)
       {
@@ -877,6 +924,8 @@ bool process_task_execution(
             timetable.get_pose(robot, obs_push_wait_start_time);
         double obs_push_start_time = -1.0;
         Trajectory obs_push_traj;
+        if (plan_stats)
+          ++plan_stats->n_obsrelo_segments;
         if (!schedule_path_segment(task.obsReloPaths->at(push_path_idx), obs_meta,
                                    robot, timetable, params, entities, options,
                                    task.sourcePrePushDistance,
@@ -884,7 +933,7 @@ bool process_task_execution(
                                    transfer_windows,
                                    out_stats, out_failure_reason,
                                    &obs_push_start_time,
-                                   &obs_push_traj))
+                                   &obs_push_traj, plan_stats))
         {
           set_failure("obs relocation push segment failed");
           return false;
@@ -904,7 +953,7 @@ bool process_task_execution(
 
         if (!append_retraction(robot, obs_push_traj, timetable, params,
                                entities, options, out_stats,
-                               out_failure_reason))
+                               out_failure_reason, plan_stats))
         {
           std::cout << "  [Retract] Skipping retraction after obstacle relocation push "
                     << "(no collision-free slot)." << std::endl;
@@ -923,13 +972,15 @@ bool process_task_execution(
         const Pose obs_return_wait_pose =
             timetable.get_pose(robot, obs_return_wait_start_time);
         double obs_return_start_time = -1.0;
+        if (plan_stats)
+          ++plan_stats->n_obsrelo_segments;
         if (!schedule_path_segment(task.obsReloPaths->at(post_path_idx), nullptr,
                                    robot, timetable, params, entities, options,
                                    task.sourcePrePushDistance,
                                    return_approach_entity,
                                    transfer_windows,
                                    out_stats, out_failure_reason,
-                                   &obs_return_start_time))
+                                   &obs_return_start_time, nullptr, plan_stats))
         {
           set_failure("obs relocation return segment failed");
           return false;
@@ -989,7 +1040,7 @@ bool process_task_execution(
                                                   segment_ready_time, timetable,
                                                   entities, params, options,
                                                   fallback_msg.str(),
-                                                  replan_context))
+                                                  replan_context, plan_stats))
     {
       set_failure("segment transit replanning failed");
       std::cerr << " [Error] Segment " << segment_idx
@@ -1020,7 +1071,7 @@ bool process_task_execution(
         path_ptr.get(), robot, segment_ready_time, timetable, params,
         entities, options, transfer_windows, out_stats,
         out_failure_reason, &segment_failure_collision,
-        &segment_failure_start);
+        &segment_failure_start, plan_stats);
 
     if (!segment_committed && path_ptr->is_transfer &&
         path_ptr->transferred_object)
@@ -1028,7 +1079,7 @@ bool process_task_execution(
       std::string transfer_replan_failure;
       if (replan_transfer_segment_after_failed_schedule(
               path_ptr.get(), robot, segment_ready_time, timetable, entities,
-              params, options, &transfer_replan_failure))
+              params, options, &transfer_replan_failure, plan_stats))
       {
         segment_failure_collision =
             CollisionInfo{true, "Not evaluated", "", segment_ready_time};
@@ -1037,7 +1088,7 @@ bool process_task_execution(
             path_ptr.get(), robot, segment_ready_time, timetable, params,
             entities, options, transfer_windows, out_stats,
             out_failure_reason, &segment_failure_collision,
-            &segment_failure_start);
+            &segment_failure_start, plan_stats);
       }
       else if (out_failure_reason && !transfer_replan_failure.empty())
       {
@@ -1104,7 +1155,7 @@ bool process_task_execution(
       }
       if (!append_retraction(robot, *path_ptr, timetable, params, entities,
                              options,
-                             out_stats, out_failure_reason))
+                             out_stats, out_failure_reason, plan_stats))
       {
         std::cout << "  [Retract] Skipping retraction after segment "
                   << segment_idx << " (no collision-free slot)." << std::endl;
@@ -1174,7 +1225,9 @@ bool attempt_task_with_candidate(
     std::vector<TransferContactWindow> &transfer_windows,
     TaskCsvRow &row,
     std::string &last_failed_robot,
-    std::string &last_failure_reason)
+    std::string &last_failure_reason,
+    std::unordered_set<std::string> *delivered_object_names,
+    PlanTimingStats *plan_stats)
 {
   TimeTable timetable_before_attempt = timetable;
   auto transfer_windows_before_attempt = transfer_windows;
@@ -1214,6 +1267,8 @@ bool attempt_task_with_candidate(
 
     if (retry_idx > 0)
     {
+      if (plan_stats)
+        ++plan_stats->n_post_validation_retries;
       std::cout << "         Retrying " << cand_robot->name
                 << " with extra task-start delay of "
                 << std::fixed << std::setprecision(2)
@@ -1226,7 +1281,8 @@ bool attempt_task_with_candidate(
                                options,
                                &transfer_windows,
                                &attempt_stats, &attempt_failure_reason,
-                               task_start_delay, row.task_id))
+                               task_start_delay, row.task_id,
+                               delivered_object_names, plan_stats))
     {
       auto verify = verify_timetable_collision_free(timetable, entities, params,
                                                     transfer_windows,
@@ -1324,7 +1380,7 @@ bool attempt_task_with_candidate(
 
           if (relocate_blocking_robot(cand_robot, self_park_base_timetable,
                                       params, entities, options, &blocked_hint,
-                                      verify.time, "self-park"))
+                                      verify.time, "self-park", plan_stats))
           {
             retry_base_timetable = std::move(self_park_base_timetable);
             retry_base_transfer_windows = std::move(self_park_base_transfer_windows);
@@ -1376,6 +1432,10 @@ bool attempt_task_with_candidate(
       row.total_waiting = attempt_stats.total_waiting;
       row.failure_reason = "";
       std::cout << "[Assign] SUCCESS with " << cand_robot->name << std::endl;
+      if (delivered_object_names && task.targetObject)
+      {
+        delivered_object_names->insert(task.targetObject->name);
+      }
       return true;
     }
 
@@ -1425,7 +1485,7 @@ bool attempt_task_with_candidate(
 
       if (relocate_blocking_robot(cand_robot, self_park_base_timetable,
                                   params, entities, options, &blocked_hint,
-                                  conflict_time, "self-park"))
+                                  conflict_time, "self-park", plan_stats))
       {
         retry_base_timetable = std::move(self_park_base_timetable);
         retry_base_transfer_windows = std::move(self_park_base_transfer_windows);
@@ -1468,7 +1528,8 @@ bool maybe_safe_park_repeated_initial_transit_failure(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-    const RuntimeOptions &options)
+    const RuntimeOptions &options,
+    PlanTimingStats *plan_stats)
 {
   if (!options.enable_failed_candidate_idle_parking || !robot)
     return false;
@@ -1520,7 +1581,8 @@ bool maybe_safe_park_repeated_initial_transit_failure(
             << " times; safe-parking before next candidate." << std::endl;
 
   if (!relocate_blocking_robot(robot, timetable, params, entities, options,
-                               &blocked_hint, robot_ready_time, "self-park"))
+                               &blocked_hint, robot_ready_time, "self-park",
+                               plan_stats))
   {
     std::cout << "         [CandidateRecovery] Safe parking failed for "
               << robot->name << "; keeping existing pose." << std::endl;
@@ -1542,7 +1604,9 @@ TaskCsvRow execute_single_task_with_candidates(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const RuntimeOptions &options,
-    std::vector<TransferContactWindow> &transfer_windows)
+    std::vector<TransferContactWindow> &transfer_windows,
+    std::unordered_set<std::string> *delivered_object_names,
+    PlanTimingStats *plan_stats)
 {
   std::cout << "\n=== Processing Task " << task_counter << " ("
             << task.targetObject->name << ") ===" << std::endl;
@@ -1557,10 +1621,13 @@ TaskCsvRow execute_single_task_with_candidates(
   for (auto &[cand_robot, free_time] : candidates)
   {
     row.attempts += 1;
+    if (plan_stats)
+      ++plan_stats->n_robot_candidate_attempts;
     if (attempt_task_with_candidate(task, cand_robot, free_time,
                                     timetable, entities, params, options,
                                     transfer_windows, row,
-                                    last_failed_robot, last_failure_reason))
+                                    last_failed_robot, last_failure_reason,
+                                    delivered_object_names, plan_stats))
     {
       clear_initial_transit_failures_for_robot(cand_robot);
       task_success = true;
@@ -1569,7 +1636,7 @@ TaskCsvRow execute_single_task_with_candidates(
 
     maybe_safe_park_repeated_initial_transit_failure(
         cand_robot, free_time, last_failure_reason, timetable, entities,
-        params, options);
+        params, options, plan_stats);
   }
 
   if (!task_success)
@@ -1590,10 +1657,16 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
     const RuntimeOptions &options,
-    bool abort_on_first_failure)
+    bool abort_on_first_failure,
+    PlanTimingStats *plan_stats)
 {
   std::vector<TaskCsvRow> task_rows;
   std::vector<TransferContactWindow> transfer_windows;
+  // Scoped to this single plan evaluation (one call = one plan): names of
+  // target objects whose delivery task has already succeeded, so the ObsRelo
+  // loop of a later task can refuse to relocate them. See
+  // process_task_execution's delivered_object_names parameter.
+  std::unordered_set<std::string> delivered_object_names;
 
   int task_counter = 0;
   for (auto &task : tasks)
@@ -1602,7 +1675,7 @@ std::vector<TaskCsvRow> execute_task_allocation_loop(
     auto row = execute_single_task_with_candidates(
         task, task_counter, all_robots, timetable, entities, params,
         options,
-        transfer_windows);
+        transfer_windows, &delivered_object_names, plan_stats);
     const bool failed = row.status != "SUCCESS";
     task_rows.push_back(std::move(row));
 

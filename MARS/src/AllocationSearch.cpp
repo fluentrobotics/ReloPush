@@ -6,6 +6,7 @@
 #include <AllocationSearch.h>
 #include <TaskExecution.h>
 #include <SafeParking.h>
+#include <ExecutedScenarioSerialization.h>
 
 #include <PHAstar/Params.h>
 #include <PHAstar/Entities.h>
@@ -13,6 +14,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -506,7 +508,8 @@ ExecutedScenario execute_allocation_scenario(
     const std::string &label,
     std::uint32_t parking_seed,
     bool verbose,
-    bool abort_on_first_failure)
+    bool abort_on_first_failure,
+    PlanTimingStats *plan_stats)
 {
   ScopedStreamSilencer silencer(!verbose && !options.print_planning_status);
 
@@ -520,7 +523,7 @@ ExecutedScenario execute_allocation_scenario(
                                     all_robots, plan);
   auto task_rows = execute_task_allocation_loop(
       tasks, all_robots, executed.timetable, executed.entities, executed.params,
-      options, abort_on_first_failure);
+      options, abort_on_first_failure, plan_stats);
 
   executed.summary = summarize_run(label, plan, parking_seed, task_rows,
                                    executed.timetable);
@@ -536,6 +539,15 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
   if (requests.empty())
     return results;
 
+  // Save-and-replay support (see MARS/16save-replay-implementation.md):
+  // serialize each plan's full ExecutedScenario WHILE it is still alive, iff
+  // the caller asked for save-and-replay output via either result-out flag.
+  // Neither flag set (the common case) skips serialization entirely, so this
+  // feature costs nothing when unused.
+  const bool save_executed_scenarios =
+      !options.eval_plans_result_out_path.empty() ||
+      !options.eval_plans_result_out_dir.empty();
+
   std::size_t worker_count = std::min<std::size_t>(
       requests.size(),
       static_cast<std::size_t>(std::max(1, options.lns_threads)));
@@ -544,10 +556,24 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
   {
     for (std::size_t i = 0; i < requests.size(); ++i)
     {
+      // Per-plan timing instrumentation (Stage 1 planner optimization work;
+      // see PlanTimingStats). `timing` is a plan-local stack object -- no
+      // sharing, no locks needed -- always populated (cheap: chrono +
+      // counters only) regardless of whether --eval-plans-timing-out= was
+      // requested; only the CSV write in EvalPlansCli.cpp is conditional.
+      PlanTimingStats timing;
+      const auto plan_t0 = std::chrono::steady_clock::now();
       auto executed = execute_allocation_scenario(
           loaded_sequence, options, requests[i].plan, requests[i].label,
-          requests[i].parking_seed, false, options.early_abort_eval_on_failure);
+          requests[i].parking_seed, false, options.early_abort_eval_on_failure,
+          &timing);
+      timing.true_wall_s = std::chrono::duration<double>(
+                               std::chrono::steady_clock::now() - plan_t0)
+                               .count();
+      if (save_executed_scenarios)
+        results[i].serialized_result = serialize_executed_scenario_b64(executed);
       results[i].summary = std::move(executed.summary);
+      results[i].timing = std::move(timing);
     }
     return results;
   }
@@ -562,7 +588,8 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
   for (std::size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx)
   {
     workers.emplace_back(
-        [&loaded_sequence, &worker_options, &requests, &results, &next_index]()
+        [&loaded_sequence, &worker_options, &requests, &results, &next_index,
+         save_executed_scenarios]()
         {
           while (true)
           {
@@ -570,10 +597,24 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
             if (idx >= requests.size())
               break;
 
+            // Per-plan timing instrumentation: `timing` is a local stack
+            // variable inside this worker's loop iteration, so each worker
+            // owns a distinct instance with no cross-thread sharing (results
+            // themselves are written to disjoint `idx` slots, same as
+            // .serialized_result/.summary below).
+            PlanTimingStats timing;
+            const auto plan_t0 = std::chrono::steady_clock::now();
             auto executed = execute_allocation_scenario(
                 loaded_sequence, worker_options, requests[idx].plan, requests[idx].label,
-                requests[idx].parking_seed, true, worker_options.early_abort_eval_on_failure);
+                requests[idx].parking_seed, true, worker_options.early_abort_eval_on_failure,
+                &timing);
+            timing.true_wall_s = std::chrono::duration<double>(
+                                     std::chrono::steady_clock::now() - plan_t0)
+                                     .count();
+            if (save_executed_scenarios)
+              results[idx].serialized_result = serialize_executed_scenario_b64(executed);
             results[idx].summary = std::move(executed.summary);
+            results[idx].timing = std::move(timing);
           }
         });
   }
@@ -2319,6 +2360,9 @@ Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
   params.safety_margin = std::max(0.0, options.default_safety_margin);
   params.robot_collision_inflation =
       positive_or(options.default_robot_collision_inflation, params.robot_collision_inflation);
+  params.safe_parking_expand_max_iterations =
+      positive_or(options.default_safe_parking_expand_iterations,
+                  params.safe_parking_expand_max_iterations);
 
   // PHAStar converts this scale to a mode-specific distance using the
   // robot's turning radius when each planner instance is constructed.

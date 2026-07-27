@@ -789,6 +789,659 @@ namespace
     return true;
   }
 
+  // Stage 1 planner timing instrumentation (opt-in per-plan timing; see
+  // MARS/include/PHAstarPushDemoTypes.h's PlanTimingStats). Sums every field
+  // of a PlanTimingStats instance and asserts add()/operator+=/operator+ all
+  // agree and produce doubled values.
+  bool test_plan_timing_stats_accumulate()
+  {
+    PlanTimingStats a;
+    a.true_wall_s = 1.0;
+    a.search_wall_s_primary = 2.0;
+    a.search_wall_s_fine = 3.0;
+    a.search_wall_s_contact = 4.0;
+    a.search_wall_s_other = 5.0;
+    a.n_searches_primary = 1;
+    a.n_searches_fine = 2;
+    a.n_searches_contact = 3;
+    a.n_searches_other = 4;
+    a.search_iterations_total = 10;
+    a.n_search_cap_hits = 1;
+    a.heuristic_time_s = 0.1;
+    a.primitive_collision_time_s = 0.2;
+    a.analytic_validation_time_s = 0.3;
+    a.holonomic_heuristic_time_s = 0.4;
+    a.sched_wall_s = 0.5;
+    a.n_find_safe_start_calls = 2;
+    a.n_start_candidates_tried = 5;
+    a.traj_scan_wall_s = 0.6;
+    a.terminal_hold_wall_s = 0.7;
+    a.safe_parking_wall_s = 0.8;
+    a.n_parking_relocations = 1;
+    a.n_robot_candidate_attempts = 3;
+    a.n_post_validation_retries = 2;
+    a.n_obsrelo_segments = 4;
+
+    const PlanTimingStats b = a; // identical copy: summing should double every field
+
+    bool ok = true;
+    auto check_double = [&](const char *name, double got, double expected)
+    {
+      if (std::abs(got - expected) > 1e-9)
+      {
+        std::cerr << "    " << name << " mismatch: got " << got
+                  << ", expected " << expected << "\n";
+        ok = false;
+      }
+    };
+    auto check_count = [&](const char *name, long long got, long long expected)
+    {
+      if (got != expected)
+      {
+        std::cerr << "    " << name << " mismatch: got " << got
+                  << ", expected " << expected << "\n";
+        ok = false;
+      }
+    };
+
+    auto verify_doubled = [&](const PlanTimingStats &sum, const char *op_name)
+    {
+      check_double(op_name, sum.true_wall_s, 2.0);
+      check_double(op_name, sum.search_wall_s_primary, 4.0);
+      check_double(op_name, sum.search_wall_s_fine, 6.0);
+      check_double(op_name, sum.search_wall_s_contact, 8.0);
+      check_double(op_name, sum.search_wall_s_other, 10.0);
+      check_count(op_name, sum.n_searches_primary, 2);
+      check_count(op_name, sum.n_searches_fine, 4);
+      check_count(op_name, sum.n_searches_contact, 6);
+      check_count(op_name, sum.n_searches_other, 8);
+      check_count(op_name, static_cast<long long>(sum.search_iterations_total), 20);
+      check_count(op_name, sum.n_search_cap_hits, 2);
+      check_double(op_name, sum.heuristic_time_s, 0.2);
+      check_double(op_name, sum.primitive_collision_time_s, 0.4);
+      check_double(op_name, sum.analytic_validation_time_s, 0.6);
+      check_double(op_name, sum.holonomic_heuristic_time_s, 0.8);
+      check_double(op_name, sum.sched_wall_s, 1.0);
+      check_count(op_name, sum.n_find_safe_start_calls, 4);
+      check_count(op_name, sum.n_start_candidates_tried, 10);
+      check_double(op_name, sum.traj_scan_wall_s, 1.2);
+      check_double(op_name, sum.terminal_hold_wall_s, 1.4);
+      check_double(op_name, sum.safe_parking_wall_s, 1.6);
+      check_count(op_name, sum.n_parking_relocations, 2);
+      check_count(op_name, sum.n_robot_candidate_attempts, 6);
+      check_count(op_name, sum.n_post_validation_retries, 4);
+      check_count(op_name, sum.n_obsrelo_segments, 8);
+    };
+
+    PlanTimingStats sum_add = a;
+    sum_add.add(b);
+    verify_doubled(sum_add, "add()");
+
+    PlanTimingStats sum_plus_eq = a;
+    sum_plus_eq += b;
+    verify_doubled(sum_plus_eq, "operator+=");
+
+    const PlanTimingStats sum_plus = a + b;
+    verify_doubled(sum_plus, "operator+");
+
+    // operator+ must not mutate either operand.
+    check_double("operator+ lhs unmodified", a.true_wall_s, 1.0);
+    check_double("operator+ rhs unmodified", b.true_wall_s, 1.0);
+
+    return ok;
+  }
+
+  // Stage 1 planner timing instrumentation: initialize_params must wire
+  // RuntimeOptions::default_safe_parking_expand_iterations into
+  // Params::safe_parking_expand_max_iterations and
+  // RuntimeOptions::default_collision_check_time_step into
+  // Params::collision_check_time_step (the latter already existed pre-Stage-1;
+  // this locks in that it still does). Also checks the positive_or() fallback:
+  // a non-positive option value keeps Params's own compiled-in default rather
+  // than propagating a bogus 0 through to the planner.
+  bool test_initialize_params_wires_stage1_fields()
+  {
+    bool ok = true;
+
+    RuntimeOptions options;
+    options.default_safe_parking_expand_iterations = 1234;
+    options.default_collision_check_time_step = 0.0123;
+
+    const Params params = initialize_params({}, options);
+
+    if (params.safe_parking_expand_max_iterations != 1234)
+    {
+      std::cerr << "    safe_parking_expand_max_iterations mismatch: got "
+                << params.safe_parking_expand_max_iterations << ", expected 1234\n";
+      ok = false;
+    }
+    if (!near(params.collision_check_time_step, 0.0123, 1e-9))
+    {
+      std::cerr << "    collision_check_time_step mismatch: got "
+                << params.collision_check_time_step << ", expected 0.0123\n";
+      ok = false;
+    }
+
+    RuntimeOptions zero_options;
+    zero_options.default_safe_parking_expand_iterations = 0;
+    zero_options.default_collision_check_time_step = 0.0;
+    const Params defaulted = initialize_params({}, zero_options);
+    const Params fresh_defaults; // Params{}'s own compiled-in defaults
+
+    if (defaulted.safe_parking_expand_max_iterations !=
+        fresh_defaults.safe_parking_expand_max_iterations)
+    {
+      std::cerr << "    safe_parking_expand_max_iterations did not fall back to "
+                   "the Params default for a non-positive option value (got "
+                << defaulted.safe_parking_expand_max_iterations << ", expected "
+                << fresh_defaults.safe_parking_expand_max_iterations << ")\n";
+      ok = false;
+    }
+    if (!near(defaulted.collision_check_time_step,
+             fresh_defaults.collision_check_time_step, 1e-12))
+    {
+      std::cerr << "    collision_check_time_step did not fall back to the "
+                   "Params default for a non-positive option value (got "
+                << defaulted.collision_check_time_step << ", expected "
+                << fresh_defaults.collision_check_time_step << ")\n";
+      ok = false;
+    }
+
+    return ok;
+  }
+
+  // Stage 1 planner timing instrumentation smoke test: mirrors
+  // test_idle_blocker_relocated_off_initial_transit_goal's tiny scenario
+  // (robot2 idle exactly on robot1's initial-transit goal, forcing a
+  // mechanism-A relocation) but runs plan_initial_transit twice from
+  // identical fresh state -- once with a PlanTimingStats attached, once with
+  // nullptr -- and asserts: (1) timing/counters were actually collected
+  // (nonzero search wall time from the 3 tier attempts that hit
+  // GOAL_INVALID_COLLISION before recovery, plus a successful
+  // relocate_blocking_robot invocation -- this exact scenario resolves via
+  // attempt_validation_blocker_recovery's direct-relocate branch, whose
+  // post-relocation replan succeeds outright with no scheduling/delay
+  // needed, so find_safe_start_time is correctly never called here; see
+  // n_find_safe_start_calls>=1 covered instead by the CollisionScheduling.cpp
+  // call sites this test doesn't exercise), and (2) critically, the PLANNING
+  // RESULT (success flag + both out_abs times) is bit-for-bit identical
+  // either way, i.e. attaching the stats pointer is purely an observer with
+  // zero effect on planner behavior.
+  bool test_plan_initial_transit_timing_stats_do_not_affect_result()
+  {
+    auto run_once = [](PlanTimingStats *stats, bool &out_success,
+                       double &out_abs_start, double &out_abs_end)
+    {
+      Params params = make_push_demo_params();
+      RuntimeOptions options; // defaults: initial_transit_methods, safe parking, etc.
+
+      EntityStore store;
+      const Pose start_pose(0.5, 1.0, 0.0);
+      const Pose goal_pose(3.0, 1.0, 0.0);
+      RobotMeta *robot1 = store.add_mars_runtime_robot("robot1", start_pose);
+      store.add_mars_runtime_robot("robot2", goal_pose);
+
+      TimeTable timetable(0.5);
+      timetable.add_initial(store.entities);
+
+      out_abs_start = -1.0;
+      out_abs_end = -1.0;
+      out_success = plan_initial_transit(robot1, goal_pose, 0.0, timetable,
+                                         store.entities, params, options,
+                                         &out_abs_start, &out_abs_end, {},
+                                         nullptr, stats);
+    };
+
+    PlanTimingStats stats;
+    bool success_with_stats = false;
+    double abs_start_with_stats = -1.0;
+    double abs_end_with_stats = -1.0;
+    run_once(&stats, success_with_stats, abs_start_with_stats, abs_end_with_stats);
+
+    bool success_without_stats = false;
+    double abs_start_without_stats = -1.0;
+    double abs_end_without_stats = -1.0;
+    run_once(nullptr, success_without_stats, abs_start_without_stats,
+            abs_end_without_stats);
+
+    bool ok = true;
+
+    const double total_search_wall_s = stats.search_wall_s_primary +
+                                       stats.search_wall_s_fine +
+                                       stats.search_wall_s_contact +
+                                       stats.search_wall_s_other;
+    if (total_search_wall_s <= 0.0)
+    {
+      std::cerr << "    expected nonzero search wall time with PlanTimingStats "
+                   "attached, got "
+                << total_search_wall_s << "\n";
+      ok = false;
+    }
+    // This scenario resolves via a direct relocate_blocking_robot() call
+    // (mechanism A) rather than the find_safe_start_time scheduling path
+    // (see the doc comment above), so assert the relocation-side counters
+    // instead of n_find_safe_start_calls.
+    if (stats.safe_parking_wall_s <= 0.0)
+    {
+      std::cerr << "    expected nonzero safe_parking_wall_s with PlanTimingStats "
+                   "attached, got "
+                << stats.safe_parking_wall_s << "\n";
+      ok = false;
+    }
+    if (stats.n_parking_relocations < 1)
+    {
+      std::cerr << "    expected n_parking_relocations >= 1, got "
+                << stats.n_parking_relocations << "\n";
+      ok = false;
+    }
+
+    if (success_with_stats != success_without_stats)
+    {
+      std::cerr << "    plan_initial_transit success (" << success_with_stats
+                << " vs " << success_without_stats
+                << ") differs with vs without a PlanTimingStats attached.\n";
+      ok = false;
+    }
+    if (!near(abs_start_with_stats, abs_start_without_stats, 1e-9))
+    {
+      std::cerr << "    out_abs_start_time (" << abs_start_with_stats << " vs "
+                << abs_start_without_stats
+                << ") differs with vs without a PlanTimingStats attached.\n";
+      ok = false;
+    }
+    if (!near(abs_end_with_stats, abs_end_without_stats, 1e-9))
+    {
+      std::cerr << "    out_abs_end_time (" << abs_end_with_stats << " vs "
+                << abs_end_without_stats
+                << ") differs with vs without a PlanTimingStats attached.\n";
+      ok = false;
+    }
+
+    return ok;
+  }
+
+  // ==========================================
+  // Stage 2 planner_opt: hot-path collision-check optimizations
+  // ==========================================
+
+  // TimeTable::for_each_pose(t, fn) must visit exactly the (entity, pose) set
+  // that get_poses(t) returns -- it is the zero-allocation replacement for
+  // get_poses(t) used throughout the collision-check hot path. Exercises an
+  // entity with no trajectory (initial pose only), and query times before the
+  // first recorded sample, exactly on recorded waypoint times (including two
+  // entities sharing one), strictly between samples, and after the last
+  // recorded sample.
+  bool test_for_each_pose_matches_get_poses()
+  {
+    EntityStore store;
+    RobotMeta *robot1 = store.add_robot("robot1", Pose(0.0, 0.0, 0.0));
+    RobotMeta *robot2 = store.add_robot("robot2", Pose(5.0, 5.0, M_PI));
+    store.add_object("obj1", Pose(2.0, 2.0, 0.0));
+
+    TimeTable timetable(0.5);
+    timetable.add_initial(store.entities);
+
+    Trajectory traj1;
+    traj1.entity = robot1;
+    traj1.start_time = 1.0;
+    traj1.is_transfer = false;
+    traj1.waypoints = {make_waypoint(0.0, 0.0, 0.0, 0.0),
+                       make_waypoint(1.0, 0.0, 0.0, 2.0),
+                       make_waypoint(2.0, 1.0, M_PI / 4.0, 5.0)};
+    timetable.add_trajectory(traj1);
+
+    Trajectory traj2;
+    traj2.entity = robot2;
+    traj2.start_time = 3.0;
+    traj2.is_transfer = false;
+    traj2.waypoints = {make_waypoint(5.0, 5.0, M_PI, 0.0),
+                       make_waypoint(4.0, 4.0, M_PI, 4.0)};
+    timetable.add_trajectory(traj2);
+    // obj1 deliberately never gets add_trajectory: it exercises the
+    // "initial pose only" per-entity submap path in both APIs.
+
+    const std::vector<double> query_times = {
+        -1.0, // before every recorded sample (clamps to the earliest pose)
+        1.0,  // exactly on traj1's first absolute waypoint time
+        3.0,  // exactly on traj1's 2nd waypoint AND traj2's start, at once
+        4.5,  // strictly between recorded samples for both trajectories
+        6.0,  // exactly on traj1's last waypoint (end of its trajectory)
+        7.0,  // exactly on traj2's last waypoint
+        100.0 // after every recorded sample (clamps to the latest pose)
+    };
+
+    for (double t : query_times)
+    {
+      auto expected = timetable.get_poses(t);
+
+      std::unordered_map<EntityMeta *, Pose> visited;
+      timetable.for_each_pose(t, [&](EntityMeta *ent, const Pose &pose)
+                              { visited[ent] = pose; });
+
+      if (visited.size() != expected.size())
+      {
+        std::cerr << "    t=" << t << ": for_each_pose visited " << visited.size()
+                  << " entities, get_poses returned " << expected.size() << ".\n";
+        return false;
+      }
+
+      for (const auto &[ent, expected_pose] : expected)
+      {
+        auto it = visited.find(ent);
+        if (it == visited.end())
+        {
+          std::cerr << "    t=" << t << ": for_each_pose did not visit entity "
+                    << ent->name << ".\n";
+          return false;
+        }
+        const Pose &got = it->second;
+        if (!near(got.x, expected_pose.x, 1e-9) || !near(got.y, expected_pose.y, 1e-9) ||
+            !near(got.yaw, expected_pose.yaw, 1e-9))
+        {
+          std::cerr << "    t=" << t << ": pose mismatch for " << ent->name
+                    << ": for_each_pose=(" << got.x << ", " << got.y << ", " << got.yaw
+                    << ") get_poses=(" << expected_pose.x << ", " << expected_pose.y
+                    << ", " << expected_pose.yaw << ").\n";
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  // TerminalHoldCache (find_safe_start_time's memoized terminal-hold check)
+  // must give IDENTICAL pass/fail and CollisionInfo fields to the pre-Stage-2
+  // per-candidate forward scan (check_terminal_hold_detailed with
+  // hold_cache=nullptr), for every candidate arrival time in a ladder --
+  // including the exact dt-aligned boundary straddling max(C) -- while doing
+  // the O(horizon/dt) backward scan only once (on whichever ladder rung
+  // happens to need it first) instead of once per rung.
+  bool test_terminal_hold_cache_matches_forward_scan()
+  {
+    Params params = make_push_demo_params();
+    const double dt = shared_collision_check_step(params);
+
+    // --- Scenario 1: a robot parked at goal_pose from t=0 through t=10.0,
+    // then jumping (over exactly one dt step) to a far-away pose where it
+    // stays through the rest of the horizon (t=20.0). The conflict is a
+    // single contiguous block [0, 10.0] with an exact, dt-aligned boundary:
+    // sample 10.0 collides, sample 10.0+dt does not.
+    {
+      EntityStore store;
+      const Pose goal_pose(2.0, 2.0, 0.0);
+      const Pose safe_pose(20.0, 20.0, 0.0);
+      store.add_robot("robot_test", Pose(0.0, 0.0, 0.0));
+      RobotMeta *robot_blocker = store.add_robot("robot_blocker", goal_pose);
+      RobotMeta *robot_test = dynamic_cast<RobotMeta *>(store.entities.at("robot_test"));
+
+      TimeTable timetable(0.5);
+      timetable.add_initial(store.entities);
+
+      Trajectory blocker_traj;
+      blocker_traj.entity = robot_blocker;
+      blocker_traj.start_time = 0.0;
+      blocker_traj.is_transfer = false;
+      blocker_traj.waypoints = {
+          make_waypoint(goal_pose.x, goal_pose.y, goal_pose.yaw, 0.0),
+          make_waypoint(goal_pose.x, goal_pose.y, goal_pose.yaw, 10.0),
+          make_waypoint(safe_pose.x, safe_pose.y, safe_pose.yaw, 10.0 + dt),
+          make_waypoint(safe_pose.x, safe_pose.y, safe_pose.yaw, 20.0)};
+      timetable.add_trajectory(blocker_traj);
+
+      Trajectory candidate_traj;
+      candidate_traj.entity = robot_test;
+      candidate_traj.is_transfer = false;
+      candidate_traj.waypoints = {
+          make_waypoint(goal_pose.x, goal_pose.y, goal_pose.yaw, 0.0)};
+
+      const std::vector<double> arrivals = {0.0,  5.0,      8.0,  9.0, 9.5,
+                                            9.9,  9.95,     10.0, 10.0 + dt,
+                                            10.1, 10.5, 12.0, 18.0};
+
+      TerminalHoldCache shared_cache;
+      for (double arrival : arrivals)
+      {
+        CollisionInfo old_result = check_terminal_hold_detailed(
+            candidate_traj, arrival, timetable, params, nullptr, nullptr);
+        CollisionInfo cached_result = check_terminal_hold_detailed(
+            candidate_traj, arrival, timetable, params, nullptr, &shared_cache);
+
+        if (old_result.is_valid != cached_result.is_valid)
+        {
+          std::cerr << "    arrival=" << arrival << ": is_valid mismatch (old="
+                    << old_result.is_valid << ", cached=" << cached_result.is_valid
+                    << ").\n";
+          return false;
+        }
+        if (old_result.reason != cached_result.reason)
+        {
+          std::cerr << "    arrival=" << arrival << ": reason mismatch (old='"
+                    << old_result.reason << "', cached='" << cached_result.reason
+                    << "').\n";
+          return false;
+        }
+        if (old_result.entity_name != cached_result.entity_name)
+        {
+          std::cerr << "    arrival=" << arrival << ": entity_name mismatch (old='"
+                    << old_result.entity_name << "', cached='"
+                    << cached_result.entity_name << "').\n";
+          return false;
+        }
+        if (!near(old_result.time, cached_result.time, 1e-6))
+        {
+          std::cerr << "    arrival=" << arrival << ": time mismatch (old="
+                    << old_result.time << ", cached=" << cached_result.time << ").\n";
+          return false;
+        }
+      }
+
+      // Sanity: the scenario actually exercises both a failing and a passing
+      // region (otherwise the equivalence loop above would be vacuous).
+      const CollisionInfo before = check_terminal_hold_detailed(
+          candidate_traj, 8.0, timetable, params, nullptr, nullptr);
+      const CollisionInfo after = check_terminal_hold_detailed(
+          candidate_traj, 10.0, timetable, params, nullptr, nullptr);
+      if (before.is_valid || !after.is_valid)
+      {
+        std::cerr << "    Scenario sanity check failed: expected arrival=8.0 to "
+                     "fail the hold and arrival=10.0 to pass it (before.is_valid="
+                  << before.is_valid << ", after.is_valid=" << after.is_valid
+                  << ").\n";
+        return false;
+      }
+    }
+
+    // --- Scenario 2: no conflicting entity anywhere in the horizon (C
+    // empty). The cache must still agree with the old path across several
+    // arrivals, including ones that hit the "nothing left to check" early
+    // return (horizon <= arrival) as well as ones that actually run the
+    // (empty) backward scan.
+    {
+      EntityStore store;
+      const Pose goal_pose(2.0, 2.0, 0.0);
+      const Pose safe_pose(20.0, 20.0, 0.0);
+      store.add_robot("robot_test", Pose(0.0, 0.0, 0.0));
+      RobotMeta *robot_other = store.add_robot("robot_other", safe_pose);
+      RobotMeta *robot_test = dynamic_cast<RobotMeta *>(store.entities.at("robot_test"));
+
+      TimeTable timetable(0.5);
+      timetable.add_initial(store.entities);
+
+      Trajectory other_traj;
+      other_traj.entity = robot_other;
+      other_traj.start_time = 0.0;
+      other_traj.is_transfer = false;
+      other_traj.waypoints = {
+          make_waypoint(safe_pose.x, safe_pose.y, safe_pose.yaw, 0.0),
+          make_waypoint(safe_pose.x, safe_pose.y, safe_pose.yaw, 15.0)};
+      timetable.add_trajectory(other_traj);
+
+      Trajectory candidate_traj;
+      candidate_traj.entity = robot_test;
+      candidate_traj.is_transfer = false;
+      candidate_traj.waypoints = {
+          make_waypoint(goal_pose.x, goal_pose.y, goal_pose.yaw, 0.0)};
+
+      const std::vector<double> arrivals = {0.0, 3.0, 7.5, 14.9, 15.0, 20.0};
+      TerminalHoldCache shared_cache;
+      for (double arrival : arrivals)
+      {
+        CollisionInfo old_result = check_terminal_hold_detailed(
+            candidate_traj, arrival, timetable, params, nullptr, nullptr);
+        CollisionInfo cached_result = check_terminal_hold_detailed(
+            candidate_traj, arrival, timetable, params, nullptr, &shared_cache);
+
+        if (!old_result.is_valid || !cached_result.is_valid)
+        {
+          std::cerr << "    (C empty) arrival=" << arrival
+                    << ": expected both paths to pass (old=" << old_result.is_valid
+                    << ", cached=" << cached_result.is_valid << ").\n";
+          return false;
+        }
+        if (!near(old_result.time, cached_result.time, 1e-6))
+        {
+          std::cerr << "    (C empty) arrival=" << arrival << ": time mismatch (old="
+                    << old_result.time << ", cached=" << cached_result.time << ").\n";
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  // End-to-end: find_safe_start_time (which internally builds and reuses one
+  // TerminalHoldCache across its whole candidate loop) must return the same
+  // start time as a hand-rolled replica of its candidate-stepping logic that
+  // calls the pre-Stage-2 uncached primitives directly (hold_cache=nullptr
+  // throughout). The scenario places a robot that occupies the candidate's
+  // goal pose for a mid-horizon window, so several early candidates fail
+  // purely because of that (no idle-robot relocation or boundary projection
+  // is ever triggered -- the blocker is never idle, and nothing goes out of
+  // bounds -- so replicating just find_safe_start_time's simple
+  // wait-and-buffered-recheck logic below is a faithful stand-in for the
+  // real function's behavior on the old, uncached path).
+  bool test_find_safe_start_time_matches_uncached_path()
+  {
+    Params params = make_push_demo_params();
+    const double dt = shared_collision_check_step(params);
+
+    EntityStore store;
+    const Pose start_pose(0.2, 2.0, 0.0);
+    const Pose goal_pose(2.0, 2.0, 0.0);
+    const Pose far_pose(20.0, 20.0, 0.0);
+    RobotMeta *robot_test = store.add_robot("robot_test", start_pose);
+    RobotMeta *robot_blocker = store.add_robot("robot_blocker", far_pose);
+
+    TimeTable timetable(0.5);
+    timetable.add_initial(store.entities);
+
+    const double T1 = 6.0;
+    const double T2 = 10.0;
+    Trajectory blocker_traj;
+    blocker_traj.entity = robot_blocker;
+    blocker_traj.start_time = 0.0;
+    blocker_traj.is_transfer = false;
+    blocker_traj.waypoints = {
+        make_waypoint(far_pose.x, far_pose.y, far_pose.yaw, 0.0),
+        make_waypoint(far_pose.x, far_pose.y, far_pose.yaw, T1 - dt),
+        make_waypoint(goal_pose.x, goal_pose.y, goal_pose.yaw, T1),
+        make_waypoint(goal_pose.x, goal_pose.y, goal_pose.yaw, T2),
+        make_waypoint(far_pose.x, far_pose.y, far_pose.yaw, T2 + dt),
+        make_waypoint(far_pose.x, far_pose.y, far_pose.yaw, 20.0)};
+    timetable.add_trajectory(blocker_traj);
+
+    Trajectory candidate_traj;
+    candidate_traj.entity = robot_test;
+    candidate_traj.is_transfer = false;
+    candidate_traj.waypoints = {
+        make_waypoint(start_pose.x, start_pose.y, start_pose.yaw, 0.0),
+        make_waypoint(goal_pose.x, goal_pose.y, goal_pose.yaw, 2.0)};
+
+    RuntimeOptions options;
+    const double earliest_start = 0.0;
+
+    auto compute_expected_uncached = [&]() -> double
+    {
+      double check_time = earliest_start;
+      const double step = 0.5;
+      // Inlined rather than calling timetable_delay_search_horizon(): that
+      // function's declaration (CollisionScheduling.h) takes `const
+      // TimeTable&` but its out-of-line definition (CollisionScheduling.cpp)
+      // takes a non-const `TimeTable&` -- a pre-existing, unrelated
+      // declaration/definition mismatch (harmless everywhere it's actually
+      // called today, since every existing caller already holds a non-const
+      // TimeTable& and so binds straight to the in-TU definition instead of
+      // needing the header declaration's symbol) that this test would
+      // otherwise be the first cross-TU caller to trip over at link time.
+      const double horizon =
+          std::max(earliest_start, timetable.get_max_time()) + std::max(step, 1e-3);
+      while (check_time <= horizon + 1e-9)
+      {
+        CollisionInfo col_info = check_trajectory_motion_and_terminal_hold_detailed(
+            candidate_traj, check_time, timetable, params, nullptr, nullptr, nullptr);
+        if (col_info.is_valid)
+        {
+          double result_time = check_time;
+          if (check_time - earliest_start > 1e-9)
+          {
+            const double buffered_start = check_time + 0.5;
+            CollisionInfo buffered_info = check_trajectory_motion_and_terminal_hold_detailed(
+                candidate_traj, buffered_start, timetable, params, nullptr, nullptr, nullptr);
+            if (buffered_info.is_valid)
+            {
+              result_time = buffered_start;
+            }
+          }
+          return result_time;
+        }
+        check_time += step;
+      }
+      return -1.0;
+    };
+
+    const double expected_start_time = compute_expected_uncached();
+    if (expected_start_time < 0.0)
+    {
+      std::cerr << "    Test scenario sanity check failed: hand-rolled uncached "
+                   "search itself found no safe start time.\n";
+      return false;
+    }
+
+    Trajectory scheduled_traj = candidate_traj;
+    double out_wait_added = 0.0;
+    CollisionInfo out_last_collision;
+    double out_last_check_time = 0.0;
+    const double actual_start_time = find_safe_start_time(
+        &scheduled_traj, earliest_start, timetable, params, store.entities, options,
+        &out_wait_added, &out_last_collision, &out_last_check_time,
+        IdleBlockerRelocationPolicy::RelocateAnyIdle, nullptr);
+
+    if (!near(actual_start_time, expected_start_time, 1e-6))
+    {
+      std::cerr << "    find_safe_start_time returned " << actual_start_time
+                << ", hand-rolled uncached path expected " << expected_start_time
+                << ".\n";
+      return false;
+    }
+
+    // Sanity: several early candidates must actually have failed (on the
+    // hold, or on motion arriving into an occupied goal -- either way
+    // find_safe_start_time treats it as "wait longer"), otherwise this test
+    // would not be exercising find_safe_start_time's cache-reuse loop at all.
+    if (actual_start_time < earliest_start + 2.0)
+    {
+      std::cerr << "    Scenario sanity check failed: expected several early "
+                   "candidates to fail before succeeding, but find_safe_start_time "
+                   "returned "
+                << actual_start_time << ".\n";
+      return false;
+    }
+
+    return true;
+  }
+
   bool test_rearranged_object_is_static_obstacle()
   {
     Params params = make_push_demo_params();
@@ -5113,6 +5766,419 @@ bool test_export_decision_time_log_end_to_end()
   return true;
 }
 
+// ==========================================
+// Stage 3 planner optimization: failure-triage predicates + holonomic
+// feasibility pre-gate (see MARS/src/PlanningHelpers.cpp's Stage 3 design
+// note; RuntimeOptions::enable_tier_triage / enable_tier_gate).
+// ==========================================
+
+// D1: triage predicate unit tests. Each predicate is a pure function over a
+// hand-built PlanningResult/debug_stats fixture, so these exercise the exact
+// rule boundaries without needing to drive a real search to failure.
+bool test_tier_triage_predicates()
+{
+  bool ok = true;
+
+  // Rule 1 (BLOCKED-BY-ROBOT SHORT-CIRCUIT).
+  {
+    PlanningResult blocked;
+    blocked.status = PlanningStatus::BLOCKED_BY_ROBOT;
+    blocked.waypoints.push_back(make_waypoint(0.0, 0.0, 0.0, 0.0));
+    if (!triage_blocked_by_robot_shortcut_applies(blocked))
+    {
+      std::cerr << "    expected shortcut to apply: BLOCKED_BY_ROBOT with a "
+                   "non-empty backup path\n";
+      ok = false;
+    }
+
+    PlanningResult no_path;
+    no_path.status = PlanningStatus::NO_PATH_FOUND;
+    no_path.waypoints.push_back(make_waypoint(0.0, 0.0, 0.0, 0.0));
+    if (triage_blocked_by_robot_shortcut_applies(no_path))
+    {
+      std::cerr << "    expected shortcut to NOT apply for NO_PATH_FOUND\n";
+      ok = false;
+    }
+
+    PlanningResult blocked_no_waypoints;
+    blocked_no_waypoints.status = PlanningStatus::BLOCKED_BY_ROBOT;
+    if (triage_blocked_by_robot_shortcut_applies(blocked_no_waypoints))
+    {
+      std::cerr << "    expected shortcut to NOT apply when BLOCKED_BY_ROBOT "
+                   "somehow carries no waypoints (defensive check)\n";
+      ok = false;
+    }
+  }
+
+  // Rule 2 (CAP-HIT-WITH-PROGRESS RETRY), gated on best_dist vs. the
+  // straight-line distance (kTriageProgressFraction == 0.5).
+  {
+    PlanningResult capped_close;
+    capped_close.debug_stats.search_iteration_limit_hit = 1;
+    capped_close.debug_stats.best_dist = 2.0;
+    if (!triage_primary_retry_applies(capped_close, 10.0))
+    {
+      std::cerr << "    expected retry to apply: cap hit + best_dist(2.0) <= "
+                   "0.5 * 10.0\n";
+      ok = false;
+    }
+
+    PlanningResult capped_far;
+    capped_far.debug_stats.search_iteration_limit_hit = 1;
+    capped_far.debug_stats.best_dist = 8.0;
+    if (triage_primary_retry_applies(capped_far, 10.0))
+    {
+      std::cerr << "    expected retry to NOT apply: best_dist(8.0) > 0.5 * "
+                   "10.0\n";
+      ok = false;
+    }
+
+    PlanningResult at_boundary;
+    at_boundary.debug_stats.search_iteration_limit_hit = 1;
+    at_boundary.debug_stats.best_dist = 5.0;
+    if (!triage_primary_retry_applies(at_boundary, 10.0))
+    {
+      std::cerr << "    expected retry to apply at the exact "
+                   "kTriageProgressFraction boundary (best_dist == 0.5 * "
+                   "straight_line_distance)\n";
+      ok = false;
+    }
+
+    PlanningResult no_cap_hit;
+    no_cap_hit.debug_stats.search_iteration_limit_hit = 0;
+    no_cap_hit.debug_stats.best_dist = 0.1;
+    if (triage_primary_retry_applies(no_cap_hit, 10.0))
+    {
+      std::cerr << "    expected retry to NOT apply when the iteration cap "
+                   "was not hit, regardless of progress\n";
+      ok = false;
+    }
+  }
+
+  // Rule 3 (NEAR-GOAL-COLLISION SKIP-TO-CONTACT), gated on best_dist vs.
+  // analytic_threshold AND reject_collision vs. generated_nodes
+  // (kTriageCollisionRejectFraction == 0.5).
+  {
+    PlanningResult contact_shaped;
+    contact_shaped.debug_stats.analytic_threshold = 1.0;
+    contact_shaped.debug_stats.best_dist = 0.5;
+    contact_shaped.debug_stats.generated_nodes = 100;
+    contact_shaped.debug_stats.reject_collision = 60;
+    if (!triage_skip_to_contact_applies(contact_shaped))
+    {
+      std::cerr << "    expected skip-to-contact to apply: near goal + "
+                   "60/100 collision-reject fraction\n";
+      ok = false;
+    }
+
+    PlanningResult low_reject_fraction;
+    low_reject_fraction.debug_stats.analytic_threshold = 1.0;
+    low_reject_fraction.debug_stats.best_dist = 0.5;
+    low_reject_fraction.debug_stats.generated_nodes = 100;
+    low_reject_fraction.debug_stats.reject_collision = 10;
+    if (triage_skip_to_contact_applies(low_reject_fraction))
+    {
+      std::cerr << "    expected skip-to-contact to NOT apply: only 10/100 "
+                   "collision-reject fraction\n";
+      ok = false;
+    }
+
+    PlanningResult far_from_goal;
+    far_from_goal.debug_stats.analytic_threshold = 1.0;
+    far_from_goal.debug_stats.best_dist = 5.0;
+    far_from_goal.debug_stats.generated_nodes = 100;
+    far_from_goal.debug_stats.reject_collision = 90;
+    if (triage_skip_to_contact_applies(far_from_goal))
+    {
+      std::cerr << "    expected skip-to-contact to NOT apply: "
+                   "best_dist(5.0) > analytic_threshold(1.0) despite a high "
+                   "reject fraction\n";
+      ok = false;
+    }
+
+    PlanningResult zero_generated;
+    zero_generated.debug_stats.analytic_threshold = 1.0;
+    zero_generated.debug_stats.best_dist = 0.0;
+    zero_generated.debug_stats.generated_nodes = 0;
+    zero_generated.debug_stats.reject_collision = 0;
+    if (triage_skip_to_contact_applies(zero_generated))
+    {
+      std::cerr << "    expected skip-to-contact to NOT apply when "
+                   "generated_nodes == 0 (denominator guard, not a "
+                   "trivial 0 >= 0 misfire)\n";
+      ok = false;
+    }
+  }
+
+  // method_list_has_fine_before_contact: gates rule 3's applicability.
+  {
+    const std::vector<TransitPlannerStep> default_list = {
+        {TransitPlannerMethod::PrimaryHybridAStar},
+        {TransitPlannerMethod::FineHybridAStar},
+        {TransitPlannerMethod::ContactBoundaryGeometricHybridAStar},
+    };
+    if (!method_list_has_fine_before_contact(default_list))
+    {
+      std::cerr << "    expected true for [Primary, Fine, Contact]\n";
+      ok = false;
+    }
+
+    const std::vector<TransitPlannerStep> no_contact = {
+        {TransitPlannerMethod::PrimaryHybridAStar},
+        {TransitPlannerMethod::FineHybridAStar},
+    };
+    if (method_list_has_fine_before_contact(no_contact))
+    {
+      std::cerr << "    expected false for [Primary, Fine] (no Contact)\n";
+      ok = false;
+    }
+
+    const std::vector<TransitPlannerStep> contact_before_fine = {
+        {TransitPlannerMethod::ContactBoundaryGeometricHybridAStar},
+        {TransitPlannerMethod::FineHybridAStar},
+    };
+    if (method_list_has_fine_before_contact(contact_before_fine))
+    {
+      std::cerr << "    expected false when Contact precedes Fine\n";
+      ok = false;
+    }
+  }
+
+  return ok;
+}
+
+// D2: gate soundness. All four scenarios share one workspace/robot geometry:
+// a 10x4 map, robot inscribed radius 0.15 (front=rear=0.3, width=0.3 ->
+// min(0.3,0.3,0.15)=0.15, diameter 0.30), start at (1,2), goal at (9,2), with
+// obstacle(s) forming a vertical barrier at x=5 whose only opening (if any)
+// is a gap centered on y=2.
+bool test_holonomic_gate_soundness()
+{
+  bool ok = true;
+
+  Params gate_params;
+  gate_params.min_x = 0.0;
+  gate_params.max_x = 10.0;
+  gate_params.min_y = 0.0;
+  gate_params.max_y = 4.0;
+  gate_params.holonomic_heuristic_resolution = 0.2;
+  // robot_boundary_origin_only defaults to true (Params.h), matching the
+  // real planner's default boundary mode.
+
+  const Pose start_pose(1.0, 2.0, 0.0);
+  const Pose goal_pose(9.0, 2.0, 0.0);
+
+  // gap_half_width < 0 means the two barrier halves overlap (fully sealed).
+  auto build_barrier_scenario = [&](double gap_half_width, EntityStore &store,
+                                    TimeTable &timetable)
+  {
+    RobotMeta *robot = store.add_robot("robot1", start_pose);
+    robot->size.front_length = 0.3;
+    robot->size.rear_length = 0.3;
+    robot->size.width = 0.3;
+
+    // Lower half of the barrier: spans y in [0, 2 - gap_half_width].
+    const double lower_extent = 2.0 - gap_half_width;
+    ObjectMeta *lower = store.add_object(
+        "barrier_lower", Pose(5.0, lower_extent / 2.0, 0.0));
+    lower->size.front_length = 0.25;
+    lower->size.rear_length = 0.25;
+    lower->size.width = lower_extent;
+
+    // Upper half of the barrier: spans y in [2 + gap_half_width, 4].
+    const double upper_extent = 4.0 - (2.0 + gap_half_width);
+    ObjectMeta *upper = store.add_object(
+        "barrier_upper",
+        Pose(5.0, 2.0 + gap_half_width + upper_extent / 2.0, 0.0));
+    upper->size.front_length = 0.25;
+    upper->size.rear_length = 0.25;
+    upper->size.width = upper_extent;
+
+    timetable.add_initial(store.entities);
+    return robot;
+  };
+
+  // Scenario 1: fully sealed (0.1 overlap) -> unreachable.
+  {
+    EntityStore store;
+    TimeTable timetable(0.5);
+    RobotMeta *robot = build_barrier_scenario(-0.1, store, timetable);
+    if (!holonomic_gate_unreachable(start_pose, goal_pose, robot, timetable,
+                                    store.entities, gate_params, 0.0))
+    {
+      std::cerr << "    expected UNREACHABLE: barrier has no gap at all "
+                   "(0.1 overlap)\n";
+      ok = false;
+    }
+  }
+
+  // Scenario 2: 0.5-wide gap (> inscribed diameter 0.30) -> reachable.
+  {
+    EntityStore store;
+    TimeTable timetable(0.5);
+    RobotMeta *robot = build_barrier_scenario(0.25, store, timetable);
+    if (holonomic_gate_unreachable(start_pose, goal_pose, robot, timetable,
+                                   store.entities, gate_params, 0.0))
+    {
+      std::cerr << "    expected REACHABLE: 0.5-wide gap is wider than the "
+                   "robot's inscribed diameter (0.30)\n";
+      ok = false;
+    }
+  }
+
+  // Scenario 3: 0.1-wide gap (< inscribed diameter 0.30) -> still
+  // unreachable. A corridor narrower than the inscribed diameter blocks even
+  // the under-approximated disc, so "unreachable" here is correct and sound
+  // (the real, larger robot is at least as wide as the disc).
+  {
+    EntityStore store;
+    TimeTable timetable(0.5);
+    RobotMeta *robot = build_barrier_scenario(0.05, store, timetable);
+    if (!holonomic_gate_unreachable(start_pose, goal_pose, robot, timetable,
+                                    store.entities, gate_params, 0.0))
+    {
+      std::cerr << "    expected UNREACHABLE: 0.1-wide gap is narrower than "
+                   "the robot's inscribed diameter (0.30), so even the "
+                   "under-approximated disc cannot pass\n";
+      ok = false;
+    }
+  }
+
+  // Scenario 4: sealed barrier (as in scenario 1), but built entirely from a
+  // single object with a scheduled future move after the gate's search start
+  // time -- treated as non-static, so it must be excluded from the gate's
+  // obstacle set entirely, leaving the corridor open.
+  {
+    EntityStore store;
+    const Pose blocking_pose(5.0, 2.0, 0.0);
+    RobotMeta *robot = store.add_robot("robot1", start_pose);
+    robot->size.front_length = 0.3;
+    robot->size.rear_length = 0.3;
+    robot->size.width = 0.3;
+    ObjectMeta *mover = store.add_object("mover", blocking_pose);
+    mover->size.front_length = 0.25;
+    mover->size.rear_length = 0.25;
+    mover->size.width = 4.0; // fully seals the y in [0,4] span at x=5.
+
+    TimeTable timetable(0.5);
+    timetable.add_initial(store.entities);
+
+    Trajectory move_away;
+    move_away.entity = mover;
+    move_away.is_transfer = false;
+    move_away.start_time = 0.0;
+    move_away.waypoints.push_back(
+        make_waypoint(blocking_pose.x, blocking_pose.y, blocking_pose.yaw, 0.0));
+    move_away.waypoints.push_back(make_waypoint(20.0, 20.0, 0.0, 10.0));
+    timetable.add_trajectory(move_away);
+
+    if (!store.entities.count("mover") ||
+        timetable.is_entity_static_after(0.0, store.entities.at("mover")))
+    {
+      std::cerr << "    test setup error: 'mover' should be non-static after "
+                   "t=0 (it has a scheduled move to (20,20) at t=10)\n";
+      ok = false;
+    }
+
+    if (holonomic_gate_unreachable(start_pose, goal_pose, robot, timetable,
+                                   store.entities, gate_params, 0.0))
+    {
+      std::cerr << "    expected REACHABLE: the only blocking object has a "
+                   "scheduled future move, so it must be excluded as "
+                   "non-static\n";
+      ok = false;
+    }
+  }
+
+  return ok;
+}
+
+// D3: flags-off regression. Guards against Stage 3's new fields accidentally
+// defaulting to (or being silently flipped to) enabled: with both at their
+// compiled-in default (false), plan_initial_transit's method loop must be
+// bit-identical to an explicitly-confirmed-off baseline run of the same
+// scenario used by the PlanTimingStats smoke test above (idle blocker parked
+// exactly on robot1's initial-transit goal, forcing a mechanism-A
+// relocation).
+bool test_tier_triage_gate_flags_off_regression()
+{
+  bool ok = true;
+
+  RuntimeOptions defaults;
+  if (defaults.enable_tier_triage || defaults.enable_tier_gate)
+  {
+    std::cerr << "    RuntimeOptions defaults changed: enable_tier_triage "
+                 "and enable_tier_gate must both default to false\n";
+    ok = false;
+  }
+
+  auto run_once = [](const RuntimeOptions &options, bool &out_success,
+                     double &out_abs_start, double &out_abs_end)
+  {
+    Params params = make_push_demo_params();
+
+    EntityStore store;
+    const Pose start_pose(0.5, 1.0, 0.0);
+    const Pose goal_pose(3.0, 1.0, 0.0);
+    RobotMeta *robot1 = store.add_mars_runtime_robot("robot1", start_pose);
+    store.add_mars_runtime_robot("robot2", goal_pose);
+
+    TimeTable timetable(0.5);
+    timetable.add_initial(store.entities);
+
+    out_abs_start = -1.0;
+    out_abs_end = -1.0;
+    out_success = plan_initial_transit(robot1, goal_pose, 0.0, timetable,
+                                       store.entities, params, options,
+                                       &out_abs_start, &out_abs_end, {},
+                                       nullptr, nullptr);
+  };
+
+  RuntimeOptions baseline; // explicitly-confirmed-off "direct call" baseline
+  baseline.enable_tier_triage = false;
+  baseline.enable_tier_gate = false;
+
+  bool success_baseline = false;
+  double abs_start_baseline = -1.0;
+  double abs_end_baseline = -1.0;
+  run_once(baseline, success_baseline, abs_start_baseline, abs_end_baseline);
+
+  bool success_defaults = false;
+  double abs_start_defaults = -1.0;
+  double abs_end_defaults = -1.0;
+  run_once(defaults, success_defaults, abs_start_defaults, abs_end_defaults);
+
+  if (!success_baseline)
+  {
+    std::cerr << "    baseline scenario (idle blocker on initial-transit "
+                 "goal) was expected to succeed\n";
+    ok = false;
+  }
+  if (success_baseline != success_defaults)
+  {
+    std::cerr << "    flags-off regression: success mismatch (baseline="
+              << success_baseline << ", defaults=" << success_defaults
+              << ")\n";
+    ok = false;
+  }
+  if (!near(abs_start_baseline, abs_start_defaults, 1e-9))
+  {
+    std::cerr << "    flags-off regression: abs_start mismatch (baseline="
+              << abs_start_baseline << ", defaults=" << abs_start_defaults
+              << ")\n";
+    ok = false;
+  }
+  if (!near(abs_end_baseline, abs_end_defaults, 1e-9))
+  {
+    std::cerr << "    flags-off regression: abs_end mismatch (baseline="
+              << abs_end_baseline << ", defaults=" << abs_end_defaults
+              << ")\n";
+    ok = false;
+  }
+
+  return ok;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -5222,6 +6288,25 @@ int main(int argc, char **argv)
       {"PgTableExport: --export-decision-time-log end-to-end (deterministic construction + "
        "no relabel fields)",
        test_export_decision_time_log_end_to_end},
+      {"PlanTimingStats: add()/operator+=/operator+ sum fields correctly",
+       test_plan_timing_stats_accumulate},
+      {"initialize_params wires Stage 1 fields (safe_parking_expand_max_iterations/"
+       "collision_check_time_step) + positive_or fallback",
+       test_initialize_params_wires_stage1_fields},
+      {"plan_initial_transit: PlanTimingStats attached vs nullptr yields identical result",
+       test_plan_initial_transit_timing_stats_do_not_affect_result},
+      {"Stage 2: TimeTable::for_each_pose matches get_poses at every sample kind",
+       test_for_each_pose_matches_get_poses},
+      {"Stage 2: TerminalHoldCache matches the uncached forward scan (incl. C empty)",
+       test_terminal_hold_cache_matches_forward_scan},
+      {"Stage 2: find_safe_start_time matches the uncached candidate-loop replica",
+       test_find_safe_start_time_matches_uncached_path},
+      {"Stage 3: tier-triage predicates (blocked-shortcut/primary-retry/skip-to-contact)",
+       test_tier_triage_predicates},
+      {"Stage 3: holonomic gate soundness (sealed/wide-gap/narrow-gap/moving-object)",
+       test_holonomic_gate_soundness},
+      {"Stage 3: tier-triage/tier-gate flags-off regression vs. direct-call baseline",
+       test_tier_triage_gate_flags_off_regression},
   };
 
   std::vector<std::pair<std::string, TestFn>> all_tests = tests;

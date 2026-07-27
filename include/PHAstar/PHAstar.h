@@ -259,6 +259,13 @@ public:
     mutable double holonomic_resolution = 0.10;
     mutable std::vector<double> holonomic_costs;
     mutable double holonomic_build_time_sec = 0.0;
+    // Precomputed once per ensure_holonomic_heuristic() build (t is fixed for
+    // the whole grid: start ? start->t : 0.0), so holonomic_cell_blocked()
+    // no longer re-queries the timetable for every (ix, iy) cell visited
+    // during the Dijkstra sweep. Already excludes robot/transferred/
+    // ignored_entity and (if ignore_other_robots) other robots -- see
+    // ensure_holonomic_heuristic().
+    mutable std::vector<CollisionGeometry> holonomic_blocking_geoms;
 
     // Backup path (valid geometry but blocked by relocatable robot)
     PlanningResult backup_result;
@@ -585,7 +592,6 @@ public:
 
         double t = node->t;
         Pose robot_pose = {node->x, node->y, node->yaw};
-        auto poses = timetable->get_poses(t);
 
         // Setup robot collision geometry
         CollisionGeometry robot_geom = setup_collision_geometry_for_type(
@@ -623,24 +629,37 @@ public:
             obj_pose_ptr = &obj_pose;
         }
 
-        // Check collisions against all entities
-        // Filter out robots if ignore_other_robots is true
-        std::unordered_map<EntityMeta *, Pose> filtered_poses;
-        if (ignore_other_robots)
+        // Check collisions against all entities, swept directly off the
+        // timetable (planner_opt Stage 2: this runs once per 0.05s collision
+        // sample, so avoiding the old fresh-map get_poses(t) allocation here
+        // matters). Robots are filtered inline when ignore_other_robots is
+        // set, instead of pre-copying a filtered_poses map.
+        //
+        // NOTE (tie-break): previously this iterated a *fresh* get_poses(t)
+        // unordered_map (a copy of per_entity_table); now it iterates
+        // per_entity_table itself via for_each_pose. Both report only the
+        // first hard collision found in their respective iteration orders,
+        // and a fresh copy's hash-bucket/iteration order is not guaranteed to
+        // match the long-lived table's (see TimeTable::for_each_pose). This
+        // can only change which entity is reported in the rare case of
+        // multiple simultaneous colliders at one sample -- flagged in the
+        // Stage 2 report.
+        auto visit_all_entities = [&](auto &&per_entity)
         {
-            for (const auto &[ent, p] : poses)
+            timetable->for_each_pose(t, [&](EntityMeta *ent, const Pose &p)
             {
-                if (ent->type != EntityType::ROBOT)
+                if (ignore_other_robots && ent->type == EntityType::ROBOT)
                 {
-                    filtered_poses[ent] = p;
+                    return;
                 }
-            }
-        }
+                per_entity(ent, p);
+            });
+        };
 
-        auto collision_result = check_multiple_entities_collision(
+        auto collision_result = check_multiple_entities_collision_visit(
             robot_geom, robot_pose,
             obj_geom_ptr, obj_pose_ptr,
-            ignore_other_robots ? filtered_poses : poses, params,
+            visit_all_entities, params,
             robot, transferred, ignored_entity);
 
         if (collision_result.has_collision)
@@ -648,19 +667,22 @@ public:
             if (!is_transfer && collision_result.colliding_entity &&
                 collision_result.colliding_entity->type == EntityType::OBJECT)
             {
-                auto it_pose = poses.find(collision_result.colliding_entity);
+                // Captured directly during the sweep above (no second lookup
+                // needed) -- equivalent to the old poses.find()/
+                // filtered_poses.find() (an object entry is never absent from
+                // either, since ignore_other_robots only ever filters robots).
+                const Pose &collider_pose = collision_result.colliding_pose;
                 bool near_start = start && (t <= start->t + 0.3 + 1e-9);
-                if (near_start && it_pose != poses.end() &&
+                if (near_start &&
                     is_valid_transfer_contact_pose(robot_pose,
                                                    dynamic_cast<ObjectMeta *>(collision_result.colliding_entity),
-                                                   it_pose->second))
+                                                   collider_pose))
                 {
                     return {true, "Valid", "", t};
                 }
-                if (it_pose != poses.end() &&
-                    is_terminal_approach_contact_pose(
+                if (is_terminal_approach_contact_pose(
                         robot_pose, collision_result.colliding_entity,
-                        it_pose->second))
+                        collider_pose))
                 {
                     return {true, "Valid", "", t};
                 }
@@ -1026,16 +1048,8 @@ public:
 
         CollisionGeometry robot_geom = setup_collision_geometry_for_type(
             pose, EntityType::ROBOT, robot->size, params);
-        auto poses = timetable->get_poses(start ? start->t : 0.0);
-        for (const auto &[ent, ent_pose] : poses)
+        for (const auto &ent_geom : holonomic_blocking_geoms)
         {
-            if (ent == robot || ent == transferred || ent == ignored_entity)
-                continue;
-            if (ignore_other_robots && ent->type == EntityType::ROBOT)
-                continue;
-
-            CollisionGeometry ent_geom = setup_collision_geometry_for_type(
-                ent_pose, ent->type, ent->size, params);
             if (rectangles_intersect(robot_geom.corners, ent_geom.corners))
                 return true;
         }
@@ -1066,6 +1080,24 @@ public:
             holonomic_heuristic_ready = true;
             return;
         }
+
+        // t is fixed for the entire grid build below, so snapshot the
+        // blocking entities' collision geometry once here instead of
+        // re-querying the timetable from holonomic_cell_blocked() on every
+        // (ix, iy) cell visited during the Dijkstra sweep.
+        holonomic_blocking_geoms.clear();
+        const double holonomic_snapshot_t = start ? start->t : 0.0;
+        timetable->for_each_pose(
+            holonomic_snapshot_t, [&](EntityMeta *ent, const Pose &ent_pose)
+            {
+                if (ent == robot || ent == transferred || ent == ignored_entity)
+                    return;
+                if (ignore_other_robots && ent->type == EntityType::ROBOT)
+                    return;
+
+                holonomic_blocking_geoms.push_back(setup_collision_geometry_for_type(
+                    ent_pose, ent->type, ent->size, params));
+            });
 
         auto cell_index = [&](int ix, int iy)
         {

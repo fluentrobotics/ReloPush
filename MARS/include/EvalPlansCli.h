@@ -85,6 +85,33 @@ std::string csv_escape_field(const std::string &s);
 // produces one feasible=-1 CSV row -- never aborts the batch. Returns false
 // (logging to stderr) only on an I/O failure (unreadable input_path,
 // unwritable output_path).
+//
+// Save-and-replay (see MARS/16save-replay-implementation.md): if
+// options.eval_plans_result_out_dir is non-empty, every evaluated plan's
+// ExecutedScenario (already serialized by evaluate_scenario_batch into
+// ScenarioEvaluationResult::serialized_result) is written to
+// "<dir>/<id>.scn.b64". If options.eval_plans_result_out_path is non-empty,
+// only the single best FEASIBLE plan (min makespan, ties broken by first
+// occurrence in input order) is written to that one file. Either, both, or
+// neither may be set; neither is the default (no behavior change).
+//
+// Stage 1 planner timing instrumentation (opt-in; see PlanTimingStats in
+// PHAstarPushDemoTypes.h): if options.eval_plans_timing_out_path is
+// non-empty, an additional CSV is written to that path with one row per
+// evaluated plan (same "id" as the main output CSV; a malformed/invalid
+// line gets an all-zero row, same as its main-CSV counterpart) and a header
+// of "id" followed by every PlanTimingStats field in its declared order
+// (true_wall_s, search_wall_s_primary/fine/contact/other,
+// n_searches_primary/fine/contact/other, search_iterations_total,
+// n_search_cap_hits, heuristic_time_s, primitive_collision_time_s,
+// analytic_validation_time_s, holonomic_heuristic_time_s, sched_wall_s,
+// n_find_safe_start_calls, n_start_candidates_tried, traj_scan_wall_s,
+// terminal_hold_wall_s, safe_parking_wall_s, n_parking_relocations,
+// n_robot_candidate_attempts, n_post_validation_retries,
+// n_obsrelo_segments). Empty (default) = no extra file written; the
+// PlanTimingStats accumulation itself always happens inside
+// evaluate_scenario_batch() regardless of this flag (cheap: chrono +
+// counters only), so this flag only gates the extra CSV write.
 bool run_eval_plans_cli(
     const std::vector<FinalAllocation> &loaded_sequence,
     const RuntimeOptions &options,

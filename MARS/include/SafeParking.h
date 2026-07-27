@@ -59,7 +59,8 @@ generate_parking_candidates_connected_primitives(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-    double start_time);
+    double start_time,
+    PlanTimingStats *plan_stats = nullptr);
 
 std::vector<ParkingCandidate>
 generate_parking_candidates_reverse_recent_path(
@@ -72,7 +73,8 @@ generate_parking_candidates(const Pose &current_pose, RobotMeta *robot,
                             const Params &params,
                             TimeTable *timetable = nullptr,
                             const std::unordered_map<std::string, EntityMeta *> *entities = nullptr,
-                            double start_time = 0.0);
+                            double start_time = 0.0,
+                            PlanTimingStats *plan_stats = nullptr);
 
 std::vector<ParkingCandidate>
 generate_parking_candidates_for_mode(const Pose &current_pose,
@@ -81,7 +83,8 @@ generate_parking_candidates_for_mode(const Pose &current_pose,
                                      ParkingCandidateMode mode,
                                      TimeTable *timetable = nullptr,
                                      const std::unordered_map<std::string, EntityMeta *> *entities = nullptr,
-                                     double start_time = 0.0);
+                                     double start_time = 0.0,
+                                     PlanTimingStats *plan_stats = nullptr);
 
 bool is_pose_collision_free_at_time(EntityMeta *entity, const Pose &pose,
                                     double t, TimeTable &timetable,
@@ -161,7 +164,8 @@ ConnectedSafeParkingSearchResult search_safe_parking_connected_search(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Trajectory *blocked_traj_hint,
     double hint_reference_time,
-    std::vector<SafeParkingDebugTrial> *debug_trials);
+    std::vector<SafeParkingDebugTrial> *debug_trials,
+    PlanTimingStats *plan_stats = nullptr);
 
 // Thread-local relocation cache (defined in PHAstar_push_demo.cpp, used by relocate_blocking_robot)
 extern thread_local std::unordered_map<std::string, double> g_recent_failed_relocations;
@@ -175,12 +179,20 @@ std::unordered_map<std::string, double> &recent_failed_relocation_cache();
 // must be validated against (see parking_candidate_clears_blocked_hint in
 // CollisionScheduling.h); pass -1.0 (default) when no better time is known,
 // which preserves the old best-effort fallback behavior.
+// `plan_stats`, when non-null, times the whole call into
+// PlanTimingStats::safe_parking_wall_s (every invocation, regardless of
+// outcome) and increments PlanTimingStats::n_parking_relocations on success;
+// it is also forwarded to the internal candidate-search machinery (see
+// search_safe_parking_connected_search / generate_parking_candidates_for_mode
+// and the PHAStar relocation search inside this function), which additionally
+// tag their own search wall time into PlanTimingStats::search_wall_s_other.
 bool relocate_blocking_robot(RobotMeta *blocker, TimeTable &timetable,
     const Params &params,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const RuntimeOptions &options,
     const Trajectory *blocked_traj_hint = nullptr,
     double hint_reference_time = -1.0,
-    const char *context = "blocker");
+    const char *context = "blocker",
+    PlanTimingStats *plan_stats = nullptr);
 
 #endif // SAFE_PARKING_H

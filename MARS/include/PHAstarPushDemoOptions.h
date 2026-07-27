@@ -186,6 +186,13 @@ struct RuntimeOptions
     // Safe Parking
     ParkingCandidateMode parking_candidate_mode = ParkingCandidateMode::REVERSE_RECENT_SHORTER;
     int safe_parking_max_search_iterations = 25; // 0 inherits max_search_iterations
+    // Iteration cap for the safe-parking connected-candidate frontier sweeps
+    // (see Params::safe_parking_expand_max_iterations, which this is wired
+    // to via initialize_params). Unrelated to safe_parking_max_search_iterations
+    // above, which only bounds the PHAStar relocation search. Default (3000)
+    // matches the previously-hardcoded kMaxExpandIterations constant, so
+    // default behavior is unchanged.
+    int default_safe_parking_expand_iterations = 3000;
     bool enable_failed_candidate_idle_parking = true;
     int failed_candidate_initial_transit_failure_threshold = 2;
     bool enable_order_constraint_learning = true;
@@ -355,6 +362,42 @@ struct RuntimeOptions
     // call site) whenever eval_plans_path is non-empty.
     std::string eval_plans_out_path;
 
+    // Stage 1 planner timing instrumentation (see MARS/include/
+    // PHAstarPushDemoTypes.h's PlanTimingStats): when non-empty, after
+    // evaluating the --eval-plans= batch, run_eval_plans_cli additionally
+    // writes one CSV row per evaluated plan (same id/order as the main
+    // output CSV) with every PlanTimingStats field, to this path. The
+    // underlying PlanTimingStats accumulation itself always happens inside
+    // evaluate_scenario_batch() (cheap: chrono + counters only) regardless
+    // of this flag; only the extra CSV write is gated by it. Empty =
+    // disabled (default; no extra file written).
+    std::string eval_plans_timing_out_path;
+
+    // Save-and-replay support (see MARS/16save-replay-implementation.md and
+    // MARS/include/ExecutedScenarioSerialization.h): when either of the two
+    // paths below is non-empty, --eval-plans= additionally serializes each
+    // plan's full ExecutedScenario (params + entities + timetable, not just
+    // its AllocationRunSummary) to a base64 blob WHILE it is still alive, in
+    // evaluate_scenario_batch() -- see ScenarioEvaluationResult::
+    // serialized_result. This lets a scored plan be visualized later via
+    // --play-result= with no re-run of the allocation search. Empty (both,
+    // default) = do not serialize, no perf regression.
+    //
+    // Saves only the single BEST feasible plan (see run_eval_plans_cli's
+    // best-selection rule: max all_tasks_succeeded, min makespan, ties break
+    // by first occurrence in input order) to this one file.
+    std::string eval_plans_result_out_path;
+    // Saves EVERY plan (feasible or not) to "<dir>/<id>.scn.b64", one file
+    // per input line's "id". The directory is created if missing.
+    std::string eval_plans_result_out_dir;
+
+    // Save-and-replay playback (see MARS/16save-replay-implementation.md):
+    // when non-empty, skip search (and even sequence loading -- see
+    // PHAstar_push_demo.cpp) entirely, load a previously-saved
+    // ExecutedScenario from this file via deserialize_executed_scenario_b64,
+    // and hand it straight to show_results(). Empty = disabled (default).
+    std::string play_result_path;
+
     // Policy-gradient PoC parity validation only (see
     // script/pg/parity_check.py): when non-empty, skip search entirely and
     // dump a DECISION-TIME step-candidate log (the exact phi values
@@ -394,6 +437,23 @@ struct RuntimeOptions
     // tasks only wastes time on fallback transit searches). Does not affect the
     // final best-scenario replay, which always runs a full execution.
     bool early_abort_eval_on_failure = true;
+
+    // Stage 3 planner optimization (opt-in; see MARS/src/PlanningHelpers.cpp's
+    // Stage 3 design note and PlanTimingStats's n_triage_*/n_gate_* fields).
+    // Both default OFF: with both false, plan_initial_transit's method loop
+    // and replan_transit_segment's cascade are bit-identical to Stage 1/2.
+    //
+    // FAILURE TRIAGE: after a tier fails, applies (in order) a BLOCKED_BY_ROBOT
+    // short-circuit (only where the cascade can otherwise escalate past a
+    // robot-blocked backup path -- see replan_transit_segment), a primary-tier
+    // cap-hit-with-progress retry (doubled iteration cap, once), and a
+    // near-goal-collision skip-Fine-go-to-Contact rule.
+    bool enable_tier_triage = false;
+    // HOLONOMIC FEASIBILITY PRE-GATE: before launching Fine (and again before
+    // Contact), runs a cheap static-obstacles + inscribed-radius-footprint
+    // reachability check at that tier's own holonomic resolution and skips
+    // the tier outright when the goal is PROVABLY unreachable.
+    bool enable_tier_gate = false;
 
     std::vector<TransitPlannerStep> initial_transit_methods = {
         {TransitPlannerMethod::PrimaryHybridAStar,

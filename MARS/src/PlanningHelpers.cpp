@@ -15,11 +15,13 @@
 #include <CsvLogging.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
 #include <string>
 #include <limits>
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <functional>
@@ -40,7 +42,8 @@ double find_safe_start_time(Trajectory *traj, double earliest_start,
                             CollisionInfo *out_last_collision = nullptr,
                             double *out_last_check_time = nullptr,
                             IdleBlockerRelocationPolicy idle_blocker_policy =
-                                IdleBlockerRelocationPolicy::RelocateAnyIdle);
+                                IdleBlockerRelocationPolicy::RelocateAnyIdle,
+                            PlanTimingStats *plan_stats = nullptr);
 
 CollisionInfo check_collision_trajectory_detailed(const Trajectory &traj, double start_time,
                                                   TimeTable &timetable, const Params &params,
@@ -734,6 +737,300 @@ bool transit_step_is_fine_repair(const TransitPlannerStep &step)
          step.method == TransitPlannerMethod::ReverseRightEscapeReedShepp;
 }
 
+// ==========================================
+// Stage 3: failure triage predicates + holonomic feasibility pre-gate
+// ==========================================
+//
+// DESIGN NOTE -- rule 1 (BLOCKED-BY-ROBOT SHORT-CIRCUIT) current-behavior
+// finding, per file:
+//
+//  * plan_initial_transit's method loop (run_initial_transit_method_list,
+//    below) ALREADY stops on a BLOCKED_BY_ROBOT tier result: its only
+//    escalate-vs-stop condition is `!result.waypoints.empty()`, and
+//    PlanningStatus::BLOCKED_BY_ROBOT is only ever produced by
+//    PHAStar::Planning_with_res together with a non-empty extracted backup
+//    path (include/PHAstar/PHAstar.h's backup_result is seeded from
+//    extract_path(...) before its status is ever set to BLOCKED_BY_ROBOT --
+//    see the analytic-candidate handlers around PHAstar.h:2100-2168 -- and
+//    both places Planning_with_res can return it, :1968 and :2515, return
+//    that same backup_result object unchanged). So this rule is a no-op here
+//    by construction; nothing is implemented for it in this function.
+//
+//  * replan_transit_segment's cascade (below) has NO status-based check at
+//    all: a tier is "accepted" (cascade stops) purely via
+//    evaluate_candidate()'s independent re-validation
+//    (validate_segment_candidate), which happens to also treat a pure robot
+//    collision as soft/non-blocking -- but if that independent re-check
+//    finds hard_valid == false for ANY reason (including simply disagreeing
+//    with the search's own analytic collision check, since the two use
+//    different discretizations), the loop escalates to the next tier
+//    regardless of the fact that the underlying failure was "just a robot in
+//    the way". This IS a real escalate-past-BLOCKED_BY_ROBOT path, so rule 1
+//    is implemented there (see replan_transit_segment).
+
+// Rule 1 predicate (see design note above): does `result` carry a
+// robot-blocked backup path at all (regardless of what any later,
+// independent revalidation of its waypoints might conclude)?
+bool triage_blocked_by_robot_shortcut_applies(const PlanningResult &result)
+{
+  return result.status == PlanningStatus::BLOCKED_BY_ROBOT &&
+         !result.waypoints.empty();
+}
+
+bool triage_primary_retry_applies(const PlanningResult &result,
+                                  double straight_line_distance)
+{
+  if (result.debug_stats.search_iteration_limit_hit == 0)
+    return false;
+  return result.debug_stats.best_dist <=
+         kTriageProgressFraction * straight_line_distance;
+}
+
+bool triage_skip_to_contact_applies(const PlanningResult &result)
+{
+  const PlanningDebugStats &stats = result.debug_stats;
+  // A zero-generated-node result (e.g. an immediate start/goal validation
+  // failure) isn't "collision-rejection dominated" in any meaningful sense;
+  // guard the ratio's denominator rather than let 0 >= 0 misfire.
+  if (stats.generated_nodes == 0)
+    return false;
+  return stats.best_dist <= stats.analytic_threshold &&
+         static_cast<double>(stats.reject_collision) >=
+             kTriageCollisionRejectFraction *
+                 static_cast<double>(stats.generated_nodes);
+}
+
+bool method_list_has_fine_before_contact(
+    const std::vector<TransitPlannerStep> &methods)
+{
+  bool seen_fine = false;
+  for (const auto &step : methods)
+  {
+    if (step.method == TransitPlannerMethod::FineHybridAStar)
+      seen_fine = true;
+    else if (seen_fine &&
+             step.method ==
+                 TransitPlannerMethod::ContactBoundaryGeometricHybridAStar)
+      return true;
+  }
+  return false;
+}
+
+double entity_inscribed_radius(const OccuRect &size)
+{
+  return std::max(0.0, std::min({size.front_length, size.rear_length,
+                                 size.width / 2.0}));
+}
+
+namespace
+{
+// Exact circle-vs-oriented-rectangle overlap test: transforms the circle
+// center into the box's local frame (get_corners's convention: the box
+// spans [-rear_length, front_length] along local +x, [-width/2, width/2]
+// across local y) and compares the distance to the closest point on the box
+// against the radius. Used (instead of rectangles_intersect, which needs
+// both shapes to already be rectangles) so the gate's under-approximated
+// robot disc is checked exactly, not via a bounding-square stand-in that
+// would over-block relative to the true circle and risk unsound skips.
+bool circle_intersects_oriented_box(double cx, double cy, double radius,
+                                    const Pose &box_pose, const OccuRect &size)
+{
+  const double dx = cx - box_pose.x;
+  const double dy = cy - box_pose.y;
+  const double cos_yaw = std::cos(box_pose.yaw);
+  const double sin_yaw = std::sin(box_pose.yaw);
+  const double local_x = dx * cos_yaw + dy * sin_yaw;
+  const double local_y = -dx * sin_yaw + dy * cos_yaw;
+  const double half_width = size.width / 2.0;
+  const double closest_x =
+      std::clamp(local_x, -size.rear_length, size.front_length);
+  const double closest_y = std::clamp(local_y, -half_width, half_width);
+  return std::hypot(local_x - closest_x, local_y - closest_y) <= radius;
+}
+} // namespace
+
+bool holonomic_gate_unreachable(
+    const Pose &start_pose, const Pose &goal_pose,
+    RobotMeta *robot, const TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &gate_params, double search_start_time)
+{
+  if (!robot)
+    return false; // Can't build a footprint; gate passes (never skips).
+
+  const double resolution =
+      std::max(1e-3, gate_params.holonomic_heuristic_resolution);
+  const int width = static_cast<int>(std::ceil(
+                        (gate_params.max_x - gate_params.min_x) / resolution)) +
+                    1;
+  const int height = static_cast<int>(std::ceil(
+                         (gate_params.max_y - gate_params.min_y) / resolution)) +
+                     1;
+  if (width <= 0 || height <= 0)
+    return false; // Degenerate bounds: gate passes, never skips.
+  const std::size_t total =
+      static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+  if (total == 0)
+    return false;
+
+  const double radius = entity_inscribed_radius(robot->size);
+
+  // Static-only obstacle snapshot at the search's start time: the workspace
+  // boundary is handled directly (via check_robot_bounds_collision) inside
+  // cell_blocked below, so only OBJECT entities with no scheduled motion
+  // after search_start_time are collected here. Robots are NEVER gate
+  // obstacles -- they can always move out of the way (wait primitives
+  // exist).
+  struct StaticObstacle
+  {
+    Pose pose;
+    OccuRect size;
+  };
+  std::vector<StaticObstacle> obstacles;
+  obstacles.reserve(entities.size());
+  for (const auto &[name, ent] : entities)
+  {
+    if (!ent || ent == robot || ent->type != EntityType::OBJECT)
+      continue;
+    if (!timetable.is_entity_static_after(search_start_time, ent))
+      continue;
+    obstacles.push_back({timetable.get_pose(ent, search_start_time), ent->size});
+  }
+
+  auto clamp_x = [&](double x)
+  {
+    return std::max(0, std::min(width - 1,
+                                static_cast<int>(std::floor(
+                                    (x - gate_params.min_x) / resolution))));
+  };
+  auto clamp_y = [&](double y)
+  {
+    return std::max(0, std::min(height - 1,
+                                static_cast<int>(std::floor(
+                                    (y - gate_params.min_y) / resolution))));
+  };
+  auto cell_index = [&](int ix, int iy)
+  { return iy * width + ix; };
+  auto cell_center = [&](int ix, int iy)
+  {
+    return Pose{gate_params.min_x + (static_cast<double>(ix) + 0.5) * resolution,
+               gate_params.min_y + (static_cast<double>(iy) + 0.5) * resolution,
+               0.0};
+  };
+
+  const int gx = clamp_x(goal_pose.x);
+  const int gy = clamp_y(goal_pose.y);
+  const int sx = clamp_x(start_pose.x);
+  const int sy = clamp_y(start_pose.y);
+  const int goal_idx = cell_index(gx, gy);
+  const int start_idx = cell_index(sx, sy);
+
+  auto cell_blocked = [&](int ix, int iy) -> bool
+  {
+    const Pose center = cell_center(ix, iy);
+    // Boundary check: reuse check_robot_bounds_collision (the exact rule the
+    // real planner applies, including the robot_boundary_origin_only
+    // origin-only/strict-corners switch) via a synthetic axis-aligned square
+    // bounding the under-approximated disc -- get_corners with
+    // front=rear=radius, width=2*radius at yaw 0 gives exactly that square.
+    const Corners disc_bound =
+        get_corners(center.x, center.y, 0.0, radius, radius, 2.0 * radius);
+    if (check_robot_bounds_collision(center, disc_bound, gate_params))
+      return true;
+    for (const auto &obstacle : obstacles)
+    {
+      if (circle_intersects_oriented_box(center.x, center.y, radius,
+                                         obstacle.pose, obstacle.size))
+        return true;
+    }
+    return false;
+  };
+
+  std::vector<double> cost(total, std::numeric_limits<double>::infinity());
+  using CostCell = std::pair<double, int>;
+  std::priority_queue<CostCell, std::vector<CostCell>, std::greater<CostCell>>
+      open;
+  cost[static_cast<std::size_t>(goal_idx)] = 0.0;
+  open.emplace(0.0, goal_idx);
+
+  constexpr int kDx[8] = {1, -1, 0, 0, 1, 1, -1, -1};
+  constexpr int kDy[8] = {0, 0, 1, -1, 1, -1, 1, -1};
+  while (!open.empty())
+  {
+    const auto [current_cost, idx] = open.top();
+    open.pop();
+    if (current_cost > cost[static_cast<std::size_t>(idx)] + 1e-9)
+      continue;
+    if (idx == start_idx)
+      return false; // Reachable (Dijkstra: first non-stale pop is optimal).
+
+    const int ix = idx % width;
+    const int iy = idx / width;
+    for (int k = 0; k < 8; ++k)
+    {
+      const int nx = ix + kDx[k];
+      const int ny = iy + kDy[k];
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height)
+        continue;
+      const int nidx = cell_index(nx, ny);
+      // The goal and start cells are always treated as passable -- mirrors
+      // ensure_holonomic_heuristic's own goal-cell exemption (PHAstar.h),
+      // extended here to the start cell too, so grid quantization can never
+      // manufacture a false "blocked" verdict at either query pose.
+      if (nidx != goal_idx && nidx != start_idx && cell_blocked(nx, ny))
+        continue;
+      const double step = ((k < 4) ? 1.0 : std::sqrt(2.0)) * resolution;
+      const double next_cost = current_cost + step;
+      if (next_cost + 1e-9 < cost[static_cast<std::size_t>(nidx)])
+      {
+        cost[static_cast<std::size_t>(nidx)] = next_cost;
+        open.emplace(next_cost, nidx);
+      }
+    }
+  }
+
+  return !std::isfinite(cost[static_cast<std::size_t>(start_idx)]);
+}
+
+bool apply_tier_gate(
+    PlanningResult &out_result, PlanSearchTier tier,
+    const Pose &start_pose, const Pose &goal_pose,
+    RobotMeta *robot, const TimeTable &timetable,
+    const std::unordered_map<std::string, EntityMeta *> &entities,
+    const Params &tier_params, double search_start_time,
+    PlanTimingStats *plan_stats)
+{
+  const auto t0 = std::chrono::steady_clock::now();
+  const bool unreachable = holonomic_gate_unreachable(
+      start_pose, goal_pose, robot, timetable, entities, tier_params,
+      search_start_time);
+  const double elapsed =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
+          .count();
+  if (plan_stats)
+  {
+    ++plan_stats->n_gate_checks;
+    plan_stats->gate_wall_s += elapsed;
+  }
+  if (!unreachable)
+    return false;
+
+  out_result = PlanningResult{};
+  out_result.status = PlanningStatus::NO_PATH_FOUND;
+  out_result.failure_detail =
+      std::string("tier-gate: goal provably unreachable at ") +
+      (tier == PlanSearchTier::Contact ? "contact" : "fine") +
+      " holonomic resolution (static obstacles, inscribed-radius footprint)";
+  if (plan_stats)
+  {
+    if (tier == PlanSearchTier::Contact)
+      ++plan_stats->n_gate_skips_contact;
+    else
+      ++plan_stats->n_gate_skips_fine;
+  }
+  return true;
+}
+
 std::string format_planning_status_line(const std::string &stage,
                                         const PlanningResult &res)
 {
@@ -780,7 +1077,8 @@ bool plan_initial_transit(
     double *out_abs_start_time,
     double *out_abs_end_time,
     const std::function<Pose(double)> &target_pose_provider,
-    const std::vector<Waypoint> *reference_waypoints)
+    const std::vector<Waypoint> *reference_waypoints,
+    PlanTimingStats *plan_stats)
 {
   if (out_abs_start_time)
     *out_abs_start_time = -1.0;
@@ -856,7 +1154,8 @@ bool plan_initial_transit(
   auto run_initial_transit_planner = [&](const std::string &debug_label,
                                          const Params &plan_params,
                                          int max_iterations,
-                                         bool allow_reference_egraph) -> PlanningResult
+                                         bool allow_reference_egraph,
+                                         PlanSearchTier tier) -> PlanningResult
   {
     current_pose = timetable.get_pose(robot, planning_start_time);
     robot->initial_pose = current_pose;
@@ -877,7 +1176,37 @@ bool plan_initial_transit(
                   << reference_waypoints->size() << ")." << std::endl;
       }
     }
-    return retry_planner.Planning_with_res(planning_start_time);
+    const auto search_t0 = std::chrono::steady_clock::now();
+    PlanningResult res = retry_planner.Planning_with_res(planning_start_time);
+    if (plan_stats)
+    {
+      const double elapsed = std::chrono::duration<double>(
+                                 std::chrono::steady_clock::now() - search_t0)
+                                 .count();
+      plan_stats->record_search(
+          tier, elapsed, res.debug_stats.iterations,
+          res.debug_stats.search_iteration_limit_hit,
+          res.debug_stats.heuristic_time_sec,
+          res.debug_stats.primitive_collision_time_sec,
+          res.debug_stats.analytic_validation_time_sec,
+          res.debug_stats.holonomic_heuristic_time_sec);
+    }
+    return res;
+  };
+
+  // Stage 3 holonomic feasibility pre-gate (RuntimeOptions::enable_tier_gate):
+  // checked immediately before launching Fine/Contact below. Uses the
+  // robot's live pose at planning_start_time (not the possibly-stale outer
+  // `current_pose`, since this can run before run_initial_transit_planner's
+  // own refresh) as the gate's start pose.
+  auto apply_initial_transit_tier_gate =
+      [&](PlanningResult &out_gated, PlanSearchTier tier,
+          const Params &tier_params) -> bool
+  {
+    const Pose gate_start_pose = timetable.get_pose(robot, planning_start_time);
+    return apply_tier_gate(out_gated, tier, gate_start_pose, active_target_pose,
+                           robot, timetable, entities, tier_params,
+                           planning_start_time, plan_stats);
   };
 
   auto replan_initial_transit_step =
@@ -890,15 +1219,23 @@ bool plan_initial_transit(
     case TransitPlannerMethod::PrimaryHybridAStar:
       return run_initial_transit_planner(
           debug_label, params, options.max_search_iterations,
-          use_reference_egraph);
+          use_reference_egraph, PlanSearchTier::Primary);
     case TransitPlannerMethod::FineHybridAStar:
     {
       Params fine_params = make_fine_segment_params(params, options);
       const int fine_max_iter = std::max(
           options.max_search_iterations,
           options.fine_segment_max_search_iterations);
+      if (options.enable_tier_gate)
+      {
+        PlanningResult gated;
+        if (apply_initial_transit_tier_gate(gated, PlanSearchTier::Fine,
+                                            fine_params))
+          return gated;
+      }
       return run_initial_transit_planner(
-          debug_label, fine_params, fine_max_iter, use_reference_egraph);
+          debug_label, fine_params, fine_max_iter, use_reference_egraph,
+          PlanSearchTier::Fine);
     }
     case TransitPlannerMethod::ContactBoundaryGeometricHybridAStar:
     {
@@ -906,8 +1243,16 @@ bool plan_initial_transit(
       const int contact_max_iter = std::max(
           options.max_search_iterations,
           options.contact_boundary_max_search_iterations);
+      if (options.enable_tier_gate)
+      {
+        PlanningResult gated;
+        if (apply_initial_transit_tier_gate(gated, PlanSearchTier::Contact,
+                                            contact_params))
+          return gated;
+      }
       return run_initial_transit_planner(
-          debug_label, contact_params, contact_max_iter, use_reference_egraph);
+          debug_label, contact_params, contact_max_iter, use_reference_egraph,
+          PlanSearchTier::Contact);
     }
     default:
     {
@@ -919,6 +1264,14 @@ bool plan_initial_transit(
     }
   };
 
+  // Stage 3 failure triage (RuntimeOptions::enable_tier_triage). Rule 1
+  // (BLOCKED-BY-ROBOT SHORT-CIRCUIT) is intentionally NOT implemented here:
+  // this loop already stops on any BLOCKED_BY_ROBOT tier result today (see
+  // the design note above triage_blocked_by_robot_shortcut_applies), so
+  // there is nothing to short-circuit. Rules 2 and 3 are wired below.
+  const bool triage_fine_then_contact_initial =
+      method_list_has_fine_before_contact(options.initial_transit_methods);
+
   bool tried_fine_initial_transit = false;
   auto run_initial_transit_method_list =
       [&](const std::string &debug_prefix,
@@ -928,10 +1281,37 @@ bool plan_initial_transit(
     result.status = PlanningStatus::NO_PATH_FOUND;
     result.failure_detail = "no initial-transit methods configured";
 
-    for (const auto &step : options.initial_transit_methods)
+    // Mirrors this loop's own fine_only filtering so "the next tier" means
+    // the next one this loop will actually attempt.
+    auto next_step_is_fine = [&](std::size_t from_idx) -> bool
     {
+      for (std::size_t j = from_idx + 1;
+           j < options.initial_transit_methods.size(); ++j)
+      {
+        const auto &candidate = options.initial_transit_methods[j];
+        if (fine_only && !transit_step_is_fine_repair(candidate))
+          continue;
+        return candidate.method == TransitPlannerMethod::FineHybridAStar;
+      }
+      return false;
+    };
+
+    bool skip_next_fine = false;
+    for (std::size_t idx = 0; idx < options.initial_transit_methods.size(); ++idx)
+    {
+      const auto &step = options.initial_transit_methods[idx];
       if (fine_only && !transit_step_is_fine_repair(step))
         continue;
+
+      if (options.enable_tier_triage && skip_next_fine &&
+          step.method == TransitPlannerMethod::FineHybridAStar)
+      {
+        skip_next_fine = false;
+        if (plan_stats)
+          ++plan_stats->n_triage_skips_to_contact;
+        continue;
+      }
+      skip_next_fine = false;
 
       if (transit_step_is_fine_repair(step))
         tried_fine_initial_transit = true;
@@ -942,6 +1322,50 @@ bool plan_initial_transit(
       append_attempt(transit_planner_method_name(step.method), result);
       if (!result.waypoints.empty())
         return result;
+
+      if (options.enable_tier_triage)
+      {
+        // Rule 2 (CAP-HIT-WITH-PROGRESS RETRY, primary tier only).
+        if (step.method == TransitPlannerMethod::PrimaryHybridAStar)
+        {
+          const double straight_line_dist = std::hypot(
+              active_target_pose.x - current_pose.x,
+              active_target_pose.y - current_pose.y);
+          if (triage_primary_retry_applies(result, straight_line_dist))
+          {
+            if (plan_stats)
+              ++plan_stats->n_triage_primary_retries;
+            const bool use_reference_egraph =
+                transit_step_uses_reference_egraph(step);
+            PlanningResult retry_result = run_initial_transit_planner(
+                stage + " (triage retry)", params,
+                2 * options.max_search_iterations, use_reference_egraph,
+                PlanSearchTier::Primary);
+            append_attempt(transit_planner_method_name(step.method) +
+                              std::string(" (triage retry)"),
+                          retry_result);
+            // The retry's result replaces the original failure for any
+            // subsequent triage rule (never retried twice; if this retry
+            // also carries a BLOCKED_BY_ROBOT backup, the unconditional
+            // !result.waypoints.empty() check below already implements
+            // rule 1's "stop and use the backup" for it too).
+            result = retry_result;
+            if (!result.waypoints.empty())
+            {
+              if (plan_stats)
+                ++plan_stats->n_triage_retry_successes;
+              return result;
+            }
+          }
+        }
+
+        // Rule 3 (NEAR-GOAL-COLLISION SKIP-TO-CONTACT).
+        if (triage_fine_then_contact_initial && next_step_is_fine(idx) &&
+            triage_skip_to_contact_applies(result))
+        {
+          skip_next_fine = true;
+        }
+      }
     }
     return result;
   };
@@ -974,7 +1398,8 @@ bool plan_initial_transit(
                                              options,
                                              &wait_added, &last_collision,
                                              &last_check_time,
-                                             IdleBlockerRelocationPolicy::RelocateAnyIdle);
+                                             IdleBlockerRelocationPolicy::RelocateAnyIdle,
+                                             plan_stats);
     if (safe_start < 0.0)
     {
       PlanningResult sched_fail;
@@ -1081,7 +1506,7 @@ bool plan_initial_transit(
 
     if (!relocate_blocking_robot(robot, timetable, params, entities,
                                  options, &blocked_hint, planning_start_time,
-                                 "self-park"))
+                                 "self-park", plan_stats))
     {
       std::cerr << "  [Transit] Self safe parking FAILED for " << robot->name
                 << "." << std::endl;
@@ -1177,7 +1602,8 @@ bool plan_initial_transit(
                 << " pose before falling back to self safe parking."
                 << std::endl;
       if (relocate_blocking_robot(blocker, timetable, params, entities,
-                                  options, &blocked_pose_hint, blocker_time))
+                                  options, &blocked_pose_hint, blocker_time,
+                                  "blocker", plan_stats))
       {
         std::cout << "  [Transit] " << blocker->name << " relocated off the "
                   << blocked_label << " pose. Replanning " << robot->name
@@ -1410,7 +1836,21 @@ bool plan_initial_transit(
     ghost_planner.set_debug_popup_enabled(false);
     ghost_planner.max_search_iterations = options.max_search_iterations;
     ghost_planner.set_planner_expansion_threads(options.planner_expansion_threads);
+    const auto ghost_search_t0 = std::chrono::steady_clock::now();
     auto ghost_res = ghost_planner.Planning_with_res(planning_start_time);
+    if (plan_stats)
+    {
+      const double elapsed = std::chrono::duration<double>(
+                                 std::chrono::steady_clock::now() - ghost_search_t0)
+                                 .count();
+      plan_stats->record_search(
+          PlanSearchTier::Other, elapsed, ghost_res.debug_stats.iterations,
+          ghost_res.debug_stats.search_iteration_limit_hit,
+          ghost_res.debug_stats.heuristic_time_sec,
+          ghost_res.debug_stats.primitive_collision_time_sec,
+          ghost_res.debug_stats.analytic_validation_time_sec,
+          ghost_res.debug_stats.holonomic_heuristic_time_sec);
+    }
     append_attempt("ghost planner", ghost_res);
 
     if (ghost_res.status == PlanningStatus::SUCCESS)
@@ -1490,7 +1930,21 @@ bool plan_initial_transit(
     geometry_planner.set_debug_popup_enabled(false);
     geometry_planner.max_search_iterations = options.max_search_iterations;
     geometry_planner.set_planner_expansion_threads(options.planner_expansion_threads);
+    const auto geometry_search_t0 = std::chrono::steady_clock::now();
     auto geometry_res = geometry_planner.Planning_with_res(planning_start_time);
+    if (plan_stats)
+    {
+      const double elapsed = std::chrono::duration<double>(
+                                 std::chrono::steady_clock::now() - geometry_search_t0)
+                                 .count();
+      plan_stats->record_search(
+          PlanSearchTier::Other, elapsed, geometry_res.debug_stats.iterations,
+          geometry_res.debug_stats.search_iteration_limit_hit,
+          geometry_res.debug_stats.heuristic_time_sec,
+          geometry_res.debug_stats.primitive_collision_time_sec,
+          geometry_res.debug_stats.analytic_validation_time_sec,
+          geometry_res.debug_stats.holonomic_heuristic_time_sec);
+    }
     append_attempt("geometry-first fallback", geometry_res);
 
     if (!geometry_res.waypoints.empty())
@@ -1506,7 +1960,8 @@ bool plan_initial_transit(
       double safe_start = find_safe_start_time(&geom_traj, planning_start_time, timetable,
                                                params, entities, options, &wait_added,
                                                nullptr, nullptr,
-                                               IdleBlockerRelocationPolicy::RelocateAnyIdle);
+                                               IdleBlockerRelocationPolicy::RelocateAnyIdle,
+                                               plan_stats);
       if (safe_start >= 0.0)
       {
         double delta = safe_start - planning_start_time;
@@ -1563,7 +2018,8 @@ bool plan_initial_transit(
       double safe_start = find_safe_start_time(&rs_traj, planning_start_time, timetable,
                                                params, entities, options, &wait_added,
                                                &last_collision, &last_check_time,
-                                               IdleBlockerRelocationPolicy::RelocateAnyIdle);
+                                               IdleBlockerRelocationPolicy::RelocateAnyIdle,
+                                               plan_stats);
       if (safe_start >= 0.0)
       {
         path_res.waypoints = rs_waypoints;
@@ -1799,7 +2255,8 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
                        const std::unordered_map<std::string, EntityMeta *> &entities,
                        const RuntimeOptions &options,
                        TaskExecutionStats *stats,
-                       std::string *out_failure_reason)
+                       std::string *out_failure_reason,
+                       PlanTimingStats *plan_stats)
 {
   if (!robot || previous_traj.waypoints.size() < 2)
     return true;
@@ -1910,7 +2367,9 @@ bool append_retraction(RobotMeta *robot, const Trajectory &previous_traj,
     double safe_start = find_safe_start_time(&retract_traj, earliest_start,
                                              timetable, params, entities,
                                              options,
-                                             &wait_added);
+                                             &wait_added, nullptr, nullptr,
+                                             IdleBlockerRelocationPolicy::RelocateAnyIdle,
+                                             plan_stats);
     if (safe_start < 0.0)
     {
       if (out_failure_reason)
@@ -2026,11 +2485,16 @@ SegmentCandidateValidation validate_segment_candidate(
       return false;
     }
 
-    auto others = timetable.get_poses(abs_t);
-    auto collision_result = check_multiple_entities_collision(
+    // Swept directly off the timetable instead of building a fresh
+    // get_poses(abs_t) map every sample (planner_opt Stage 2). NOTE
+    // (tie-break): if multiple entities collide simultaneously at one
+    // sample, which one gets reported can change vs. the old fresh-map
+    // iteration order -- see TimeTable::for_each_pose.
+    auto collision_result = check_multiple_entities_collision_visit(
         robot_geom, robot_pose,
         nullptr, nullptr,
-        others,
+        [&](auto &&per_entity)
+        { timetable.for_each_pose(abs_t, per_entity); },
         params,
         robot,
         nullptr,
@@ -2041,11 +2505,11 @@ SegmentCandidateValidation validate_segment_candidate(
 
     EntityMeta *collider = collision_result.colliding_entity;
     const std::string collider_name = collider ? collider->name : "";
+    // colliding_pose was captured directly during the sweep above, so no
+    // second others.find(collider) lookup is needed for either excuse check.
     if (rel_t <= 0.3 && collider && collider->type == EntityType::OBJECT)
     {
-      auto it = others.find(collider);
-      if (it != others.end() &&
-          is_valid_transfer_contact(robot, robot_pose, collider, it->second))
+      if (is_valid_transfer_contact(robot, robot_pose, collider, collision_result.colliding_pose))
       {
         return true;
       }
@@ -2053,10 +2517,8 @@ SegmentCandidateValidation validate_segment_candidate(
     if (terminal_approach_entity && collider == terminal_approach_entity &&
         collider->type == EntityType::OBJECT)
     {
-      auto it = others.find(collider);
-      if (it != others.end() &&
-          is_valid_terminal_approach_contact(
-              robot, robot_pose, candidate_rel.back(), collider, it->second,
+      if (is_valid_terminal_approach_contact(
+              robot, robot_pose, candidate_rel.back(), collider, collision_result.colliding_pose,
               terminal_approach_entity, params))
       {
         return true;
@@ -2411,7 +2873,8 @@ bool replan_transit_segment(
     std::vector<Waypoint> &out_waypoints_rel,
     const SegmentReplanContext &context,
     EntityMeta *terminal_approach_entity,
-    const std::vector<Waypoint> *reference_waypoints)
+    const std::vector<Waypoint> *reference_waypoints,
+    PlanTimingStats *plan_stats)
 {
   Pose start_pose = timetable.get_pose(robot, start_time);
   robot->initial_pose = start_pose;
@@ -2506,6 +2969,7 @@ bool replan_transit_segment(
                              const Params &plan_params,
                              int max_iter,
                              const std::string &stage,
+                             PlanSearchTier tier,
                              bool allow_reference_egraph = true) -> PlanningResult
   {
     Color::println("[PHAStar] Attempting search method: " + stage, Color::CYAN);
@@ -2529,7 +2993,22 @@ bool replan_transit_segment(
                   << reference_waypoints->size() << ")." << std::endl;
       }
     }
-    return planner.Planning_with_res(plan_start_time);
+    const auto search_t0 = std::chrono::steady_clock::now();
+    PlanningResult res = planner.Planning_with_res(plan_start_time);
+    if (plan_stats)
+    {
+      const double elapsed = std::chrono::duration<double>(
+                                 std::chrono::steady_clock::now() - search_t0)
+                                 .count();
+      plan_stats->record_search(
+          tier, elapsed, res.debug_stats.iterations,
+          res.debug_stats.search_iteration_limit_hit,
+          res.debug_stats.heuristic_time_sec,
+          res.debug_stats.primitive_collision_time_sec,
+          res.debug_stats.analytic_validation_time_sec,
+          res.debug_stats.holonomic_heuristic_time_sec);
+    }
+    return res;
   };
 
   auto evaluate_hybrid_stage = [&](const std::string &stage,
@@ -2537,12 +3016,16 @@ bool replan_transit_segment(
                                    double plan_start_time,
                                    const Params &plan_params,
                                    int max_iter,
+                                   PlanSearchTier tier,
                                    const std::vector<Waypoint> *prefix = nullptr,
-                                   bool allow_reference_egraph = true) -> bool
+                                   bool allow_reference_egraph = true,
+                                   PlanningResult *out_res = nullptr) -> bool
   {
     PlanningResult res = run_hybrid_plan(plan_start_pose, plan_start_time,
-                                         plan_params, max_iter, stage,
+                                         plan_params, max_iter, stage, tier,
                                          allow_reference_egraph);
+    if (out_res)
+      *out_res = res;
     if (res.waypoints.empty())
       return evaluate_candidate(stage, res, {});
 
@@ -2555,6 +3038,35 @@ bool replan_transit_segment(
       make_waypoint_times_relative(candidate_rel, start_time);
     }
     return evaluate_candidate(stage, res, std::move(candidate_rel));
+  };
+
+  // Stage 3 holonomic feasibility pre-gate wrapper for this cascade's Fine
+  // and Contact dispatch (see run_gateable_hybrid_stage below): when the
+  // gate is enabled and proves the goal unreachable at `plan_params`'s
+  // holonomic resolution, synthesizes the same "tier ran and failed" shape
+  // (a NO_PATH_FOUND/empty-waypoints PlanningResult run through
+  // evaluate_candidate for reporting) that a real failed search would
+  // produce, without spending time on the real search.
+  auto run_gateable_hybrid_stage = [&](const std::string &stage,
+                                       const Params &plan_params,
+                                       int max_iter,
+                                       PlanSearchTier tier,
+                                       bool use_reference_egraph,
+                                       PlanningResult &out_tier_result) -> bool
+  {
+    if (options.enable_tier_gate)
+    {
+      PlanningResult gated;
+      if (apply_tier_gate(gated, tier, start_pose, goal_pose, robot, timetable,
+                          entities, plan_params, start_time, plan_stats))
+      {
+        out_tier_result = gated;
+        return evaluate_candidate(stage, gated, {});
+      }
+    }
+    return evaluate_hybrid_stage(stage, start_pose, start_time, plan_params,
+                                 max_iter, tier, nullptr, use_reference_egraph,
+                                 &out_tier_result);
   };
 
   const bool start_contact_case = !diag_context.start_contact_entity.empty();
@@ -2653,7 +3165,8 @@ bool replan_transit_segment(
     Pose escape_pose{escape_end.x, escape_end.y, escape_end.yaw};
     const double escape_abs_time = start_time + escape_end.time;
     return evaluate_hybrid_stage(stage, escape_pose, escape_abs_time,
-                                 fine_params, fine_max_iter, &prefix);
+                                 fine_params, fine_max_iter,
+                                 PlanSearchTier::Fine, &prefix);
   };
 
   auto evaluate_escape_rs = [&](const std::string &stage,
@@ -2672,30 +3185,73 @@ bool replan_transit_segment(
                                   stage, &prefix);
   };
 
-  for (const auto &step : options.segment_transit_methods)
+  // Stage 3 failure triage (RuntimeOptions::enable_tier_triage). Rule 1
+  // (BLOCKED-BY-ROBOT SHORT-CIRCUIT) IS implemented in this cascade: unlike
+  // plan_initial_transit's method loop, escalation here is governed by
+  // evaluate_candidate()'s independent hard-collision revalidation
+  // (validate_segment_candidate), not by PlanningStatus, so a
+  // BLOCKED_BY_ROBOT tier result can otherwise fall through to the next
+  // tier -- see the design note above triage_blocked_by_robot_shortcut_applies.
+  const bool triage_fine_then_contact_segment =
+      method_list_has_fine_before_contact(options.segment_transit_methods);
+
+  // Mirrors this loop's own step_applies filtering so "the next tier" means
+  // the next one this loop will actually attempt.
+  auto next_segment_step_is_fine = [&](std::size_t from_idx) -> bool
   {
+    for (std::size_t j = from_idx + 1;
+         j < options.segment_transit_methods.size(); ++j)
+    {
+      const auto &candidate = options.segment_transit_methods[j];
+      if (!step_applies(candidate))
+        continue;
+      return candidate.method == TransitPlannerMethod::FineHybridAStar;
+    }
+    return false;
+  };
+
+  bool skip_next_fine = false;
+  for (std::size_t idx = 0; idx < options.segment_transit_methods.size(); ++idx)
+  {
+    const auto &step = options.segment_transit_methods[idx];
     if (!step_applies(step))
       continue;
+
+    if (options.enable_tier_triage && skip_next_fine &&
+        step.method == TransitPlannerMethod::FineHybridAStar)
+    {
+      skip_next_fine = false;
+      if (plan_stats)
+        ++plan_stats->n_triage_skips_to_contact;
+      continue;
+    }
+    skip_next_fine = false;
 
     const bool use_reference_egraph = transit_step_uses_reference_egraph(step);
     const std::string stage = transit_planner_method_name(step.method);
     bool accepted = false;
+    PlanningResult tier_result;
+    bool has_tier_result = false;
     switch (step.method)
     {
     case TransitPlannerMethod::PrimaryHybridAStar:
       accepted = evaluate_hybrid_stage(stage, start_pose, start_time, params,
-                                       options.max_search_iterations, nullptr,
-                                       use_reference_egraph);
+                                       options.max_search_iterations,
+                                       PlanSearchTier::Primary, nullptr,
+                                       use_reference_egraph, &tier_result);
+      has_tier_result = true;
       break;
     case TransitPlannerMethod::FineHybridAStar:
-      accepted = evaluate_hybrid_stage(stage, start_pose, start_time,
-                                       fine_params, fine_max_iter, nullptr,
-                                       use_reference_egraph);
+      accepted = run_gateable_hybrid_stage(
+          stage, fine_params, fine_max_iter, PlanSearchTier::Fine,
+          use_reference_egraph, tier_result);
+      has_tier_result = true;
       break;
     case TransitPlannerMethod::ContactBoundaryGeometricHybridAStar:
-      accepted = evaluate_hybrid_stage(stage, start_pose, start_time,
-                                       contact_params, contact_max_iter,
-                                       nullptr, use_reference_egraph);
+      accepted = run_gateable_hybrid_stage(
+          stage, contact_params, contact_max_iter, PlanSearchTier::Contact,
+          use_reference_egraph, tier_result);
+      has_tier_result = true;
       break;
     case TransitPlannerMethod::AllCandidateReedShepp:
       accepted = evaluate_rs_candidates(start_pose, start_time, fine_params,
@@ -2723,6 +3279,78 @@ bool replan_transit_segment(
       break;
     }
 
+    bool stop_cascade_failed = false;
+    if (options.enable_tier_triage && has_tier_result && !accepted)
+    {
+      if (triage_blocked_by_robot_shortcut_applies(tier_result))
+      {
+        // Rule 1: stop escalating entirely and let this BLOCKED_BY_ROBOT
+        // result stand as the cascade's outcome, exactly as if the later
+        // tiers had also failed with the same backup -- the existing
+        // post-loop write_segment_replan_diagnostics()/return false below
+        // already handles "cascade exhausted" uniformly via `reports`.
+        if (plan_stats)
+          ++plan_stats->n_triage_blocked_shortcuts;
+        stop_cascade_failed = true;
+      }
+      else
+      {
+        // Rule 2 (CAP-HIT-WITH-PROGRESS RETRY, primary tier only).
+        if (step.method == TransitPlannerMethod::PrimaryHybridAStar)
+        {
+          const double straight_line_dist =
+              std::hypot(goal_pose.x - start_pose.x, goal_pose.y - start_pose.y);
+          if (triage_primary_retry_applies(tier_result, straight_line_dist))
+          {
+            if (plan_stats)
+              ++plan_stats->n_triage_primary_retries;
+            const std::string retry_stage = stage + " (triage retry)";
+            PlanningResult retry_res = run_hybrid_plan(
+                start_pose, start_time, params,
+                2 * options.max_search_iterations, retry_stage,
+                PlanSearchTier::Primary, use_reference_egraph);
+            bool retry_accepted;
+            if (retry_res.waypoints.empty())
+            {
+              retry_accepted = evaluate_candidate(retry_stage, retry_res, {});
+            }
+            else
+            {
+              std::vector<Waypoint> retry_rel = retry_res.waypoints;
+              make_waypoint_times_relative(retry_rel, start_time);
+              retry_accepted = evaluate_candidate(retry_stage, retry_res,
+                                                  std::move(retry_rel));
+            }
+            // The retry's result replaces the original failure for any
+            // subsequent triage rule (never retried twice).
+            tier_result = retry_res;
+            if (retry_accepted)
+            {
+              if (plan_stats)
+                ++plan_stats->n_triage_retry_successes;
+              accepted = true;
+            }
+            else if (triage_blocked_by_robot_shortcut_applies(tier_result))
+            {
+              // Rule 1, re-applied to the retry's own failure.
+              if (plan_stats)
+                ++plan_stats->n_triage_blocked_shortcuts;
+              stop_cascade_failed = true;
+            }
+          }
+        }
+
+        // Rule 3 (NEAR-GOAL-COLLISION SKIP-TO-CONTACT).
+        if (!accepted && !stop_cascade_failed &&
+            triage_fine_then_contact_segment &&
+            next_segment_step_is_fine(idx) &&
+            triage_skip_to_contact_applies(tier_result))
+        {
+          skip_next_fine = true;
+        }
+      }
+    }
+
     if (accepted)
     {
       if (diag_context.tight_or_contact_case)
@@ -2731,6 +3359,8 @@ bool replan_transit_segment(
                                          selected_stage);
       return true;
     }
+    if (stop_cascade_failed)
+      break;
   }
 
   write_segment_replan_diagnostics(diag_context, robot, start_pose,

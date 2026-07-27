@@ -15,6 +15,7 @@
 #include <PHAstar/Visualization.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <iomanip>
@@ -401,13 +402,17 @@ generate_parking_candidates_connected_primitives(
     TimeTable &timetable,
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Params &params,
-    double start_time)
+    double start_time,
+    PlanTimingStats *plan_stats)
 {
   std::vector<ParkingCandidate> candidates;
   if (!robot)
     return candidates;
 
-  constexpr int kMaxExpandIterations = 3000;
+  ScopedWallTimer connected_gen_timer(plan_stats,
+                                      &PlanTimingStats::search_wall_s_other,
+                                      &PlanTimingStats::safe_parking_wall_s);
+
   constexpr int kMaxPrimitiveDepth = 12;
   constexpr size_t kMaxCandidates = 200;
   constexpr double kMinParkingDisplacement = 0.25;
@@ -443,7 +448,7 @@ generate_parking_candidates_connected_primitives(
 
   int iterations = 0;
   while (!open_set.empty() &&
-         iterations < kMaxExpandIterations &&
+         iterations < params.safe_parking_expand_max_iterations &&
          candidates.size() < kMaxCandidates)
   {
     auto [priority_cost, _, current, depth] = open_set.top();
@@ -776,7 +781,8 @@ generate_parking_candidates(const Pose &current_pose, RobotMeta *robot,
                             const Params &params,
                             TimeTable *timetable,
                             const std::unordered_map<std::string, EntityMeta *> *entities,
-                            double start_time)
+                            double start_time,
+                            PlanTimingStats *plan_stats)
 {
   if (g_parking_candidate_mode == ParkingCandidateMode::REVERSE_RECENT ||
       g_parking_candidate_mode == ParkingCandidateMode::REVERSE_RECENT_SHORTER)
@@ -793,7 +799,8 @@ generate_parking_candidates(const Pose &current_pose, RobotMeta *robot,
       return {};
     return generate_parking_candidates_connected_primitives(current_pose, robot,
                                                             *timetable, *entities,
-                                                            params, start_time);
+                                                            params, start_time,
+                                                            plan_stats);
   }
   if (g_parking_candidate_mode == ParkingCandidateMode::EXPAND)
   {
@@ -810,7 +817,8 @@ generate_parking_candidates_for_mode(const Pose &current_pose,
                                      ParkingCandidateMode mode,
                                      TimeTable *timetable,
                                      const std::unordered_map<std::string, EntityMeta *> *entities,
-                                     double start_time)
+                                     double start_time,
+                                     PlanTimingStats *plan_stats)
 {
   if (mode == ParkingCandidateMode::REVERSE_RECENT ||
       mode == ParkingCandidateMode::REVERSE_RECENT_SHORTER)
@@ -827,7 +835,8 @@ generate_parking_candidates_for_mode(const Pose &current_pose,
       return {};
     return generate_parking_candidates_connected_primitives(current_pose, robot,
                                                             *timetable, *entities,
-                                                            params, start_time);
+                                                            params, start_time,
+                                                            plan_stats);
   }
   if (mode == ParkingCandidateMode::EXPAND)
   {
@@ -861,16 +870,20 @@ bool is_pose_collision_free_at_time(EntityMeta *entity, const Pose &pose,
     return false;
   }
 
-  auto poses = timetable.get_poses(t);
-  for (const auto &[ent, ent_pose] : poses)
+  // Swept directly off the timetable instead of building a fresh
+  // get_poses(t) map (planner_opt Stage 2). This is a pure boolean result
+  // (no "which entity" reporting), so there is no tie-break concern from the
+  // iteration-order change (see TimeTable::for_each_pose).
+  bool collision_found = false;
+  timetable.for_each_pose(t, [&](EntityMeta *ent, const Pose &ent_pose)
   {
-    if (ent == entity)
-      continue;
+    if (collision_found || ent == entity)
+      return;
     auto c = check_entity_collision(geom, pose, ent, ent_pose, params);
     if (c.has_collision)
-      return false;
-  }
-  return true;
+      collision_found = true;
+  });
+  return !collision_found;
 }
 
 bool is_parking_pose_safe_until_last_timestamp(EntityMeta *entity,
@@ -1021,13 +1034,17 @@ ConnectedSafeParkingSearchResult search_safe_parking_connected_search(
     const std::unordered_map<std::string, EntityMeta *> &entities,
     const Trajectory *blocked_traj_hint,
     double hint_reference_time,
-    std::vector<SafeParkingDebugTrial> *debug_trials)
+    std::vector<SafeParkingDebugTrial> *debug_trials,
+    PlanTimingStats *plan_stats)
 {
   ConnectedSafeParkingSearchResult result;
   if (!blocker)
     return result;
 
-  constexpr int kMaxExpandIterations = 3000;
+  ScopedWallTimer connected_search_timer(plan_stats,
+                                         &PlanTimingStats::search_wall_s_other,
+                                         &PlanTimingStats::safe_parking_wall_s);
+
   constexpr int kMaxPrimitiveDepth = 12;
   constexpr double kMinParkingDisplacement = 0.25;
 
@@ -1101,7 +1118,7 @@ ConnectedSafeParkingSearchResult search_safe_parking_connected_search(
   open_set.emplace(queue_priority(0.0, start_pose), node_id++, planner.start.get(), 0);
 
   int iterations = 0;
-  while (!open_set.empty() && iterations < kMaxExpandIterations)
+  while (!open_set.empty() && iterations < params.safe_parking_expand_max_iterations)
   {
     auto [priority_cost, _, current, depth] = open_set.top();
     open_set.pop();
@@ -1307,8 +1324,14 @@ bool relocate_blocking_robot(RobotMeta *blocker,
                              const RuntimeOptions &options,
                              const Trajectory *blocked_traj_hint,
                              double hint_reference_time,
-                             const char *context)
+                             const char *context,
+                             PlanTimingStats *plan_stats)
 {
+  // Covers every exit path (including the early "recently failed" cache
+  // short-circuit below) so safe_parking_wall_s reflects the whole cost of
+  // every invocation, not just successful ones.
+  ScopedWallTimer relocate_timer(plan_stats, &PlanTimingStats::safe_parking_wall_s);
+
   auto &recent_failed_relocations = recent_failed_relocation_cache();
 
   double ready_time = timetable.get_entity_max_time(blocker);
@@ -1540,7 +1563,8 @@ bool relocate_blocking_robot(RobotMeta *blocker,
       auto connected_result = search_safe_parking_connected_search(
           candidate_mode, blocker, start_pose, ready_time,
           timetable, params, entities, blocked_traj_hint,
-          hint_reference_time, DEBUG_VIS ? &debug_trials : nullptr);
+          hint_reference_time, DEBUG_VIS ? &debug_trials : nullptr,
+          plan_stats);
       if (connected_result.found)
       {
         show_debug_trials();
@@ -1555,6 +1579,8 @@ bool relocate_blocking_robot(RobotMeta *blocker,
                   << ", schedule_failures=" << relocation_schedule_failures
                   << ", safety_rejections=" << relocation_safety_rejections
                   << std::endl;
+        if (plan_stats)
+          ++plan_stats->n_parking_relocations;
         return true;
       }
       continue;
@@ -1563,7 +1589,7 @@ bool relocate_blocking_robot(RobotMeta *blocker,
     auto candidates =
         generate_parking_candidates_for_mode(start_pose, blocker, params,
                                              candidate_mode, &timetable,
-                                             &entities, ready_time);
+                                             &entities, ready_time, plan_stats);
 
     for (const auto &cand : candidates)
     {
@@ -1612,7 +1638,22 @@ bool relocate_blocking_robot(RobotMeta *blocker,
                 : options.max_search_iterations;
         planner.set_planner_expansion_threads(options.planner_expansion_threads);
 
+        const auto search_t0 = std::chrono::steady_clock::now();
         res = planner.Planning_with_res(ready_time);
+        if (plan_stats)
+        {
+          const double elapsed = std::chrono::duration<double>(
+                                     std::chrono::steady_clock::now() - search_t0)
+                                     .count();
+          plan_stats->record_search(
+              PlanSearchTier::Other, elapsed, res.debug_stats.iterations,
+              res.debug_stats.search_iteration_limit_hit,
+              res.debug_stats.heuristic_time_sec,
+              res.debug_stats.primitive_collision_time_sec,
+              res.debug_stats.analytic_validation_time_sec,
+              res.debug_stats.holonomic_heuristic_time_sec);
+          plan_stats->safe_parking_wall_s += elapsed;
+        }
       }
 
       if (res.status != PlanningStatus::SUCCESS)
@@ -1771,6 +1812,8 @@ bool relocate_blocking_robot(RobotMeta *blocker,
                 << ", schedule_failures=" << relocation_schedule_failures
                 << ", safety_rejections=" << relocation_safety_rejections
                 << std::endl;
+      if (plan_stats)
+        ++plan_stats->n_parking_relocations;
       return true;
     }
   }

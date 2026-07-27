@@ -41,6 +41,12 @@ struct MultiEntityCollisionResult
     bool has_collision;
     EntityMeta *colliding_entity;
     std::string collision_type; // "Robot", "Object", "Boundary", etc.
+    // colliding_entity's pose at the checked time, captured during the sweep.
+    // Only meaningful when has_collision is true; lets hot callers apply
+    // contact-excuse checks (is_valid_transfer_contact, etc.) without a
+    // second timetable lookup for the collider's pose. Default-constructed
+    // (unused) otherwise.
+    Pose colliding_pose;
 };
 
 /**
@@ -301,12 +307,36 @@ inline EntityCollisionResult check_entity_collision(
  * @param ignored_entity Optional pointer to an entity to ignore
  * @return MultiEntityCollisionResult with collision details
  */
-inline MultiEntityCollisionResult check_multiple_entities_collision(
+/**
+ * @brief Same semantics as check_multiple_entities_collision() below, but the
+ * entity sweep is driven by a caller-supplied `visit_entities` callable
+ * instead of a prebuilt `std::unordered_map<EntityMeta*, Pose>`.
+ *
+ * `visit_entities` must be callable as `visit_entities(per_entity)`, where
+ * `per_entity` is itself callable as `per_entity(EntityMeta*, const Pose&)`
+ * and gets invoked once for every candidate entity -- `TimeTable::for_each_pose`
+ * fits this directly, which is the point: hot call sites that used to build a
+ * fresh `TimeTable::get_poses(t)` map every sample can drive this sweep from
+ * `timetable.for_each_pose(t, ...)` instead, at zero allocation.
+ *
+ * Difference from the map-based overload: that version `return`s the instant
+ * it finds a hard (non-robot) collision, skipping every entity after it. A
+ * bare visitor callback has no equivalent early-exit, so this version instead
+ * sets a flag on the first hard hit and skips the (cheap) collision math for
+ * remaining entities. This costs a few extra rectangle-intersection tests in
+ * the rare multi-collider case; it does not add any avoided-map-allocation
+ * cost back, since every entity's pose was already being computed for all
+ * entities inside get_poses() before this change too. Both overloads report
+ * the *first* hard collision encountered in visitation order, and the first
+ * robot collider seen if no hard collision exists anywhere in the sweep.
+ */
+template <class VisitEntities>
+inline MultiEntityCollisionResult check_multiple_entities_collision_visit(
     const CollisionGeometry &robot_geom,
     const Pose &robot_pose,
     const CollisionGeometry *object_geom,
     const Pose *object_pose,
-    const std::unordered_map<EntityMeta *, Pose> &entities_at_time,
+    VisitEntities &&visit_entities,
     const Params &params,
     EntityMeta *robot_entity,
     EntityMeta *transferred_entity = nullptr,
@@ -314,13 +344,23 @@ inline MultiEntityCollisionResult check_multiple_entities_collision(
 {
     MultiEntityCollisionResult result{false, nullptr, ""};
     EntityMeta *first_robot_collider = nullptr;
+    Pose first_robot_collider_pose;
+    bool hard_collision_found = false;
 
-    for (const auto &[ent, pose] : entities_at_time)
+    visit_entities([&](EntityMeta *ent, const Pose &pose)
     {
+        // A hard collision was already found earlier in the sweep: skip the
+        // remaining (cheap) collision math, but we still have to visit every
+        // entity since the visitor has no early-exit protocol.
+        if (hard_collision_found)
+        {
+            return;
+        }
+
         // Skip self, transferred object, and ignored entity
         if (ent == robot_entity || ent == transferred_entity || ent == ignored_entity)
         {
-            continue;
+            return;
         }
 
         // Check robot body collision
@@ -329,17 +369,22 @@ inline MultiEntityCollisionResult check_multiple_entities_collision(
         {
             if (ent->type != EntityType::ROBOT)
             {
-                // HARD COLLISION (Static/Wall/Object) - Return IMMEDIATELY
+                // HARD COLLISION (Static/Wall/Object)
                 result.has_collision = true;
                 result.colliding_entity = ent;
                 result.collision_type = "Object"; // Or Static/Wall
-                return result;
+                result.colliding_pose = pose;
+                hard_collision_found = true;
+                return;
             }
             else
             {
                 // SOFT COLLISION (Robot) - Store and continue checking for Hard Collisions
                 if (!first_robot_collider)
+                {
                     first_robot_collider = ent;
+                    first_robot_collider_pose = pose;
+                }
             }
         }
 
@@ -357,27 +402,55 @@ inline MultiEntityCollisionResult check_multiple_entities_collision(
                     result.has_collision = true;
                     result.colliding_entity = ent;
                     result.collision_type = "Object";
-                    return result;
+                    result.colliding_pose = pose;
+                    hard_collision_found = true;
+                    return;
                 }
                 else
                 {
                     if (!first_robot_collider)
+                    {
                         first_robot_collider = ent;
+                        first_robot_collider_pose = pose;
+                    }
                 }
             }
         }
-    }
+    });
 
-    // If we finished loop and found a robot collider but no hard collider
-    if (first_robot_collider)
+    // If we finished the sweep and found a robot collider but no hard collider
+    if (!hard_collision_found && first_robot_collider)
     {
         result.has_collision = true;
         result.colliding_entity = first_robot_collider;
         result.collision_type = "Robot";
-        return result;
+        result.colliding_pose = first_robot_collider_pose;
     }
 
     return result;
+}
+
+inline MultiEntityCollisionResult check_multiple_entities_collision(
+    const CollisionGeometry &robot_geom,
+    const Pose &robot_pose,
+    const CollisionGeometry *object_geom,
+    const Pose *object_pose,
+    const std::unordered_map<EntityMeta *, Pose> &entities_at_time,
+    const Params &params,
+    EntityMeta *robot_entity,
+    EntityMeta *transferred_entity = nullptr,
+    EntityMeta *ignored_entity = nullptr)
+{
+    return check_multiple_entities_collision_visit(
+        robot_geom, robot_pose, object_geom, object_pose,
+        [&entities_at_time](auto &&per_entity)
+        {
+            for (const auto &[ent, pose] : entities_at_time)
+            {
+                per_entity(ent, pose);
+            }
+        },
+        params, robot_entity, transferred_entity, ignored_entity);
 }
 
 /**
