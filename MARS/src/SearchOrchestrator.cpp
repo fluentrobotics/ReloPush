@@ -11,6 +11,8 @@
 #include <config.h>
 #include <ReloPush/base64.h>
 #include <ReloPush/trajectory.hpp>
+#include <RobotTrajectoryBuilder.h>
+#include <SimVizHandoff.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -220,7 +222,11 @@ int run_greedy_only_pipeline(
     }
   }
 
-  if (options.run_on_robots && greedy_summary.all_tasks_succeeded)
+  if (options.sim_viz_handoff && greedy_summary.all_tasks_succeeded)
+  {
+    maybe_handoff_to_sim_viz(options, greedy_executed, greedy_summary.label);
+  }
+  else if (options.run_on_robots && greedy_summary.all_tasks_succeeded)
   {
     run_on_robots_pipeline(options, greedy_executed.timetable);
   }
@@ -943,7 +949,11 @@ int finalize_and_replay_best(
     }
   }
 
-  if (options.run_on_robots && best_executed->summary.all_tasks_succeeded)
+  if (options.sim_viz_handoff && best_executed->summary.all_tasks_succeeded)
+  {
+    maybe_handoff_to_sim_viz(options, *best_executed, best_executed->summary.label);
+  }
+  else if (options.run_on_robots && best_executed->summary.all_tasks_succeeded)
   {
     run_on_robots_pipeline(options, best_executed->timetable);
   }
@@ -986,24 +996,8 @@ void run_on_robots_pipeline(
     return;
   }
 
-  const auto &spans = timetable.get_trajectory_spans();
   std::vector<std::unique_ptr<zeromp_object>> sockets;
   sockets.reserve(robot_entities.size());
-
-  // Helper lambda to determine if absolute time t is transfer (pushing) mode
-  auto is_pushing_at_time = [&](EntityMeta *robot, double t) {
-    for (const auto &span : spans)
-    {
-      if (span.entity == robot && span.is_transfer)
-      {
-        if (t >= (span.start_time - 1e-4) && t <= (span.end_time + 1e-4))
-        {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
 
   // Helper to extract port number
   auto get_robot_port = [&](const std::string &name, int default_index) {
@@ -1096,42 +1090,22 @@ void run_on_robots_pipeline(
   }
 
   // Phase 1: Connect and upload trajectories
+  // Trajectory construction itself is factored into build_robot_trajectories
+  // (MARS/include/RobotTrajectoryBuilder.h) so mars_sim_viz (Phase B) can
+  // reuse the exact same logic -- see that header's doc comment. This call
+  // was originally a pure refactor of the inline `rp_traj`-building loop;
+  // ref_vel is now SIGNED (see RobotTrajectoryBuilder.h's dir_sign) -- a
+  // deliberate change validated by test_mpc_full_loop/test_robot_controllers.
+  auto robot_trajectories = build_robot_trajectories(timetable, robot_entities);
   for (size_t i = 0; i < robot_entities.size(); ++i)
   {
     EntityMeta *robot = robot_entities[i];
-    RobotMeta *robot_meta = dynamic_cast<RobotMeta *>(robot);
-    double speed_transit = robot_meta ? robot_meta->speed_transit : 0.2;
-    double speed_transfer = robot_meta ? robot_meta->speed_transfer : 0.15;
+    ReloPush::trajectory &rp_traj = robot_trajectories[i].second;
 
     int port = get_robot_port(robot->name, static_cast<int>(i + 1));
     std::string endpoint = "tcp://127.0.0.1:" + std::to_string(port);
 
     std::cout << "[Robots] Extracting trajectory for " << robot->name << "..." << std::endl;
-
-    ReloPush::trajectory rp_traj;
-    rp_traj.time_zero = 0.0f;
-
-    const auto &path_map = timetable.get_database().at(robot);
-    if (!path_map.empty())
-    {
-      double first_t = path_map.begin()->first;
-      for (const auto &[t, pose] : path_map)
-      {
-        float rel_t = static_cast<float>(t - first_t);
-        bool is_push = is_pushing_at_time(robot, t);
-        float ref_vel = static_cast<float>(is_push ? speed_transfer : speed_transit);
-
-        ReloPush::trajectory_elem elem(
-            static_cast<float>(pose.x),
-            static_cast<float>(pose.y),
-            static_cast<float>(pose.yaw),
-            ref_vel,
-            rel_t,
-            is_push
-        );
-        rp_traj.append_waypoint(elem);
-      }
-    }
 
     std::string serialized = rp_traj.serialize();
     std::string encoded = base64_encode(serialized);

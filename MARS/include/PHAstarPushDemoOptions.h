@@ -523,4 +523,22 @@ struct RuntimeOptions
     std::string mpc_vesc_ip = "127.0.0.1";
     std::string mpc_localization_ip = "127.0.0.1";
     bool spawn_mpc = true;
+
+    // Sim-viz handoff gate (see MARS/include/SimVizHandoff.h): when true,
+    // a successful run's
+    // finalization step hands the ExecutedScenario off to a separately
+    // running mars_sim_viz process instead of driving robots/simulators
+    // in-process via run_on_robots_pipeline. Mutually exclusive with
+    // run_on_robots at the two SearchOrchestrator.cpp call sites (this flag
+    // wins when both are set); default false keeps existing --run-on-robots
+    // behavior bit-identical.
+    bool sim_viz_handoff = false;
+    // Control-socket endpoint mars_sim_viz's REP server binds (PING/EXECUTE
+    // protocol).
+    std::string sim_viz_endpoint = "tcp://127.0.0.1:5601";
+    // Directory the handoff-gate writes "<label>.scn.b64" into before
+    // notifying the visualizer. Created if missing. Relative paths resolve
+    // against the working directory the process was launched from (same
+    // convention as --eval-plans-result-out-dir=).
+    std::string sim_handoff_out_dir = "results/sim_handoff";
 };

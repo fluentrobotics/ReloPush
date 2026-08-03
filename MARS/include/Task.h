@@ -163,6 +163,14 @@ public:
         StartPoseObj = {fa.startPose.x, fa.startPose.y, NormalizeReloPushYaw(fa.startPose.yaw)};
         GoalPoseObj = {fa.goalPose.x, fa.goalPose.y, NormalizeReloPushYaw(fa.goalPose.yaw)};
         targetObject = dynamic_cast<ObjectMeta*>(entities.at(fa.object.name));
+        // GOAL-POSE FIX: back-fill the entity's goal_pose from the value just
+        // computed above (ground truth, sourced from FinalAllocation::goalPose).
+        // Without this, ObjectMeta::goal_pose is never assigned anywhere in the
+        // write path and is serialized/drawn as uninitialized heap garbage --
+        // see the goal-pose diagnosis (default Pose() only zero-inits yaw;
+        // GeometryPoint's x/y have no ctor/NSDMI and are left indeterminate).
+        if (targetObject)
+            targetObject->goal_pose = GoalPoseObj;
         sourcePrePushDistance = fa.snapshot.parameters.PrePush_dist;
 
         // Use the first executable segment start so tasks with obstacle relocation

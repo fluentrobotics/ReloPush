@@ -790,6 +790,18 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
     {
       options.run_on_robots = true;
     }
+    else if (arg == "--sim-viz-handoff")
+    {
+      options.sim_viz_handoff = true;
+    }
+    else if (arg.rfind("--sim-viz-endpoint=", 0) == 0)
+    {
+      options.sim_viz_endpoint = arg.substr(std::string("--sim-viz-endpoint=").size());
+    }
+    else if (arg.rfind("--sim-handoff-out-dir=", 0) == 0)
+    {
+      options.sim_handoff_out_dir = arg.substr(std::string("--sim-handoff-out-dir=").size());
+    }
     else if (arg.rfind("--robot-port-start=", 0) == 0)
     {
       std::string value = arg.substr(std::string("--robot-port-start=").size());

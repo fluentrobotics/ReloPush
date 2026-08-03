@@ -1,6 +1,16 @@
 #include <ReloPush/TaskAllocation.hpp>
 #include <ReloPush/ReloPushBossDiagnostics.hpp>
 #include <tuple>
+#include <cstdlib>
+
+static long relopush_timeout_ms() {
+    static long v = [](){
+        const char* s = std::getenv("RELOPUSH_TIMEOUT_MS");
+        long x = s ? std::atol(s) : 0;
+        return x > 0 ? x : 180000L;
+    }();
+    return v;
+}
 
 EdgeMatrixEntry PairCostResult::getBestPath()
 {
@@ -2073,7 +2083,7 @@ bool performAllocationsDFS(
     auto time_now = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_now - time_start);
 
-    if (duration.count() > 180000) // 180 seconds
+    if (duration.count() > relopush_timeout_ms()) // timeout (default 180 seconds, overridable via RELOPUSH_TIMEOUT_MS)
     {
         // timeout
         return false;
@@ -2227,7 +2237,7 @@ bool performAllocations(
         auto time_now = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_now - time_start);
 
-        if (duration.count() > 180000) // 180 seconds
+        if (duration.count() > relopush_timeout_ms()) // timeout (default 180 seconds, overridable via RELOPUSH_TIMEOUT_MS)
         {
             // timeout
             return false;

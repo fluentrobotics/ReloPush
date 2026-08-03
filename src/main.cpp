@@ -1,5 +1,6 @@
 #include <ReloPush/GraphBuilder.hpp>
 #include "ReloPush/InputParser.hpp"
+#include <cstdlib>
 #include <ReloPush/batchInstanceParcer.hpp>
 #include <iostream>
 #include <vector>
@@ -80,6 +81,15 @@ namespace
         return options;
     }
 } // namespace
+
+static long relopush_timeout_ms() {
+    static long v = [](){
+        const char* s = std::getenv("RELOPUSH_TIMEOUT_MS");
+        long x = s ? std::atol(s) : 0;
+        return x > 0 ? x : 180000L;
+    }();
+    return v;
+}
 
 // Function to save finalSequence to a file using base64-encoded binary data
 void saveFinalSequenceToFile(const std::vector<FinalAllocation> &finalSequence, const std::string &filename)
@@ -389,7 +399,7 @@ int main(int argc, char *argv[])
     std::cout << "Elapsed time: " << duration.count() << " ms" << std::endl;
 
     bool timeout = false;
-    if (duration.count() > 120000)
+    if (duration.count() > (2 * relopush_timeout_ms()) / 3) // default 120 seconds (2/3 of the 180s solve deadline), overridable via RELOPUSH_TIMEOUT_MS
         timeout = true;
 
     double total_path_length = 0.0;
