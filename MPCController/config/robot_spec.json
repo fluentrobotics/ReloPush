@@ -1,0 +1,32 @@
+{
+  "_doc": "MPCController robot geometry/limits and MPC tuning, loaded via --robot-spec=<path>. Absent keys keep the compiled defaults (mpc::RobotSpec::defaults()/mpc::MpcParams::defaults()); unknown keys produce a stderr warning but do not fail loading. The MPC prediction horizon (mpc::kHorizon in include/mpc/MpcCore.h) is a compile-time constant and is intentionally NOT configurable here.",
+  "robot": {
+    "wheel_base": 0.29,
+    "front_length": 0.36,
+    "rear_length": 0.12,
+    "width": 0.275,
+    "min_turning_radius_transit": 1.02,
+    "min_turning_radius_transfer": 1.43,
+    "speed_transit": 0.2,
+    "speed_transfer": 0.15,
+    "max_steer": 0.33,
+    "max_accel": 0.73,
+    "max_v_push": 0.295,
+    "max_v_nonpush": 0.38
+  },
+  "mpc": {
+    "dt": 0.05,
+    "control_delay_steps": 1,
+    "loop_hz": 20,
+    "w_dist": 5.0,
+    "w_dist_dirchange": 50.0,
+    "w_yaw": 1.0,
+    "w_vel": 0.2,
+    "w_lat": 40.0,
+    "w_control": 0.001,
+    "w_delta_rate": 50.0,
+    "vel_scale": 1.01,
+    "vel_scale_back": 0.9,
+    "dir_change_scale": 0.77
+  }
+}
