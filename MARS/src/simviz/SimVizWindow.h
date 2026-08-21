@@ -26,6 +26,7 @@
 // minimal seam added for this phase) so the canvas has something to draw
 // for the whole Loaded/Running/Done/Err lifecycle.
 
+#include "CalibrationTab.h"
 #include "MocapTab.h"
 #include "SimVizCore.h"
 
@@ -169,9 +170,12 @@ public:
   // and tab 1 "OptiTrack" (mocap_tab()). Exposed for tests that want to
   // assert tab structure/switch tabs; canvas()/every other pre-existing
   // seam is untouched (tab 0's contents are byte-identical to before this
-  // task, just reparented under the tab widget).
+  // task, just reparented under the tab widget). Tab 2 "Calibration"
+  // (calibration_tab()) is a later addition -- see CalibrationTab.h's own
+  // header comment.
   QTabWidget *tabs() { return tabs_; }
   MocapTab *mocap_tab() { return mocap_tab_; }
+  CalibrationTab *calibration_tab() { return calibration_tab_; }
 
   // FEATURE C (testability): the toolbar "Motor (accel) noise σ" slider's
   // current integer percent (0..25), or -1 if the slider hasn't been
@@ -412,9 +416,10 @@ private:
   QTimer *repaint_timer_ = nullptr; // ~33ms (~30Hz): trail sampling + canvas/monitor-panel repaint
 
   // DESIGN part C: QTabWidget central widget -- tab 0 = the pre-existing
-  // Simulation layout (unchanged), tab 1 = mocap_tab_.
+  // Simulation layout (unchanged), tab 1 = mocap_tab_, tab 2 = calibration_tab_.
   QTabWidget *tabs_ = nullptr;
   MocapTab *mocap_tab_ = nullptr;
+  CalibrationTab *calibration_tab_ = nullptr;
 };
 
 } // namespace simviz

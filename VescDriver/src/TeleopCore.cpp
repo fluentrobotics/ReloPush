@@ -29,16 +29,6 @@ constexpr double kDutyRampMax = 1.0;
 constexpr double kErpmRampMin = 10.0;
 constexpr double kErpmRampMax = 20000.0;
 
-// Speed governor mode (see TeleopCore.h's "SPEED GOVERNOR MODE" section).
-// EMA smoothing factor for the raw erpm reading -- FW 2.18's own erpm
-// estimate is noisy (roughly +-150), so this is deliberately fairly
-// aggressive smoothing, not just a nominal filter.
-constexpr double kErpmFilterAlpha = 0.3;
-// Floor on the v_in used in the feedforward term's denominator -- guards
-// against a division blowing up (or even by zero) on a bogus/startup
-// v_in reading, not a claim that 6V is a real operating point.
-constexpr double kSpeedMinEffectiveVIn = 6.0;
-
 std::string fault_name(uint8_t fault_code) {
     switch (fault_code) {
         case 1: return "OVER_VOLTAGE";
@@ -51,6 +41,23 @@ std::string fault_name(uint8_t fault_code) {
     }
 }
 
+namespace {
+// Maps TeleopConfig's own flat speed_*/duty_ramp/max_duty fields into a
+// SpeedGovernorConfig -- see SpeedGovernor.h. TeleopConfig keeps its
+// existing field names (this mapping lives here, not as a rename), so
+// existing callers/config files are unaffected.
+SpeedGovernorConfig make_speed_governor_config(const TeleopConfig& c) {
+    SpeedGovernorConfig g;
+    g.kp = c.speed_kp;
+    g.ki = c.speed_ki;
+    g.ff_gain = c.speed_ff_gain;
+    g.max_duty = c.max_duty;
+    g.duty_slew_per_s = c.duty_ramp;
+    g.erpm_filter_tau_s = c.erpm_filter_tau_s;
+    return g;
+}
+}  // namespace
+
 TeleopCore::TeleopCore(TeleopConfig config)
     : config_(config),
       duty_mag_(config.duty_mag_default),
@@ -59,7 +66,9 @@ TeleopCore::TeleopCore(TeleopConfig config)
       duty_ramp_(config.duty_ramp),
       erpm_ramp_(config.erpm_ramp),
       ramp_enabled_(config.ramp_enabled),
-      steering_position_(clamp_steering(config.steer_center)) {}
+      steering_position_(clamp_steering(config.steer_center)) {
+    governor_.configure(make_speed_governor_config(config_));
+}
 
 double TeleopCore::max_for_mode(TeleopMode m) const {
     // kErpm and kSpeed are both erpm-shaped targets -- share max_erpm.
@@ -126,9 +135,7 @@ void TeleopCore::begin_brake(const std::string& reason, double now_s) {
 }
 
 void TeleopCore::reset_governor() {
-    speed_integrator_ = 0.0;
-    erpm_filter_initialized_ = false;
-    erpm_filtered_ = 0.0;  // reseeded fresh from the next feed_telemetry() call.
+    governor_.reset();
 }
 
 double TeleopCore::clamp_steering(double value) const {
@@ -442,37 +449,20 @@ TeleopMotorAction TeleopCore::step(double now_s) {
 TeleopMotorAction TeleopCore::step_speed_governor(double dt) {
     // target_value() here is direction()*magnitude(), and magnitude() in
     // kSpeed is the TARGET ERPM (see TeleopCore.h's class header) -- NOT
-    // a duty value, despite this function's only output being duty.
-    const double target_erpm = target_value();
-    const double error = target_erpm - erpm_filtered_;
-
-    const double effective_v_in = std::max(v_in_last_, kSpeedMinEffectiveVIn);
-    const double duty_ff =
-        (config_.speed_ff_gain > 1e-9) ? target_erpm / (config_.speed_ff_gain * effective_v_in) : 0.0;
-
-    // Incremental PI with anti-windup: only commit the integrator step
-    // if the resulting duty command does NOT need clamping this tick --
-    // otherwise freeze it at its pre-tick value (std::min/max just
-    // SELECT one of their inputs, introducing no rounding of their own,
-    // so an exact `==` reliably detects "no clamping occurred" here).
-    const double integ_candidate = speed_integrator_ + config_.speed_ki * error * dt;
-    const double duty_cmd_unclamped = duty_ff + config_.speed_kp * error + integ_candidate;
-    const double duty_cmd = std::min(config_.max_duty, std::max(-config_.max_duty, duty_cmd_unclamped));
-    if (duty_cmd == duty_cmd_unclamped) {
-        speed_integrator_ = integ_candidate;
-    }
-
-    // The governor's own gentleness guarantee: ALWAYS slew-limit the
-    // emitted duty toward duty_cmd by duty_ramp_, regardless of
-    // ramp_enabled_ (see the class header's "SPEED GOVERNOR MODE"
-    // section) -- reuses the same emitted_value_ slewing machinery as
-    // duty/erpm ramp mode above, just always-on here.
-    const double max_delta = duty_ramp_ * dt;
-    if (emitted_value_ < duty_cmd) {
-        emitted_value_ = std::min(duty_cmd, emitted_value_ + max_delta);
-    } else if (emitted_value_ > duty_cmd) {
-        emitted_value_ = std::max(duty_cmd, emitted_value_ - max_delta);
-    }
+    // a duty value, despite this function's only output being duty. The
+    // actual PI+FF+slew math now lives in SpeedGovernor (see
+    // SpeedGovernor.h). duty_ramp_ is runtime-mutable (the 'Z'+digit
+    // ramp-rate entry -- see commit_digit_buffer()), so re-sync the
+    // governor's own duty_slew_per_s from it every tick rather than only
+    // once at construction; this is what delivers the "ALWAYS slew-
+    // limited, regardless of ramp_enabled_" guarantee documented in the
+    // class header's "SPEED GOVERNOR MODE" section, using whatever rate
+    // is CURRENTLY configured.
+    SpeedGovernorConfig gcfg = governor_.config();
+    gcfg.duty_slew_per_s = duty_ramp_;
+    governor_.configure(gcfg);
+    governor_.set_target_erpm(target_value());
+    emitted_value_ = governor_.step(dt);
 
     TeleopMotorAction action;
     action.type = TeleopMotorAction::Type::kDuty;  // speed mode NEVER sends SET_RPM.
@@ -483,7 +473,6 @@ TeleopMotorAction TeleopCore::step_speed_governor(double dt) {
 }
 
 void TeleopCore::feed_telemetry(const VescValues& values, double now_s) {
-    (void)now_s;
     if (state_ == State::kAborted) return;
 
     const bool over_current = std::fabs(values.current_motor) > config_.current_abort;
@@ -508,15 +497,16 @@ void TeleopCore::feed_telemetry(const VescValues& values, double now_s) {
 
     // Kept warm regardless of the current mode/driving state, so it's
     // ready the moment the operator switches into speed mode and starts
-    // driving -- see "SPEED GOVERNOR MODE".
-    v_in_last_ = values.v_in;
-    if (!erpm_filter_initialized_) {
-        erpm_filtered_ = values.erpm * drive_sign();
-        erpm_filter_initialized_ = true;
-    } else {
-        erpm_filtered_ =
-            kErpmFilterAlpha * (values.erpm * drive_sign()) + (1.0 - kErpmFilterAlpha) * erpm_filtered_;
-    }
+    // driving -- see "SPEED GOVERNOR MODE". dt_since_last_sample is
+    // computed from THIS class's own last_telemetry_time_s_ bookkeeping
+    // (not governor state -- see TeleopCore.h) -- governor_.feed_erpm()
+    // ignores it entirely on the first-ever call (or the first call
+    // after a reset()), so an arbitrary/stale last_telemetry_time_s_ left
+    // over from before a reset is harmless.
+    const double dt_since_last_sample = now_s - last_telemetry_time_s_;
+    last_telemetry_time_s_ = now_s;
+    governor_.feed_vin(values.v_in);
+    governor_.feed_erpm(values.erpm * drive_sign(), dt_since_last_sample);
 }
 
 double TeleopCore::deadman_remaining_s(double now_s) const {

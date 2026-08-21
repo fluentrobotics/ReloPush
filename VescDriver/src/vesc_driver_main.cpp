@@ -13,6 +13,7 @@
 #include "DriverCore.h"
 #include "PortDiscovery.h"
 #include "SerialPort.h"
+#include "SteeringAngleMap.h"
 #include "SteeringCalib.h"
 #include "VescProtocol.h"
 #include "ZmqChannels.h"
@@ -60,6 +61,17 @@ struct CliOptions {
     std::string calibration;
     std::string steering_calib_path;  // empty -> auto-resolve via SteeringCalib::resolve_default_load_path().
     bool print_telemetry = false;
+
+    // Driver v2 CLI additions (see DriverCore.h's CommandSemantics/
+    // ActuationMode and vesc_driver_main.cpp's resolve_optional_map_path()).
+    bool has_command_semantics = false;
+    std::string command_semantics;
+    bool has_actuation = false;
+    std::string actuation;
+    bool has_wheel_base = false;
+    double wheel_base = 0.0;
+    std::string velocity_calib_path;     // empty -> resolve via $HOME/.vesc / exe-relative example.
+    std::string steering_angle_map_path;  // empty -> resolve via $HOME/.vesc only (no shipped example).
 
     // VEHICLE drive-direction sign override (see SteeringCalib.h's
     // drive_invert) -- has_drive_invert==false means "use whatever the
@@ -126,6 +138,19 @@ CliOptions parse_cli(int argc, char** argv) {
         } else if (arg == "--no-drive-invert") {
             o.has_drive_invert = true;
             o.drive_invert = false;
+        } else if (flag_matches(arg, "--command-semantics") && next_value(argc, argv, &i, &value)) {
+            o.has_command_semantics = true;
+            o.command_semantics = value;
+        } else if (flag_matches(arg, "--actuation") && next_value(argc, argv, &i, &value)) {
+            o.has_actuation = true;
+            o.actuation = value;
+        } else if (flag_matches(arg, "--wheel-base") && next_value(argc, argv, &i, &value)) {
+            o.has_wheel_base = true;
+            o.wheel_base = std::atof(value.c_str());
+        } else if (flag_matches(arg, "--velocity-calib") && next_value(argc, argv, &i, &value)) {
+            o.velocity_calib_path = value;
+        } else if (flag_matches(arg, "--steering-angle-map") && next_value(argc, argv, &i, &value)) {
+            o.steering_angle_map_path = value;
         } else {
             std::fprintf(stderr, "vesc_driver: ignoring unrecognized argument '%s'\n", arg.c_str());
         }
@@ -159,6 +184,40 @@ std::string resolve_default_config_path() {
     return "./config/driver_config.json";
 }
 
+// Load precedence for the Driver v2 velocity/steering-angle map files (see
+// DriverConfig::velocity_calib_file/steering_angle_map_file's own comment
+// in DriverCore.h): explicit_path if non-empty (returned as-is --
+// existence is NOT checked here, the loader itself reports "failed to
+// load" and DriverCore falls back gracefully); else
+// "$HOME/.vesc/<filename>" if that file exists; else, if
+// `example_relative` is non-empty, "<exe_dir>/../config/<example_relative>"
+// if THAT exists (the velocity map's own shipped example -- the steering
+// angle map has no shipped example, per the task brief, so callers pass
+// an empty `example_relative` for it and simply get "" here, meaning
+// "legacy servo path"). Mirrors SteeringCalib.h's own resolve_load_path()
+// precedence shape.
+std::string resolve_optional_map_path(const std::string& explicit_path, const std::string& filename,
+                                       const std::string& example_relative) {
+    if (!explicit_path.empty()) return explicit_path;
+
+    const char* home_env = std::getenv("HOME");
+    const std::string home_dir = home_env ? home_env : "";
+    if (!home_dir.empty()) {
+        const std::string home_path = home_dir + "/.vesc/" + filename;
+        if (path_exists(home_path)) return home_path;
+    }
+
+    if (!example_relative.empty()) {
+        const std::string exe_dir = own_exe_dir();
+        if (!exe_dir.empty()) {
+            const std::string example_path = exe_dir + "/../config/" + example_relative;
+            if (path_exists(example_path)) return example_path;
+        }
+    }
+
+    return "";
+}
+
 void apply_cli_overrides(const CliOptions& cli, vesc::DriverConfig* config) {
     if (cli.has_robot) config->robot_name = cli.robot;
     if (cli.has_ackermann_port) config->ackermann_port = cli.ackermann_port;
@@ -167,6 +226,9 @@ void apply_cli_overrides(const CliOptions& cli, vesc::DriverConfig* config) {
     if (cli.has_serial_port) config->serial_port = cli.serial_port;
     if (cli.has_mode) config->mode = cli.mode;
     if (cli.has_calibration) config->calibration_file = cli.calibration;
+    if (cli.has_command_semantics) config->command_semantics = cli.command_semantics;
+    if (cli.has_actuation) config->actuation = cli.actuation;
+    if (cli.has_wheel_base) config->wheel_base = cli.wheel_base;
 }
 
 // ---------------------------------------------------------------------
@@ -181,6 +243,7 @@ struct RuntimeState {
     bool ackermann_ever_valid = false;
     double held_accel = 0.0;
     double held_steering = 0.0;
+    double held_speed = 0.0;  // Driver v2: consumed only in command_semantics=="velocity" -- see DriverCore.h.
     double last_valid_ackermann_time_s = 0.0;
 
     bool calib_ever_set = false;
@@ -193,6 +256,12 @@ struct RuntimeState {
     double servo_override_value = 0.5;
 
     double erpm_meas = 0.0;
+    // Driver v2: latest VESC-reported battery voltage (GET_VALUES) --
+    // fed into DriverCore's actuation=="governor" SpeedGovernor
+    // feedforward term every tick (see TickInputs::v_in's own comment);
+    // simply holds its last value between GET_VALUES replies, same
+    // "caller keeps last" convention as erpm_meas above.
+    double v_in_meas = 0.0;
 };
 
 struct TelemetrySnapshot {
@@ -385,6 +454,42 @@ int main(int argc, char** argv) {
     }
     apply_cli_overrides(cli, &config);
 
+    // Driver v2: resolve the velocity/steering-angle map files (see
+    // resolve_optional_map_path()'s own doc comment for the precedence).
+    // An empty result is the documented "use the built-in fallback" case
+    // for both (VelocityMap's linear defaults / the legacy servo path
+    // respectively) -- DriverCore's own constructor loads whichever path
+    // ends up here (or falls back gracefully if it's empty/unloadable).
+    config.velocity_calib_file =
+        resolve_optional_map_path(cli.velocity_calib_path, "velocity_calib.json", "velocity_calib.example.json");
+    config.steering_angle_map_file =
+        resolve_optional_map_path(cli.steering_angle_map_path, "steering_angle_map.json", "");
+
+    // Wheelbase enforcement: a steering_angle_map's OWN wheel_base must
+    // agree with config.wheel_base (within 1e-3) -- a mismatch here means
+    // the map was fit for a physically different vehicle geometry than
+    // what this process thinks it's driving, which would silently produce
+    // wrong steering angles. Checked as early as possible (before serial
+    // discovery/opening the VESC) so a misconfigured robot never even
+    // attempts to actuate. A load FAILURE here is not fatal on its own --
+    // DriverCore's own constructor re-attempts the same load and falls
+    // back to the legacy servo path, reported in the startup banner below.
+    if (!config.steering_angle_map_file.empty()) {
+        const vesc::SteeringAngleMapLoadResult smap_check = vesc::load_steering_angle_map(config.steering_angle_map_file);
+        if (smap_check.ok) {
+            const double mismatch = std::fabs(smap_check.map.wheel_base() - config.wheel_base);
+            if (mismatch > 1e-3) {
+                std::fprintf(stderr,
+                              "vesc_driver: FATAL: steering_angle_map '%s' wheel_base=%.4f does not match "
+                              "driver_config/--wheel-base wheel_base=%.4f (mismatch=%.4f > 1e-3) -- refusing "
+                              "to start. Fix one or the other before retrying.\n",
+                              config.steering_angle_map_file.c_str(), smap_check.map.wheel_base(), config.wheel_base,
+                              mismatch);
+                return 1;
+            }
+        }
+    }
+
     // Shared steering calibration (SteeringCalib.h): center/min_pos/max_pos/
     // invert are overridden from this file when it loads successfully --
     // gain_per_rad is DELIBERATELY left alone (rad_per_unit is reserved/
@@ -472,6 +577,16 @@ int main(int argc, char** argv) {
         config.ackermann_port, config.control_port, config.telemetry_port, config.watchdog_ms,
         config.control_rate_hz);
     std::fprintf(stderr, "vesc_driver: motor map: %s\n", core.motor_map_note().c_str());
+    // Driver v2 startup banner: command_semantics/actuation/watchdog_ms
+    // and which velocity/steering maps actually loaded (or their
+    // documented fallback), so an operator can tell at a glance what mode
+    // this process is actually running in without reading config files.
+    std::printf("vesc_driver: command_semantics=%s actuation=%s watchdog_ms=%.0f\n",
+                 vesc::to_string(core.command_semantics()).c_str(), vesc::to_string(core.actuation()).c_str(),
+                 config.watchdog_ms);
+    std::printf("vesc_driver: velocity map: %s\n", core.velocity_map_note().c_str());
+    std::printf("vesc_driver: steering angle map: %s\n",
+                 core.has_steering_angle_map() ? core.steering_angle_map_note().c_str() : "legacy servo path");
     // Steering calibration: which source actually supplied servo.center/
     // min_pos/max_pos/invert (see the load block above, before serial
     // discovery) -- an operator glancing at startup output should
@@ -526,6 +641,7 @@ int main(int argc, char** argv) {
             if (cmd.ok) {
                 state.held_accel = cmd.accel;
                 state.held_steering = cmd.steering;
+                state.held_speed = cmd.speed;
                 state.last_valid_ackermann_time_s = now_s;
                 state.ackermann_ever_valid = true;
                 if (state.source == vesc::Source::kAckermann) {
@@ -564,6 +680,7 @@ int main(int argc, char** argv) {
                     const vesc::VescValues v = vesc::parse_get_values(payload);
                     if (v.ok) {
                         state.erpm_meas = v.erpm;
+                        state.v_in_meas = v.v_in;
                         snapshot.erpm = v.erpm;
                         snapshot.duty = v.duty;
                         snapshot.current_motor = v.current_motor;
@@ -585,6 +702,7 @@ int main(int argc, char** argv) {
         in.ackermann.valid = state.ackermann_ever_valid;
         in.ackermann.accel = state.held_accel;
         in.ackermann.steering = state.held_steering;
+        in.ackermann.speed = state.held_speed;
         in.ackermann.age_s = state.ackermann_ever_valid ? (now_s - state.last_valid_ackermann_time_s) : 1.0e18;
         in.calib.has_command = state.calib_ever_set;
         in.calib.mode = state.calib_mode;
@@ -598,6 +716,9 @@ int main(int argc, char** argv) {
         // VEHICLE frame ("+ is forward"), so this must be converted here,
         // matching TeleopCore's own feed_telemetry() conversion.
         in.erpm_meas = state.erpm_meas * drive_sign;
+        // v_in is a scalar (no vehicle/motor frame distinction) -- passed
+        // straight through, "keep last" per state.v_in_meas's own comment.
+        in.v_in = state.v_in_meas;
 
         vesc::TickResult result = core.tick(in);
 

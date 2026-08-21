@@ -1,0 +1,19 @@
+{
+  "_doc": "EXAMPLE ONLY -- documents the shared vehicle calibration schema: steering servo (center position + travel limits + invert) AND drive-direction sign (drive_invert) -- see VescDriver/src/SteeringCalib.h. This file is never written to by any program: vesc_teleop/vesc_driver/future MPC-side tools read/write the LIVE calibration at $HOME/.vesc/steering_calib.json (or wherever --steering-calib points), never here -- this repo-shipped copy is only a read-only fallback/reference (see SteeringCalib.h's resolve_load_path(), tier 3) and a schema example for documentation.",
+  "version": 1,
+  "center": 0.5,
+  "_center_doc": "servo position (0..1) that points the wheels straight ahead.",
+  "min_pos": 0.05,
+  "_min_pos_doc": "servo position (0..1) at full lock in one direction -- must satisfy 0<=min_pos<center.",
+  "max_pos": 0.95,
+  "_max_pos_doc": "servo position (0..1) at full lock in the other direction -- must satisfy center<max_pos<=1.",
+  "invert": false,
+  "_invert_doc": "EXAMPLE -- flips the sign of steering-to-servo mapping if the servo turns the wrong way.",
+  "rad_per_unit": 0.0,
+  "_rad_per_unit_doc": "PLACEHOLDER -- radians of steering angle per unit of servo position; 0 means unknown/uncalibrated. Reserved for later steering-angle work, not consumed by anything yet.",
+  "drive_invert": false,
+  "_drive_invert_doc": "EXAMPLE -- whole-vehicle property, true if the robot's 'forward' motor command sign is physically inverted by wiring, so DRIVE code must negate the sign of its motor command when this is true.",
+  "note": "example fixture -- not a real calibration",
+  "saved_unix_time": 0,
+  "_saved_unix_time_doc": "EXAMPLE -- a real saved file records time(nullptr) at save time here."
+}

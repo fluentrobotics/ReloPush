@@ -56,6 +56,52 @@ namespace
                !is_option_arg(argv[3]);
     }
 
+    struct WorkspaceOverrideOptions
+    {
+        bool has_x = false;
+        bool has_y = false;
+        double x = 0.0;
+        double y = 0.0;
+    };
+
+    // Scans argv for optional --workspace-x=<float> / --workspace-y=<float>
+    // flags, records any values found, and builds filtered_argv with those
+    // flags removed so downstream positional-arg parsing (has_batch_instance_args
+    // / handle_args) never sees them, regardless of where they appear on the
+    // command line. When neither flag is present, filtered_argv is just a copy
+    // of argv and behavior is unchanged.
+    WorkspaceOverrideOptions parse_and_strip_workspace_override(
+        int argc, char *argv[], std::vector<char *> &filtered_argv)
+    {
+        WorkspaceOverrideOptions options;
+        filtered_argv.clear();
+        filtered_argv.push_back(argv[0]);
+
+        const std::string x_prefix = "--workspace-x=";
+        const std::string y_prefix = "--workspace-y=";
+
+        for (int i = 1; i < argc; ++i)
+        {
+            const std::string arg = argv[i] ? argv[i] : "";
+            if (arg.rfind(x_prefix, 0) == 0)
+            {
+                options.has_x = true;
+                options.x = std::atof(arg.substr(x_prefix.size()).c_str());
+            }
+            else if (arg.rfind(y_prefix, 0) == 0)
+            {
+                options.has_y = true;
+                options.y = std::atof(arg.substr(y_prefix.size()).c_str());
+            }
+            else
+            {
+                filtered_argv.push_back(argv[i]);
+            }
+        }
+
+        return options;
+    }
+
     MarsIntegrationOptions parse_mars_integration_options(int argc, char *argv[])
     {
         MarsIntegrationOptions options;
@@ -231,21 +277,29 @@ int main(int argc, char *argv[])
 
     // bool sim = true;
     planningSimOrReal sim = planningSimOrReal::planOnly;
+
+    // Strip optional --workspace-x=/--workspace-y= flags before any positional
+    // or other flag parsing sees argv, so their presence/position cannot
+    // affect existing argument handling.
+    std::vector<char *> filtered_argv;
+    const WorkspaceOverrideOptions workspace_override =
+        parse_and_strip_workspace_override(argc, argv, filtered_argv);
+    int filtered_argc = static_cast<int>(filtered_argv.size());
+
     const MarsIntegrationOptions mars_integration =
-        parse_mars_integration_options(argc, argv);
+        parse_mars_integration_options(filtered_argc, filtered_argv.data());
     ReloPush::HandoffInstanceInfo handoff_instance_info;
 
     // Data to parse
-    WorkspaceBoundary boundary(4, 5.2); // todo: parse from file
     ObjectMap objects, goals;
     // std::unordered_map<std::string, ObjectInfo>   goals;
     std::unordered_map<std::string, ObjectGoalPair> objGoalPairs;
     std::vector<ReloPush::State> robots;
 
-    if (has_batch_instance_args(argc, argv)) // parse legacy positional batch args
+    if (has_batch_instance_args(filtered_argc, filtered_argv.data())) // parse legacy positional batch args
     {
-        handle_args(argc, argv, filename, instance_ind, use_opt, no_init_guess, use_dfs); // 3rd arg: mode. 'f'=ReloPush-F 'd' = ReloPush-D 'u'=no-init-opt 'o'=ReloPush
-        vis = false;                                                                      // disable for evaluations
+        handle_args(filtered_argc, filtered_argv.data(), filename, instance_ind, use_opt, no_init_guess, use_dfs); // 3rd arg: mode. 'f'=ReloPush-F 'd' = ReloPush-D 'u'=no-init-opt 'o'=ReloPush
+        vis = false;                                                                                               // disable for evaluations
     }
 
     if (mars_integration.enabled)
@@ -286,8 +340,26 @@ int main(int argc, char *argv[])
         input_abs_path,
         selected_instance_line);
 
-    parse_instance_from_file(filename, instance_ind, objects, goals, robots, objGoalPairs);
+    bool file_has_ws = false;
+    double file_ws_x = 0.0;
+    double file_ws_y = 0.0;
+    parse_instance_from_file(filename, instance_ind, objects, goals, robots, objGoalPairs,
+                              &file_has_ws, &file_ws_x, &file_ws_y);
     ReloPushBossDiagnostics::log_parsed_input(objects, goals, robots, objGoalPairs);
+
+    // Resolve effective workspace boundary: CLI flag > file `ws:` section > legacy default.
+    const double workspace_x = workspace_override.has_x
+        ? workspace_override.x
+        : (file_has_ws ? file_ws_x : 4.0);
+    const double workspace_y = workspace_override.has_y
+        ? workspace_override.y
+        : (file_has_ws ? file_ws_y : 5.2);
+    const char *workspace_source =
+        (workspace_override.has_x || workspace_override.has_y) ? "CLI override" :
+        (file_has_ws ? "instance file" : "default");
+    std::cout << "[Workspace] " << workspace_x << " x " << workspace_y
+              << " (from " << workspace_source << ")" << std::endl;
+    WorkspaceBoundary boundary(workspace_x, workspace_y);
 
     // send via zeromq
     zeromp_object mqClient;

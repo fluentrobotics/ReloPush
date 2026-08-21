@@ -1,0 +1,61 @@
+{
+  "_doc": "copy this folder to the Jetson; placeholders marked",
+  "robot_name": "robot2",
+  "ackermann_port": 3160,
+  "control_port": 3460,
+  "telemetry_port": 3560,
+  "serial_port": "",
+  "baud": 115200,
+  "mode": "erpm",
+  "cmd_per_mps": 4614.0,
+  "_cmd_per_mps_doc": "PLACEHOLDER -- replace with the real steady-state cmd-vs-speed slope from the calibration campaign (or point calibration_file at a fitted calibration JSON instead).",
+  "cmd_offset": 0.0,
+  "_cmd_offset_doc": "PLACEHOLDER -- see cmd_per_mps.",
+  "erpm_per_mps": 4614.0,
+  "_erpm_per_mps_doc": "PLACEHOLDER -- electrical RPM per m/s, used to convert VESC-reported erpm into v_now/v_est. Replace with the real motor/gearing/wheel-radius-derived value (or the calibration file's own fitted value, which overrides this when calibration_file is set).",
+  "servo": {
+    "enabled": true,
+    "center": 0.5,
+    "gain_per_rad": -0.65,
+    "invert": false,
+    "min_pos": 0.0,
+    "max_pos": 1.0
+  },
+  "safety": {
+    "max_erpm": 3000,
+    "max_duty": 0.15,
+    "max_current": 8.0,
+    "safety_max_accel": 3.5,
+    "safety_max_v": 0.6
+  },
+  "watchdog_ms": 1500,
+  "_watchdog_ms_doc": "Driver v2: raised from the pre-v2 default of 250ms -- 250ms proved too tight against real ackermann-stream jitter/latency on the actual robot, causing spurious watchdog brakes; 1500ms gives real-world margin while still being a small fraction of a human's reaction time.",
+  "control_rate_hz": 50,
+  "telemetry_rate_hz": 20,
+  "kick": {
+    "enabled": true,
+    "kick_cmd": 1200,
+    "kick_duty": 0.05,
+    "_kick_duty_doc": "actuation==\"governor\" only -- raw duty the kick bypass emits instead of kick_cmd (kick_cmd/kick_erpm_threshold are erpm-flavored and don't apply to a duty-only governor). See src/DriverCore.h's KickConfig.",
+    "kick_ms": 150,
+    "min_moving_speed_mps": 0.08,
+    "kick_erpm_threshold": 200
+  },
+  "calibration_file": "",
+  "command_semantics": "accel",
+  "_command_semantics_doc": "\"accel\" (default, unchanged pre-v2 behavior: wire accel is integrated into v_target, wire speed ignored) | \"velocity\" (wire speed IS the target, wire accel is repurposed as a slew-rate bound). See src/DriverCore.h's CommandSemantics.",
+  "actuation": "map",
+  "_actuation_doc": "\"map\" (default -- legacy LinearMap/CalibratedMap path via calibration_file, unchanged pre-v2 behavior) | \"governor\" (SpeedGovernor + velocity_calib-based VelocityMap, duty-only output). See src/DriverCore.h's ActuationMode. velocity_calib/steering_angle_map files are resolved by vesc_driver_main.cpp's own CLI/$HOME/.vesc precedence, not driver_config.json keys -- see README.md.",
+  "wheel_base": 0.29,
+  "_wheel_base_doc": "meters -- cross-checked against a loaded steering_angle_map's own wheel_base at startup (mismatch is a hard, nonzero-exit error).",
+  "default_slew_mps2": 0.73,
+  "_default_slew_mps2_doc": "command_semantics==\"velocity\" only -- default/held slew bound (m/s^2) before the first finite wire-accel value ever arrives.",
+  "governor": {
+    "kp": 2e-6,
+    "ki": 1e-5,
+    "ff_gain": 4400.0,
+    "duty_slew_per_s": 0.1,
+    "erpm_filter_tau_s": 0.1,
+    "_doc": "actuation==\"governor\" only -- see src/SpeedGovernor.h. max_duty is NOT configurable here; it always comes from safety.max_duty above."
+  }
+}

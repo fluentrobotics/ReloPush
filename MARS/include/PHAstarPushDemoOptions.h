@@ -1,7 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <cmath>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -208,6 +210,17 @@ struct RuntimeOptions
     int robot_count = 3;                       // capped by the predefined MARS robot set
     bool enable_lns_fine_segment_retry = true; // for LNS
     bool lns_reassign_only = false;            // false: lns-task-reassign default
+
+    // Optional runtime override for the 4th predefined robot's initial pose
+    // (x, y, theta), set via --robot4-pose=<x>,<y>,<theta>. Only the 4th
+    // entry in AllocationSearch.cpp's predefined_robots is affected, and only
+    // when robot_count >= 4 -- so this is a no-op for --num-robots<=3.
+    // std::nullopt (default) keeps the hardcoded WS45 campaign pose
+    // (4.0, 4.05, M_PI) in AllocationSearch.cpp unchanged. Added to reproduce
+    // the original paper's n=4 baseline (4.0x5.2 workspace, robot4 at
+    // (3.5, 4.75, pi)) at runtime without hardcoding -- see
+    // MARS/16ws45-instance-generation.md's "Implementation changes" section.
+    std::optional<std::array<double, 3>> robot4_pose;
 
     // Allocation-improvement method. LNS (default) keeps the destroy/repair
     // search; DQN uses the per-instance online Q-learning allocator.

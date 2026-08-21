@@ -784,6 +784,19 @@ std::optional<Pose> MocapManager::body_pose(const std::string &published_name) c
   return it->second.pose;
 }
 
+std::optional<MocapManager::TimedPose>
+MocapManager::latest_timed_pose(const std::string &published_name) const
+{
+  std::lock_guard<std::mutex> lk(bodies_mutex_);
+  auto it = bodies_.find(published_name);
+  if (it == bodies_.end() || !it->second.has_pose)
+    return std::nullopt;
+  TimedPose out;
+  out.t = it->second.last_update_steady_s;
+  out.pose = it->second.pose;
+  return out;
+}
+
 std::vector<MotiveAssetEntry> MocapManager::motive_assets() const
 {
   std::lock_guard<std::mutex> lk(inventory_mutex_);

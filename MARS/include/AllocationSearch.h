@@ -32,7 +32,8 @@ Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
 
 std::unordered_map<std::string, EntityMeta *>
 initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
-                    int requested_robot_count);
+                    int requested_robot_count,
+                    const std::optional<std::array<double, 3>> &robot4_pose_override = std::nullopt);
 
 std::vector<Task> initialize_tasks(
     const std::vector<FinalAllocation> &loaded_sequence,

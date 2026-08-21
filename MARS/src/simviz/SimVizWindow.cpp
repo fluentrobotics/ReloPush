@@ -555,6 +555,12 @@ SimVizWindow::SimVizWindow(SimVizConfig config, QWidget *parent)
   tabs_->addTab(central, "Simulation");
   mocap_tab_ = new MocapTab(manager_, this);
   tabs_->addTab(mocap_tab_, "OptiTrack");
+  // Calibration tab (teleop-driven velocity/steering map capture -- see
+  // CalibrationTab.h's own header comment): added after the OptiTrack tab,
+  // same "just another SimVizManager-driven tab" convention MocapTab
+  // established.
+  calibration_tab_ = new CalibrationTab(manager_, this);
+  tabs_->addTab(calibration_tab_, "Calibration");
   setCentralWidget(tabs_);
 
   QMenu *file_menu = menuBar()->addMenu("&File");
@@ -970,6 +976,8 @@ void SimVizWindow::refresh_display()
   // other block in this method.
   if (mocap_tab_)
     mocap_tab_->refresh();
+  if (calibration_tab_)
+    calibration_tab_->refresh();
 }
 
 void SimVizWindow::update_status_bar()

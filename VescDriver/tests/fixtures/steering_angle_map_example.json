@@ -1,0 +1,18 @@
+{
+  "_doc": "TEST FIXTURE ONLY (tests/vesc_unit_tests.cpp) -- deliberately NOT shipped under config/ (steering_angle_map.json has no example there, per the Driver v2 task brief: absent means legacy servo path).",
+  "version": 1,
+  "kind": "steering_angle_map",
+  "robot_name": "test_robot",
+  "wheel_base": 0.29,
+  "points": [
+    {"delta": -0.33, "servo": 0.62},
+    {"delta": 0.0, "servo": 0.50},
+    {"delta": 0.30, "servo": 0.40}
+  ],
+  "delta_min": -0.33,
+  "delta_max": 0.30,
+  "residual_rms": 0.004,
+  "meta": {
+    "notes": "Synthetic test fixture -- NOT fit from a real steering rig."
+  }
+}

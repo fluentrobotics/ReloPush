@@ -463,6 +463,28 @@ public:
   std::vector<Body> bodies() const;
   std::optional<Pose> body_pose(const std::string &published_name) const;
 
+  // Latest pose sample for a published body WITH its own steady-clock
+  // timestamp (seconds, monotonic, relative to this bridge session's
+  // sub_start_time_ -- the SAME basis Body::age_s is derived from). Added
+  // for CalibrationTab's mocap-feed poll (MARS/src/simviz/CalibrationTab.h):
+  // body_pose()/bodies() only expose AGE (relative to "now"), which can't by
+  // itself tell a caller "is this the SAME sample I already saw" across
+  // repeated polls -- this exposes the raw per-sample timestamp so a poller
+  // can dedupe on it directly (only feed a downstream consumer once per
+  // genuinely new sample). std::nullopt if the body has never been seen.
+  // NOTE: this timestamp is on MocapManager's own sub_start_time_ clock
+  // basis, NOT necessarily comparable to another process's/thread's steady
+  // clock reading -- callers that need to align this against a DIFFERENT
+  // live stream (e.g. VESC telemetry) should use it only to detect "is this
+  // a new sample", and self-timestamp on their OWN shared clock basis for
+  // anything that needs cross-stream time alignment (see CalibrationTab.cpp).
+  struct TimedPose
+  {
+    double t = 0.0;
+    Pose pose;
+  };
+  std::optional<TimedPose> latest_timed_pose(const std::string &published_name) const;
+
   // Motive-name inventory parsed from the bridge's one-time stdout line --
   // empty until the bridge's first NAT_MODELDEF reply (see
   // parse_motive_assets_line()'s doc comment).

@@ -13,8 +13,11 @@
 #include "../src/McconfPatcher.h"
 #include "../src/PortDiscovery.h"
 #include "../src/SerialPort.h"
+#include "../src/SpeedGovernor.h"
+#include "../src/SteeringAngleMap.h"
 #include "../src/SteeringCalib.h"
 #include "../src/TeleopCore.h"
+#include "../src/VelocityMap.h"
 #include "../src/VescProtocol.h"
 #include "FakeVescModel.h"
 
@@ -1646,6 +1649,690 @@ bool test_driver_core_nonfinite_ackermann_rejected() {
 }
 
 // ---------------------------------------------------------------------
+// SyntheticSpeedPlant is defined here (moved up from its original
+// location in section (o) below, which still uses it) so the new
+// SpeedGovernor (g) and DriverCore v2 (t) sections below can reuse the
+// SAME plant model rather than duplicating it -- deliberately
+// separate from FakeVescModel (this one is DUTY-actuated only, since
+// that's the governor's only output, and needs a live, test-mutable
+// v_in). Shape: a stall band (|duty| below some threshold ->
+// erpm_target 0) plus a first-order lag toward erpm_target =
+// plant_gain*duty*v_in.
+struct SyntheticSpeedPlant {
+    double plant_gain = 4400.0;  // erpm per (duty*volt) at steady state -- matches speed_ff_gain's own
+                                  // real-log-derived default, so a well-tuned ff alone gets close.
+    double stall_duty = 0.02;    // |duty| below this -> erpm_target 0 (mirrors FakeVescModel's stall_duty).
+    double tau_s = 0.2;          // first-order lag time constant.
+    double v_in = 8.0;           // caller-mutable mid-test (the battery-drop test below).
+    double erpm = 0.0;
+
+    double erpm_target(double duty) const {
+        if (std::fabs(duty) < stall_duty) return 0.0;
+        return plant_gain * duty * v_in;
+    }
+    void step(double duty, double dt) {
+        if (dt <= 0.0) return;
+        const double target = erpm_target(duty);
+        const double decay = std::exp(-dt / tau_s);
+        erpm = target + (erpm - target) * decay;
+    }
+};
+
+// ---------------------------------------------------------------------
+// (g) SpeedGovernor -- standalone (Driver v2): the class extracted out of
+// TeleopCore's former inline "SPEED GOVERNOR MODE" math (see
+// SpeedGovernor.h). Exercised directly here, independent of TeleopCore,
+// since DriverCore's own actuation=="governor" backend uses the SAME
+// class. SyntheticSpeedPlant (defined below, section (o)) is reused by
+// test_speed_governor_saturation_freeze_anti_windup() -- this section is
+// placed after it precisely so that struct is already in scope.
+// ---------------------------------------------------------------------
+
+bool test_speed_governor_pi_ff_formula_and_slew() {
+    bool ok = true;
+    vesc::SpeedGovernorConfig cfg;
+    cfg.kp = 2e-6;
+    cfg.ki = 1e-5;
+    cfg.ff_gain = 4400.0;
+    cfg.max_duty = 0.2;
+    cfg.duty_slew_per_s = 100.0;  // fast enough that emitted tracks duty_cmd almost exactly within one tick.
+    cfg.erpm_filter_tau_s = 0.1;
+    vesc::SpeedGovernor gov(cfg);
+
+    gov.feed_erpm(0.0, 0.0);  // first-ever sample -- seeds the filter directly, ignoring dt.
+    ok &= check_true(near_eq(gov.erpm_filtered(), 0.0), "first feed_erpm() seeds the filter directly at the raw value");
+    gov.feed_vin(8.0);
+    gov.set_target_erpm(1000.0);
+
+    const double dt = 0.02;
+    const double duty = gov.step(dt);
+    const double error = 1000.0 - 0.0;
+    const double effective_v_in = std::max(8.0, 6.0);
+    const double expected_ff = 1000.0 / (4400.0 * effective_v_in);
+    const double expected = expected_ff + cfg.kp * error + cfg.ki * error * dt;
+    ok &= check_true(near_eq(duty, expected, 1e-4), "step() matches the FF+P+(1 tick I) formula on a fresh governor");
+    ok &= check_true(!gov.saturated(), "not saturated on this small, well-within-max_duty command");
+    ok &= check_true(near_eq(gov.target_erpm(), 1000.0), "target_erpm() accessor reflects set_target_erpm()");
+    ok &= check_true(near_eq(gov.v_in(), 8.0), "v_in() accessor reflects feed_vin()");
+
+    return ok;
+}
+
+bool test_speed_governor_tau_based_ema_exact() {
+    bool ok = true;
+    vesc::SpeedGovernorConfig cfg;
+    cfg.erpm_filter_tau_s = 0.1;
+    vesc::SpeedGovernor gov(cfg);
+
+    gov.feed_erpm(0.0, 0.0);
+    ok &= check_true(near_eq(gov.erpm_filtered(), 0.0), "seed at 0");
+
+    const double dt = 0.02;
+    const double alpha = 1.0 - std::exp(-dt / 0.1);
+    gov.feed_erpm(1000.0, dt);
+    const double expected = alpha * 1000.0 + (1.0 - alpha) * 0.0;
+    ok &= check_true(near_eq(gov.erpm_filtered(), expected, 1e-6),
+                      "feed_erpm() applies alpha=1-exp(-dt/tau) exactly (Driver v2: replaces the fixed "
+                      "per-sample alpha=0.3 TeleopCore used to hardcode)");
+
+    const double before = gov.erpm_filtered();
+    gov.feed_erpm(5000.0, 0.0);
+    ok &= check_true(near_eq(gov.erpm_filtered(), before), "dt<=0 (repeated timestamp) leaves the filter unchanged");
+    gov.feed_erpm(5000.0, -1.0);
+    ok &= check_true(near_eq(gov.erpm_filtered(), before), "negative dt (backward clock) also leaves the filter unchanged");
+
+    return ok;
+}
+
+bool test_speed_governor_saturation_freeze_anti_windup() {
+    bool ok = true;
+    vesc::SpeedGovernorConfig cfg;
+    cfg.kp = 2e-6;
+    cfg.ki = 1e-5;
+    cfg.ff_gain = 4400.0;
+    cfg.max_duty = 0.05;
+    cfg.duty_slew_per_s = 10.0;
+    cfg.erpm_filter_tau_s = 0.1;
+    vesc::SpeedGovernor gov(cfg);
+    SyntheticSpeedPlant plant;
+    plant.v_in = 8.0;
+
+    gov.feed_vin(plant.v_in);
+    gov.feed_erpm(plant.erpm, 0.0);
+    gov.set_target_erpm(1.0e5);  // absurd, unreachable target -- forces sustained saturation.
+
+    const double dt = 0.02;
+    for (int i = 0; i < 100; ++i) {  // 2s of sustained saturation.
+        gov.feed_vin(plant.v_in);
+        gov.feed_erpm(plant.erpm, dt);
+        const double duty = gov.step(dt);
+        plant.step(duty, dt);
+    }
+    ok &= check_true(gov.saturated(), "sustained huge error -> saturated() true");
+    ok &= check_true(near_eq(gov.emitted_duty(), cfg.max_duty, 1e-6), "pinned at max_duty during sustained saturation");
+    ok &= check_true(plant.erpm > 1500.0,
+                      "plant settled near its own steady-state erpm at max_duty before the switch (got " +
+                          std::to_string(plant.erpm) + ")");
+
+    gov.set_target_erpm(500.0);  // achievable.
+    bool converged = false;
+    int ticks = -1;
+    for (int i = 0; i < 500 && !converged; ++i) {  // up to 10 more seconds.
+        gov.feed_vin(plant.v_in);
+        gov.feed_erpm(plant.erpm, dt);
+        const double duty = gov.step(dt);
+        plant.step(duty, dt);
+        if (std::fabs(plant.erpm - 500.0) <= 50.0) {
+            converged = true;
+            ticks = i;
+        }
+    }
+    ok &= check_true(converged, "converges to the new achievable target after switching down from saturation");
+    ok &= check_true(ticks >= 0 && ticks <= 250,
+                      "converges within a BOUNDED number of ticks -- anti-windup, not a wound-up integrator "
+                      "dragging it out (got " +
+                          std::to_string(ticks) + " ticks)");
+
+    return ok;
+}
+
+bool test_speed_governor_reset_clears_state() {
+    bool ok = true;
+    vesc::SpeedGovernorConfig cfg;
+    cfg.kp = 2e-6;
+    cfg.ki = 1e-5;
+    cfg.ff_gain = 4400.0;
+    cfg.max_duty = 0.15;
+    cfg.duty_slew_per_s = 100.0;
+    cfg.erpm_filter_tau_s = 0.1;
+    vesc::SpeedGovernor gov(cfg);
+    gov.feed_vin(8.0);
+    gov.feed_erpm(0.0, 0.0);
+    gov.set_target_erpm(1000.0);
+
+    const double dt = 0.02;
+    for (int i = 0; i < 50; ++i) {
+        gov.feed_erpm(200.0, dt);
+        gov.step(dt);
+    }
+    ok &= check_true(gov.emitted_duty() != 0.0, "built a nonzero emitted duty before reset");
+    ok &= check_true(gov.erpm_filtered() > 1.0, "built a nonzero filtered erpm before reset");
+
+    gov.reset();
+    ok &= check_true(near_eq(gov.emitted_duty(), 0.0), "reset() zeroes the slewed output");
+    ok &= check_true(!gov.saturated(), "reset() clears the saturation flag");
+    ok &= check_true(near_eq(gov.v_in(), 8.0), "reset() does NOT touch v_in() -- kept warm, matches TeleopCore's former v_in_last_ contract");
+
+    gov.feed_erpm(777.0, 999.0);  // huge dt on purpose -- must be ignored (seeding, not blending).
+    ok &= check_true(near_eq(gov.erpm_filtered(), 777.0),
+                      "post-reset(), the next feed_erpm() reseeds the filter directly regardless of dt");
+
+    const double duty = gov.step(dt);
+    const double error = 1000.0 - 777.0;
+    const double expected = (1000.0 / (4400.0 * 8.0)) + cfg.kp * error + cfg.ki * error * dt;
+    ok &= check_true(near_eq(duty, expected, 1e-4),
+                      "step() right after reset() matches the fresh FF+P+(1 tick I) formula -- zero carried-over "
+                      "integrator windup");
+
+    return ok;
+}
+
+bool test_speed_governor_seed_output_for_kick_handoff() {
+    bool ok = true;
+    vesc::SpeedGovernorConfig cfg;
+    cfg.duty_slew_per_s = 0.1;  // slow slew so the seeded starting point is directly observable.
+    vesc::SpeedGovernor gov(cfg);
+    gov.seed_output(0.05);
+    gov.set_target_erpm(0.0);
+    gov.feed_erpm(0.0, 0.0);
+    gov.feed_vin(8.0);
+
+    const double duty = gov.step(0.001);  // tiny dt -> slew barely moves from the seeded value.
+    ok &= check_true(near_eq(duty, 0.05, 0.01),
+                      "step() right after seed_output() starts slewing FROM the seeded value, not from 0 (got " +
+                          std::to_string(duty) + ")");
+
+    return ok;
+}
+
+// ---------------------------------------------------------------------
+// (i) VelocityMap (Driver v2): monotone piecewise-linear v<->erpm map.
+// ---------------------------------------------------------------------
+
+bool test_velocity_map_forward_inverse_and_clamp() {
+    bool ok = true;
+    vesc::VelocityCalibData data;
+    data.table = {{-0.6, -2768.4}, {0.0, 0.0}, {0.6, 2768.4}};
+    vesc::VelocityMap map(data);
+
+    ok &= check_true(map.has_table(), "3-point table -> has_table()==true");
+    ok &= check_true(near_eq(map.erpm_for_velocity(0.0), 0.0), "exact node, forward");
+    ok &= check_true(near_eq(map.erpm_for_velocity(0.3), 1384.2, 1e-6), "interpolated forward (halfway 0.0..0.6)");
+    ok &= check_true(near_eq(map.velocity_for_erpm(1384.2), 0.3, 1e-6), "interpolated inverse");
+    ok &= check_true(near_eq(map.erpm_for_velocity(-5.0), -2768.4), "forward clamps below the table's low end (never extrapolates)");
+    ok &= check_true(near_eq(map.erpm_for_velocity(5.0), 2768.4), "forward clamps above the table's high end");
+    ok &= check_true(near_eq(map.velocity_for_erpm(-999999.0), -0.6), "inverse clamps below the table's low end");
+    ok &= check_true(near_eq(map.velocity_for_erpm(999999.0), 0.6), "inverse clamps above the table's high end");
+
+    return ok;
+}
+
+bool test_velocity_map_linear_fallback() {
+    bool ok = true;
+    vesc::VelocityMap default_map;  // default-constructed -- linear mode, struct defaults.
+    ok &= check_true(!default_map.has_table(), "default-constructed VelocityMap has no table");
+    ok &= check_true(near_eq(default_map.erpm_for_velocity(0.5), 4614.0 * 0.5), "linear fallback forward uses the default erpm_per_mps");
+    ok &= check_true(near_eq(default_map.velocity_for_erpm(4614.0 * 0.5), 0.5, 1e-9), "linear fallback inverse");
+
+    vesc::VelocityCalibData data;
+    data.linear_fallback.erpm_per_mps = 1000.0;
+    data.linear_fallback.offset_erpm = 50.0;
+    vesc::VelocityMap map2(data);
+    ok &= check_true(!map2.has_table(), "empty table -> linear mode");
+    ok &= check_true(near_eq(map2.erpm_for_velocity(1.0), 1050.0), "linear fallback honors offset_erpm/erpm_per_mps");
+    ok &= check_true(near_eq(map2.velocity_for_erpm(1050.0), 1.0, 1e-9), "linear fallback inverse honors the offset");
+
+    vesc::VelocityCalibData zero_gain;
+    zero_gain.linear_fallback.erpm_per_mps = 0.0;
+    vesc::VelocityMap map3(zero_gain);
+    ok &= check_true(near_eq(map3.velocity_for_erpm(1000.0), 0.0), "velocity_for_erpm() returns 0 rather than dividing by ~zero erpm_per_mps");
+
+    return ok;
+}
+
+bool test_velocity_map_parse_good_and_bad() {
+    bool ok = true;
+    auto expect_fail = [&](const std::string& text, const std::string& what) {
+        const vesc::VelocityCalibParseResult r = vesc::parse_velocity_calib_json(text);
+        ok &= check_true(!r.ok, what);
+    };
+
+    expect_fail("not json", "invalid JSON -> ok=false");
+    expect_fail("[1,2,3]", "non-object top level -> ok=false");
+    expect_fail("{\"table\":[{\"v\":0.0,\"erpm\":0.0}]}", "table with fewer than 2 points -> ok=false");
+    expect_fail("{\"table\":[{\"v\":0.0,\"erpm\":0.0},{\"v\":0.0,\"erpm\":100.0}]}", "table not strictly ascending in v -> ok=false");
+    expect_fail("{\"table\":[{\"v\":0.0,\"erpm\":100.0},{\"v\":0.5,\"erpm\":50.0}]}", "table not strictly ascending in erpm -> ok=false");
+    expect_fail("{\"table\":[{\"v\":0.0},{\"v\":0.5,\"erpm\":50.0}]}", "table entry missing 'erpm' -> ok=false");
+    expect_fail("{\"table\":\"nope\"}", "non-array 'table' -> ok=false");
+
+    const vesc::VelocityCalibParseResult ok_absent = vesc::parse_velocity_calib_json("{\"min_reliable_erpm\":300.0}");
+    ok &= check_true(ok_absent.ok && ok_absent.data.table.empty(), "absent 'table' key -> ok=true, empty table (the documented linear-fallback case)");
+    ok &= check_true(near_eq(ok_absent.data.min_reliable_erpm, 300.0), "min_reliable_erpm parses independently");
+
+    const vesc::VelocityCalibParseResult good = vesc::parse_velocity_calib_json(
+        "{\"version\":2,\"table\":[{\"v\":-0.6,\"erpm\":-2768.4},{\"v\":0.6,\"erpm\":2768.4}],"
+        "\"min_reliable_erpm\":250.0,\"linear_fallback\":{\"erpm_per_mps\":4614.0,\"offset_erpm\":0.0,\"rms\":0.0}}");
+    ok &= check_true(good.ok, "well-formed 2-point table parses ok");
+    ok &= check_true(good.data.table.size() == 2, "table size");
+    ok &= check_true(near_eq(good.data.linear_fallback.erpm_per_mps, 4614.0), "linear_fallback sub-fields parse independently");
+
+    return ok;
+}
+
+bool test_velocity_map_load_file_and_example() {
+    bool ok = true;
+    const std::string source_file = __FILE__;
+    const std::string marker = "/tests/vesc_unit_tests.cpp";
+    const size_t marker_pos = source_file.rfind(marker);
+    const std::string vescdriver_dir = (marker_pos != std::string::npos) ? source_file.substr(0, marker_pos) : ".";
+    const std::string example_path = vescdriver_dir + "/config/velocity_calib.example.json";
+
+    const vesc::VelocityMapLoadResult loaded = vesc::load_velocity_map(example_path);
+    ok &= check_true(loaded.used_table, "the shipped velocity_calib.example.json loads its table (" + loaded.note + ")");
+    ok &= check_true(near_eq(loaded.map.erpm_for_velocity(0.6), 2768.4, 1e-6), "shipped example table content");
+
+    const vesc::VelocityMapLoadResult missing = vesc::load_velocity_map("/nonexistent/velocity_calib.json");
+    ok &= check_true(!missing.used_table, "a missing file falls back to linear, never a hard failure");
+    ok &= check_true(near_eq(missing.map.erpm_for_velocity(1.0), 4614.0), "fallback uses the built-in linear defaults");
+
+    const vesc::VelocityMapLoadResult empty_path = vesc::load_velocity_map("");
+    ok &= check_true(!empty_path.used_table, "an empty path is the documented 'no file configured' case -- also linear");
+
+    return ok;
+}
+
+// ---------------------------------------------------------------------
+// (k) SteeringAngleMap (Driver v2): monotone piecewise-linear steering
+// angle (delta, radians) -> servo position map. tests/fixtures/
+// steering_angle_map_example.json is a TEST-ONLY fixture -- there is
+// deliberately no shipped config/ example (absent means legacy servo
+// path, per the task brief).
+// ---------------------------------------------------------------------
+
+bool test_steering_angle_map_interpolation_and_clamp() {
+    bool ok = true;
+    vesc::SteeringAngleMapData data;
+    data.wheel_base = 0.29;
+    data.delta_min = -0.33;
+    data.delta_max = 0.30;
+    data.points = {{-0.33, 0.62}, {0.0, 0.50}, {0.30, 0.40}};
+    vesc::SteeringAngleMap map(data);
+
+    ok &= check_true(near_eq(map.servo_for_delta(0.0), 0.50), "exact node");
+    ok &= check_true(near_eq(map.servo_for_delta(-0.165), 0.56, 1e-6), "interpolates halfway between -0.33 and 0.0 (0.62->0.50)");
+    ok &= check_true(near_eq(map.servo_for_delta(0.15), 0.45, 1e-6), "interpolates halfway between 0.0 and 0.30 (0.50->0.40)");
+    ok &= check_true(near_eq(map.servo_for_delta(-5.0), 0.62), "delta below delta_min clamps to delta_min's own servo");
+    ok &= check_true(near_eq(map.servo_for_delta(5.0), 0.40), "delta above delta_max clamps to delta_max's own servo");
+    ok &= check_true(near_eq(map.wheel_base(), 0.29), "wheel_base() accessor");
+    ok &= check_true(!map.empty(), "a 3-point map is not empty()");
+
+    return ok;
+}
+
+bool test_steering_angle_map_parse_validation() {
+    bool ok = true;
+    auto expect_fail = [&](const std::string& text, const std::string& what) {
+        const vesc::SteeringAngleMapParseResult r = vesc::parse_steering_angle_map_json(text);
+        ok &= check_true(!r.ok, what);
+    };
+
+    expect_fail("not json", "invalid JSON -> ok=false");
+    expect_fail("[1,2,3]", "non-object top level -> ok=false");
+    expect_fail("{\"wheel_base\":0.29}", "missing 'points' -> ok=false");
+    expect_fail("{\"points\":\"nope\"}", "non-array 'points' -> ok=false");
+    expect_fail("{\"points\":[{\"delta\":-0.1,\"servo\":0.6}]}", "fewer than 2 points -> ok=false");
+    expect_fail("{\"points\":[{\"delta\":0.0,\"servo\":0.5},{\"delta\":0.0,\"servo\":0.4}]}",
+                "'points' not strictly ascending in delta -> ok=false");
+    expect_fail(
+        "{\"points\":[{\"delta\":-0.1,\"servo\":0.5},{\"delta\":0.0,\"servo\":0.5},{\"delta\":0.1,\"servo\":0.4}]}",
+        "non-monotone servo column -> ok=false");
+    expect_fail("{\"points\":[{\"delta\":-0.1,\"servo\":1.5},{\"delta\":0.1,\"servo\":0.4}]}",
+                "servo outside [0,1] -> ok=false");
+
+    const vesc::SteeringAngleMapParseResult good = vesc::parse_steering_angle_map_json(
+        "{\"version\":1,\"wheel_base\":0.29,\"points\":[{\"delta\":-0.33,\"servo\":0.62},{\"delta\":0.30,\"servo\":0.40}],"
+        "\"delta_min\":-0.33,\"delta_max\":0.30}");
+    ok &= check_true(good.ok, "well-formed 2-point descending-servo map parses ok");
+    ok &= check_true(near_eq(good.data.wheel_base, 0.29), "wheel_base parses");
+
+    const vesc::SteeringAngleMapParseResult good_ascending =
+        vesc::parse_steering_angle_map_json("{\"points\":[{\"delta\":-0.33,\"servo\":0.30},{\"delta\":0.30,\"servo\":0.70}]}");
+    ok &= check_true(good_ascending.ok, "an ASCENDING servo column is also accepted -- either physical direction is legal");
+
+    return ok;
+}
+
+bool test_steering_angle_map_load_file_and_wheelbase_check() {
+    bool ok = true;
+    const std::string source_file = __FILE__;
+    const std::string marker = "/tests/vesc_unit_tests.cpp";
+    const size_t marker_pos = source_file.rfind(marker);
+    const std::string vescdriver_dir = (marker_pos != std::string::npos) ? source_file.substr(0, marker_pos) : ".";
+    const std::string fixture_path = vescdriver_dir + "/tests/fixtures/steering_angle_map_example.json";
+
+    const vesc::SteeringAngleMapLoadResult loaded = vesc::load_steering_angle_map(fixture_path);
+    ok &= check_true(loaded.ok, "the test fixture steering_angle_map loads ok (" + loaded.note + ")");
+    if (loaded.ok) {
+        ok &= check_true(near_eq(loaded.map.wheel_base(), 0.29), "fixture wheel_base");
+        ok &= check_true(near_eq(loaded.map.servo_for_delta(0.0), 0.50, 1e-6), "fixture midpoint node");
+
+        // Wheel-base mismatch detection AT THE MAP LEVEL -- exactly the
+        // comparison vesc_driver_main.cpp performs at startup (see that
+        // file's own wheelbase-enforcement block, which exits nonzero on
+        // a mismatch before ever touching the serial port).
+        const double mismatched_wheel_base = 0.35;
+        ok &= check_true(std::fabs(loaded.map.wheel_base() - mismatched_wheel_base) > 1e-3,
+                          "a genuinely different configured wheel_base is detected as a mismatch");
+        const double agreeing_wheel_base = 0.29;
+        ok &= check_true(std::fabs(loaded.map.wheel_base() - agreeing_wheel_base) <= 1e-3,
+                          "an agreeing configured wheel_base is NOT flagged as a mismatch");
+    }
+
+    const vesc::SteeringAngleMapLoadResult missing = vesc::load_steering_angle_map("/nonexistent/steering_angle_map.json");
+    ok &= check_true(!missing.ok, "a missing file fails to load -- caller falls back to the legacy servo path");
+
+    const vesc::SteeringAngleMapLoadResult empty_path = vesc::load_steering_angle_map("");
+    ok &= check_true(!empty_path.ok, "an empty path is the documented 'no map configured' case -- legacy servo path");
+
+    return ok;
+}
+
+// ---------------------------------------------------------------------
+// (t) DriverCore Driver v2 additions -- command_semantics/actuation,
+// SpeedGovernor/VelocityMap/SteeringAngleMap wiring, the raised watchdog
+// default, and the steering-NaN-hold behavior change. Reuses
+// make_test_driver_config()/base_driver_inputs() from section (h) above,
+// and SyntheticSpeedPlant from section (o) below.
+// ---------------------------------------------------------------------
+
+bool test_driver_core_v2_struct_defaults() {
+    bool ok = true;
+    const vesc::DriverConfig cfg;  // struct defaults, no overrides.
+
+    ok &= check_true(near_eq(cfg.watchdog_ms, 1500.0),
+                      "DriverConfig{}'s own compiled-in watchdog_ms default is 1500 (Driver v2, raised from the pre-v2 250)");
+    ok &= check_true(cfg.command_semantics == "accel",
+                      "DriverConfig{}'s own compiled-in command_semantics default is \"accel\" (pre-v2-identical "
+                      "behavior when unconfigured)");
+    ok &= check_true(cfg.actuation == "map",
+                      "DriverConfig{}'s own compiled-in actuation default is \"map\" -- see DriverCore.h's "
+                      "ActuationMode comment for why this deliberately differs from the task brief's literal "
+                      "\"governor\" default (a \"governor\" struct default would silently break every "
+                      "pre-existing DriverCore test/caller that never sets this field)");
+    ok &= check_true(near_eq(cfg.wheel_base, 0.29), "wheel_base default");
+    ok &= check_true(near_eq(cfg.default_slew_mps2, 0.73), "default_slew_mps2 default");
+    ok &= check_true(near_eq(cfg.kick.kick_duty, 0.05), "kick.kick_duty default");
+    ok &= check_true(near_eq(cfg.governor.kp, 2e-6) && near_eq(cfg.governor.ki, 1e-5) &&
+                          near_eq(cfg.governor.ff_gain, 4400.0) && near_eq(cfg.governor.duty_slew_per_s, 0.1) &&
+                          near_eq(cfg.governor.erpm_filter_tau_s, 0.1),
+                      "governor sub-config defaults match the task brief's own numbers");
+
+    // The new 1500ms default is actually WIRED to watchdog timing (not
+    // just a struct field) -- age just under it must not engage, just
+    // over must.
+    vesc::DriverCore core(cfg);
+    vesc::TickInputs in = base_driver_inputs(0.0);
+    in.ackermann.valid = true;
+    in.ackermann.accel = 0.1;
+    in.ackermann.age_s = 1.499;
+    core.tick(in);
+    in.now_s = 0.02;
+    core.tick(in);
+    ok &= check_true(core.state_string() == "active", "age_s just under the new 1500ms default does NOT engage the watchdog");
+
+    in.now_s = 0.04;
+    in.ackermann.age_s = 1.501;
+    core.tick(in);
+    ok &= check_true(core.state_string() == "watchdog_brake", "age_s just over the new 1500ms default DOES engage the watchdog");
+
+    return ok;
+}
+
+bool test_driver_core_velocity_semantics_nan_holds() {
+    bool ok = true;
+    vesc::DriverConfig cfg = make_test_driver_config();
+    cfg.command_semantics = "velocity";
+    cfg.actuation = "map";  // isolate semantics from actuation for this test.
+    cfg.default_slew_mps2 = 0.5;
+    cfg.safety.safety_max_v = 10.0;
+    cfg.safety.safety_max_accel = 10.0;
+    cfg.kick.enabled = false;
+    vesc::DriverCore core(cfg);
+    ok &= check_true(core.config().command_semantics == "velocity", "config round-trips command_semantics");
+
+    double t = 0.0;
+    vesc::TickInputs in = base_driver_inputs(t);
+    in.ackermann.valid = true;
+    in.ackermann.speed = 2.0;  // target 2.0 m/s.
+    in.ackermann.accel = 1.0;  // slew bound 1.0 m/s^2 (velocity semantics repurposes this field).
+    in.ackermann.age_s = 0.0;
+    core.tick(in);  // first-ever tick: dt==0.
+
+    const double dt = 0.02;
+    t += dt;
+    in.now_s = t;
+    const vesc::TickResult r1 = core.tick(in);
+    ok &= check_true(near_eq(r1.v_target, 1.0 * dt, 1e-6),
+                      "velocity semantics: internal setpoint slews toward the wire speed target at the wire "
+                      "accel-as-bound rate");
+
+    // NaN speed -> HOLD the last finite target (2.0), keep slewing toward it.
+    t += dt;
+    in.now_s = t;
+    in.ackermann.speed = std::numeric_limits<double>::quiet_NaN();
+    const vesc::TickResult r2 = core.tick(in);
+    ok &= check_true(std::isfinite(r2.v_target), "NaN speed tick leaves v_target finite");
+    ok &= check_true(near_eq(r2.v_target, r1.v_target + 1.0 * dt, 1e-6),
+                      "NaN speed HOLDS the last finite target (2.0) -- setpoint keeps slewing toward it");
+
+    // NaN accel(bound) -> HOLD the last finite bound (1.0).
+    t += dt;
+    in.now_s = t;
+    in.ackermann.accel = std::numeric_limits<double>::quiet_NaN();
+    const vesc::TickResult r3 = core.tick(in);
+    ok &= check_true(std::isfinite(r3.v_target), "NaN accel(bound) tick leaves v_target finite");
+    ok &= check_true(near_eq(r3.v_target, r2.v_target + 1.0 * dt, 1e-6), "NaN accel HOLDS the last finite slew bound (1.0)");
+
+    // Regression: "accel" semantics NEVER reads wire speed at all.
+    vesc::DriverConfig cfg_accel = make_test_driver_config();
+    vesc::DriverCore core_accel(cfg_accel);
+    vesc::TickInputs in_accel = base_driver_inputs(0.0);
+    in_accel.ackermann.valid = true;
+    in_accel.ackermann.accel = 0.0;    // no accel commanded.
+    in_accel.ackermann.speed = 999.0;  // a huge wire speed that MUST be ignored in accel semantics.
+    in_accel.ackermann.age_s = 0.0;
+    core_accel.tick(in_accel);
+    in_accel.now_s = 1.0;
+    const vesc::TickResult r_accel = core_accel.tick(in_accel);
+    ok &= check_true(near_eq(r_accel.v_target, 0.0, 1e-9), "accel semantics ignores wire speed entirely (v_target stays 0 with accel=0)");
+
+    return ok;
+}
+
+bool test_driver_core_steering_nan_holds_last_finite() {
+    bool ok = true;
+    const vesc::DriverConfig cfg = make_test_driver_config();
+    vesc::DriverCore core(cfg);
+
+    vesc::TickInputs in = base_driver_inputs(0.0);
+    in.ackermann.valid = true;
+    in.ackermann.accel = 0.0;
+    in.ackermann.steering = 0.2;
+    in.ackermann.age_s = 0.0;
+    const vesc::TickResult r0 = core.tick(in);
+    const double expected0 = cfg.servo.center + (cfg.servo.invert ? -1.0 : 1.0) * cfg.servo.gain_per_rad * 0.2;
+    ok &= check_true(near_eq(r0.servo_pos, std::max(cfg.servo.min_pos, std::min(cfg.servo.max_pos, expected0)), 1e-9),
+                      "servo_pos matches the affine formula for a finite steering value");
+
+    // Driver v2 change: a NaN steering value now HOLDS 0.2 exactly --
+    // NOT the pre-v2 "recenter to 0 rad" behavior.
+    in.now_s = 0.02;
+    in.ackermann.steering = std::numeric_limits<double>::quiet_NaN();
+    const vesc::TickResult r1 = core.tick(in);
+    ok &= check_true(near_eq(r1.servo_pos, r0.servo_pos, 1e-9),
+                      "NaN steering HOLDS the last finite servo_pos exactly (not a snap to the 0-rad/center position)");
+
+    in.now_s = 0.04;
+    const vesc::TickResult r2 = core.tick(in);
+    ok &= check_true(near_eq(r2.servo_pos, r0.servo_pos, 1e-9), "the hold persists across multiple consecutive NaN ticks");
+
+    in.now_s = 0.06;
+    in.ackermann.steering = -0.1;
+    const vesc::TickResult r3 = core.tick(in);
+    const double expected3 = cfg.servo.center + (cfg.servo.invert ? -1.0 : 1.0) * cfg.servo.gain_per_rad * (-0.1);
+    ok &= check_true(near_eq(r3.servo_pos, std::max(cfg.servo.min_pos, std::min(cfg.servo.max_pos, expected3)), 1e-9),
+                      "a fresh finite steering value immediately overrides the hold");
+
+    return ok;
+}
+
+bool test_driver_core_steering_angle_map_wiring() {
+    bool ok = true;
+    const std::string source_file = __FILE__;
+    const std::string marker = "/tests/vesc_unit_tests.cpp";
+    const size_t marker_pos = source_file.rfind(marker);
+    const std::string vescdriver_dir = (marker_pos != std::string::npos) ? source_file.substr(0, marker_pos) : ".";
+    const std::string fixture_path = vescdriver_dir + "/tests/fixtures/steering_angle_map_example.json";
+
+    vesc::DriverConfig cfg = make_test_driver_config();
+    cfg.steering_angle_map_file = fixture_path;
+    cfg.wheel_base = 0.29;  // agrees with the fixture.
+    vesc::DriverCore core(cfg);
+    ok &= check_true(core.has_steering_angle_map(),
+                      "DriverCore loads the configured steering_angle_map_file (" + core.steering_angle_map_note() + ")");
+    ok &= check_true(near_eq(core.steering_angle_map_wheel_base(), 0.29),
+                      "DriverCore exposes the loaded map's own wheel_base for the caller's mismatch check");
+
+    vesc::TickInputs in = base_driver_inputs(0.0);
+    in.ackermann.valid = true;
+    in.ackermann.accel = 0.0;
+    in.ackermann.steering = 0.0;  // exact node -> servo 0.50 per the fixture.
+    in.ackermann.age_s = 0.0;
+    const vesc::TickResult r = core.tick(in);
+    ok &= check_true(near_eq(r.servo_pos, 0.50, 1e-6),
+                      "servo_pos comes from the loaded SteeringAngleMap, REPLACING the legacy "
+                      "center+gain_per_rad affine formula entirely");
+
+    vesc::DriverConfig cfg_legacy = make_test_driver_config();
+    vesc::DriverCore core_legacy(cfg_legacy);
+    ok &= check_true(!core_legacy.has_steering_angle_map(), "no steering_angle_map_file configured -> legacy servo path (regression)");
+
+    return ok;
+}
+
+bool test_driver_core_governor_actuation_converges() {
+    bool ok = true;
+    vesc::DriverConfig cfg = make_test_driver_config();
+    cfg.actuation = "governor";
+    cfg.command_semantics = "accel";
+    cfg.kick.enabled = false;
+    cfg.safety.max_duty = 0.2;
+    cfg.governor.kp = 2e-6;
+    cfg.governor.ki = 1e-5;
+    cfg.governor.ff_gain = 4400.0;
+    cfg.governor.duty_slew_per_s = 10.0;
+    cfg.governor.erpm_filter_tau_s = 0.1;
+    // velocity_calib_file left empty -> the default linear-fallback
+    // VelocityMap (4614 erpm/mps), so the expected target erpm below is
+    // exactly derivable from safety_max_v.
+    vesc::DriverCore core(cfg);
+    ok &= check_true(!core.velocity_map_used_table(), "no velocity_calib_file configured -> linear-fallback VelocityMap");
+
+    SyntheticSpeedPlant plant;  // reused from section (o) below.
+    plant.v_in = 8.0;
+    plant.plant_gain = 4400.0;
+
+    double t = 0.0;
+    vesc::TickInputs in = base_driver_inputs(t);
+    in.ackermann.valid = true;
+    in.ackermann.accel = 3.0;  // ramps v_target up quickly toward safety_max_v.
+    in.ackermann.age_s = 0.0;
+    core.tick(in);
+
+    const double dt = 0.02;
+    for (int i = 0; i < 500; ++i) {  // 10s.
+        t += dt;
+        in.now_s = t;
+        in.ackermann.age_s = 0.0;
+        in.erpm_meas = plant.erpm;
+        in.v_in = plant.v_in;
+        const vesc::TickResult r = core.tick(in);
+        ok &= check_true(r.motor.type == vesc::MotorAction::Type::kDuty,
+                          "actuation==\"governor\" ALWAYS emits kDuty, tick " + std::to_string(i));
+        plant.step(r.motor.value, dt);
+    }
+    const double expected_erpm = 4614.0 * cfg.safety.safety_max_v;
+    ok &= check_true(near_eq(plant.erpm, expected_erpm, 150.0),
+                      "governor actuation backend converges toward the VelocityMap-derived target erpm (got " +
+                          std::to_string(plant.erpm) + ", expected ~" + std::to_string(expected_erpm) + ")");
+
+    return ok;
+}
+
+bool test_driver_core_kick_in_governor_mode_seeds_slew() {
+    bool ok = true;
+    vesc::DriverConfig cfg = make_test_driver_config();
+    cfg.actuation = "governor";
+    cfg.kick.enabled = true;
+    cfg.kick.kick_duty = 0.08;
+    cfg.kick.kick_ms = 100.0;
+    cfg.kick.min_moving_speed_mps = 0.1;
+    cfg.kick.kick_erpm_threshold = 200.0;
+    cfg.safety.max_duty = 0.5;           // generous, isolate this test from the safety clamp.
+    cfg.governor.duty_slew_per_s = 0.5;  // slow enough that the seeded starting point is directly observable.
+    vesc::DriverCore core(cfg);
+
+    double t = 0.0;
+    vesc::TickInputs in = base_driver_inputs(t);
+    in.ackermann.valid = true;
+    in.ackermann.accel = 0.5;  // small -> v_target rises slowly, entering the kick band.
+    in.ackermann.age_s = 0.0;
+    in.erpm_meas = 0.0;  // "at rest".
+    core.tick(in);       // first-ever tick: dt==0.
+
+    t += 0.02;
+    in.now_s = t;
+    const vesc::TickResult r1 = core.tick(in);
+    ok &= check_true(r1.motor.type == vesc::MotorAction::Type::kDuty, "kick output type is kDuty under actuation==\"governor\"");
+    ok &= check_true(near_eq(r1.motor.value, cfg.kick.kick_duty, 1e-9),
+                      "kick fires: motor.value == +kick_duty (NOT kick_cmd, which is erpm-flavored)");
+
+    for (int i = 0; i < 3; ++i) {
+        t += 0.02;
+        in.now_s = t;
+        const vesc::TickResult r = core.tick(in);
+        ok &= check_true(near_eq(r.motor.value, cfg.kick.kick_duty, 1e-9), "kick sustained at kick_duty, tick " + std::to_string(i));
+    }
+
+    // Push past kick_ms -> falls through to the governor. dt for this
+    // specific tick() call is 0.06s (t was last at 0.08, now 0.14), so
+    // the governor's own mandatory slew bounds this tick's movement to
+    // at most duty_slew_per_s*0.06 away from the seeded kick_duty --
+    // proving the seed handoff (an UN-seeded governor always starts its
+    // slew from 0 instead).
+    t += 0.06;
+    in.now_s = t;
+    const vesc::TickResult r_after = core.tick(in);
+    ok &= check_true(r_after.motor.type == vesc::MotorAction::Type::kDuty, "post-kick output is still kDuty (governor actuation)");
+    const double max_delta = cfg.governor.duty_slew_per_s * 0.06;
+    ok &= check_true(std::fabs(r_after.motor.value - cfg.kick.kick_duty) <= max_delta + 1e-6,
+                      "post-kick governor output starts its slew FROM the seeded kick_duty, within this tick's own "
+                      "slew budget (got " +
+                          std::to_string(r_after.motor.value) + ", seeded " + std::to_string(cfg.kick.kick_duty) + ")");
+
+    return ok;
+}
+
 // (j) TeleopCore -- pure logic, no I/O: constructs a TeleopConfig by hand
 // and drives handle_key()/step()/feed_telemetry() with synthetic
 // monotonic time (no real sleeps), mirroring DriverCore's own unit-test
@@ -2419,36 +3106,12 @@ bool test_teleop_core_ramp_mode_switch_stops_first() {
 }
 
 // ---------------------------------------------------------------------
-// (o) TeleopCore SPEED GOVERNOR mode -- pure logic, no I/O: drives the
-// governor (handle_key/step/feed_telemetry) against a small synthetic
-// motor plant defined right here (deliberately separate from
-// FakeVescModel -- this one is DUTY-actuated only, since that's the
-// governor's only output, and needs a live, test-mutable v_in to prove
-// the voltage-independence claim, which FakeVescModel's own fixed
-// --v-in isn't built for). Shape mirrors FakeVescModel: a stall band
-// (|duty| below some threshold -> erpm_target 0) plus a first-order lag
-// toward erpm_target = plant_gain*duty*v_in.
+// (o) TeleopCore SPEED GOVERNOR mode -- pure logic, no I/O: drives
+// TeleopCore's own key/mode wiring around SpeedGovernor
+// (handle_key/step/feed_telemetry) against SyntheticSpeedPlant (now
+// defined up in section (g), since the new SpeedGovernor/DriverCore-v2
+// sections above also need it).
 // ---------------------------------------------------------------------
-
-struct SyntheticSpeedPlant {
-    double plant_gain = 4400.0;  // erpm per (duty*volt) at steady state -- matches speed_ff_gain's own
-                                  // real-log-derived default, so a well-tuned ff alone gets close.
-    double stall_duty = 0.02;    // |duty| below this -> erpm_target 0 (mirrors FakeVescModel's stall_duty).
-    double tau_s = 0.2;          // first-order lag time constant.
-    double v_in = 8.0;           // caller-mutable mid-test (the battery-drop test below).
-    double erpm = 0.0;
-
-    double erpm_target(double duty) const {
-        if (std::fabs(duty) < stall_duty) return 0.0;
-        return plant_gain * duty * v_in;
-    }
-    void step(double duty, double dt) {
-        if (dt <= 0.0) return;
-        const double target = erpm_target(duty);
-        const double decay = std::exp(-dt / tau_s);
-        erpm = target + (erpm - target) * decay;
-    }
-};
 
 bool test_teleop_core_speed_mode_separate_magnitude_and_step() {
     bool ok = true;
@@ -4174,6 +4837,50 @@ int main() {
         {"h12) DriverCore: NaN/Inf accel+steering never latch v_target_/servo_pos/motor cmd non-finite, "
          "and the driver recovers on the next valid command",
          test_driver_core_nonfinite_ackermann_rejected},
+        {"g1) SpeedGovernor: FF+P+I formula matches the pre-extraction inline math on a fresh governor",
+         test_speed_governor_pi_ff_formula_and_slew},
+        {"g2) SpeedGovernor: tau-based EMA alpha=1-exp(-dt/tau) exact arithmetic + dt<=0 no-op",
+         test_speed_governor_tau_based_ema_exact},
+        {"g3) SpeedGovernor: saturation freeze anti-windup + bounded recovery time on a synthetic plant",
+         test_speed_governor_saturation_freeze_anti_windup},
+        {"g4) SpeedGovernor: reset() clears integrator/filter/slew/saturation but NOT v_in(), fresh-start formula",
+         test_speed_governor_reset_clears_state},
+        {"g5) SpeedGovernor: seed_output() starts the next step()'s slew from the seeded value (kick handoff)",
+         test_speed_governor_seed_output_for_kick_handoff},
+        {"i1) VelocityMap: forward/inverse interpolation + end clamping (never extrapolates)",
+         test_velocity_map_forward_inverse_and_clamp},
+        {"i2) VelocityMap: linear-fallback mode (no table) + near-zero erpm_per_mps guard",
+         test_velocity_map_linear_fallback},
+        {"i3) VelocityMap: parse_velocity_calib_json() malformation classes + absent-table linear-fallback case",
+         test_velocity_map_parse_good_and_bad},
+        {"i4) VelocityMap: load_velocity_map() against the shipped velocity_calib.example.json + missing/empty-path fallback",
+         test_velocity_map_load_file_and_example},
+        {"k1) SteeringAngleMap: delta->servo interpolation + delta clamping to [delta_min,delta_max]",
+         test_steering_angle_map_interpolation_and_clamp},
+        {"k2) SteeringAngleMap: parse_steering_angle_map_json() validation (monotone delta, monotone-either-"
+         "direction servo, servo range, point count)",
+         test_steering_angle_map_parse_validation},
+        {"k3) SteeringAngleMap: load_steering_angle_map_file() against a test fixture + wheel-base mismatch "
+         "detection at the map level + missing/empty-path fallback",
+         test_steering_angle_map_load_file_and_wheelbase_check},
+        {"t1) DriverCore v2: DriverConfig{}'s own compiled-in defaults (watchdog_ms=1500, command_semantics="
+         "\"accel\", actuation=\"map\", governor sub-config) + the new watchdog timing actually uses 1500ms",
+         test_driver_core_v2_struct_defaults},
+        {"t2) DriverCore v2: command_semantics==\"velocity\" per-field NaN-holds (speed NaN holds target, "
+         "accel NaN holds the slew bound) + accel semantics never reads wire speed (regression)",
+         test_driver_core_velocity_semantics_nan_holds},
+        {"t3) DriverCore v2: NaN steering HOLDS the last finite servo_pos (replaces the pre-v2 recenter-to-0 "
+         "behavior)",
+         test_driver_core_steering_nan_holds_last_finite},
+        {"t4) DriverCore v2: a loaded SteeringAngleMap REPLACES the legacy affine servo formula + no-map "
+         "regression",
+         test_driver_core_steering_angle_map_wiring},
+        {"t5) DriverCore v2: actuation==\"governor\" backend converges to the VelocityMap-derived target erpm "
+         "on a synthetic plant, always emitting kDuty",
+         test_driver_core_governor_actuation_converges},
+        {"t6) DriverCore v2: kick bypass emits kick_duty under actuation==\"governor\" and seeds the "
+         "governor's slew state on kick end",
+         test_driver_core_kick_in_governor_mode_seeds_slew},
         {"j1) TeleopCore: mode switching keeps separate per-mode magnitudes", test_teleop_core_mode_switch_separate_magnitudes},
         {"j2) TeleopCore: +/- step adjust, floor-at-one-step, and max clamp", test_teleop_core_step_adjust_and_clamp},
         {"j3) TeleopCore: digit-entry commit (ENTER, clamped) and clear (ESC)",

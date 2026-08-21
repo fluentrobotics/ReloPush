@@ -1,0 +1,22 @@
+{
+  "families": [
+    {"id": "boss8",  "b64_name": "ReloPush-BOSS_8_objects.txt",  "index_min": 0, "index_max": 99},
+    {"id": "boss10", "b64_name": "ReloPush-BOSS_10_objects.txt", "index_min": 0, "index_max": 99},
+    {"id": "boss13", "b64_name": "ReloPush-BOSS_13_objects.txt", "index_min": 0, "index_max": 99}
+  ],
+  "sequence_dir": "results/relopush-out",
+  "sequence_pattern": "result_seq_{b64_name}_ind{index}.b64",
+  "tables_dir": "results/pg_tables",
+  "propose_script": "script/pg/propose_best_plan.py",
+  "num_robots_default": 3, "num_robots_min": 1, "num_robots_max": 3,
+  "num_robots_note": "Predefined 3-robot MARS fleet; values >3 clamp to 3. Model/BC refinements are fixed at 3 (tables baked at R=3).",
+  "refinements": [
+    {"id": "lns",          "name": "LNS (default search)",                       "runner": "cpp",            "extra_flags": ["--search-mode=lns"], "supports_num_robots": true,  "supports_visualize": true},
+    {"id": "dqn_online",   "name": "Online DQN (from scratch)",                  "runner": "cpp",            "extra_flags": ["--search-mode=dqn"], "supports_num_robots": true,  "supports_visualize": true},
+    {"id": "pg_ep7",       "name": "Pretrained PG (ep7, deployed)",              "runner": "propose_verify", "model": "results/pg_models/pg_mlp16_ep7.json",        "default_k": 40, "supports_num_robots": false, "supports_visualize": true},
+    {"id": "pg_long_ep23", "name": "Pretrained PG (long-run ep23, unvalidated)", "runner": "propose_verify", "model": "results/pg_models_long/pg_mlp16_ep23.json",  "default_k": 40, "supports_num_robots": false, "supports_visualize": true},
+    {"id": "bc_mlp16",     "name": "BC-MLP16",                                   "runner": "propose_verify", "model": "results/pg_models/bc_mlp16.json",            "default_k": 40, "supports_num_robots": false, "supports_visualize": true},
+    {"id": "bc_linear",    "name": "BC-linear",                                  "runner": "propose_verify", "model": "results/pg_models/bc_linear.json",           "default_k": 40, "supports_num_robots": false, "supports_visualize": true}
+  ],
+  "notes": "Basic-mode refinement catalog. runner=cpp -> phastar_push_demo --search-mode=...; runner=propose_verify -> python3 propose_best_plan.py (Python drives, spawns the C++ oracle to score). Model/BC path fixes robots at 3 and always runs offscreen (headless scoring)."
+}

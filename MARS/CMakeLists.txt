@@ -248,6 +248,7 @@ add_executable(mars_sim_viz
     src/simviz/StagingCore.cpp
     src/simviz/SimVizWindow.cpp
     src/simviz/MocapTab.cpp
+    src/simviz/CalibrationTab.cpp
     src/simviz/simviz_main.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
@@ -271,6 +272,11 @@ target_include_directories(mars_sim_viz PRIVATE
 phastar_apply_common_settings(mars_sim_viz)
 target_link_libraries(mars_sim_viz PRIVATE Threads::Threads)
 phastar_link_zeromq(mars_sim_viz)
+# Calibration tab (CalibrationTab.cpp) links the UI-independent
+# teleop-calibration data/fitting library -- see MPC/CMakeLists.txt's
+# calibration_core target (its include dirs are PUBLIC, so no separate
+# target_include_directories is needed here).
+target_link_libraries(mars_sim_viz PRIVATE calibration_core)
 
 # Phase B unit tests (headless/offscreen -- see MARS/tests/*.cpp headers for
 # what each covers).
@@ -379,6 +385,7 @@ add_executable(test_sim_viz_window_render
     src/simviz/StagingCore.cpp
     src/simviz/SimVizWindow.cpp
     src/simviz/MocapTab.cpp
+    src/simviz/CalibrationTab.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -405,6 +412,7 @@ target_compile_definitions(test_sim_viz_window_render PRIVATE
 phastar_apply_common_settings(test_sim_viz_window_render)
 target_link_libraries(test_sim_viz_window_render PRIVATE Threads::Threads)
 phastar_link_zeromq(test_sim_viz_window_render)
+target_link_libraries(test_sim_viz_window_render PRIVATE calibration_core)
 
 # RIGHT-SIDE MONITOR PANEL (core layer): LocalizationListener's new
 # telemetry tracking (SimVizCore.h/.cpp) -- modeled directly on
@@ -454,6 +462,7 @@ add_executable(test_sim_viz_monitor_panel
     src/simviz/StagingCore.cpp
     src/simviz/SimVizWindow.cpp
     src/simviz/MocapTab.cpp
+    src/simviz/CalibrationTab.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -476,6 +485,7 @@ target_include_directories(test_sim_viz_monitor_panel PRIVATE
 phastar_apply_common_settings(test_sim_viz_monitor_panel)
 target_link_libraries(test_sim_viz_monitor_panel PRIVATE Threads::Threads)
 phastar_link_zeromq(test_sim_viz_monitor_panel)
+target_link_libraries(test_sim_viz_monitor_panel PRIVATE calibration_core)
 
 # Standalone headless integration test (spawns real mars_sim_viz --headless
 # + real mpc_controller/mpc_robot_sim children against a synthetic short
@@ -798,6 +808,7 @@ add_executable(test_sim_viz_gui
     src/simviz/StagingCore.cpp
     src/simviz/SimVizWindow.cpp
     src/simviz/MocapTab.cpp
+    src/simviz/CalibrationTab.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -823,6 +834,7 @@ target_compile_definitions(test_sim_viz_gui PRIVATE
 phastar_apply_common_settings(test_sim_viz_gui)
 target_link_libraries(test_sim_viz_gui PRIVATE Threads::Threads)
 phastar_link_zeromq(test_sim_viz_gui)
+target_link_libraries(test_sim_viz_gui PRIVATE calibration_core)
 
 # PART B (DESIGN doc): standalone REAL-ROBOT MODE / STAGE_REAL test (T2+T3)
 # -- spawns the real mars_sim_viz --headless binary in --real-mode; "real
@@ -863,6 +875,47 @@ phastar_apply_common_settings(test_sim_viz_real_mode)
 target_link_libraries(test_sim_viz_real_mode PRIVATE Threads::Threads)
 phastar_link_zeromq(test_sim_viz_real_mode)
 add_dependencies(test_sim_viz_real_mode mars_sim_viz)
+
+# Calibration tab: offscreen GUI test for CalibrationTab (teleop-driven
+# velocity/steering map capture -- see MARS/src/simviz/CalibrationTab.h's own
+# header comment). No real ZMQ sockets/process spawn involved -- the test
+# substitutes a RecordingTeleopSink stub for TeleopWorker (see
+# CalibrationTab::set_command_sink_for_test()) and feeds synthetic pose/
+# telemetry samples directly (feed_pose_for_test()/feed_telemetry_for_test()),
+# so this links SimVizWindow.cpp/MocapTab.cpp/CalibrationTab.cpp +
+# calibration_core but spawns nothing. Same "not wired into ctest, not
+# installed" convention as test_sim_viz_gui immediately above.
+add_executable(test_sim_viz_calibration_tab
+    tests/test_sim_viz_calibration_tab.cpp
+    src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
+    src/simviz/SimVizWindow.cpp
+    src/simviz/MocapTab.cpp
+    src/simviz/CalibrationTab.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/SimVizHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+target_include_directories(test_sim_viz_calibration_tab PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simviz
+)
+phastar_apply_common_settings(test_sim_viz_calibration_tab)
+target_link_libraries(test_sim_viz_calibration_tab PRIVATE Threads::Threads)
+phastar_link_zeromq(test_sim_viz_calibration_tab)
+target_link_libraries(test_sim_viz_calibration_tab PRIVATE calibration_core)
 
 if(BUILD_TESTING)
     add_test(NAME phastar_unit_tests COMMAND phastar_unit_tests)

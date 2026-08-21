@@ -84,24 +84,30 @@
 // Duty mode alone drives smoothly but requires the operator to
 // compensate for battery voltage sag by hand. Speed mode is a duty-
 // actuated, erpm-feedback governor: the operator sets a TARGET ERPM
-// (magnitude() in this mode) but the wire only EVER carries SET_DUTY --
-// this class runs a small PI-with-feedforward control loop each tick
-// and emits whatever duty gets the real motor to that erpm.
+// (magnitude() in this mode) but the wire only EVER carries SET_DUTY.
+// The actual PI-with-feedforward control loop lives in SpeedGovernor.h
+// (extracted so DriverCore's own "actuation" backend -- see
+// DriverCore.h -- can reuse the identical logic); this class owns one
+// SpeedGovernor instance (governor_) and is just the thin key/mode
+// wiring around it:
 //   - Feed erpm/v_in into the governor via feed_telemetry() (as always);
-//     the raw erpm is lightly low-pass filtered (EMA) before use, since
-//     FW 2.18's own erpm estimate is noisy (roughly +-150).
+//     the raw erpm is fed through SpeedGovernor::feed_erpm(), which
+//     lightly low-pass filters it (EMA, time-constant based) before use,
+//     since FW 2.18's own erpm estimate is noisy (roughly +-150).
 //   - error = target_erpm - filtered_erpm. duty_ff = target_erpm /
 //     (speed_ff_gain * max(v_in, 6.0)) (0 disables the feedforward term
 //     -- pure PI). Incremental PI: the integrator only accumulates when
 //     the resulting duty command is NOT saturated at +-max_duty
 //     (anti-windup -- freezes instead of winding up unboundedly while
-//     the target is temporarily unreachable).
+//     the target is temporarily unreachable). See SpeedGovernor.h for
+//     the exact formula.
 //   - The governor's duty output is ALWAYS slew-limited by duty_ramp
-//     (reusing the same emitted-value slewing machinery as duty/erpm
-//     ramp mode above), REGARDLESS of whether ramp_enabled() is on --
-//     this is the governor's own built-in gentleness guarantee, not an
-//     opt-in. Speed mode's own 'A'-armed ramp-rate entry (see below)
-//     also targets duty_ramp, since that is what it actually governs.
+//     (SpeedGovernor's own duty_slew_per_s, mapped 1:1 from
+//     TeleopConfig::duty_ramp), REGARDLESS of whether ramp_enabled() is
+//     on -- this is the governor's own built-in gentleness guarantee,
+//     not an opt-in. Speed mode's own 'A'-armed ramp-rate entry (see
+//     below) also targets duty_ramp, since that is what it actually
+//     governs.
 //   - Direction ('f'/'b') flips the sign of the target exactly like
 //     duty/erpm mode; a reversal slews the output duty smoothly through
 //     zero via the same mechanism as ramp mode's reversal.
@@ -203,6 +209,7 @@
 #ifndef VESC_DRIVER_TELEOP_CORE_H_
 #define VESC_DRIVER_TELEOP_CORE_H_
 
+#include "SpeedGovernor.h"
 #include "VescProtocol.h"
 
 #include <cstdint>
@@ -249,6 +256,14 @@ struct TeleopConfig {
     double speed_kp = 2e-6;             // duty per erpm of (proportional) error.
     double speed_ki = 1e-5;             // duty per erpm-second of (integral) error.
     double speed_ff_gain = 4400.0;
+    // EMA time constant (seconds) for the governor's erpm input filter --
+    // see SpeedGovernor.h's feed_erpm() doc comment (alpha = 1-exp(-dt/tau)).
+    // New field (Driver v2's SpeedGovernor extraction): the ORIGINAL
+    // governor used a fixed per-SAMPLE alpha=0.3 regardless of elapsed
+    // time; this replaces it with a time-constant parameterization, which
+    // shifts exact filtered-erpm values at a given dt (see
+    // SpeedGovernor.h's own header for why this is deliberate).
+    double erpm_filter_tau_s = 0.1;
 
     // Steering sub-state-machine (see the class header's "STEERING
     // SUB-STATE-MACHINE" section). steer_center matches SteeringCalib's
@@ -439,7 +454,7 @@ public:
 
     // --- speed governor status accessors (for the CLI's status line;
     // meaningful only while mode()==kSpeed) ---
-    double filtered_erpm() const { return erpm_filtered_; }
+    double filtered_erpm() const { return governor_.erpm_filtered(); }
 
     // --- steering status accessors (for the CLI's status line; see the
     // class header's "STEERING SUB-STATE-MACHINE" section) ---
@@ -509,17 +524,14 @@ private:
     double erpm_ramp_;
     bool ramp_enabled_;
 
-    // Speed governor state (see "SPEED GOVERNOR MODE") -- reset by
-    // reset_governor() on any stop/abort/mode-switch.
-    double speed_integrator_ = 0.0;
-    double erpm_filtered_ = 0.0;
-    bool erpm_filter_initialized_ = false;
-    // Latest raw v_in reading -- NOT governor state (not reset by
-    // reset_governor()), just a plain telemetry pass-through the
-    // feedforward term needs; 12.0 is a harmless placeholder before the
-    // first real GET_VALUES reply arrives (the max(v_in,6.0) floor in
-    // step_speed_governor() protects against anything more extreme).
-    double v_in_last_ = 12.0;
+    // Speed governor (see "SPEED GOVERNOR MODE") -- the actual PI+FF+
+    // filter+slew state now lives inside SpeedGovernor (see
+    // SpeedGovernor.h); reset_governor() delegates to governor_.reset().
+    // last_telemetry_time_s_ is TeleopCore's own bookkeeping (NOT
+    // governor state) purely to compute the dt SpeedGovernor::feed_erpm()
+    // needs between consecutive feed_telemetry() calls.
+    SpeedGovernor governor_;
+    double last_telemetry_time_s_ = 0.0;
 
     State state_ = State::kIdle;
     DriveDirection direction_ = DriveDirection::kStopped;

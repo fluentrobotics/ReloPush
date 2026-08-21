@@ -1,5 +1,6 @@
 #include <PHAstar/PHAstar.h>
 #include <AllocationSearch.h>
+#include <RuntimeOptionsParsing.h>
 #include <DqnQModel.h>
 #include <DqnFeaturesV2.h>
 #include <DqnAllocationSearch.h>
@@ -945,6 +946,172 @@ namespace
                 << defaulted.collision_check_time_step << ", expected "
                 << fresh_defaults.collision_check_time_step << ")\n";
       ok = false;
+    }
+
+    return ok;
+  }
+
+  // --robot4-pose= CLI flag: parse_runtime_options() should populate
+  // RuntimeOptions::robot4_pose only when the flag is present and
+  // well-formed, leaving it std::nullopt otherwise (default behavior
+  // unchanged) and on malformed input (with a stderr warning, mirroring
+  // every other --<opt>= parser in RuntimeOptionsParsing.cpp).
+  bool test_parse_robot4_pose_option()
+  {
+    bool ok = true;
+
+    {
+      char arg0[] = "phastar_push_demo";
+      char *argv[] = {arg0};
+      const RuntimeOptions options = parse_runtime_options(1, argv);
+      if (options.robot4_pose.has_value())
+      {
+        std::cerr << "    robot4_pose should default to nullopt when --robot4-pose= "
+                     "is absent\n";
+        ok = false;
+      }
+    }
+
+    {
+      char arg0[] = "phastar_push_demo";
+      char arg1[] = "--robot4-pose=3.5,4.75,3.141592653589793";
+      char *argv[] = {arg0, arg1};
+      const RuntimeOptions options = parse_runtime_options(2, argv);
+      if (!options.robot4_pose.has_value())
+      {
+        std::cerr << "    robot4_pose should be set when --robot4-pose= is present\n";
+        ok = false;
+      }
+      else
+      {
+        const auto &pose = *options.robot4_pose;
+        if (!near(pose[0], 3.5, 1e-9) || !near(pose[1], 4.75, 1e-9) ||
+            !near(pose[2], 3.141592653589793, 1e-9))
+        {
+          std::cerr << "    robot4_pose value mismatch: got (" << pose[0] << ", "
+                    << pose[1] << ", " << pose[2]
+                    << "), expected (3.5, 4.75, 3.141592653589793)\n";
+          ok = false;
+        }
+      }
+    }
+
+    {
+      // Malformed (wrong component count): should warn and keep nullopt.
+      char arg0[] = "phastar_push_demo";
+      char arg1[] = "--robot4-pose=1.0,2.0";
+      char *argv[] = {arg0, arg1};
+      const RuntimeOptions options = parse_runtime_options(2, argv);
+      if (options.robot4_pose.has_value())
+      {
+        std::cerr << "    robot4_pose should stay nullopt for a malformed "
+                     "(2-component) --robot4-pose= value\n";
+        ok = false;
+      }
+    }
+
+    return ok;
+  }
+
+  // initialize_entities()'s robot4_pose_override parameter: absent (default)
+  // must reproduce today's hardcoded WS45 pose (4.0, 4.05, M_PI) exactly;
+  // present must overwrite only the "robot4" entry (robot1-3 untouched);
+  // and with requested_robot_count<=3 the override must have zero effect
+  // (robot4 is never instantiated at all), proving the flag cannot affect
+  // n<=3 runs.
+  bool test_initialize_entities_robot4_pose_override()
+  {
+    bool ok = true;
+
+    // Default (no override): byte-identical to the hardcoded WS45 pose.
+    {
+      auto entities = initialize_entities({}, 4);
+      auto it = entities.find("robot4");
+      if (it == entities.end())
+      {
+        std::cerr << "    robot4 missing from entities with requested_robot_count=4\n";
+        ok = false;
+      }
+      else
+      {
+        const Pose &pose = it->second->initial_pose;
+        if (!near(pose.x, 4.0, 1e-9) || !near(pose.y, 4.05, 1e-9) ||
+            !near(pose.yaw, M_PI, 1e-9))
+        {
+          std::cerr << "    default robot4 pose mismatch: got (" << pose.x << ", "
+                    << pose.y << ", " << pose.yaw << "), expected (4.0, 4.05, pi)\n";
+          ok = false;
+        }
+      }
+      for (const auto &[name, ent] : entities)
+      {
+        delete ent;
+      }
+    }
+
+    // Override present, n=4: only robot4 changes.
+    {
+      const std::array<double, 3> override_pose = {3.5, 4.75, 3.141592653589793};
+      auto entities = initialize_entities({}, 4, override_pose);
+
+      auto it4 = entities.find("robot4");
+      if (it4 == entities.end())
+      {
+        std::cerr << "    robot4 missing from entities with override + requested_robot_count=4\n";
+        ok = false;
+      }
+      else
+      {
+        const Pose &pose = it4->second->initial_pose;
+        if (!near(pose.x, override_pose[0], 1e-9) ||
+            !near(pose.y, override_pose[1], 1e-9) ||
+            !near(pose.yaw, override_pose[2], 1e-9))
+        {
+          std::cerr << "    overridden robot4 pose mismatch: got (" << pose.x << ", "
+                    << pose.y << ", " << pose.yaw << "), expected ("
+                    << override_pose[0] << ", " << override_pose[1] << ", "
+                    << override_pose[2] << ")\n";
+          ok = false;
+        }
+      }
+
+      auto it1 = entities.find("robot1");
+      if (it1 == entities.end() || !near(it1->second->initial_pose.x, 0.5, 1e-9) ||
+          !near(it1->second->initial_pose.y, 0.45, 1e-9))
+      {
+        std::cerr << "    robot1 pose was disturbed by the robot4_pose_override\n";
+        ok = false;
+      }
+
+      for (const auto &[name, ent] : entities)
+      {
+        delete ent;
+      }
+    }
+
+    // Override present, n=3: the flag must be a total no-op (robot4 never
+    // instantiated), proving --robot4-pose= cannot affect --num-robots<=3.
+    {
+      const std::array<double, 3> override_pose = {3.5, 4.75, 3.141592653589793};
+      auto entities = initialize_entities({}, 3, override_pose);
+
+      if (entities.find("robot4") != entities.end())
+      {
+        std::cerr << "    robot4 should not be instantiated when requested_robot_count=3, "
+                     "even with an override supplied\n";
+        ok = false;
+      }
+      if (entities.size() != 3)
+      {
+        std::cerr << "    expected exactly 3 robots with requested_robot_count=3, got "
+                  << entities.size() << "\n";
+        ok = false;
+      }
+
+      for (const auto &[name, ent] : entities)
+      {
+        delete ent;
+      }
     }
 
     return ok;
@@ -6307,6 +6474,10 @@ int main(int argc, char **argv)
        test_holonomic_gate_soundness},
       {"Stage 3: tier-triage/tier-gate flags-off regression vs. direct-call baseline",
        test_tier_triage_gate_flags_off_regression},
+      {"--robot4-pose= CLI flag parsing (absent/present/malformed)",
+       test_parse_robot4_pose_option},
+      {"initialize_entities robot4_pose_override (default/override/n<=3 no-op)",
+       test_initialize_entities_robot4_pose_override},
   };
 
   std::vector<std::pair<std::string, TestFn>> all_tests = tests;

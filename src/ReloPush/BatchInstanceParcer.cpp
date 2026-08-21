@@ -70,7 +70,10 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
                               ObjectMap& objects,
                               ObjectMap& goals,
                               std::vector<ReloPush::State>& robots,
-                              std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs)
+                              std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
+                              bool* has_ws,
+                              double* ws_x,
+                              double* ws_y)
 {
     std::string type_delim = "!"; // separate mo and robot
     std::string header_delim = ":";
@@ -95,6 +98,8 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
 
 
     std::string mo_str, robot_str, goal_str, assign_str;
+    std::string ws_str;
+    bool has_ws_section = false;
     //std::unordered_map<std::string,std::string> d_table;
 
     for(auto& it : type_sp)
@@ -114,6 +119,37 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
 
         else if(temp_sp[0] == "assign")
             assign_str = temp_sp[1];
+
+        else if(temp_sp[0] == "ws")
+        {
+            ws_str = temp_sp[1];
+            has_ws_section = true;
+        }
+    }
+
+    // parse optional workspace-size section: ws:<x_max>,<y_max>
+    if (has_ws)
+        *has_ws = false;
+    if (has_ws_section)
+    {
+        auto ws_elem_sp = split(ws_str, elem_delilm);
+        if (ws_elem_sp.size() < 2) {
+            throw std::runtime_error("Malformed ws entry: " + ws_str);
+        }
+        double parsed_ws_x = 0.0, parsed_ws_y = 0.0;
+        try {
+            parsed_ws_x = std::stod(ws_elem_sp[0]);
+            parsed_ws_y = std::stod(ws_elem_sp[1]);
+        }
+        catch (const std::exception& e) {
+            throw std::runtime_error("Error parsing ws section: " + std::string(e.what()));
+        }
+        if (has_ws)
+            *has_ws = true;
+        if (ws_x)
+            *ws_x = parsed_ws_x;
+        if (ws_y)
+            *ws_y = parsed_ws_y;
     }
 
     // parse movable objects

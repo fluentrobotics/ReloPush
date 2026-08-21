@@ -20,6 +20,10 @@
 #ifndef VESC_DRIVER_DRIVER_CORE_H_
 #define VESC_DRIVER_DRIVER_CORE_H_
 
+#include "SpeedGovernor.h"
+#include "SteeringAngleMap.h"
+#include "VelocityMap.h"
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -59,11 +63,52 @@ struct SafetyConfig {
 
 struct KickConfig {
     bool enabled = true;
-    double kick_cmd = 1200.0;      // same units as the active MotorMap's mode() (erpm or duty).
+    double kick_cmd = 1200.0;      // same units as the active MotorMap's mode() (erpm or duty) -- actuation=="map" only.
+    // actuation=="governor" only: the kick bypass emits this RAW DUTY
+    // (vehicle frame, clamped to +-safety.max_duty like every other
+    // governor output) instead of kick_cmd -- kick_cmd/kick_erpm_threshold
+    // are erpm-flavored and don't make sense against a duty-only governor.
+    // On kick end the governor's own slew state is seeded to this exact
+    // (signed, clamped) value so its subsequent step()s decay smoothly
+    // FROM here instead of jumping from 0 -- see DriverCore.cpp's tick().
+    double kick_duty = 0.05;
     double kick_ms = 150.0;
     double min_moving_speed_mps = 0.08;
     double kick_erpm_threshold = 200.0;
 };
+
+// "accel" (default): wire accel is integrated into v_target_ every tick,
+// wire speed is ignored -- EXACTLY DriverCore's pre-v2 behavior, byte for
+// byte (see TickInputs's own AckermannHeld::accel comment and tick()'s
+// own doc comments). "velocity": wire speed IS the target (per-field
+// NaN-held, safety_max_v-clamped), wire accel is repurposed as a SLEW
+// BOUND on how fast the internal setpoint may move toward that target
+// (per-field NaN-held, clamped to (0, safety_max_accel]) -- see
+// TickInputs's own comments for the exact per-field hold/clamp rules.
+enum class CommandSemantics { kAccel, kVelocity };
+// Unrecognized strings default to kAccel (documented fallback -- mirrors
+// DriverConfig::command_semantics's own default).
+CommandSemantics command_semantics_from_string(const std::string& s);
+std::string to_string(CommandSemantics s);
+
+// "map" (default -- see DriverCore.cpp's own note on why the COMPILED-IN
+// default is "map" rather than the literal task spec's "governor": a
+// "governor" compiled-in default would silently change every pre-existing
+// DriverCore test/caller that never sets this field, and this driver's
+// own "accel semantics: EXACTLY current behavior" contract requires the
+// unconfigured case to keep behaving exactly as before this task. Fresh
+// installs' config/driver_config.json ships this key EXPLICITLY, so real
+// deployments are unaffected either way): v_target_ (however
+// CommandSemantics produced it) is converted to a motor command via the
+// legacy MotorMap (LinearMap/CalibratedMap, built from
+// config.calibration_file -- completely unchanged from pre-v2).
+// "governor": v_target_ is converted to a TARGET ERPM via a VelocityMap
+// (config.velocity_calib_file, linear-fallback if absent/unloadable) and
+// tracked by a SpeedGovernor (config.governor), emitting SET_DUTY only.
+enum class ActuationMode { kMap, kGovernor };
+// Unrecognized strings default to kMap.
+ActuationMode actuation_from_string(const std::string& s);
+std::string to_string(ActuationMode m);
 
 struct DriverConfig {
     std::string robot_name = "robot2";
@@ -79,11 +124,44 @@ struct DriverConfig {
                                      // whenever no calibration file overrides it (see build_motor_map()).
     ServoConfig servo;
     SafetyConfig safety;
-    double watchdog_ms = 250.0;
+    double watchdog_ms = 1500.0;   // Driver v2: raised from the pre-v2 default of 250ms (see
+                                     // config/driver_config.json's own "_watchdog_ms_doc").
     double control_rate_hz = 50.0;
     double telemetry_rate_hz = 20.0;
     KickConfig kick;
     std::string calibration_file;  // empty => LinearMap with the placeholder gains above.
+
+    // --- Driver v2 additions (see CommandSemantics/ActuationMode above) ---
+    std::string command_semantics = "accel";  // "accel" | "velocity".
+    std::string actuation = "map";            // "map" | "governor" -- see ActuationMode's own comment.
+    double wheel_base = 0.29;                 // meters -- also cross-checked against a loaded
+                                                // SteeringAngleMap's own wheel_base at startup (main.cpp).
+    // velocity semantics ONLY: default/held slew bound (m/s^2) applied
+    // before the first finite wire-accel value ever arrives -- see
+    // TickInputs's own comment. Deliberately the SAME numeric value as
+    // DriverCore.cpp's kWatchdogRampAccel (0.73, the nominal actuator
+    // max_accel) -- not a coincidence, both represent "how fast this
+    // actuator can reasonably change speed" in the absence of a
+    // controller-supplied number.
+    double default_slew_mps2 = 0.73;
+    // Governor sub-config (kp/ki/ff_gain/duty_slew_per_s/erpm_filter_tau_s)
+    // -- reuses SpeedGovernorConfig directly (see SpeedGovernor.h) so its
+    // defaults are defined in exactly one place. NOTE: this struct's own
+    // max_duty field is UNUSED here -- DriverCore always overrides it
+    // from safety.max_duty when actually configuring its SpeedGovernor
+    // instance (a single authoritative actuation-output ceiling, shared
+    // with the "map" actuation's own clamp), never a second, possibly-
+    // drifted copy.
+    SpeedGovernorConfig governor;
+    // Resolved, already-precedence-applied file paths (explicit CLI flag
+    // > $HOME/.vesc/<name>.json > <exe_dir>/../config/<name>.example.json)
+    // -- see vesc_driver_main.cpp's own resolution logic. Deliberately
+    // NOT driver_config.json keys themselves (mirrors SteeringCalib's own
+    // CLI/env-resolved-only convention, see SteeringCalib.h) -- empty
+    // means "use the built-in fallback" (VelocityMap's linear defaults /
+    // the legacy servo path, respectively).
+    std::string velocity_calib_file;
+    std::string steering_angle_map_file;
 };
 
 // Loads VescDriver/config/driver_config.json-shaped JSON from `path`.
@@ -233,8 +311,18 @@ struct AckermannHeld {
     // first valid one arrives, at which point it latches true (there is no
     // "un-receive").
     bool valid = false;
-    double accel = 0.0;     // last VALID accel (m/s^2), held across malformed/missing payloads.
+    // last VALID accel (m/s^2), held across malformed/missing payloads.
+    // "accel" semantics: integrated into v_target_ every tick (unchanged
+    // pre-v2 meaning). "velocity" semantics: repurposed as a SLEW BOUND
+    // on the internal setpoint's approach to `speed` below -- see
+    // CommandSemantics's own comment.
+    double accel = 0.0;
     double steering = 0.0;  // last VALID steering (rad), likewise held.
+    // last VALID speed (m/s), likewise held. Consumed ONLY in "velocity"
+    // command_semantics (the target v_target_ setpoint slews toward);
+    // ignored (never read) in "accel" semantics, exactly like every
+    // pre-v2 version of this driver ignored it.
+    double speed = 0.0;
     // Seconds since that last VALID payload -- the caller must NOT advance
     // the "last valid" timestamp on a malformed payload (per the frozen
     // wire contract: "Malformed payloads must NOT refresh the watchdog
@@ -268,6 +356,15 @@ struct TickInputs {
     bool servo_override_active = false;
     double servo_override_value = 0.5;  // 0..1, meaningful only when servo_override_active.
     double erpm_meas = 0.0;             // latest VESC-reported electrical RPM (0 if never measured yet).
+    // Latest VESC-reported battery voltage (from GET_VALUES), VEHICLE-
+    // frame-independent (a scalar, no sign convention) -- only consumed
+    // by actuation=="governor"'s SpeedGovernor feedforward term (see
+    // SpeedGovernor.h's own v_in()/feed_vin() comments, which floor the
+    // EFFECTIVE value at 6.0V regardless of what's passed here). The
+    // caller (main.cpp) is responsible for "when stale, keep last" --
+    // DriverCore itself applies no staleness logic of its own, exactly
+    // like erpm_meas above.
+    double v_in = 0.0;
 };
 
 struct MotorAction {
@@ -331,6 +428,24 @@ class DriverCore {
     bool used_calibration() const { return used_calibration_; }
     const std::string& motor_map_note() const { return motor_map_note_; }
 
+    // --- Driver v2 status accessors (startup banner / telemetry) ---
+    CommandSemantics command_semantics() const { return semantics_; }
+    ActuationMode actuation() const { return actuation_; }
+    // True iff config.velocity_calib_file loaded a real TABLE (false
+    // means the built-in linear fallback is in effect, whether because
+    // no file was configured or because it failed to load/parse).
+    bool velocity_map_used_table() const { return velocity_map_used_table_; }
+    const std::string& velocity_map_note() const { return velocity_map_note_; }
+    // True iff config.steering_angle_map_file loaded successfully (false
+    // means compute_servo_pos() is using the legacy center+gain_per_rad+
+    // invert affine path).
+    bool has_steering_angle_map() const { return has_steering_angle_map_; }
+    const std::string& steering_angle_map_note() const { return steering_angle_map_note_; }
+    // Meaningful only when has_steering_angle_map() -- the loaded map's
+    // OWN wheel_base, for vesc_driver_main.cpp's startup mismatch check
+    // against config().wheel_base (see that file's own comment).
+    double steering_angle_map_wheel_base() const { return steering_angle_map_.wheel_base(); }
+
     // Safety-clamps one raw calib value to config().safety's limit for
     // `mode` (max_duty/max_erpm/max_current respectively). Public/static so
     // the REP "raw" verb handler (main.cpp) can compute the SAME
@@ -342,9 +457,22 @@ class DriverCore {
    private:
     enum class InternalState { kIdle, kActive, kWatchdogBrake };
 
-    double compute_servo_pos(const TickInputs& in) const;
+    // No longer const: holds/updates last_finite_steering_ (see the
+    // Driver v2 "steering NaN hold" change, .cpp).
+    double compute_servo_pos(const TickInputs& in);
     MotorAction action_from_map_cmd(double cmd) const;  // clamps + wraps per map_->mode().
     double watchdog_brake_amps() const;
+    // Dispatches v_target->motor-command conversion on actuation_ (map vs
+    // governor) -- shared by both the watchdog-ramp branch and normal
+    // tracking, see .cpp. a_desired is only consumed by actuation==kMap's
+    // CalibratedMap path; erpm_meas/v_in are only consumed by
+    // actuation==kGovernor's SpeedGovernor.
+    MotorAction actuate(double v_now, double v_target, double a_desired, double dt, double erpm_meas, double v_in);
+    // Resets governor_ -- called from every DriverCore-internal "clean
+    // slate" point (idle, calib-source entry, watchdog-zero-brake,
+    // stop()) -- see .cpp's own call sites for why ("stop/brake/
+    // watchdog-zero/abort paths" per the task brief).
+    void reset_governor();
 
     DriverConfig config_;
     std::unique_ptr<MotorMap> map_;
@@ -352,10 +480,38 @@ class DriverCore {
     bool used_calibration_ = false;
     std::string motor_map_note_;
 
+    CommandSemantics semantics_ = CommandSemantics::kAccel;
+    ActuationMode actuation_ = ActuationMode::kMap;
+
+    VelocityMap velocity_map_;
+    bool velocity_map_used_table_ = false;
+    std::string velocity_map_note_;
+
+    SteeringAngleMap steering_angle_map_;
+    bool has_steering_angle_map_ = false;
+    std::string steering_angle_map_note_;
+
+    SpeedGovernor governor_;
+
     bool has_ticked_ = false;
     double last_tick_time_s_ = 0.0;
 
     double v_target_ = 0.0;
+
+    // "velocity" command_semantics ONLY -- per-field NaN-held wire
+    // speed/accel (accel repurposed as a slew bound there) -- see
+    // AckermannHeld's own comments. Irrelevant/unused in "accel"
+    // semantics. slew_bound_hold_ is seeded from config_.default_slew_mps2
+    // in the constructor (init value, per the task brief); velocity_
+    // target_hold_ always starts at 0.
+    double velocity_target_hold_ = 0.0;
+    double slew_bound_hold_ = 0.0;
+
+    // Last finite steering angle (rad) ever seen on the ackermann stream
+    // -- Driver v2 "steering NaN hold" change (see compute_servo_pos()):
+    // a NaN/Inf steering value now HOLDS this instead of recentering to
+    // 0. Init 0, per the task brief.
+    double last_finite_steering_ = 0.0;
 
     // Ackermann-path watchdog (mirrors mpc::Watchdog's engaged/just_engaged
     // semantics -- see MPC/include/mpc/SimCore.h).

@@ -498,6 +498,52 @@ else()
     )
 endif()
 
+# ---------------------------------------------------------------------
+# calibration_core: UI-independent teleop-calibration data/fitting library
+# (mpc::CalibrationCore -- see MPC/include/mpc/CalibrationCore.h's file
+# header comment). Pure logic (no ZMQ sockets, no Qt -- every stream this
+# needs is fed in by the caller via feed_pose()/feed_telemetry()/
+# feed_command()), needs only nlohmann (header-only, already reachable via
+# ${CMAKE_SOURCE_DIR}/include) -- mirrors MotorCalibCore.cpp's dependency-
+# light footprint. Unlike MotorCalibCore.cpp (folded directly into each
+# consumer's source list), this is a real STATIC LIBRARY target: a later
+# Qt tab links it directly, so its include directory is exported PUBLIC
+# (propagates to any target that links calibration_core, no separate
+# target_include_directories needed on the consumer side).
+# ---------------------------------------------------------------------
+add_library(calibration_core STATIC
+    src/CalibrationCore.cpp
+)
+target_include_directories(calibration_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+# ---------------------------------------------------------------------
+# robot_calibration: headless CLI that fits calibration_core's velocity/
+# steering maps from an already-recorded teleop session directory and
+# exports the FROZEN OUTPUT SCHEMAS (velocity_calib.json/
+# steering_angle_map.json) the robot-side driver loads. No live ZMQ feed
+# here at all (unlike motor_calibration/drive_test) -- see
+# src/robot_calibration.cpp's own header comment.
+# ---------------------------------------------------------------------
+add_executable(robot_calibration
+    src/robot_calibration.cpp
+)
+target_include_directories(robot_calibration PRIVATE ${MPC_INCLUDE_DIRS})
+target_link_libraries(robot_calibration PRIVATE calibration_core)
+
+# ---------------------------------------------------------------------
+# calibration_core_tests: standalone, manually-run test binary (see this
+# project's test-binary convention above at motor_calib_tests' own comment)
+# -- no add_test(), not added to the install() list below.
+# ---------------------------------------------------------------------
+add_executable(calibration_core_tests
+    tests/calibration_core_tests.cpp
+)
+target_include_directories(calibration_core_tests PRIVATE ${MPC_INCLUDE_DIRS})
+target_link_libraries(calibration_core_tests PRIVATE calibration_core)
+
 install(TARGETS mpc_controller mpc_dummy_straight_mover mpc_robot_sim mpc_unit_tests
         optitrack_zmq_bridge fake_motive optitrack_unit_tests motor_calibration
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

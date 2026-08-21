@@ -370,7 +370,7 @@ void initialize_environment(
     std::cout << collision_tuning.str() << std::endl;
   }
 
-  entities = initialize_entities(loaded_sequence, options.robot_count);
+  entities = initialize_entities(loaded_sequence, options.robot_count, options.robot4_pose);
   timetable.add_initial(entities);
 
   all_robots.clear();
@@ -2387,7 +2387,8 @@ Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
 
 std::unordered_map<std::string, EntityMeta *>
 initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
-                    int requested_robot_count)
+                    int requested_robot_count,
+                    const std::optional<std::array<double, 3>> &robot4_pose_override)
 {
   std::unordered_map<std::string, EntityMeta *> entities;
 
@@ -2406,12 +2407,22 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
     Pose initial_pose;
   };
 
-  const std::vector<PredefinedRobot> predefined_robots = {
+  std::vector<PredefinedRobot> predefined_robots = {
       {"robot1", {0.5, 0.45, 0.0}},
       {"robot2", {0.5, 3.0, 0.0}},
       {"robot3", {0.5, 4.5, 0.0}},
       {"robot4", {4.0, 4.05, M_PI}},
   };
+
+  // Runtime override for robot4's initial pose (--robot4-pose=<x>,<y>,<theta>),
+  // used to reproduce the original paper's n=4 baseline (4.0x5.2 workspace,
+  // robot4 at (3.5, 4.75, pi)) instead of the hardcoded WS45 campaign default
+  // above. Absent (default): predefined_robots stays exactly as hardcoded.
+  if (robot4_pose_override.has_value())
+  {
+    const auto &pose = *robot4_pose_override;
+    predefined_robots[3].initial_pose = {pose[0], pose[1], pose[2]};
+  }
 
   const std::size_t active_robot_count = std::min<std::size_t>(
       predefined_robots.size(),

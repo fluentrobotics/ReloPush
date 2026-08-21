@@ -1,0 +1,21 @@
+{
+  "_doc": "EXAMPLE ONLY -- documents the velocity_calib.json schema (VescDriver/src/VelocityMap.h): a monotone piecewise-linear v<->erpm map, used by DriverCore's actuation=\"governor\" backend to convert a velocity setpoint into a target erpm for SpeedGovernor. This 2-point table is deliberately LINEAR-EQUIVALENT (erpm = 4614*v exactly) -- i.e. loading this example produces the same conversion as the linear_fallback below, or as no file at all with driver_config.json's own default erpm_per_mps=4614. Replace 'table' with a real fitted multi-point curve from a calibration campaign for an actual robot.",
+  "version": 2,
+  "kind": "velocity_calib",
+  "robot_name": "robot2",
+  "table": [
+    {"v": -0.60, "erpm": -2768.4},
+    {"v": 0.60, "erpm": 2768.4}
+  ],
+  "min_reliable_erpm": 250.0,
+  "_min_reliable_erpm_doc": "PLACEHOLDER -- below this |erpm| the VESC's own erpm estimate is considered too noisy to trust for closed-loop feedback; not enforced by VelocityMap itself (informational for callers/telemetry).",
+  "linear_fallback": {
+    "erpm_per_mps": 4614.0,
+    "offset_erpm": 0.0,
+    "rms": 0.0
+  },
+  "_linear_fallback_doc": "Used only when 'table' is absent -- matches driver_config.json's own placeholder erpm_per_mps.",
+  "meta": {
+    "notes": "Example velocity calibration file for tests/documentation only -- NOT fit from a real VESC."
+  }
+}

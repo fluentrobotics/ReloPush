@@ -436,6 +436,36 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << "'. Keeping default." << std::endl;
       }
     }
+    else if (arg.rfind("--robot4-pose=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--robot4-pose=").size());
+      std::vector<double> parsed_values;
+      std::stringstream ss(value);
+      std::string component;
+      bool parse_ok = true;
+      while (std::getline(ss, component, ','))
+      {
+        try
+        {
+          parsed_values.push_back(std::stod(component));
+        }
+        catch (...)
+        {
+          parse_ok = false;
+          break;
+        }
+      }
+      if (parse_ok && parsed_values.size() == 3)
+      {
+        options.robot4_pose = std::array<double, 3>{
+            parsed_values[0], parsed_values[1], parsed_values[2]};
+      }
+      else
+      {
+        std::cerr << "[Warn] Invalid --robot4-pose value: '" << value
+                  << "'. Expected '<x>,<y>,<theta>'. Keeping default." << std::endl;
+      }
+    }
     else if (arg.rfind("--num-robots=", 0) == 0 ||
              arg.rfind("--robot-count=", 0) == 0)
     {

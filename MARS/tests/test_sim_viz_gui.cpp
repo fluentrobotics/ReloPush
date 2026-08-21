@@ -236,12 +236,18 @@ void test_window_tab_structure()
   simviz::SimVizWindow window(config);
 
   TEST_ASSERT(window.tabs() != nullptr);
-  TEST_ASSERT(window.tabs()->count() == 2);
+  // A "Calibration" tab (teleop-driven velocity/steering map capture -- see
+  // MARS/src/simviz/CalibrationTab.h) was added after "OptiTrack"; covered
+  // in its own dedicated test binary (test_sim_viz_calibration_tab.cpp), not
+  // here -- this is just the tab-count/order sanity check.
+  TEST_ASSERT(window.tabs()->count() == 3);
   TEST_ASSERT(window.tabs()->tabText(0).toStdString() == "Simulation");
   TEST_ASSERT(window.tabs()->tabText(1).toStdString() == "OptiTrack");
+  TEST_ASSERT(window.tabs()->tabText(2).toStdString() == "Calibration");
   TEST_ASSERT(window.tabs()->currentIndex() == 0);
   TEST_ASSERT(window.canvas() != nullptr);
   TEST_ASSERT(window.mocap_tab() != nullptr);
+  TEST_ASSERT(window.calibration_tab() != nullptr);
 
   // GUI-MODE STARTUP DEFAULTS: a freshly-constructed SimVizWindow (built
   // from a default-constructed, otherwise-untouched SimVizConfig, exactly
