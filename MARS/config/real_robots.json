@@ -1,0 +1,17 @@
+{
+  "_doc": "PART B (REAL-ROBOT MODE): per-robot mpc_controller endpoint overrides for mars_sim_viz --real-mode. Key = planner/scenario robot name (matches EntityMeta::name in the .scn.b64 the robot appears in). Both fields are optional per robot -- an absent/empty 'vesc_endpoint' falls back to tcp://127.0.0.1:<--vesc-port-start + robot index>; an absent/empty 'localization_endpoint' falls back to the single OptiTrack bridge auto-discovery port, tcp://127.0.0.1:<MocapConfig::loc_port_start, default 3260>, with mars_sim_viz subscribing to that robot's own '/<name>/localization' topic on it (see MARS/src/simviz/MocapCore.h's AUTO-DISCOVERY doc comment). Loaded once at mars_sim_viz startup via --real-robots-config= (default: this file, resolved against the current working directory); edits require a restart to take effect. See MARS/src/simviz/SimVizCore.h's load_real_robots_config()/RealRobotEndpoints doc comments for the full contract.",
+  "robots": {
+    "robot1": {
+      "localization_endpoint": "",
+      "vesc_endpoint": "tcp://127.0.0.1:3160"
+    },
+    "robot2": {
+      "localization_endpoint": "",
+      "vesc_endpoint": "tcp://127.0.0.1:3161"
+    },
+    "robot3": {
+      "localization_endpoint": "",
+      "vesc_endpoint": "tcp://127.0.0.1:3162"
+    }
+  }
+}

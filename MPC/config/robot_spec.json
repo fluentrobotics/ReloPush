@@ -1,0 +1,39 @@
+{
+  "_doc": "MPC robot geometry/limits and MPC tuning, loaded via --robot-spec=<path>. Absent keys keep the compiled defaults (mpc::RobotSpec::defaults()/mpc::MpcParams::defaults()); unknown keys produce a stderr warning but do not fail loading. The MPC prediction horizon (mpc::kHorizon in include/mpc/MpcCore.h) is a compile-time constant and is intentionally NOT configurable here. DEADBAND FIELDS ARE HARDWARE PROPERTIES: min_moving_speed/min_sustain_speed describe this project's actual robots' real BLDC breakaway/sustain thresholds (m/s) and drive BOTH mpc_robot_sim's opt-in --deadband plant model (see MPC/include/mpc/SimCore.h; the sim also needs its own --deadband --min-moving-speed=/--min-sustain-speed= flags to actually enable it) AND mpc_controller's LAUNCH GOVERNOR (see MPC/include/mpc/LaunchGovernor.h, which activates automatically whenever min_moving_speed > 0). Compiled defaults are 0.0/0.0 -- an IDEAL, deadband-free plant with the governor inactive -- so passing --robot-spec=<this file> is what opts a controller INTO real-hardware behavior; simulated/test runs that want an ideal plant should omit --robot-spec (or override it away) rather than relying on any implicit zeroing. launch_margin (headroom the launch governor commands above min_moving_speed when launching from rest) defaults to 0.1 regardless and is inert whenever min_moving_speed is 0. max_breakaway_accel (default 3.0, must be >= max_accel) is the accel ceiling mpc_robot_sim's --deadband plant allows a RECEIVED command while stalled (models ESC launch-current headroom); it has no effect once the plant is moving or while --deadband is off. settle_position_tolerance/settle_cooldown_s/settle_max_attempts (defaults 0.03m/1.0s/3) tune the LAUNCH GOVERNOR's CORRECTION-LAUNCH behavior (see LaunchGovernor.h): a bounded, rate-limited nudge that lets a robot finish closing a residual position error at an otherwise-stationary reference instead of parking short forever; inert whenever min_moving_speed<=0.",
+  "robot": {
+    "wheel_base": 0.29,
+    "front_length": 0.36,
+    "rear_length": 0.12,
+    "width": 0.275,
+    "min_turning_radius_transit": 1.02,
+    "min_turning_radius_transfer": 1.43,
+    "speed_transit": 0.2,
+    "speed_transfer": 0.15,
+    "max_steer": 0.33,
+    "max_accel": 0.73,
+    "max_v_push": 0.295,
+    "max_v_nonpush": 0.38,
+    "min_moving_speed": 0.1,
+    "min_sustain_speed": 0.1,
+    "launch_margin": 0.1,
+    "max_breakaway_accel": 3.0,
+    "settle_position_tolerance": 0.03,
+    "settle_cooldown_s": 1.0,
+    "settle_max_attempts": 3
+  },
+  "mpc": {
+    "dt": 0.05,
+    "control_delay_steps": 1,
+    "loop_hz": 20,
+    "w_dist": 5.0,
+    "w_dist_dirchange": 50.0,
+    "w_yaw": 1.0,
+    "w_vel": 0.2,
+    "w_lat": 40.0,
+    "w_control": 0.001,
+    "w_delta_rate": 50.0,
+    "vel_scale": 1.01,
+    "vel_scale_back": 0.9,
+    "dir_change_scale": 0.77
+  }
+}

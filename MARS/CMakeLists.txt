@@ -244,7 +244,10 @@ phastar_link_zeromq(test_sim_viz_handoff)
 # footprint: ExecutedScenarioSerialization.h + RobotTrajectoryBuilder.h).
 add_executable(mars_sim_viz
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/simviz/SimVizWindow.cpp
+    src/simviz/MocapTab.cpp
     src/simviz/simviz_main.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
@@ -274,6 +277,8 @@ phastar_link_zeromq(mars_sim_viz)
 add_executable(test_sim_viz_control
     tests/test_sim_viz_control.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -306,6 +311,8 @@ phastar_link_zeromq(test_sim_viz_control)
 add_executable(test_sim_viz_pose_retention
     tests/test_sim_viz_pose_retention.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -332,6 +339,8 @@ phastar_link_zeromq(test_sim_viz_pose_retention)
 add_executable(test_sim_viz_scenario_model
     tests/test_sim_viz_scenario_model.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -366,7 +375,10 @@ phastar_link_zeromq(test_sim_viz_scenario_model)
 add_executable(test_sim_viz_window_render
     tests/test_sim_viz_window_render.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/simviz/SimVizWindow.cpp
+    src/simviz/MocapTab.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -403,6 +415,8 @@ phastar_link_zeromq(test_sim_viz_window_render)
 add_executable(test_sim_viz_telemetry
     tests/test_sim_viz_telemetry.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -436,7 +450,10 @@ phastar_link_zeromq(test_sim_viz_telemetry)
 add_executable(test_sim_viz_monitor_panel
     tests/test_sim_viz_monitor_panel.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/simviz/SimVizWindow.cpp
+    src/simviz/MocapTab.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -462,7 +479,7 @@ phastar_link_zeromq(test_sim_viz_monitor_panel)
 
 # Standalone headless integration test (spawns real mars_sim_viz --headless
 # + real mpc_controller/mpc_robot_sim children against a synthetic short
-# scenario) -- mirrors MPCController/tests/test_mpc_sim_loop.cpp's style:
+# scenario) -- mirrors MPC/tests/test_mpc_sim_loop.cpp's style:
 # a standalone diagnostic binary, not necessarily wired into ctest.
 add_executable(test_sim_viz_integration
     tests/test_sim_viz_integration.cpp
@@ -497,6 +514,8 @@ add_dependencies(test_sim_viz_integration mars_sim_viz mpc_controller mpc_robot_
 add_executable(test_sim_viz_execute
     tests/test_sim_viz_execute.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -532,6 +551,8 @@ add_dependencies(test_sim_viz_execute mars_sim_viz mpc_controller mpc_robot_sim)
 add_executable(test_sim_viz_pause
     tests/test_sim_viz_pause.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -563,6 +584,8 @@ add_dependencies(test_sim_viz_pause mars_sim_viz mpc_controller mpc_robot_sim)
 add_executable(test_sim_viz_noise
     tests/test_sim_viz_noise.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -594,6 +617,8 @@ add_dependencies(test_sim_viz_noise mars_sim_viz mpc_controller mpc_robot_sim)
 add_executable(test_sim_viz_stall
     tests/test_sim_viz_stall.cpp
     src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
     src/CsvLogging.cpp
     src/ResultVisualization.cpp
     src/SafeParking.cpp
@@ -617,6 +642,227 @@ phastar_apply_common_settings(test_sim_viz_stall)
 target_link_libraries(test_sim_viz_stall PRIVATE Threads::Threads)
 phastar_link_zeromq(test_sim_viz_stall)
 add_dependencies(test_sim_viz_stall mars_sim_viz mpc_controller mpc_robot_sim)
+
+# STAGING PHASE: standalone staging-plumbing test (in-process StagingCore
+# unit checks PLUS real mars_sim_viz --headless + real mpc_controller/
+# mpc_robot_sim children for the --stage-first process parts), same style
+# as test_sim_viz_stall/test_sim_viz_noise immediately above -- not wired
+# into ctest.
+add_executable(test_sim_viz_staging
+    tests/test_sim_viz_staging.cpp
+    src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/SimVizHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+target_include_directories(test_sim_viz_staging PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simviz
+)
+phastar_apply_common_settings(test_sim_viz_staging)
+target_link_libraries(test_sim_viz_staging PRIVATE Threads::Threads)
+phastar_link_zeromq(test_sim_viz_staging)
+add_dependencies(test_sim_viz_staging mars_sim_viz mpc_controller mpc_robot_sim)
+
+# LAG READOUT (three-clock lag-diagnosis task): standalone test for
+# simviz::progress_time_search() (pure) + ExecutionManager::lag_seconds() +
+# STATUS's additive " lag=" suffix, same style as test_sim_viz_stall/
+# test_sim_viz_staging immediately above -- not wired into ctest.
+add_executable(test_sim_viz_lag
+    tests/test_sim_viz_lag.cpp
+    src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/SimVizHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+target_include_directories(test_sim_viz_lag PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simviz
+)
+phastar_apply_common_settings(test_sim_viz_lag)
+target_link_libraries(test_sim_viz_lag PRIVATE Threads::Threads)
+phastar_link_zeromq(test_sim_viz_lag)
+add_dependencies(test_sim_viz_lag mars_sim_viz mpc_controller mpc_robot_sim)
+
+# OptiTrack/MocapManager (DESIGN part A -- see MARS/src/simviz/MocapCore.h):
+# pure-helper unit tests (transform parsing, mapping round-trip, Motive-
+# assets inventory-line parsing) plus process-level tests spawning REAL
+# fake_motive + optitrack_zmq_bridge binaries from MPC's own
+# build output (NOT rebuilt here -- no add_dependencies on those targets,
+# since this task must not trigger a rebuild of MPC code another
+# session may be actively editing; the already-built binaries under
+# build-release/MPC/ are used as-is, resolved at runtime the same
+# self_dir()-relative way test_sim_viz_shared.h's harness resolves
+# mars_sim_viz's own siblings). Same "not wired into ctest" convention as
+# test_sim_viz_staging/test_sim_viz_lag immediately above (process-spawning,
+# fixed TEST PORTS, run standalone).
+add_executable(test_sim_viz_mocap
+    tests/test_sim_viz_mocap.cpp
+    src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/SimVizHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+target_include_directories(test_sim_viz_mocap PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simviz
+)
+phastar_apply_common_settings(test_sim_viz_mocap)
+target_link_libraries(test_sim_viz_mocap PRIVATE Threads::Threads)
+phastar_link_zeromq(test_sim_viz_mocap)
+
+# MIXED-FLEET regression: reproduces the "wrong-robot mocap-linking" bug
+# report headlessly (in-process SimVizManager + a REAL fake_motive +
+# MocapManager-owned bridge, same conventions as test_sim_viz_mocap's Part 3
+# immediately above) -- 3 robots, ONE Motive body aliased to robot2, mocap
+# Connected, EXECUTE with no --real-mode. Also exercises the port-collision
+# fix (config.loc_port_start deliberately == config.mocap.loc_port_start).
+add_executable(test_sim_viz_mixed_fleet
+    tests/test_sim_viz_mixed_fleet.cpp
+    src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/SimVizHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+target_include_directories(test_sim_viz_mixed_fleet PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simviz
+)
+phastar_apply_common_settings(test_sim_viz_mixed_fleet)
+target_link_libraries(test_sim_viz_mixed_fleet PRIVATE Threads::Threads)
+phastar_link_zeromq(test_sim_viz_mixed_fleet)
+
+# DESIGN part C / T4: offscreen GUI test for the restructured SimVizWindow
+# (QTabWidget: "Simulation" + "OptiTrack") and MocapTab -- spawns a REAL
+# fake_motive + MocapManager-owned optitrack_zmq_bridge (same process-level
+# pattern/ports as test_sim_viz_mocap's Part 2 immediately above) so the
+# rigid-body list / mapping table / transform visual all render against
+# genuine live data. Same "not wired into ctest, not rebuilding MPC"
+# convention as test_sim_viz_mocap.
+add_executable(test_sim_viz_gui
+    tests/test_sim_viz_gui.cpp
+    src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
+    src/simviz/SimVizWindow.cpp
+    src/simviz/MocapTab.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/SimVizHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+target_include_directories(test_sim_viz_gui PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simviz
+)
+target_compile_definitions(test_sim_viz_gui PRIVATE
+    MARS_TEST_RENDER_OUT_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+)
+phastar_apply_common_settings(test_sim_viz_gui)
+target_link_libraries(test_sim_viz_gui PRIVATE Threads::Threads)
+phastar_link_zeromq(test_sim_viz_gui)
+
+# PART B (DESIGN doc): standalone REAL-ROBOT MODE / STAGE_REAL test (T2+T3)
+# -- spawns the real mars_sim_viz --headless binary in --real-mode; "real
+# hardware" is stood in by ordinary mpc_robot_sim processes the TEST ITSELF
+# spawns directly (never through mars_sim_viz -- see test_sim_viz_real_
+# mode.cpp's header comment). Deliberately NO add_dependencies on
+# mpc_controller/mpc_robot_sim (same reasoning as test_sim_viz_mocap
+# immediately above: those binaries are used AS-IS from build-release/
+# MPC/, never rebuilt here, since that code may be under active
+# edit by another session concurrently) -- only mars_sim_viz itself (this
+# task's own edit surface) is a build dependency. Same "not wired into
+# ctest" convention as the other process-spawning suites above.
+add_executable(test_sim_viz_real_mode
+    tests/test_sim_viz_real_mode.cpp
+    src/simviz/SimVizCore.cpp
+    src/simviz/MocapCore.cpp
+    src/simviz/StagingCore.cpp
+    src/CsvLogging.cpp
+    src/ResultVisualization.cpp
+    src/SafeParking.cpp
+    src/PlanningHelpers.cpp
+    src/CollisionScheduling.cpp
+    src/ReloPushSetup.cpp
+    src/AllocationSearch.cpp
+    src/TaskExecution.cpp
+    src/RuntimeOptionsParsing.cpp
+    src/DataLoading.cpp
+    src/SearchOrchestrator.cpp
+    src/SimVizHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/FinalSequenceHandoff.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/BatchInstanceParcer.cpp
+    ${PHASTAR_SHARED_RELOPUSH_SOURCES}
+)
+target_include_directories(test_sim_viz_real_mode PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simviz
+)
+phastar_apply_common_settings(test_sim_viz_real_mode)
+target_link_libraries(test_sim_viz_real_mode PRIVATE Threads::Threads)
+phastar_link_zeromq(test_sim_viz_real_mode)
+add_dependencies(test_sim_viz_real_mode mars_sim_viz)
 
 if(BUILD_TESTING)
     add_test(NAME phastar_unit_tests COMMAND phastar_unit_tests)

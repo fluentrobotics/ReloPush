@@ -2410,6 +2410,7 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
       {"robot1", {0.5, 0.45, 0.0}},
       {"robot2", {0.5, 3.0, 0.0}},
       {"robot3", {0.5, 4.5, 0.0}},
+      {"robot4", {4.0, 4.05, M_PI}},
   };
 
   const std::size_t active_robot_count = std::min<std::size_t>(

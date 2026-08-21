@@ -1,0 +1,29 @@
+{
+  "_doc": "Motor calibration tool config (mpc::load_motor_calib_config / mpc::MotorCalibConfig). Absent keys keep the compiled defaults shown here. robot_ip and motive_body_name/robot_topic_name are DELIBERATE placeholders -- fill in the real robot's IP and its actual Motive rigid-body/planner names before running a real session. line.line_yaw_rad=null means 'use the robot's initial heading at capture time as the line axis' (see mpc::LineFrame); set a number to override. safety.* are shared with mpc_controller's own hardware-safety conventions in spirit but are calibration-session-only limits (see mpc::TrialRunnerConfig). sweeps.duty/sweeps.erpm are the raw command values to sweep in each mode (a later agent's motor_calibration binary decides how to alternate direction/interleave modes across these). trial.steady_window_frac feeds mpc::steady_state_v(); trial.settle_s/arm_settle_s/max_duration_s feed mpc::TrialRunnerConfig (see mpc::make_trial_runner_config). output_dir is relative to the process's working directory.",
+  "robot_ip": "192.168.1.PLACEHOLDER",
+  "control_port": 3460,
+  "telemetry_port": 3560,
+  "localization_endpoint": "tcp://127.0.0.1:3260",
+  "robot_topic_name": "robot2",
+  "motive_body_name": "mushr2",
+  "line": {
+    "length_m": 4.5,
+    "end_margin_m": 0.75,
+    "line_yaw_rad": null
+  },
+  "safety": {
+    "mocap_stale_abort_ms": 300,
+    "max_speed_abort_mps": 0.8
+  },
+  "sweeps": {
+    "duty": [0.02, 0.03, 0.04, 0.05, 0.06, 0.08],
+    "erpm": [500, 750, 1000, 1250, 1500, 2000, 2500]
+  },
+  "trial": {
+    "max_duration_s": 6.0,
+    "settle_s": 1.5,
+    "arm_settle_s": 1.0,
+    "steady_window_frac": 0.4
+  },
+  "output_dir": "results/motor_calib"
+}

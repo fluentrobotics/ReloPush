@@ -63,13 +63,13 @@ std::string find_mpc_executable()
 {
   std::vector<std::string> paths = {
       "./mpc_controller",
-      "./MPCController/mpc_controller",
-      "../MPCController/mpc_controller",
-      "../../MPCController/mpc_controller",
-      "./build/MPCController/mpc_controller",
-      "../build/MPCController/mpc_controller",
-      "/Users/jeeho/InSync/UMich/Fluent_ws/ReloPush_ws/ReloPush_src/build/MPCController/mpc_controller",
-      "/Users/jeeho/InSync/UMich/Fluent_ws/ReloPush_ws/ReloPush_src/build-release/MPCController/mpc_controller"
+      "./MPC/mpc_controller",
+      "../MPC/mpc_controller",
+      "../../MPC/mpc_controller",
+      "./build/MPC/mpc_controller",
+      "../build/MPC/mpc_controller",
+      "/Users/jeeho/InSync/UMich/Fluent_ws/ReloPush_ws/ReloPush_src/build/MPC/mpc_controller",
+      "/Users/jeeho/InSync/UMich/Fluent_ws/ReloPush_ws/ReloPush_src/build-release/MPC/mpc_controller"
   };
 
   for (const auto &path : paths)
