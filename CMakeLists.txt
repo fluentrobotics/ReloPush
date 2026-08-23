@@ -209,6 +209,19 @@ else()
     target_link_libraries(test_parse_instance ${OMPL_LIBRARIES} ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET} ${CERES_LIBRARIES} ${RELOPUSH_ABSL_LOG_LIBS})
 endif()
 
+# Focused unit test for the optional ws:<x_max>,<y_max> instance-file section
+# in parse_instance_from_file() (src/ReloPush/BatchInstanceParcer.cpp).
+add_executable(test_parse_instance_ws
+    test/test_parse_instance_ws.cpp
+    src/ReloPush/BatchInstanceParcer.cpp)
+target_link_libraries(test_parse_instance_ws ${Boost_LIBRARIES})
+
+# Unit test for footprint_in_bounds() corner-based boundary checking
+add_executable(test_footprint_bounds
+    test/test_footprint_bounds.cpp
+)
+target_link_libraries(test_footprint_bounds ${Boost_LIBRARIES})
+
 add_executable(test_trajectory_gen test/test_trajectory_gen.cpp)
 target_link_libraries(test_trajectory_gen ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${QT_WIDGET_TARGET})
 
@@ -253,7 +266,7 @@ else()
 endif()
 
 add_subdirectory(MARS)
-add_subdirectory(MPCController)
+add_subdirectory(MPC)
 
 include(GNUInstallDirs)
 install(TARGETS ReloPush-BOSS
@@ -292,3 +305,5 @@ install(TARGETS test_single_robot_planner_compare_vis
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+add_subdirectory(VescDriver)
