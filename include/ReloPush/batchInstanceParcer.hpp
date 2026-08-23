@@ -24,7 +24,10 @@ bool parse_instance_from_file( std::string file_path, size_t data_ind,
                                ObjectMap& objects,
                                GoalMap& goals,
                                std::vector<ReloPush::State>& robots,
-                               std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs);
+                               std::unordered_map<std::string, ObjectGoalPair> &objGoalPairs,
+                               bool* has_ws = nullptr,
+                               double* ws_x = nullptr,
+                               double* ws_y = nullptr);
 
 /*
  * argv[1]: filename, argv[2]: index, argv[3]: use_opt

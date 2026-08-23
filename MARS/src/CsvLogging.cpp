@@ -96,6 +96,31 @@ namespace
     }
     return oss.str();
   }
+
+  // Same semicolon-joined convention as format_lns_batch_makespans(), but an
+  // infeasible candidate is written as the literal -1 (SequenceSearchOutcome::
+  // lns_candidate_makespans' sentinel) rather than "INF" -- lns_batch_best_makespans
+  // stores +infinity for a batch with no feasible candidate yet, which is a
+  // different question ("best feasible makespan seen up to this batch") than
+  // a single candidate's own feasibility, so the two columns intentionally
+  // use different infeasible markers. Documented in write_instance_run_record_csv's
+  // header comment.
+  std::string format_lns_candidate_makespans(
+      const std::vector<double> &lns_candidate_makespans)
+  {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+    for (std::size_t i = 0; i < lns_candidate_makespans.size(); ++i)
+    {
+      if (i > 0)
+        oss << ";";
+      if (lns_candidate_makespans[i] < 0.0)
+        oss << -1;
+      else
+        oss << lns_candidate_makespans[i];
+    }
+    return oss.str();
+  }
 }
 
 std::string csv_escape(const std::string &value)
@@ -566,6 +591,9 @@ void write_instance_run_record_csv(
     const std::vector<double> &lns_batch_planning_times_s,
     const std::vector<double> &lns_batch_best_makespans,
     const std::vector<int> &lns_batch_failed_iterations,
+    const std::vector<double> &lns_candidate_planning_times_s,
+    const std::vector<int> &lns_candidate_feasible,
+    const std::vector<double> &lns_candidate_makespans,
     int path_max_search_iterations_default,
     int path_max_search_iterations_fine,
     int safe_parking_max_search_iterations,
@@ -577,6 +605,14 @@ void write_instance_run_record_csv(
     const std::string &best_overall_label,
     double best_overall_makespan)
 {
+  // lns_candidate_planning_times_s / lns_candidate_feasible /
+  // lns_candidate_makespans (appended at the END, after best_overall_makespan,
+  // so existing position/DictReader-based consumers of the earlier columns
+  // keep working): one entry per LNS iteration, in iteration order across
+  // every batch. lns_candidate_feasible is 1/0. lns_candidate_makespans uses
+  // -1 (not "INF"/empty) as its infeasible sentinel -- see
+  // format_lns_candidate_makespans() above. All three are empty for
+  // greedy-only (and DQN search mode) runs.
   const std::string header =
       "file_name,instance_index,relopush_single_robot_makespan,"
       "greedy_allocation_makespan,lns_best_makespan,lns_iterations,"
@@ -587,7 +623,8 @@ void write_instance_run_record_csv(
       "path_max_search_iterations_default,path_max_search_iterations_fine,"
       "safe_parking_max_search_iterations,lns_threads,robot_count,lns_mode,"
       "lns_fine_segment_retry,order_constraint_learning,best_overall_label,"
-      "best_overall_makespan";
+      "best_overall_makespan,lns_candidate_planning_times_s,"
+      "lns_candidate_feasible,lns_candidate_makespans";
 
   bool write_header = false;
   {
@@ -648,7 +685,10 @@ void write_instance_run_record_csv(
       << csv_escape(lns_fine_segment_retry) << ","
       << csv_escape(order_constraint_learning) << ","
       << csv_escape(best_overall_label) << ","
-      << format_instance_record_number(best_overall_makespan) << "\n";
+      << format_instance_record_number(best_overall_makespan) << ","
+      << csv_escape(format_lns_batch_times(lns_candidate_planning_times_s)) << ","
+      << csv_escape(format_lns_batch_counts(lns_candidate_feasible)) << ","
+      << csv_escape(format_lns_candidate_makespans(lns_candidate_makespans)) << "\n";
 
   std::cout << "[Log] Appended instance record CSV: " << csv_path << std::endl;
 }

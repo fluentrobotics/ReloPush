@@ -37,6 +37,7 @@ typedef boost::geometry::model::segment<Point> Segment;
 #include <ReloPush/Parameters.hpp>
 // #include "timer.hpp"
 #include <ReloPush/ObjectInfo.hpp>
+#include <ReloPush/BoundaryCheck.hpp>
 
 using libMultiRobotPlanning::HybridAStar;
 using libMultiRobotPlanning::Neighbor;
@@ -976,6 +977,24 @@ public:
         double y_ind = s.y / Constants::mapResolution;
         if (x_ind < 0 || x_ind >= m_dimx || y_ind < 0 || y_ind >= m_dimy)
             return StateValiditySet(false, StateValidity::out_of_boundary);
+
+        // Corner-based boundary check when robot_boundary_corners mode is enabled
+        if (params::robot_boundary_corners) {
+            double half_width = car_width / 2.0;
+            // Determine front extent: LF is the parameter passed in
+            // LF_push > LF_nonpush, so detect push mode:
+            float front_extent = LF;
+            if (LF > Constants::LF_nonpush + 0.001) {
+                // In pushing mode: front_extent = LF_push + obsEncDiameter/2
+                front_extent = LF + Constants::obsEncDiameter / 2.0;
+            }
+            // Check all 4 corners against bounds [xMin-1e-2, xMax+1e-2] x [yMin-1e-2, yMax+1e-2]
+            double xMin = 0.0, xMax = m_dimx * Constants::mapResolution;
+            double yMin = 0.0, yMax = m_dimy * Constants::mapResolution;
+            if (!footprint_in_bounds(s.x, s.y, s.yaw, front_extent, LB, half_width, xMin, xMax, yMin, yMax, 1e-2)) {
+                return StateValiditySet(false, StateValidity::out_of_boundary);
+            }
+        }
 
         Eigen::Matrix2f rot;
         rot << cos(s.yaw), sin(s.yaw),

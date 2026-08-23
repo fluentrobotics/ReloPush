@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <random>
 #include <vector>
+#include <cstdlib>
 
 std::string default_sequence_path()
 {
@@ -466,6 +467,20 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
                   << "'. Expected '<x>,<y>,<theta>'. Keeping default." << std::endl;
       }
     }
+    else if (arg.rfind("--robot-poses=", 0) == 0)
+    {
+      std::string value = arg.substr(std::string("--robot-poses=").size());
+      auto parsed = parse_robot_poses(value);
+      if (parsed.has_value())
+      {
+        options.robot_poses = parsed;
+      }
+      else
+      {
+        // parse_robot_poses already printed an error message to stderr
+        std::exit(1);
+      }
+    }
     else if (arg.rfind("--num-robots=", 0) == 0 ||
              arg.rfind("--robot-count=", 0) == 0)
     {
@@ -496,6 +511,10 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
         std::cerr << "[Warn] Invalid --planner-expansion-threads value: '" << value
                   << "'. Keeping default." << std::endl;
       }
+    }
+    else if (arg == "--nested-expansion-threads")
+    {
+      options.nested_expansion_threads = true;
     }
     else if (arg.rfind("--max-search-iters=", 0) == 0)
     {
@@ -923,4 +942,64 @@ RuntimeOptions parse_runtime_options(int argc, char **argv)
   }
 
   return options;
+}
+
+std::optional<std::vector<std::array<double, 3>>> parse_robot_poses(const std::string &poses_str)
+{
+  std::vector<std::array<double, 3>> result;
+  std::stringstream poses_stream(poses_str);
+  std::string pose_str;
+
+  while (std::getline(poses_stream, pose_str, ';'))
+  {
+    // Remove leading/trailing whitespace from each pose
+    pose_str.erase(0, pose_str.find_first_not_of(" \t"));
+    pose_str.erase(pose_str.find_last_not_of(" \t") + 1);
+
+    if (pose_str.empty())
+      continue;
+
+    std::vector<double> components;
+    std::stringstream components_stream(pose_str);
+    std::string component;
+
+    while (std::getline(components_stream, component, ','))
+    {
+      // Remove leading/trailing whitespace from each component
+      component.erase(0, component.find_first_not_of(" \t"));
+      component.erase(component.find_last_not_of(" \t") + 1);
+
+      try
+      {
+        components.push_back(std::stod(component));
+      }
+      catch (...)
+      {
+        std::cerr << "[Error] Invalid --robot-poses value: '" << poses_str
+                  << "'. Expected format: 'x1,y1,th1;x2,y2,th2;...' with 1-4 poses."
+                  << std::endl;
+        return std::nullopt;
+      }
+    }
+
+    if (components.size() != 3)
+    {
+      std::cerr << "[Error] Invalid --robot-poses value: '" << poses_str
+                << "'. Each pose must have exactly 3 components (x,y,theta)."
+                << std::endl;
+      return std::nullopt;
+    }
+
+    result.push_back(std::array<double, 3>{components[0], components[1], components[2]});
+  }
+
+  if (result.empty() || result.size() > 4)
+  {
+    std::cerr << "[Error] Invalid --robot-poses value: '" << poses_str
+              << "'. Expected 1-4 poses (got " << result.size() << ")."
+              << std::endl;
+    return std::nullopt;
+  }
+
+  return result;
 }

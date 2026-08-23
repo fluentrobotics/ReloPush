@@ -107,6 +107,16 @@ void write_instance_run_record_csv(
     const std::vector<double> &lns_batch_planning_times_s,
     const std::vector<double> &lns_batch_best_makespans,
     const std::vector<int> &lns_batch_failed_iterations,
+    // Per-candidate LNS records (see SequenceSearchOutcome's doc comments in
+    // PHAstarPushDemoTypes.h), appended as the CSV's three trailing columns
+    // so existing position/DictReader-based consumers of the earlier columns
+    // are unaffected. Semicolon-separated lists, one entry per LNS
+    // iteration, empty for greedy-only (and DQN-mode) runs.
+    // lns_candidate_makespans uses -1 (not "INF") as its infeasible
+    // sentinel -- see format_lns_candidate_makespans() in CsvLogging.cpp.
+    const std::vector<double> &lns_candidate_planning_times_s,
+    const std::vector<int> &lns_candidate_feasible,
+    const std::vector<double> &lns_candidate_makespans,
     int path_max_search_iterations_default,
     int path_max_search_iterations_fine,
     int safe_parking_max_search_iterations,

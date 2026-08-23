@@ -499,7 +499,11 @@ bool run_eval_plans_cli(
       // 26 columns (id..n_obsrelo_segments) are Stage 1/2; the Stage 3
       // n_triage_*/n_gate_*/gate_wall_s columns are appended at the end so
       // existing readers keyed by position on the first 26 columns are
-      // unaffected.
+      // unaffected. start_offset_s/end_offset_s (seconds since the
+      // evaluate_scenario_batch() call's own start, per plan, in submission
+      // order -- see PlanTimingStats's doc comment) are appended last of
+      // all, so the wall time of any K-prefix of submitted `id`s can be
+      // derived as max(end_offset_s) over the first K rows.
       timing_out << "id,true_wall_s,"
                  << "search_wall_s_primary,search_wall_s_fine,search_wall_s_contact,search_wall_s_other,"
                  << "n_searches_primary,n_searches_fine,n_searches_contact,n_searches_other,"
@@ -511,7 +515,8 @@ bool run_eval_plans_cli(
                  << "n_robot_candidate_attempts,n_post_validation_retries,n_obsrelo_segments,"
                  << "n_triage_blocked_shortcuts,n_triage_primary_retries,"
                  << "n_triage_retry_successes,n_triage_skips_to_contact,"
-                 << "n_gate_checks,n_gate_skips_fine,n_gate_skips_contact,gate_wall_s\n";
+                 << "n_gate_checks,n_gate_skips_fine,n_gate_skips_contact,gate_wall_s,"
+                 << "start_offset_s,end_offset_s\n";
       timing_out << std::fixed << std::setprecision(6);
       for (std::size_t i = 0; i < records.size(); ++i)
       {
@@ -534,7 +539,8 @@ bool run_eval_plans_cli(
                    << t.n_triage_blocked_shortcuts << "," << t.n_triage_primary_retries << ","
                    << t.n_triage_retry_successes << "," << t.n_triage_skips_to_contact << ","
                    << t.n_gate_checks << "," << t.n_gate_skips_fine << ","
-                   << t.n_gate_skips_contact << "," << t.gate_wall_s << "\n";
+                   << t.n_gate_skips_contact << "," << t.gate_wall_s << ","
+                   << t.start_offset_s << "," << t.end_offset_s << "\n";
       }
     }
   }

@@ -501,6 +501,14 @@ inline void initialize(const std::string &filename,
                        const std::string &input_path,
                        const std::string &selected_line)
 {
+    // Short-circuit if diagnostics are disabled via environment variable
+    bool diag_disabled = (std::getenv("RELOPUSH_DISABLE_DIAGNOSTICS") &&
+                         std::string(std::getenv("RELOPUSH_DISABLE_DIAGNOSTICS")) == "1");
+    if (diag_disabled)
+    {
+        return;
+    }
+
     auto &s = session();
     if (s.summary.is_open())
         s.summary.close();

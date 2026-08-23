@@ -79,6 +79,19 @@ struct PlanTimingStats
   // oracle CSV's batch-mean eval_wall_s, this is a real per-plan measurement.
   double true_wall_s = 0.0;
 
+  // Seconds (steady_clock) from the start of the evaluate_scenario_batch()
+  // call this plan was submitted in, to the moment this plan's
+  // execute_allocation_scenario() call started/ended (submission order, not
+  // wall order -- see evaluate_scenario_batch's `batch_start` capture in
+  // AllocationSearch.cpp). Lets a caller derive the true wall time of any
+  // K-prefix of submitted plans as max(end_offset_s) over the first K rows,
+  // for both the sequential (worker_count<=1) and threaded paths. Not
+  // included in add()/operator+= below: these are batch-relative
+  // timestamps, not durations, so summing two instances would be
+  // meaningless -- read them from the individual per-plan PlanTimingStats.
+  double start_offset_s = 0.0;
+  double end_offset_s = 0.0;
+
   // Wall-clock time spent inside PHAStar::Planning_with_res, by tier.
   double search_wall_s_primary = 0.0;
   double search_wall_s_fine = 0.0;
@@ -560,6 +573,12 @@ struct LnsEvaluationResult
 {
   AllocationRunSummary summary;
   std::unique_ptr<ExecutedScenario> executed;
+  // Wall-clock time (steady_clock) of this single candidate's
+  // repair_destroyed_tasks_with_sampled_insertion() call, measured inside
+  // evaluate_lns_batch's worker lambda (both the worker_count<=1 sequential
+  // path and the threaded path). Carried into
+  // SequenceSearchOutcome::lns_candidate_planning_times_s below.
+  double wall_seconds = 0.0;
 };
 
 struct SequenceSearchOutcome
@@ -570,6 +589,19 @@ struct SequenceSearchOutcome
   std::vector<double> lns_batch_planning_times_s;
   std::vector<double> lns_batch_best_makespans;
   std::vector<int> lns_batch_failed_iterations;
+  // Per-candidate LNS records, one entry per LNS iteration, appended in
+  // iteration order across every batch (run_adaptive_lns_search's
+  // sequential post-batch loop in SearchOrchestrator.cpp). Empty for
+  // greedy-only runs (this outcome is never populated) and for DQN search
+  // mode (run_dqn_search returns a default-constructed SequenceSearchOutcome
+  // for these three fields; only the LNS path populates them).
+  std::vector<double> lns_candidate_planning_times_s;
+  // 1 = candidate.all_tasks_succeeded, 0 = infeasible.
+  std::vector<int> lns_candidate_feasible;
+  // Candidate makespan when feasible; -1.0 (not NaN/inf) as the sentinel for
+  // an infeasible candidate, matching the CSV convention documented at
+  // write_instance_run_record_csv's header comment.
+  std::vector<double> lns_candidate_makespans;
   int lns_failed_iterations = 0;
   bool has_feasible = false;
   bool has_partial = false;

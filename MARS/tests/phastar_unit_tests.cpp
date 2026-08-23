@@ -10,6 +10,8 @@
 #include <PlanningHelpers.h>
 #include <CollisionScheduling.h>
 #include <TaskExecution.h>
+#include <CsvLogging.h>
+#include <ReloPush/FinalSequenceHandoff.h>
 
 #include <algorithm>
 #include <cmath>
@@ -1052,7 +1054,7 @@ namespace
     // Override present, n=4: only robot4 changes.
     {
       const std::array<double, 3> override_pose = {3.5, 4.75, 3.141592653589793};
-      auto entities = initialize_entities({}, 4, override_pose);
+      auto entities = initialize_entities({}, 4, std::nullopt, override_pose);
 
       auto it4 = entities.find("robot4");
       if (it4 == entities.end())
@@ -1093,7 +1095,7 @@ namespace
     // instantiated), proving --robot4-pose= cannot affect --num-robots<=3.
     {
       const std::array<double, 3> override_pose = {3.5, 4.75, 3.141592653589793};
-      auto entities = initialize_entities({}, 3, override_pose);
+      auto entities = initialize_entities({}, 3, std::nullopt, override_pose);
 
       if (entities.find("robot4") != entities.end())
       {
@@ -6346,6 +6348,462 @@ bool test_tier_triage_gate_flags_off_regression()
   return ok;
 }
 
+// ==========================================
+// --nested-expansion-threads (nested planner expansion threads inside
+// parallel LNS/eval-plans batch workers)
+// ==========================================
+
+// --nested-expansion-threads CLI flag: default false, true when passed. See
+// RuntimeOptions::nested_expansion_threads's doc comment in
+// PHAstarPushDemoOptions.h and effective_worker_expansion_threads() in
+// AllocationSearch.cpp.
+bool test_parse_nested_expansion_threads_option()
+{
+  bool ok = true;
+
+  {
+    char arg0[] = "phastar_push_demo";
+    char *argv[] = {arg0};
+    const RuntimeOptions options = parse_runtime_options(1, argv);
+    if (options.nested_expansion_threads)
+    {
+      std::cerr << "    nested_expansion_threads should default to false when "
+                   "--nested-expansion-threads is absent\n";
+      ok = false;
+    }
+  }
+
+  {
+    char arg0[] = "phastar_push_demo";
+    char arg1[] = "--nested-expansion-threads";
+    char *argv[] = {arg0, arg1};
+    const RuntimeOptions options = parse_runtime_options(2, argv);
+    if (!options.nested_expansion_threads)
+    {
+      std::cerr << "    nested_expansion_threads should be true when "
+                   "--nested-expansion-threads is present\n";
+      ok = false;
+    }
+  }
+
+  return ok;
+}
+
+// effective_worker_expansion_threads(): the pure derivation shared by
+// make_parallel_lns_worker_options() (LNS candidate workers) and
+// evaluate_scenario_batch()'s worker_options (eval-plans/DQN scenario batch
+// workers) to pick each parallel worker thread's own
+// planner_expansion_threads. Forced to 1 when nested_expansion_threads is
+// off (default -- preserves today's behavior exactly); inherits
+// options.planner_expansion_threads verbatim when on.
+bool test_effective_worker_expansion_threads()
+{
+  bool ok = true;
+
+  RuntimeOptions off;
+  off.nested_expansion_threads = false;
+  off.planner_expansion_threads = 5;
+  if (effective_worker_expansion_threads(off) != 1)
+  {
+    std::cerr << "    expected 1 when nested_expansion_threads is off, got "
+              << effective_worker_expansion_threads(off) << "\n";
+    ok = false;
+  }
+
+  RuntimeOptions on;
+  on.nested_expansion_threads = true;
+  on.planner_expansion_threads = 5;
+  if (effective_worker_expansion_threads(on) != 5)
+  {
+    std::cerr << "    expected planner_expansion_threads (5) when "
+                 "nested_expansion_threads is on, got "
+              << effective_worker_expansion_threads(on) << "\n";
+    ok = false;
+  }
+
+  RuntimeOptions on_one;
+  on_one.nested_expansion_threads = true;
+  on_one.planner_expansion_threads = 1;
+  if (effective_worker_expansion_threads(on_one) != 1)
+  {
+    std::cerr << "    expected 1 when planner_expansion_threads itself is 1 "
+                 "(nested_expansion_threads on), got "
+              << effective_worker_expansion_threads(on_one) << "\n";
+    ok = false;
+  }
+
+  return ok;
+}
+
+// ==========================================
+// Per-candidate LNS records (instance-record CSV's trailing three columns)
+// ==========================================
+
+// write_instance_run_record_csv(): the header must end with the three new
+// per-candidate LNS columns (appended last so existing position/DictReader-
+// based consumers of the earlier columns are unaffected -- see CsvLogging.h's
+// doc comment), and a synthetic record with a mixed feasible/infeasible
+// candidate list must serialize the three semicolon-separated lists
+// correctly, using -1 (not "INF"/empty) as the infeasible-makespan sentinel.
+bool test_instance_record_csv_candidate_columns()
+{
+  bool ok = true;
+
+  const std::filesystem::path csv_path =
+      std::filesystem::temp_directory_path() /
+      "instance_record_candidate_columns_test.csv";
+  std::error_code rm_ec;
+  std::filesystem::remove(csv_path, rm_ec);
+
+  ReloPush::HandoffInstanceInfo instance_info;
+  instance_info.file_name = "synthetic_test_instance.txt";
+  instance_info.instance_index = 3;
+
+  const std::vector<double> lns_candidate_planning_times_s = {0.5, 1.25, 0.75};
+  const std::vector<int> lns_candidate_feasible = {1, 0, 1};
+  const std::vector<double> lns_candidate_makespans = {12.34, -1.0, 9.87};
+
+  write_instance_run_record_csv(
+      csv_path.string(),
+      instance_info,
+      /*relopush_single_robot_makespan=*/20.0,
+      /*greedy_makespan=*/15.0,
+      /*lns_best_makespan=*/9.87,
+      /*lns_iterations=*/3,
+      /*lns_failed_iterations=*/1,
+      /*greedy_allocation_planning_time_s=*/1.0,
+      /*lns_batch_planning_times_s=*/{2.5},
+      /*lns_batch_best_makespans=*/{9.87},
+      /*lns_batch_failed_iterations=*/{1},
+      lns_candidate_planning_times_s,
+      lns_candidate_feasible,
+      lns_candidate_makespans,
+      /*path_max_search_iterations_default=*/250,
+      /*path_max_search_iterations_fine=*/750,
+      /*safe_parking_max_search_iterations=*/25,
+      /*lns_threads=*/1,
+      /*robot_count=*/3,
+      /*lns_mode=*/"lns-task-reassign",
+      /*lns_fine_segment_retry=*/"enabled",
+      /*order_constraint_learning=*/"enabled",
+      /*best_overall_label=*/"lns-adaptive",
+      /*best_overall_makespan=*/9.87);
+
+  if (!std::filesystem::exists(csv_path))
+  {
+    std::cerr << "    write_instance_run_record_csv did not create " << csv_path << "\n";
+    return false;
+  }
+
+  const std::string csv = read_text_file(csv_path.string());
+  std::istringstream csv_stream(csv);
+  std::string header;
+  std::getline(csv_stream, header);
+
+  const std::string expected_header_tail =
+      "best_overall_makespan,lns_candidate_planning_times_s,"
+      "lns_candidate_feasible,lns_candidate_makespans";
+  if (header.size() < expected_header_tail.size() ||
+      header.compare(header.size() - expected_header_tail.size(),
+                     expected_header_tail.size(), expected_header_tail) != 0)
+  {
+    std::cerr << "    header does not end with the expected candidate columns: '"
+              << header << "'\n";
+    ok = false;
+  }
+
+  std::string row;
+  std::getline(csv_stream, row);
+  const std::string expected_tail = ",0.50;1.25;0.75,1;0;1,12.34;-1;9.87";
+  if (row.find(expected_tail) == std::string::npos)
+  {
+    std::cerr << "    record row did not contain the expected candidate columns "
+                 "('"
+              << expected_tail << "'): '" << row << "'\n";
+    ok = false;
+  }
+
+  std::filesystem::remove(csv_path, rm_ec);
+  return ok;
+}
+
+// ==========================================
+// --eval-plans-timing-out= start_offset_s/end_offset_s
+// ==========================================
+
+// start_offset_s/end_offset_s: seconds since the evaluate_scenario_batch()
+// call's own start, per plan, in submission order (see PlanTimingStats's
+// doc comment in PHAstarPushDemoTypes.h). With --lns-threads=1 (forcing the
+// sequential worker_count<=1 path in evaluate_scenario_batch, so ordering is
+// deterministic), the two submitted plans' windows must be non-negative,
+// each end_offset_s >= its own start_offset_s, and non-overlapping in
+// submission order (the second plan's start_offset_s must be >= the first
+// plan's end_offset_s).
+bool test_eval_plans_timing_offsets_end_to_end()
+{
+  const std::filesystem::path exe_dir = g_test_executable_path.parent_path();
+  const std::filesystem::path demo_path = exe_dir / "phastar_push_demo";
+  if (!std::filesystem::exists(demo_path))
+  {
+    std::cerr << "    Missing phastar_push_demo executable at " << demo_path << "\n";
+    return false;
+  }
+
+  const std::filesystem::path instance_path =
+      std::filesystem::path(CMAKE_SOURCE_DIR) /
+      "results/relopush-out/result_seq_ReloPush-BOSS_8_objects.txt_ind1.b64";
+  if (!std::filesystem::exists(instance_path))
+  {
+    std::cerr << "    Missing instance file at " << instance_path << "\n";
+    return false;
+  }
+
+  const std::filesystem::path plans_path =
+      std::filesystem::temp_directory_path() / "eval_plans_timing_offsets_test_input.jsonl";
+  const std::filesystem::path out_path =
+      std::filesystem::temp_directory_path() / "eval_plans_timing_offsets_test_output.csv";
+  const std::filesystem::path timing_path =
+      std::filesystem::temp_directory_path() / "eval_plans_timing_offsets_test_timing.csv";
+  std::error_code rm_ec;
+  std::filesystem::remove(plans_path, rm_ec);
+  std::filesystem::remove(out_path, rm_ec);
+  std::filesystem::remove(timing_path, rm_ec);
+
+  {
+    std::ofstream plans_out(plans_path);
+    plans_out << R"({"id": "p0", "order": [0,1,2,3,4,5,6,7], )"
+              << R"("assign": [0,0,0,0,0,0,0,0]})" << "\n";
+    plans_out << R"({"id": "p1", "order": [0,1,2,3,4,5,6,7], )"
+              << R"("assign": [0,0,0,0,0,0,0,0]})" << "\n";
+  }
+
+  std::string command =
+      demo_path.string() +
+      " --no-visualization --no-visualize-relopush-plan --no-debug-vis"
+      " --random-seed=1 --lns-threads=1"
+      " --eval-plans=" + plans_path.string() +
+      " --eval-plans-out=" + out_path.string() +
+      " --eval-plans-timing-out=" + timing_path.string() +
+      " --input-sequence=" + instance_path.string() + " 2>&1";
+
+  int exit_code = 0;
+  const std::string output = run_command_capture(command, exit_code);
+  if (exit_code != 0)
+  {
+    std::cerr << "    --eval-plans-timing-out command failed with exit code " << exit_code
+              << "\n    output: " << output << "\n";
+    return false;
+  }
+
+  if (!std::filesystem::exists(timing_path))
+  {
+    std::cerr << "    Expected timing CSV was not created at " << timing_path << "\n";
+    return false;
+  }
+
+  const std::string csv = read_text_file(timing_path.string());
+  std::istringstream csv_stream(csv);
+  std::string header;
+  std::getline(csv_stream, header);
+
+  const std::string expected_header_tail = "start_offset_s,end_offset_s";
+  if (header.size() < expected_header_tail.size() ||
+      header.compare(header.size() - expected_header_tail.size(),
+                     expected_header_tail.size(), expected_header_tail) != 0)
+  {
+    std::cerr << "    timing CSV header does not end with start_offset_s,end_offset_s: '"
+              << header << "'\n";
+    return false;
+  }
+
+  std::string row0, row1;
+  std::getline(csv_stream, row0);
+  std::getline(csv_stream, row1);
+
+  auto split_csv_fields = [](const std::string &row)
+  {
+    std::vector<std::string> fields;
+    std::stringstream ss(row);
+    std::string field;
+    while (std::getline(ss, field, ','))
+      fields.push_back(field);
+    return fields;
+  };
+
+  const std::vector<std::string> fields_row0 = split_csv_fields(row0);
+  const std::vector<std::string> fields_row1 = split_csv_fields(row1);
+
+  if (fields_row0.size() < 2 || fields_row1.size() < 2)
+  {
+    std::cerr << "    timing CSV rows too short: '" << row0 << "' / '" << row1 << "'\n";
+    return false;
+  }
+
+  bool ok = true;
+  try
+  {
+    const double start0 = std::stod(fields_row0[fields_row0.size() - 2]);
+    const double end0 = std::stod(fields_row0.back());
+    const double start1 = std::stod(fields_row1[fields_row1.size() - 2]);
+    const double end1 = std::stod(fields_row1.back());
+
+    if (start0 < 0.0 || end0 < start0)
+    {
+      std::cerr << "    row0 offsets not sane: start=" << start0 << " end=" << end0 << "\n";
+      ok = false;
+    }
+    if (start1 < end0 - 1e-6)
+    {
+      std::cerr << "    row1 start_offset_s (" << start1
+                << ") should be >= row0 end_offset_s (" << end0
+                << ") under --lns-threads=1 sequential evaluation\n";
+      ok = false;
+    }
+    if (end1 < start1)
+    {
+      std::cerr << "    row1 offsets not sane: start=" << start1 << " end=" << end1 << "\n";
+      ok = false;
+    }
+  }
+  catch (const std::exception &e)
+  {
+    std::cerr << "    failed to parse offset fields: " << e.what() << "\n";
+    ok = false;
+  }
+
+  std::filesystem::remove(plans_path, rm_ec);
+  std::filesystem::remove(out_path, rm_ec);
+  std::filesystem::remove(timing_path, rm_ec);
+  return ok;
+}
+
+bool test_parse_robot_poses_valid_single()
+{
+  auto result = parse_robot_poses("1.5,2.5,3.14159");
+  if (!result.has_value())
+  {
+    std::cerr << "    single pose parse failed (returned nullopt)\n";
+    return false;
+  }
+  if (result->size() != 1)
+  {
+    std::cerr << "    single pose parse got size " << result->size() << " instead of 1\n";
+    return false;
+  }
+  const auto &pose = (*result)[0];
+  constexpr double eps = 1e-6;
+  if (std::abs(pose[0] - 1.5) > eps || std::abs(pose[1] - 2.5) > eps ||
+      std::abs(pose[2] - 3.14159) > eps)
+  {
+    std::cerr << "    single pose values incorrect: (" << pose[0] << "," << pose[1]
+              << "," << pose[2] << ")\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_parse_robot_poses_valid_four()
+{
+  auto result = parse_robot_poses("0.5,0.45,0;0.5,3.0,0;0.5,4.5,0;4.0,4.05,3.14159");
+  if (!result.has_value())
+  {
+    std::cerr << "    four poses parse failed (returned nullopt)\n";
+    return false;
+  }
+  if (result->size() != 4)
+  {
+    std::cerr << "    four poses parse got size " << result->size() << " instead of 4\n";
+    return false;
+  }
+  // Check first and last pose
+  constexpr double eps = 1e-6;
+  const auto &pose0 = (*result)[0];
+  const auto &pose3 = (*result)[3];
+  if (std::abs(pose0[0] - 0.5) > eps || std::abs(pose0[1] - 0.45) > eps ||
+      std::abs(pose0[2] - 0.0) > eps)
+  {
+    std::cerr << "    pose[0] incorrect: (" << pose0[0] << "," << pose0[1]
+              << "," << pose0[2] << ")\n";
+    return false;
+  }
+  if (std::abs(pose3[0] - 4.0) > eps || std::abs(pose3[1] - 4.05) > eps ||
+      std::abs(pose3[2] - 3.14159) > eps)
+  {
+    std::cerr << "    pose[3] incorrect: (" << pose3[0] << "," << pose3[1]
+              << "," << pose3[2] << ")\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_parse_robot_poses_whitespace_tolerance()
+{
+  auto result = parse_robot_poses(" 1.0 , 2.0 , 3.0 ; 4.0 , 5.0 , 6.0 ");
+  if (!result.has_value())
+  {
+    std::cerr << "    whitespace-tolerant parse failed (returned nullopt)\n";
+    return false;
+  }
+  if (result->size() != 2)
+  {
+    std::cerr << "    whitespace-tolerant parse got size " << result->size()
+              << " instead of 2\n";
+    return false;
+  }
+  constexpr double eps = 1e-6;
+  const auto &pose0 = (*result)[0];
+  const auto &pose1 = (*result)[1];
+  if (std::abs(pose0[0] - 1.0) > eps || std::abs(pose0[1] - 2.0) > eps ||
+      std::abs(pose0[2] - 3.0) > eps)
+  {
+    std::cerr << "    whitespace pose[0] incorrect\n";
+    return false;
+  }
+  if (std::abs(pose1[0] - 4.0) > eps || std::abs(pose1[1] - 5.0) > eps ||
+      std::abs(pose1[2] - 6.0) > eps)
+  {
+    std::cerr << "    whitespace pose[1] incorrect\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_parse_robot_poses_malformed_missing_field()
+{
+  // Should fail: only 2 components instead of 3
+  auto result = parse_robot_poses("1.0,2.0");
+  if (result.has_value())
+  {
+    std::cerr << "    malformed (missing field) should have returned nullopt\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_parse_robot_poses_malformed_non_number()
+{
+  // Should fail: non-numeric value
+  auto result = parse_robot_poses("1.0,abc,3.0");
+  if (result.has_value())
+  {
+    std::cerr << "    malformed (non-number) should have returned nullopt\n";
+    return false;
+  }
+  return true;
+}
+
+bool test_parse_robot_poses_malformed_too_many()
+{
+  // Should fail: >4 poses
+  auto result = parse_robot_poses("0,0,0;1,1,1;2,2,2;3,3,3;4,4,4");
+  if (result.has_value())
+  {
+    std::cerr << "    malformed (>4 poses) should have returned nullopt\n";
+    return false;
+  }
+  return true;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -6478,6 +6936,22 @@ int main(int argc, char **argv)
        test_parse_robot4_pose_option},
       {"initialize_entities robot4_pose_override (default/override/n<=3 no-op)",
        test_initialize_entities_robot4_pose_override},
+      {"--nested-expansion-threads CLI flag parsing (default false/present true)",
+       test_parse_nested_expansion_threads_option},
+      {"effective_worker_expansion_threads (forced-1 off / inherited on)",
+       test_effective_worker_expansion_threads},
+      {"Instance record CSV: trailing per-candidate LNS columns "
+       "(header tail + list serialization incl. -1 infeasible sentinel)",
+       test_instance_record_csv_candidate_columns},
+      {"--eval-plans-timing-out=: start_offset_s/end_offset_s columns "
+       "(sane + sequential-order monotonic under --lns-threads=1)",
+       test_eval_plans_timing_offsets_end_to_end},
+      {"parse_robot_poses: valid single pose", test_parse_robot_poses_valid_single},
+      {"parse_robot_poses: valid four poses", test_parse_robot_poses_valid_four},
+      {"parse_robot_poses: whitespace tolerance", test_parse_robot_poses_whitespace_tolerance},
+      {"parse_robot_poses: malformed (missing field)", test_parse_robot_poses_malformed_missing_field},
+      {"parse_robot_poses: malformed (non-number)", test_parse_robot_poses_malformed_non_number},
+      {"parse_robot_poses: malformed (>4 poses)", test_parse_robot_poses_malformed_too_many},
   };
 
   std::vector<std::pair<std::string, TestFn>> all_tests = tests;

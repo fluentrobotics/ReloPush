@@ -159,6 +159,16 @@ struct RuntimeOptions
     double default_robot_collision_inflation = 1.005;
     double retraction_distance = 0.11;
     int planner_expansion_threads = 1;
+    // When lns_threads > 1 (parallel LNS candidate workers) or a batched
+    // evaluate_scenario_batch() call spawns worker threads, each worker
+    // historically forced its own planner_expansion_threads to 1 to avoid
+    // nested oversubscription (lns_threads workers * planner_expansion_threads
+    // each). --nested-expansion-threads opts into keeping the configured
+    // planner_expansion_threads value inside those workers instead, so a run
+    // may use up to lns_threads * planner_expansion_threads total planner
+    // threads. Default false keeps existing behavior byte-identical. See
+    // effective_worker_expansion_threads() in AllocationSearch.cpp.
+    bool nested_expansion_threads = false;
     int max_search_iterations = 250; // 300;
     bool robot_boundary_origin_only = true;
 
@@ -221,6 +231,13 @@ struct RuntimeOptions
     // (3.5, 4.75, pi)) at runtime without hardcoding -- see
     // MARS/16ws45-instance-generation.md's "Implementation changes" section.
     std::optional<std::array<double, 3>> robot4_pose;
+
+    // Optional runtime override for robot start poses, set via
+    // --robot-poses=x1,y1,th1;x2,y2,th2;...
+    // Accepts 1-4 poses in prefix order (pose i replaces predefined robot i+1).
+    // Applied before robot4_pose, so --robot4-pose wins for robot4 if both given.
+    // std::nullopt (default) keeps hardcoded predefined_robots unchanged.
+    std::optional<std::vector<std::array<double, 3>>> robot_poses;
 
     // Allocation-improvement method. LNS (default) keeps the destroy/repair
     // search; DQN uses the per-instance online Q-learning allocator.

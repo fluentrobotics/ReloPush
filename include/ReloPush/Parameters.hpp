@@ -88,6 +88,9 @@ namespace params
     extern bool measure_exec_time;
 
     extern int64_t grid_search_timeout;
+
+    // Robot boundary checking mode: when true, check all 4 robot corners against workspace bounds
+    extern bool robot_boundary_corners;
 }
 
 #endif // PARAMETERS_HPP

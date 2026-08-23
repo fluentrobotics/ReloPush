@@ -188,6 +188,9 @@ int run_greedy_only_pipeline(
       {},
       {},
       {},
+      {}, // lns_candidate_planning_times_s (greedy-only: empty)
+      {}, // lns_candidate_feasible (greedy-only: empty)
+      {}, // lns_candidate_makespans (greedy-only: empty)
       options.max_search_iterations,
       effective_fine_path_max_search_iterations(options),
       effective_safe_parking_max_search_iterations(options),
@@ -714,6 +717,15 @@ SequenceSearchOutcome run_adaptive_lns_search(
         ++batch_failed_iterations;
       }
 
+      // Per-candidate record (see SequenceSearchOutcome's doc comments):
+      // appended here, in iteration order, across every batch.
+      lns_outcome.lns_candidate_planning_times_s.push_back(
+          batch_results[batch_idx].wall_seconds);
+      lns_outcome.lns_candidate_feasible.push_back(
+          candidate.all_tasks_succeeded ? 1 : 0);
+      lns_outcome.lns_candidate_makespans.push_back(
+          candidate.all_tasks_succeeded ? candidate.makespan : -1.0);
+
       if (options.enable_order_constraint_learning &&
           !options.lns_reassign_only &&
           !candidate.all_tasks_succeeded)
@@ -847,6 +859,9 @@ int finalize_and_replay_best(
     const std::vector<double> &lns_batch_planning_times_s,
     const std::vector<double> &lns_batch_best_makespans,
     const std::vector<int> &lns_batch_failed_iterations,
+    const std::vector<double> &lns_candidate_planning_times_s,
+    const std::vector<int> &lns_candidate_feasible,
+    const std::vector<double> &lns_candidate_makespans,
     int lns_failed_iterations,
     int robot_count,
     double relopush_single_robot_makespan,
@@ -887,6 +902,9 @@ int finalize_and_replay_best(
       lns_batch_planning_times_s,
       lns_batch_best_makespans,
       lns_batch_failed_iterations,
+      lns_candidate_planning_times_s,
+      lns_candidate_feasible,
+      lns_candidate_makespans,
       options.max_search_iterations,
       effective_fine_path_max_search_iterations(options),
       effective_safe_parking_max_search_iterations(options),

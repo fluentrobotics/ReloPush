@@ -23,6 +23,11 @@ class Params;
 
 void print_runtime_options(const RuntimeOptions &options);
 
+// See definition in AllocationSearch.cpp for the full contract. Exposed here
+// (rather than kept file-local) so unit tests can exercise the derivation
+// directly.
+int effective_worker_expansion_threads(const RuntimeOptions &options);
+
 // ==========================================
 // Environment & Task Initialization
 // ==========================================
@@ -33,6 +38,7 @@ Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
 std::unordered_map<std::string, EntityMeta *>
 initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
                     int requested_robot_count,
+                    const std::optional<std::vector<std::array<double, 3>>> &robot_poses_override = std::nullopt,
                     const std::optional<std::array<double, 3>> &robot4_pose_override = std::nullopt);
 
 std::vector<Task> initialize_tasks(

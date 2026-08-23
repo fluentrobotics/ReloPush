@@ -17,6 +17,7 @@ set(PHASTAR_SHARED_RELOPUSH_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ReloPush/FromOMPL.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/PathPlanningTools.cpp
     ${CMAKE_SOURCE_DIR}/src/ReloPush/PrintInColor.cpp
+    ${CMAKE_SOURCE_DIR}/src/ReloPush/params.cpp
 )
 
 function(phastar_apply_common_settings target_name)

@@ -62,10 +62,26 @@ private:
   bool previous_ = false;
 };
 
+} // namespace
+
+// Derives the planner_expansion_threads value a parallel batch worker
+// (LNS candidate worker or evaluate_scenario_batch() worker thread) should
+// use. Historically always 1, to avoid nested oversubscription (lns_threads
+// worker threads each independently spawning planner_expansion_threads more
+// threads). options.nested_expansion_threads (--nested-expansion-threads)
+// opts into keeping the configured planner_expansion_threads instead. Pure
+// function of options, so it is exercised directly by unit tests.
+int effective_worker_expansion_threads(const RuntimeOptions &options)
+{
+  return options.nested_expansion_threads ? options.planner_expansion_threads : 1;
+}
+
+namespace
+{
 RuntimeOptions make_parallel_lns_worker_options(const RuntimeOptions &options)
 {
   RuntimeOptions worker_options = options;
-  worker_options.planner_expansion_threads = 1;
+  worker_options.planner_expansion_threads = effective_worker_expansion_threads(options);
   worker_options.print_planning_status = false;
 
   // LNS candidates run in worker threads when lns_threads > 1. Qt windows
@@ -168,9 +184,24 @@ void print_runtime_options(const RuntimeOptions &options)
             << options.planner_expansion_threads << std::endl;
   if (options.lns_threads > 1 && options.planner_expansion_threads > 1)
   {
-    std::cout << "[Config] Planner expansion threads are disabled inside "
-                 "parallel LNS/search batches to avoid nested oversubscription."
-              << std::endl;
+    const int effective_worker_threads = effective_worker_expansion_threads(options);
+    if (options.nested_expansion_threads)
+    {
+      std::cout << "[Config] --nested-expansion-threads is set: parallel "
+                   "LNS/search batch workers each use "
+                << effective_worker_threads
+                << " planner expansion thread(s) (up to "
+                << options.lns_threads << " x " << effective_worker_threads
+                << " total)." << std::endl;
+    }
+    else
+    {
+      std::cout << "[Config] Planner expansion threads are forced to "
+                << effective_worker_threads
+                << " inside parallel LNS/search batch workers to avoid nested "
+                   "oversubscription (pass --nested-expansion-threads to override)."
+                << std::endl;
+    }
   }
   std::cout << "[Config] Max search iterations: "
             << options.max_search_iterations << std::endl;
@@ -370,7 +401,7 @@ void initialize_environment(
     std::cout << collision_tuning.str() << std::endl;
   }
 
-  entities = initialize_entities(loaded_sequence, options.robot_count, options.robot4_pose);
+  entities = initialize_entities(loaded_sequence, options.robot_count, options.robot_poses, options.robot4_pose);
   timetable.add_initial(entities);
 
   all_robots.clear();
@@ -552,6 +583,11 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
       requests.size(),
       static_cast<std::size_t>(std::max(1, options.lns_threads)));
 
+  // Shared zero-point for PlanTimingStats::start_offset_s/end_offset_s below,
+  // so a K-prefix (in submission order) wall time can be derived downstream
+  // as max(end_offset_s) over the first K rows, regardless of worker_count.
+  const auto batch_start = std::chrono::steady_clock::now();
+
   if (worker_count <= 1)
   {
     for (std::size_t i = 0; i < requests.size(); ++i)
@@ -567,9 +603,13 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
           loaded_sequence, options, requests[i].plan, requests[i].label,
           requests[i].parking_seed, false, options.early_abort_eval_on_failure,
           &timing);
-      timing.true_wall_s = std::chrono::duration<double>(
-                               std::chrono::steady_clock::now() - plan_t0)
-                               .count();
+      const auto plan_t1 = std::chrono::steady_clock::now();
+      timing.true_wall_s =
+          std::chrono::duration<double>(plan_t1 - plan_t0).count();
+      timing.start_offset_s =
+          std::chrono::duration<double>(plan_t0 - batch_start).count();
+      timing.end_offset_s =
+          std::chrono::duration<double>(plan_t1 - batch_start).count();
       if (save_executed_scenarios)
         results[i].serialized_result = serialize_executed_scenario_b64(executed);
       results[i].summary = std::move(executed.summary);
@@ -580,7 +620,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
 
   ScopedGlobalStreamSilencer silencer(!options.print_planning_status);
   RuntimeOptions worker_options = options;
-  worker_options.planner_expansion_threads = 1;
+  worker_options.planner_expansion_threads = effective_worker_expansion_threads(options);
   std::atomic<std::size_t> next_index{0};
   std::vector<std::thread> workers;
   workers.reserve(worker_count);
@@ -589,7 +629,7 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
   {
     workers.emplace_back(
         [&loaded_sequence, &worker_options, &requests, &results, &next_index,
-         save_executed_scenarios]()
+         save_executed_scenarios, batch_start]()
         {
           while (true)
           {
@@ -608,9 +648,13 @@ std::vector<ScenarioEvaluationResult> evaluate_scenario_batch(
                 loaded_sequence, worker_options, requests[idx].plan, requests[idx].label,
                 requests[idx].parking_seed, true, worker_options.early_abort_eval_on_failure,
                 &timing);
-            timing.true_wall_s = std::chrono::duration<double>(
-                                     std::chrono::steady_clock::now() - plan_t0)
-                                     .count();
+            const auto plan_t1 = std::chrono::steady_clock::now();
+            timing.true_wall_s =
+                std::chrono::duration<double>(plan_t1 - plan_t0).count();
+            timing.start_offset_s =
+                std::chrono::duration<double>(plan_t0 - batch_start).count();
+            timing.end_offset_s =
+                std::chrono::duration<double>(plan_t1 - batch_start).count();
             if (save_executed_scenarios)
               results[idx].serialized_result = serialize_executed_scenario_b64(executed);
             results[idx].summary = std::move(executed.summary);
@@ -665,10 +709,14 @@ std::vector<LnsEvaluationResult> evaluate_lns_batch(
   {
     for (std::size_t i = 0; i < candidates.size(); ++i)
     {
+      const auto candidate_t0 = std::chrono::steady_clock::now();
       auto executed = repair_destroyed_tasks_with_sampled_insertion(
           loaded_sequence, options, base_plan, base_summary, constraints,
           candidates[i].destroyed_tasks, robot_names, candidates[i].destroy_scores,
           candidates[i].parking_seed, candidates[i].repair_seed, label, false);
+      results[i].wall_seconds = std::chrono::duration<double>(
+                                     std::chrono::steady_clock::now() - candidate_t0)
+                                     .count();
       results[i].summary = executed.summary;
       results[i].executed =
           std::make_unique<ExecutedScenario>(std::move(executed));
@@ -698,11 +746,15 @@ std::vector<LnsEvaluationResult> evaluate_lns_batch(
 
             print_lns_worker_status(worker_idx, worker_count,
                                     candidates[idx], "running");
+            const auto candidate_t0 = std::chrono::steady_clock::now();
             auto executed = repair_destroyed_tasks_with_sampled_insertion(
                 loaded_sequence, worker_options, base_plan, base_summary, constraints,
                 candidates[idx].destroyed_tasks, robot_names,
                 candidates[idx].destroy_scores, candidates[idx].parking_seed,
                 candidates[idx].repair_seed, label, true);
+            results[idx].wall_seconds = std::chrono::duration<double>(
+                                             std::chrono::steady_clock::now() - candidate_t0)
+                                             .count();
             results[idx].summary = executed.summary;
             results[idx].executed =
                 std::make_unique<ExecutedScenario>(std::move(executed));
@@ -2388,6 +2440,7 @@ Params initialize_params(const std::vector<FinalAllocation> &loadedSequence,
 std::unordered_map<std::string, EntityMeta *>
 initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
                     int requested_robot_count,
+                    const std::optional<std::vector<std::array<double, 3>>> &robot_poses_override,
                     const std::optional<std::array<double, 3>> &robot4_pose_override)
 {
   std::unordered_map<std::string, EntityMeta *> entities;
@@ -2414,10 +2467,24 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
       {"robot4", {4.0, 4.05, M_PI}},
   };
 
+  // Runtime override for robot poses via --robot-poses=x1,y1,th1;x2,y2,th2;...
+  // Applied in prefix order (pose i replaces predefined robot i+1). Accepts 1-4 poses.
+  // Precedence: robot_poses applied first, then robot4_pose (so robot4_pose wins for
+  // robot4 if both flags are given).
+  if (robot_poses_override.has_value())
+  {
+    const auto &poses = *robot_poses_override;
+    for (std::size_t i = 0; i < poses.size() && i < predefined_robots.size(); ++i)
+    {
+      predefined_robots[i].initial_pose = {poses[i][0], poses[i][1], poses[i][2]};
+    }
+  }
+
   // Runtime override for robot4's initial pose (--robot4-pose=<x>,<y>,<theta>),
   // used to reproduce the original paper's n=4 baseline (4.0x5.2 workspace,
   // robot4 at (3.5, 4.75, pi)) instead of the hardcoded WS45 campaign default
   // above. Absent (default): predefined_robots stays exactly as hardcoded.
+  // Takes precedence over --robot-poses when both are given.
   if (robot4_pose_override.has_value())
   {
     const auto &pose = *robot4_pose_override;
@@ -2427,6 +2494,16 @@ initialize_entities(const std::vector<FinalAllocation> &loadedSequence,
   const std::size_t active_robot_count = std::min<std::size_t>(
       predefined_robots.size(),
       static_cast<std::size_t>(std::max(1, requested_robot_count)));
+
+  // Print the effective robot poses being used
+  std::cout << "[Robots] n=" << active_robot_count << " poses:";
+  for (std::size_t i = 0; i < active_robot_count; ++i)
+  {
+    const auto &pose = predefined_robots[i].initial_pose;
+    std::cout << " " << predefined_robots[i].name << "(" << pose.x << ","
+              << pose.y << "," << pose.yaw << ")";
+  }
+  std::cout << std::endl;
 
   for (std::size_t i = 0; i < active_robot_count; ++i)
   {
