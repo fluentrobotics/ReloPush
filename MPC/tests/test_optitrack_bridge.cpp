@@ -561,7 +561,7 @@ Report run_part_unicast(const std::string& dir) {
             std::getline(csv_f, header);
             const std::string expected_header =
                 "t_arrival,robot,raw_x,raw_y,raw_z,qx,qy,qz,qw,roll,pitch,heading,planar_x,planar_y,"
-                "planar_yaw,tracking_valid";
+                "planar_yaw,tracking_valid,mocap_t";
             if (header != expected_header) {
                 rep.fail("CSV header mismatch: got '" + header + "', expected '" + expected_header + "'");
             }
@@ -573,7 +573,7 @@ Report run_part_unicast(const std::string& dir) {
                 std::vector<std::string> fields;
                 std::string tok;
                 while (std::getline(ss, tok, ',')) fields.push_back(tok);
-                if (fields.size() != 16) {
+                if (fields.size() != 17) {
                     ++malformed;
                     continue;
                 }
@@ -1286,7 +1286,7 @@ Report run_part_yup_and_name_resolution(const std::string& dir) {
             std::getline(csv_f, header);
             const std::string expected_header =
                 "t_arrival,robot,raw_x,raw_y,raw_z,qx,qy,qz,qw,roll,pitch,heading,planar_x,planar_y,"
-                "planar_yaw,tracking_valid";
+                "planar_yaw,tracking_valid,mocap_t";
             if (header != expected_header) {
                 rep.fail("CSV header mismatch: got '" + header + "', expected '" + expected_header + "'");
             }
@@ -1298,14 +1298,15 @@ Report run_part_yup_and_name_resolution(const std::string& dir) {
                 std::vector<std::string> fields;
                 std::string tok;
                 while (std::getline(ss, tok, ',')) fields.push_back(tok);
-                if (fields.size() != 16) {
+                if (fields.size() != 17) {
                     ++malformed;
                     continue;
                 }
                 try {
                     bool all_finite = true;
                     for (std::size_t k = 0; k < fields.size(); ++k) {
-                        if (k == 1) continue;  // robot name column, not numeric.
+                        if (k == 1) continue;   // robot name column, not numeric.
+                        if (k == 16) continue;  // mocap_t -- empty here (NatNet 3.1, no trailer timestamp).
                         if (!std::isfinite(std::stod(fields[k]))) all_finite = false;
                     }
                     if (!all_finite) {
@@ -1581,7 +1582,7 @@ Report run_part_auto_discovery(const std::string& dir) {
                 std::vector<std::string> fields;
                 std::string tok;
                 while (std::getline(ss, tok, ',')) fields.push_back(tok);
-                if (fields.size() != 16) continue;
+                if (fields.size() != 17) continue;
                 ++rows;
                 if (fields[1] == "robot1") {
                     ++robot1_rows;
@@ -1973,7 +1974,7 @@ Report run_part_pose_filter_integration(const std::string& dir) {
         std::ifstream csv_f(csv_path);
         std::string header;
         std::getline(csv_f, header);
-        const std::string expected_suffix = ",accepted,d2_pos,d2_yaw,fx,fy,fyaw";
+        const std::string expected_suffix = ",accepted,d2_pos,d2_yaw,fx,fy,fyaw,mocap_t";
         const bool header_ok =
             header.size() >= expected_suffix.size() &&
             header.compare(header.size() - expected_suffix.size(), expected_suffix.size(),
@@ -1981,7 +1982,7 @@ Report run_part_pose_filter_integration(const std::string& dir) {
         rep.info(std::string("CSV header ends with pose_filter columns: ") + (header_ok ? "yes" : "no") +
                   " (header='" + header + "')");
         if (!header_ok) {
-            rep.fail("--log-csv header does not end with ',accepted,d2_pos,d2_yaw,fx,fy,fyaw'");
+            rep.fail("--log-csv header does not end with ',accepted,d2_pos,d2_yaw,fx,fy,fyaw,mocap_t'");
         }
 
         int rows = 0, rejected = 0, fx_mismatch = 0;
@@ -1992,7 +1993,7 @@ Report run_part_pose_filter_integration(const std::string& dir) {
             std::stringstream ss(line);
             std::string tok;
             while (std::getline(ss, tok, ',')) fields.push_back(tok);
-            if (fields.size() != 22) continue;  // 16 base + 6 pose_filter columns.
+            if (fields.size() != 23) continue;  // 16 base + 6 pose_filter + mocap_t columns.
             ++rows;
             try {
                 const int accepted = std::stoi(fields[16]);

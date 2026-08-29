@@ -99,6 +99,7 @@
 #include <cstring>
 #include <chrono>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <optional>
@@ -436,7 +437,11 @@ void print_usage(const char* prog) {
            "                              at the end: accepted,d2_pos,d2_yaw,fx,fy,fyaw (the filter's\n"
            "                              own accept/reject decision and gate distances, and its\n"
            "                              filtered pose -- planar_x/y/yaw above stay the RAW,\n"
-           "                              unfiltered world-frame pose either way, for comparison)\n"
+           "                              unfiltered world-frame pose either way, for comparison).\n"
+           "                              The LAST column is always \"mocap_t\" (the same NatNet\n"
+           "                              frame timestamp used for the localization payload's \"t\"\n"
+           "                              field, empty when the source frame had none) -- t_arrival\n"
+           "                              and mocap_t are written at std::setprecision(9)\n"
            "  --pose-filter on|off        override --map-config's \"pose_filter.enabled\" (see doc/\n"
            "                              MOCAP_POSE_FILTER_PLAN.md) -- a per-body gated Kalman\n"
            "                              filter that rejects single-frame mocap pose jumps before\n"
@@ -1185,6 +1190,16 @@ int main(int argc, char** argv) {
         // {"x","y","yaw"} regardless -- see mpc::quat_to_roll_pitch_heading()'s
         // doc comment for the exact roll/pitch/heading sequence definition;
         // heading == planar_yaw's pre-map-transform value, bit-for-bit).
+        // std::setprecision(9) on the WHOLE stream (not just t_arrival/
+        // mocap_t) -- simpler and safer than juggling precision per-field,
+        // and every existing --log-csv consumer parses fields back to
+        // double rather than string-comparing them, so more precision only
+        // ever helps. Motivation: the DEFAULT stream precision (6
+        // significant digits) collapses distinct t_arrival values to the
+        // same printed string at large t (~ms resolution at t>100s),
+        // masking true sub-ms frame spacing -- see mocap_t's own doc
+        // comment below.
+        csv << std::setprecision(9);
         csv << "t_arrival,robot,raw_x,raw_y,raw_z,qx,qy,qz,qw,roll,pitch,heading,planar_x,planar_y,"
                "planar_yaw,tracking_valid";
         // Mocap pose-jump filter columns -- appended at the END, and only
@@ -1197,7 +1212,21 @@ int main(int argc, char** argv) {
         if (map_cfg.pose_filter.enabled) {
             csv << ",accepted,d2_pos,d2_yaw,fx,fy,fyaw";
         }
-        csv << "\n";
+        // mocap_t: the parsed NatNet frame timestamp (same value used for the
+        // localization payload's "t" field, see mocap_t above in the receive
+        // loop) -- empty when the source frame had none. ALWAYS appended,
+        // unconditionally, as the LAST column (after the pose_filter columns
+        // when present) -- unlike those, this is not gated on pose_filter,
+        // so it changes every --log-csv header/row regardless of config; see
+        // this session's follow-up fix in doc/MOCAP_POSE_FILTER_PLAN.md's
+        // "Implementation status" for why it was added: t_arrival alone
+        // collapses distinct frames to the same printed value at low stream
+        // precision, and (separately) doesn't reflect the mocap frame
+        // clock's own pacing during a receive-side burst (e.g. after an
+        // outage), which made an offline replay misread a buffered burst as
+        // a sub-millisecond-spaced sequence instead of the ~8.3ms-spaced
+        // sequence the LIVE bridge actually filtered it as.
+        csv << ",mocap_t\n";
     }
 
     struct RobotPoseSample {
@@ -1515,6 +1544,20 @@ int main(int argc, char** argv) {
                                          << pf_out.d2_yaw << ',' << pf_out.x << ',' << pf_out.y << ','
                                          << pf_out.yaw;
                                 }
+                                csv << ',';
+                                if (mocap_t.has_value()) {
+                                    csv << *mocap_t;
+                                } else {
+                                    // Explicit "nan", never a bare trailing comma: an EMPTY final
+                                    // field is silently DROPPED (not parsed as an empty string) by
+                                    // any std::getline(ss, tok, ',')-based splitter (this project's
+                                    // own convention, e.g. pose_filter_replay.cpp/
+                                    // test_optitrack_bridge.cpp), which would undercount this row's
+                                    // column total by one -- found the hard way when this column
+                                    // was first added. std::stod("nan") parses cleanly to a
+                                    // (correctly non-finite) NaN.
+                                    csv << "nan";
+                                }
                                 csv << '\n';
                             }
 
@@ -1665,6 +1708,20 @@ int main(int argc, char** argv) {
                                     csv << ',' << (pf_out.accepted ? 1 : 0) << ',' << pf_out.d2_pos << ','
                                          << pf_out.d2_yaw << ',' << pf_out.x << ',' << pf_out.y << ','
                                          << pf_out.yaw;
+                                }
+                                csv << ',';
+                                if (mocap_t.has_value()) {
+                                    csv << *mocap_t;
+                                } else {
+                                    // Explicit "nan", never a bare trailing comma: an EMPTY final
+                                    // field is silently DROPPED (not parsed as an empty string) by
+                                    // any std::getline(ss, tok, ',')-based splitter (this project's
+                                    // own convention, e.g. pose_filter_replay.cpp/
+                                    // test_optitrack_bridge.cpp), which would undercount this row's
+                                    // column total by one -- found the hard way when this column
+                                    // was first added. std::stod("nan") parses cleanly to a
+                                    // (correctly non-finite) NaN.
+                                    csv << "nan";
                                 }
                                 csv << '\n';
                             }

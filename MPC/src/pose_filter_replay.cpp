@@ -36,6 +36,14 @@ struct CsvRow {
     std::string robot;
     double planar_x = 0.0, planar_y = 0.0, planar_yaw = 0.0;
     bool tracking_valid = true;
+    // The mocap frame's own capture timestamp (optitrack_zmq_bridge's
+    // "mocap_t" column, same value published as the ZMQ payload's "t"
+    // field) -- absent when the column doesn't exist in this CSV (an older
+    // recording) or the source frame had none (has_mocap_t=false either
+    // way; see select_filter_time() below for which time this row actually
+    // gets filtered at).
+    bool has_mocap_t = false;
+    double mocap_t = 0.0;
 };
 
 std::vector<std::string> split_csv_line(const std::string& line) {
@@ -89,12 +97,16 @@ std::vector<CsvRow> read_csv(const std::string& path, bool* ok, std::string* err
     if (!*ok) return rows;
     const auto tv_it = col.find("tracking_valid");
     const int i_valid = (tv_it != col.end()) ? tv_it->second : -1;
+    // Optional (older recordings predate this column -- see doc/
+    // MOCAP_POSE_FILTER_PLAN.md's "Implementation status" follow-up fix).
+    const auto mt_it = col.find("mocap_t");
+    const int i_mocap_t = (mt_it != col.end()) ? mt_it->second : -1;
 
     std::string line;
     while (std::getline(f, line)) {
         if (line.empty()) continue;
         std::vector<std::string> fields = split_csv_line(line);
-        const int needed = 1 + std::max({i_t, i_robot, i_x, i_y, i_yaw, i_valid});
+        const int needed = 1 + std::max({i_t, i_robot, i_x, i_y, i_yaw, i_valid, i_mocap_t});
         if (static_cast<int>(fields.size()) < needed) continue;  // malformed/truncated row -- skip.
         CsvRow row;
         try {
@@ -106,6 +118,17 @@ std::vector<CsvRow> read_csv(const std::string& path, bool* ok, std::string* err
             row.tracking_valid = (i_valid < 0) || (std::stoi(fields[i_valid]) != 0);
         } catch (const std::exception&) {
             continue;  // malformed numeric field -- skip this row, keep going.
+        }
+        if (i_mocap_t >= 0 && i_mocap_t < static_cast<int>(fields.size()) && !fields[i_mocap_t].empty()) {
+            try {
+                const double v = std::stod(fields[i_mocap_t]);
+                if (std::isfinite(v)) {
+                    row.mocap_t = v;
+                    row.has_mocap_t = true;
+                }
+            } catch (const std::exception&) {
+                // Malformed mocap_t alone doesn't invalidate the row -- just falls back to t_arrival.
+            }
         }
         if (!row.tracking_valid) continue;
         rows.push_back(row);
@@ -344,6 +367,16 @@ int main(int argc, char** argv) {
                   << (body_filter.empty() ? "" : " --body '" + body_filter + "'") << std::endl;
         return 1;
     }
+    {
+        const bool any_mocap_t =
+            std::any_of(all_rows.begin(), all_rows.end(), [](const CsvRow& r) { return r.has_mocap_t; });
+        std::cout << "[pose_filter_replay] mocap_t column: "
+                  << (any_mocap_t ? "present (used as the primary filter time; t_arrival is the "
+                                     "per-row fallback -- see each body's own time_source counts below)"
+                                   : "absent (falling back to t_arrival for every row -- an older "
+                                     "recording predating this column)")
+                  << std::endl;
+    }
 
     int total_rejects = 0;
     int total_reinits = 0;
@@ -366,7 +399,8 @@ int main(int argc, char** argv) {
         }
 
         mpc::PoseFilter filt(cfg);
-        int rejects = 0, reinits = 0, ignored = 0;
+        int rejects = 0, reinits = 0, ignored = 0, duplicates_handled = 0;
+        int mocap_t_used = 0, t_arrival_fallback_used = 0;
         double max_d2_accepted = 0.0;
         double max_dpos_accepted = 0.0;
         double last_x = 0.0, last_y = 0.0;
@@ -389,16 +423,66 @@ int main(int argc, char** argv) {
                           << " INJECTED SPIKE (dx=" << spike.dx << " dy=" << spike.dy
                           << " dyaw=" << spike.dyaw << ")" << std::endl;
             }
-            const double t_before = rows[i]->t_arrival;
+            // Time source: the mocap frame's own capture timestamp when this CSV has it (matches
+            // what the LIVE bridge actually filters on -- see optitrack_zmq_bridge.cpp), else
+            // t_arrival (older recordings, or frames whose source had no NatNet trailer
+            // timestamp). Mixing sources row-to-row for the SAME body is deliberately tolerated
+            // (a recording can transition mid-file) since both are the same monotonic-seconds
+            // domain the bridge itself uses for "t"/mocap_t.
+            const bool using_mocap_t = rows[i]->has_mocap_t;
+            if (using_mocap_t) {
+                ++mocap_t_used;
+            } else {
+                ++t_arrival_fallback_used;
+            }
+            double t_selected = using_mocap_t ? rows[i]->mocap_t : rows[i]->t_arrival;
+
+            // Duplicate-arrival handling: a near-zero (or tiny-negative, from write-precision
+            // collisions in an old t_arrival-only recording -- see doc/
+            // MOCAP_POSE_FILTER_PLAN.md's "Implementation status") gap since the last FED sample
+            // is treated as a dt=0 duplicate -- nudged forward by a sub-kMinMeaningfulDt epsilon
+            // so PoseFilter::step() takes its own "skip prediction, still gate/update" duplicate
+            // path (see PoseFilter.cpp) instead of the separate "ignore" path meant for a
+            // genuine out-of-order/backwards timestamp. A LARGE backwards jump (a real anomaly,
+            // not a collision) is deliberately left alone and still reported IGNORED below.
+            constexpr double kDuplicateWindowS = 0.002;     // generous vs. worst-case 6-sig-fig
+                                                               // t_arrival rounding at large t.
+            constexpr double kDuplicateBumpS = 1e-5;         // << kMinMeaningfulDt (1e-4) in
+                                                               // PoseFilter.cpp -- stays inside its
+                                                               // own duplicate-handling branch.
+            bool duplicate_bumped = false;
+            if (have_last_accepted_t) {
+                const double raw_dt = t_selected - last_t;
+                if (raw_dt <= 0.0 && raw_dt > -kDuplicateWindowS) {
+                    t_selected = last_t + kDuplicateBumpS;
+                    duplicate_bumped = true;
+                }
+            }
+
+            const double t_before = t_selected;
             const bool would_be_nonincreasing = have_last_accepted_t && t_before <= last_t;
             mpc::PoseFilterOutput out = filt.step(t_before, zx, zy, zyaw);
-            last_t = t_before;
+            // IMPORTANT: track the HIGHEST t ever fed, not simply "the last t fed" -- a row that
+            // falls outside the duplicate-bump window (see above) and so gets fed AS-IS can be
+            // LOWER than a value already fed a few rows earlier (this body's own raw timestamps
+            // are not perfectly monotonic at the microsecond scale this bump logic operates at).
+            // PoseFilter's own internal last_time_ only ever moves forward (or stays put on an
+            // internally-ignored call) -- never backward -- so a plain `last_t = t_before` here
+            // would let this loop's OWN bookkeeping fall behind PoseFilter's real internal clock
+            // after exactly one such dip, silently mis-classifying every subsequent internally-
+            // ignored call as a fresh reject for the rest of the run (found via a targeted debug
+            // trace against PoseFilter::debug_last_time() during this session's validation).
+            last_t = std::max(last_t, t_before);
             have_last_accepted_t = true;
+            if (duplicate_bumped) {
+                ++duplicates_handled;
+            }
             if (!out.accepted && !out.reinit && would_be_nonincreasing) {
-                // The CSV's own t_arrival column is written in overall-arrival order and is
-                // normally strictly increasing per body already; a non-increasing timestamp here
-                // means step() took the "ignore" path (see PoseFilter.cpp) rather than a real
-                // gate rejection -- counted separately so the summary stays meaningful.
+                // The CSV's own t_arrival/mocap_t column is written in overall-arrival order and
+                // is normally strictly increasing per body already; a non-increasing timestamp
+                // here (that WASN'T already handled as a near-zero duplicate above) means step()
+                // took the "ignore" path (see PoseFilter.cpp) rather than a real gate rejection --
+                // counted separately so the summary stays meaningful.
                 ++ignored;
                 std::cout << "[pose_filter_replay]   " << body << " t=" << rows[i]->t_arrival
                           << " IGNORED (non-increasing timestamp)" << std::endl;
@@ -433,7 +517,10 @@ int main(int argc, char** argv) {
 
         std::cout << "[pose_filter_replay] --- body '" << body << "' summary ---\n"
                   << "  frames=" << rows.size() << " rejects=" << rejects
-                  << " reinits=" << reinits << " ignored=" << ignored << "\n"
+                  << " reinits=" << reinits << " ignored=" << ignored
+                  << " duplicates_handled=" << duplicates_handled << "\n"
+                  << "  time_source: mocap_t=" << mocap_t_used
+                  << " t_arrival_fallback=" << t_arrival_fallback_used << "\n"
                   << "  max_d2_on_accepted=" << max_d2_accepted
                   << " max_delta_pos_between_accepted=" << max_dpos_accepted
                   << " (filter lifetime: rejects()=" << filt.rejects()

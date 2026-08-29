@@ -172,3 +172,62 @@ overrides `enabled` from the CLI without editing the file.
 "What it cannot fix" swap scenario needs two bodies to exercise at all) and capture at least one genuine jump
 as a fixture; the hardware A/B (filter on vs off, `replay_full`, n≥3) from "Deliverables" #4c; then flip
 `enabled: true` in the live map-config.
+
+### Follow-up fix (same session): a faithful `mocap_t` column, and a real replay-tool bug
+
+Reviewing the "genuine ~30cm relocation" reject cascade above (t≈3713.27-3713.6s) more closely surfaced two
+real problems, both now fixed:
+
+1. **`--log-csv` had no way to distinguish the mocap frame's own capture timestamp from `t_arrival`.** The
+   OLD recording's cascade looked like "23 consecutive rejects over 0.38s" -- but that was partly an artifact
+   of replaying on `t_arrival` alone: after an outage/burst, the bridge can receive many buffered frames in a
+   tight delivery burst that all log a very similar (sometimes literally identical, post-6-sig-fig-rounding)
+   `t_arrival`, even though the underlying NatNet frames were captured ~8.3ms apart. The LIVE bridge already
+   steps the filter on the frame's own timestamp when available; the CSV log just wasn't recording it
+   separately. Fix: `optitrack_zmq_bridge.cpp`'s `--log-csv` now ALWAYS appends a final `mocap_t` column (the
+   same value published as the localization payload's `"t"` field; the literal string `nan` -- never a bare
+   empty field, which a `std::getline(ss, tok, ',')`-style splitter silently drops as a trailing token,
+   undercounting the row -- when the source frame had none), and `t_arrival`/`mocap_t` are written at
+   `std::setprecision(9)` (the whole CSV stream, in fact -- simpler than juggling precision per field, and
+   every consumer parses back to `double` rather than string-comparing, so it only helps). `pose_filter_replay`
+   now uses `mocap_t` as the primary filter time whenever the column exists and a given row's value is finite,
+   falling back to `t_arrival` per-row otherwise (prints which source was used, and each body's own
+   mocap_t-vs-t_arrival-fallback row counts) -- confirmed end-to-end against a live NatNet 2.10 fake-motive run
+   (mocap_t populated and used for 100% of rows) and a NatNet 3.1 run (mocap_t absent/`nan`, correct fallback).
+   A near-zero (or up-to-2ms-negative, covering the old file's rounding-induced collisions) gap since the last
+   FED sample is now treated as a dt=0 duplicate -- nudged forward by 1e-5s, `PoseFilter`'s own
+   `kMinMeaningfulDt` (1e-4s) duplicate-handling path taking over (skip prediction, still gate/update) --
+   instead of `pose_filter_replay`'s separate "IGNORED" bucket, which is now reserved for a genuine
+   out-of-order/backwards timestamp.
+
+2. **Found and fixed a real bug in `pose_filter_replay` while validating (1) above**: its own bookkeeping of
+   "the last time fed to the filter" used a plain `last_t = t_before` assignment. `PoseFilter`'s real internal
+   clock (`last_time_`) only ever moves forward (or holds still on an internally-ignored call) -- it never goes
+   backward. But a row whose raw timestamp fell just outside the new duplicate-bump window (a real, if rare,
+   case in a body whose raw per-row timestamps are not perfectly monotonic at the microsecond scale this logic
+   operates at) got fed AS-IS, and if that value happened to be LOWER than an already-bumped-forward value fed
+   a few rows earlier, `last_t = t_before` silently walked the tool's own bookkeeping BACKWARD relative to the
+   filter's real internal clock. Every subsequent call for the rest of the run then silently hit the filter's
+   internal "ignore" path (`t <= last_time_`, returning the frozen previous output unchanged) while the replay
+   tool -- still comparing against its own already-wrong, lower `last_t` -- kept misreading each one as a FRESH
+   reject with the SAME frozen d²/consecutive-reject values repeated verbatim. This was caught by literally
+   dozens of consecutive `REJECT` lines printing byte-identical `d2_pos`/`consecutive_rejects` values in a row
+   during this fix's own validation run, tracing PoseFilter's real internal `last_time_`/`consecutive_rejects_`
+   (via a temporary debug accessor, removed once confirmed) against the tool's own bookkeeping to confirm the
+   two had diverged. Fixed with a one-line change: `last_t = std::max(last_t, t_before)` -- track the highest
+   time ever fed, not simply the most recent.
+
+**Updated numbers after both fixes** (same 461,937-frame robot2 recording, default config, `t_arrival`
+fallback throughout since this old file predates the `mocap_t` column): **205 rejects, 18 reinits, 264
+ignored, 65,873 duplicate-arrivals correctly gated/updated** (previously: 540 -> 35 rejects across this
+session's earlier plausibility-margin fix alone, using the OLD buggy replay-tool bookkeeping that
+under-detected true ignores and, it turns out, mis-attributed many genuinely-ignored duplicate-burst frames
+to fresh rejects once duplicate-handling was added but before the `last_t` bug was fixed -- that intermediate
+"467 rejects" number was itself an artifact of the bug in (2) and was never reported as final). The
+t=3713.27-3713.6s cascade is confirmed a single genuine relocation event: 201 consecutive rejects with
+smoothly evolving (not frozen/repeated) d² values over ~0.27s of real recorded time, correctly resolving to
+one `REINIT` at the end and clean tracking afterward -- exactly the designed persistent-reject -> re-init
+behavior working on real data, not a duplicate-arrival artifact. The clean 2000-frame excerpt fixture
+(`MPC/tests/data/mocap_clean_excerpt.csv`) is unaffected: still 0 rejects, 1 reinit (the initial sample). A
+synthetic 5cm spike (`--inject-spike`) is unaffected by any of this (dt≈8.3ms, never near the duplicate
+window) and remains reliably caught.
