@@ -8,14 +8,30 @@
     "yaw_offset": "Per-robot mounting-correction added to heading AFTER the global transform (matrix or legacy x0/y0/theta0) -- see optitrack_zmq_bridge.cpp's per-robot yaw_offset handling. Keys on the PUBLISHED name (e.g. \"robot1\", not Motive's raw \"mushr2\") in both explicit and auto-discovery mode. robot1's rigid body was created facing BACKWARD in Motive (confirmed live: the user's own 'yaw should read ~5 degrees' check only passes with this pi offset applied -- see the y_up entry above for the exact numbers) -- pi radians (180 degrees) corrects for that until refined by an actual motion-direction calibration (drive the robot forward, compare reported heading to the real heading of travel, adjust this value to close the gap exactly rather than relying on the approximate 5-degree check). NOTE (2026-08-04 transform-restructure session): this pi offset is consistent with a body created 180deg BACKWARD under the local-+X-is-forward assumption mocap_rotation()/quat_to_planar_yaw() use throughout -- there is no evidence of a 90deg (cross-axis, X-vs-Z-forward) convention mismatch that would call for a per-rig 'forward axis' config option; a 90deg error would show up as an offset near +-pi/2, not pi. RESET TO 0.0 (2026-08-04, later same day): per the user's explicit instruction 'make them 0 by default' -- now that the mocap transform chain above is corrected (y_up/theta0 drift fixed) and per-body yaw offsets are tunable LIVE from mars_sim_viz's OptiTrack-tab mapping-table UI (an editable per-row yaw-offset column, see MARS/src/simviz/MocapTab.cpp/MocapCore.h's set_yaw_offset()/set_yaw_offset_in_mapping()), there is no more need for a hand-edited pi-radian patch baked into this file as the default -- a user can dial in the real per-robot mounting correction from the GUI instead. The pi-radian history above is kept for context, not because pi is still believed correct."
   },
   "_theta0_x0_y0_doc_correction_2026_08_04": "theta0 had ALSO drifted (to pi, matching y_up's own drift -- see the y_up entry above) away from the IDENTITY (0,0,0) this file's own x0/y0/theta0 doc entry always claimed -- same root cause (a stale-checkbox Apply click writes all four calibration fields together). Restored to 0.0 here; independently confirmed broken via the same test_optitrack_bridge Part 1 regression (its 'no --map-config -> identity transform' assumption was failing 100% of CSV rows before this fix).",
+  "_doc_pose_filter": "See doc/MOCAP_POSE_FILTER_PLAN.md for the full design/validation writeup. pose_filter is a per-body gated constant-velocity Kalman filter (mpc::PoseFilter, MPC/include/mpc/PoseFilter.h) that runs at the full 120Hz mocap frame rate and rejects single-(or few-)frame pose jumps before they ever reach mpc_controller/the GUI/mpc_tune. Ships DISABLED (enabled=false) pending: (a) a real captured jump turned into a regression fixture, (b) a hardware A/B (filter on vs off) showing tracking metrics unchanged within noise on clean data -- see the plan doc's 'Validation gate before enabling by default' checklist. Override live via --pose-filter on|off without editing this file. The values below are this feature's shipped defaults (data-driven off the 2026-08-28 robot2 rig recording, see the plan doc); --pose-filter on / enabled:true here starts using them.",
   "aliases": {
+    "mushr1": "robot1",
     "mushr2": "robot2"
   },
   "theta0": 0.0,
-  "x0": 1.8,
-  "y0": 2.5,
+  "x0": 2.1,
+  "y0": 2.1,
   "y_up": false,
   "yaw_offset": {
     "robot1": 0.0
+  },
+  "pose_filter": {
+    "enabled": false,
+    "gate_chi2_pos": 9.21,
+    "gate_chi2_yaw": 6.63,
+    "gate_chi2_all": 12.8,
+    "max_speed": 1.0,
+    "max_yaw_rate": 4.0,
+    "reinit_after_s": 0.25,
+    "gap_reinit_s": 0.5,
+    "r_pos": 0.005,
+    "r_yaw": 0.01745,
+    "q_acc": 3.0,
+    "q_yaw_acc": 15.0
   }
 }

@@ -26,6 +26,7 @@ set(MPC_CORE_SOURCES
     ${MPC_KINEMATICS_SOURCES}
     src/MpcCore.cpp
     src/LaunchGovernor.cpp
+    src/DriverTelemetry.cpp
 )
 
 # Pure sim logic (ackermann decode, localization encode, clamping, watchdog
@@ -282,9 +283,21 @@ set(OPTITRACK_CORE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ReloPush/base64.cpp
 )
 
+# Mocap pose-jump filter (see doc/MOCAP_POSE_FILTER_PLAN.md): a per-body
+# gated constant-velocity Kalman filter, pure logic (no ZMQ/JSON -- only
+# Eigen, header-only via MPC_INCLUDE_DIRS' Eigen_INCLUDE_DIRS, no separate
+# link target needed beyond the ${Eigen_LIBRARIES} every other Eigen-using
+# target here already links). Kept as its own source list (not folded into
+# OPTITRACK_CORE_SOURCES) since pose_filter_tests/pose_filter_replay need it
+# WITHOUT the rest of OptiTrackCore's NatNet-parsing weight.
+set(POSE_FILTER_SOURCES
+    src/PoseFilter.cpp
+)
+
 add_executable(optitrack_zmq_bridge
     src/optitrack_zmq_bridge.cpp
     ${OPTITRACK_CORE_SOURCES}
+    ${POSE_FILTER_SOURCES}
 )
 target_include_directories(optitrack_zmq_bridge PRIVATE ${MPC_INCLUDE_DIRS})
 # Compiled-in default config directory: with no --mocap-config/--map-config
@@ -335,6 +348,17 @@ target_include_directories(optitrack_unit_tests PRIVATE ${MPC_INCLUDE_DIRS})
 # deliberately even lighter than that (doesn't even need SimCore/base64,
 # since it never calls encode_localization_payload).
 
+# Unit tests for mpc::parse_driver_telemetry (MPC/include/mpc/
+# DriverTelemetry.h) -- the VESC driver telemetry JSON parser mpc_controller
+# (main.cpp) uses to fill --log-csv's drv_*/telem_age_s columns. Pure
+# logic, no sockets -- mirrors optitrack_unit_tests' dependency-light
+# footprint (only nlohmann, header-only).
+add_executable(driver_telemetry_tests
+    tests/driver_telemetry_tests.cpp
+    src/DriverTelemetry.cpp
+)
+target_include_directories(driver_telemetry_tests PRIVATE ${MPC_INCLUDE_DIRS})
+
 # Process-level integration test: spawns real fake_motive + optitrack_zmq_bridge
 # child processes over UDP loopback and SUBs to both robots' real localization
 # PUB sockets, mirroring test_mpc_deadband.cpp's spawn/ProcessGuard structure.
@@ -360,6 +384,35 @@ else()
             ${ZeroMQ_LIBRARIES}
     )
 endif()
+
+# ---------------------------------------------------------------------
+# pose_filter_tests: unit tests for mpc::PoseFilter (MPC/include/mpc/
+# PoseFilter.h) -- deterministic synthetic 120Hz tracks, no sockets, no
+# process spawning. Only needs Eigen (header-only) -- deliberately even
+# lighter than optitrack_unit_tests (no nlohmann either).
+# ---------------------------------------------------------------------
+add_executable(pose_filter_tests
+    tests/pose_filter_tests.cpp
+    ${POSE_FILTER_SOURCES}
+)
+target_include_directories(pose_filter_tests PRIVATE ${MPC_INCLUDE_DIRS})
+target_link_libraries(pose_filter_tests PRIVATE ${Eigen_LIBRARIES})
+
+# ---------------------------------------------------------------------
+# pose_filter_replay: offline tool that runs the SAME mpc::PoseFilter over a
+# previously-recorded optitrack_zmq_bridge --log-csv file (per body), so the
+# gate thresholds can be tuned/validated against real mocap data and a real
+# captured jump can be turned into a regression fixture -- see doc/
+# MOCAP_POSE_FILTER_PLAN.md's "Deliverables" #3/#4. Needs nlohmann
+# (header-only, for the optional --map-config's "pose_filter" block) +
+# Eigen, but no ZMQ/Boost/Ceres/Qt -- this is a pure CSV-in/stdout-out tool.
+# ---------------------------------------------------------------------
+add_executable(pose_filter_replay
+    src/pose_filter_replay.cpp
+    ${POSE_FILTER_SOURCES}
+)
+target_include_directories(pose_filter_replay PRIVATE ${MPC_INCLUDE_DIRS})
+target_link_libraries(pose_filter_replay PRIVATE ${Eigen_LIBRARIES})
 
 # ---------------------------------------------------------------------
 # Motor calibration tool (main-PC side testable core). Pure logic (no ZMQ
@@ -499,6 +552,71 @@ else()
 endif()
 
 # ---------------------------------------------------------------------
+# sustain_sweep: measures the SUSTAIN duty threshold -- the lowest duty that
+# keeps an ALREADY-MOVING robot moving (as opposed to a prior breakaway
+# sweep's threshold to get a STATIONARY robot moving at all). Reuses the
+# SAME live-hardware machinery drive_test/motor_calibration already use
+# (CalibClient's ZmqDriverClient/DriverRestoreGuard/LiveChannels,
+# MotorCalibCore's LineFrame/VelocityEstimator) -- see src/sustain_sweep.cpp's
+# own header comment for the full kick/ramp-down/drop-out procedure and
+# safety-abort design. The pure kick/ramp/drop-out/abort-predicate logic
+# lives in mpc::SustainSweepCore.h/.cpp (no sockets), unit-tested by
+# sustain_sweep_tests below -- mirrors the MotorCalibCore/motor_calibration
+# split precedent above. Needs cppzmq + nlohmann (header-only, already on
+# MPC_INCLUDE_DIRS) but NOT Boost/Eigen/Ceres/Qt -- mirrors drive_test's
+# dependency-light footprint.
+# ---------------------------------------------------------------------
+add_executable(sustain_sweep
+    src/sustain_sweep.cpp
+    src/SustainSweepCore.cpp
+    src/CalibClient.cpp
+    src/MotorCalibCore.cpp
+)
+target_include_directories(sustain_sweep PRIVATE ${MPC_INCLUDE_DIRS})
+# Compiled-in default path to read governor.ff_gain/erpm_per_mps from for the
+# final duty->speed conversion (see sustain_sweep.cpp's resolve_driver_
+# constants()) -- mirrors motor_calibration's MOTOR_CALIB_DEFAULT_CONFIG_PATH
+# precedent. Falls back to --ff-gain/--erpm-per-mps (or their compiled
+# defaults) if this file is missing or doesn't parse -- never a hard error.
+target_compile_definitions(sustain_sweep PRIVATE
+    SUSTAIN_SWEEP_DEFAULT_DRIVER_CONFIG_PATH="${CMAKE_SOURCE_DIR}/VescDriver/config/driver_config.json"
+)
+
+if(APPLE)
+    target_link_libraries(sustain_sweep
+        PRIVATE
+            ${ZMQ_LIB}
+    )
+else()
+    target_link_libraries(sustain_sweep
+        PRIVATE
+            ${ZeroMQ_LIBRARIES}
+    )
+endif()
+# sustain_sweep is a standalone, manually-run hardware diagnostic tool (like
+# drive_test/motor_calibration) -- deliberately NOT added to the install()
+# list below (mirrors drive_test's own precedent, not motor_calibration's).
+
+# ---------------------------------------------------------------------
+# sustain_sweep_tests: unit tests for mpc::SustainSweepCore's pure logic
+# (duty ladder generation, drop-out/DropoutDetector debounce, the
+# evaluate_sustain_abort() predicate, the sustain-duty<->speed conversion,
+# compute_stats) -- no sockets, no spawned processes, mirrors motor_calib_
+# tests.cpp/calibration_core_tests.cpp's harness style (plain bool
+# test_xxx() functions registered in main(), no gtest dependency).
+# Deliberately even lighter than motor_calib_tests: SustainSweepCore.h/.cpp
+# needs no nlohmann/ZMQ/Boost/Eigen/Ceres -- plain C++ only.
+# ---------------------------------------------------------------------
+add_executable(sustain_sweep_tests
+    tests/sustain_sweep_tests.cpp
+    src/SustainSweepCore.cpp
+)
+target_include_directories(sustain_sweep_tests PRIVATE ${MPC_INCLUDE_DIRS})
+# sustain_sweep_tests is a standalone, manually-run test binary (see this
+# project's test-binary convention above at motor_calib_tests' own comment)
+# -- no add_test(), not added to the install() list below.
+
+# ---------------------------------------------------------------------
 # calibration_core: UI-independent teleop-calibration data/fitting library
 # (mpc::CalibrationCore -- see MPC/include/mpc/CalibrationCore.h's file
 # header comment). Pure logic (no ZMQ sockets, no Qt -- every stream this
@@ -546,5 +664,6 @@ target_link_libraries(calibration_core_tests PRIVATE calibration_core)
 
 install(TARGETS mpc_controller mpc_dummy_straight_mover mpc_robot_sim mpc_unit_tests
         optitrack_zmq_bridge fake_motive optitrack_unit_tests motor_calibration
+        driver_telemetry_tests
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

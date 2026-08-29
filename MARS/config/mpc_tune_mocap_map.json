@@ -1,0 +1,30 @@
+{
+  "_doc": "IDENTITY-TRANSFORM mocap map for mpc_tune ONLY. The tuning harness works entirely in the RAW MOCAP FRAME (start pose = mocap origin, workspace +-2 m), so x0/y0/theta0/yaw_offset are all zero here -- unlike MPC/config/mocap_map_config.json, which carries the world/planner transform (x0=1.9, y0=2.5, theta0=0.0) used by mars_sim_viz. TWO fields are deliberately COPIED from that file and must track it if it ever changes: 'aliases' (without the Motive-asset -> robot-name mapping the bridge publishes under a name nothing subscribes to) and 'y_up' (which selects the mocap UP-AXIS, i.e. which physical plane the 2D pose is taken from -- that is NOT part of the world transform being dropped). Run the bridge with --map-config MARS/config/mpc_tune_mocap_map.json --loc-port-start 3270 so it cannot collide with a bridge mars_sim_viz may already have bound on 3260.",
+  "aliases": {
+    "mushr2": "robot2",
+    "mushr1": "robot1"
+  },
+  "y_up": false,
+  "x0": 0.0,
+  "y0": 0.0,
+  "theta0": 0.0,
+  "yaw_offset": {
+    "robot2": 0.0,
+    "robot1": 0.0
+  },
+  "_doc_pose_filter": "See doc/MOCAP_POSE_FILTER_PLAN.md. Same shipped-default, disabled-by-default pose_filter block as MPC/config/mocap_map_config.json -- copied here (a THIRD field that must track that file, alongside 'aliases'/'y_up' -- see this file's own _doc above) so mpc_tune runs get the same filter behavior once it's validated and enabled. Override live via --pose-filter on|off.",
+  "pose_filter": {
+    "enabled": false,
+    "gate_chi2_pos": 9.21,
+    "gate_chi2_yaw": 6.63,
+    "gate_chi2_all": 12.8,
+    "max_speed": 1.0,
+    "max_yaw_rate": 4.0,
+    "reinit_after_s": 0.25,
+    "gap_reinit_s": 0.5,
+    "r_pos": 0.005,
+    "r_yaw": 0.01745,
+    "q_acc": 3.0,
+    "q_yaw_acc": 15.0
+  }
+}

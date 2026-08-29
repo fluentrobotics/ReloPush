@@ -22,11 +22,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
 #include <cerrno>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -57,14 +61,28 @@ const std::string kRobot2 = "robot2";
 // binary (see test_mpc_deadband.cpp's identical, independently-duplicated
 // helper -- kept self-contained per file per this codebase's own precedent).
 // ---------------------------------------------------------------------
+// Round 8 (macOS dev box support -- see this project's cross-OS-build notes:
+// /proc/self/exe is Linux-only, so this test could not even START on
+// macOS): __APPLE__ resolves the running binary's own path via
+// _NSGetExecutablePath() instead (the macOS-native equivalent); every other
+// platform keeps the original /proc/self/exe readlink() unchanged.
 std::string self_dir() {
     char buf[4096];
+    std::string p;
+#ifdef __APPLE__
+    std::uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) != 0) {
+        throw std::runtime_error("_NSGetExecutablePath() failed (path longer than buffer)");
+    }
+    p.assign(buf);
+#else
     ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
     if (n <= 0) {
         throw std::runtime_error("readlink(/proc/self/exe) failed");
     }
     buf[n] = '\0';
-    std::string p(buf);
+    p.assign(buf);
+#endif
     auto pos = p.find_last_of('/');
     return pos == std::string::npos ? std::string(".") : p.substr(0, pos);
 }
@@ -962,27 +980,35 @@ Report run_part_version_gating(const std::string& dir) {
     }
 
     // ---- Check 1+4: EVERY published payload, across the ENTIRE run, is a
-    // well-formed {x,y,yaw} object with finite, sane-magnitude values --
+    // well-formed {x,y,yaw[,t]} object with finite, sane-magnitude values --
     // this is the direct regression check for the "frame 1 was garbage"
     // bug: id=-812564734/x=-6.4e+35-style values would trivially blow the
     // 100.0 bound (our fake circle never exceeds a few meters from origin),
-    // and NaN/inf are rejected via std::isfinite. ----
+    // and NaN/inf are rejected via std::isfinite. This Part streams REAL
+    // NatNet 2.10 (see fake_motive_args above), the one version whose
+    // trailer this bridge actually walks for a timestamp (round 8) -- once
+    // confirmed, EVERY message here is expected to additionally carry "t"
+    // (fake_motive emits one by default), so a well-formed payload is
+    // size==4 with "t", not size==3 -- see Part 1's/Part 2's identical
+    // checks (NatNet 3.1 streams, no trailer walked, size stays 3) for the
+    // contrast. ----
     {
         int checked = 0, garbage = 0;
         for (const RecvMsg& m : all_msgs) {
             ++checked;
             try {
                 nlohmann::json j = nlohmann::json::parse(m.payload);
-                if (!j.is_object() || j.size() != 3 || !j.contains("x") || !j.contains("y") ||
-                    !j.contains("yaw")) {
+                if (!j.is_object() || j.size() != 4 || !j.contains("x") || !j.contains("y") ||
+                    !j.contains("yaw") || !j.contains("t")) {
                     ++garbage;
                     continue;
                 }
                 const double x = j.at("x").get<double>();
                 const double y = j.at("y").get<double>();
                 const double yaw = j.at("yaw").get<double>();
+                const double t = j.at("t").get<double>();
                 if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(yaw) ||
-                    std::fabs(x) > 100.0 || std::fabs(y) > 100.0) {
+                    !std::isfinite(t) || std::fabs(x) > 100.0 || std::fabs(y) > 100.0) {
                     ++garbage;
                 }
             } catch (const std::exception&) {
@@ -1586,6 +1612,429 @@ Report run_part_auto_discovery(const std::string& dir) {
     return rep;
 }
 
+// ---------------------------------------------------------------------
+// Part 6 (round 8): mocap clock sync. fake_motive streams REAL NatNet 2.10
+// (the one version whose trailer this bridge actually walks -- see
+// OptiTrackCore.h's has_timestamp doc comment) with its DEFAULT (nominal-
+// schedule, frame_number/rate_hz -- see fake_motive.cpp's
+// Options::emit_timestamp doc comment) trailer timestamps; --no-timestamp
+// is deliberately NOT passed. The published "t" field must be present,
+// monotonic, and its deltas must quantize to whole multiples of the FAKE
+// FRAME CLOCK's own period -- NOT this test's own receipt-time jitter
+// (network/scheduling delivery of the ~30Hz downsampled publish ticks is
+// never perfectly periodic in wall-clock terms, but "t" derives from
+// frame_number, not from when this test happened to observe the message).
+// ---------------------------------------------------------------------
+Report run_part_mocap_clock_sync(const std::string& dir) {
+    Report rep;
+    namespace fs = std::filesystem;
+
+    const std::string fake_motive_exe = dir + "/fake_motive";
+    const std::string bridge_exe = dir + "/optitrack_zmq_bridge";
+
+    const fs::path bridge_log_path =
+        fs::temp_directory_path() / "test_optitrack_bridge_part6_stdout.log";
+    std::error_code ec;
+    fs::remove(bridge_log_path, ec);
+
+    constexpr double kFakeRateHz = 120.0;
+    constexpr double kPublishRateHz = 30.0;
+    const double kFramePeriodS = 1.0 / kFakeRateHz;
+
+    std::vector<std::string> fake_motive_args = {
+        "--target-ip",           "127.0.0.1",
+        "--target-port",         std::to_string(kBridgeLocalDataPort),
+        "--rate",                std::to_string(kFakeRateHz),
+        "--natnet-version",      "2.10",
+        "--body-ids",            "1",
+        "--serve-command-port",  std::to_string(kFakeMotiveCommandPort),
+        "--served-app-name",     "TestMotiveClockSync",
+        "--served-version",      "2.10",
+        "--duration-s",          "0",
+        // --no-timestamp deliberately NOT passed -- default is emit_timestamp=true.
+    };
+    ProcessGuard fake_motive_guard(spawn(fake_motive_exe, fake_motive_args), "fake_motive[part6]");
+    std::cout << "[test] Part 6: spawned fake_motive pid=" << fake_motive_guard.pid() << std::endl;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    const double kBridgeDurationS = 5.0;
+    std::vector<std::string> bridge_args = {
+        "--server-ip",        "127.0.0.1",
+        "--mode",              "unicast",
+        "--command-port",      std::to_string(kFakeMotiveCommandPort),
+        "--local-data-port",   std::to_string(kBridgeLocalDataPort),
+        "--natnet-version",    "2.10",
+        "--robots",            "robot1",
+        "--rigid-body-ids",    "1",
+        "--loc-port-start",    std::to_string(kLocPortStart),
+        "--publish-rate",      std::to_string(kPublishRateHz),
+        "--duration-s",        std::to_string(kBridgeDurationS),
+    };
+    ProcessGuard bridge_guard(spawn(bridge_exe, bridge_args, bridge_log_path.string()),
+                               "optitrack_zmq_bridge[part6]");
+    std::cout << "[test] Part 6: spawned optitrack_zmq_bridge pid=" << bridge_guard.pid() << std::endl;
+
+    std::vector<RecvMsg> all_msgs;
+    try {
+        zmq::context_t ctx(1);
+        zmq::socket_t sub(ctx, zmq::socket_type::sub);
+        sub.set(zmq::sockopt::linger, 0);
+        sub.connect("tcp://127.0.0.1:" + std::to_string(kLocPortStart));
+        sub.set(zmq::sockopt::subscribe, "/" + kRobot1 + "/localization");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));  // slow-joiner grace.
+
+        bool exited = bridge_guard.wait_for_exit(
+            kBridgeDurationS + 4.0, 0.05, [&]() { drain_messages(sub, all_msgs); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        drain_messages(sub, all_msgs);
+
+        if (!exited) {
+            rep.fail("optitrack_zmq_bridge did not self-exit within budget");
+        } else {
+            std::cout << "[test] Part 6: optitrack_zmq_bridge exited on its own" << std::endl;
+        }
+    } catch (const std::exception& ex) {
+        rep.fail(std::string("exception while driving Part 6: ") + ex.what());
+    }
+
+    bridge_guard.terminate();
+    fake_motive_guard.terminate();
+    std::cout << "[test] Part 6: captured " << all_msgs.size() << " messages" << std::endl;
+
+    if (all_msgs.size() < 30) {
+        rep.fail("too few messages captured: " + std::to_string(all_msgs.size()));
+        fs::remove(bridge_log_path, ec);
+        return rep;
+    }
+
+    // ---- Check 1: the one-time clock-sync offset log line. ----
+    {
+        std::ifstream log_f(bridge_log_path);
+        std::string log_contents((std::istreambuf_iterator<char>(log_f)),
+                                   std::istreambuf_iterator<char>());
+        const bool has_sync_line = log_contents.find("mocap clock sync: offset=") != std::string::npos;
+        rep.info(std::string("'mocap clock sync: offset=' log line: ") + (has_sync_line ? "yes" : "no"));
+        if (!has_sync_line) {
+            rep.fail("bridge log does not contain the expected mocap clock sync offset line");
+        }
+    }
+
+    // ---- Check 2: EVERY message carries a finite "t" alongside x/y/yaw. ----
+    std::vector<double> ts;
+    ts.reserve(all_msgs.size());
+    {
+        int checked = 0, missing_t = 0;
+        for (const RecvMsg& m : all_msgs) {
+            ++checked;
+            try {
+                nlohmann::json j = nlohmann::json::parse(m.payload);
+                if (!j.is_object() || !j.contains("x") || !j.contains("y") || !j.contains("yaw") ||
+                    !j.contains("t") || !j.at("t").is_number()) {
+                    ++missing_t;
+                    continue;
+                }
+                const double t = j.at("t").get<double>();
+                if (!std::isfinite(t)) {
+                    ++missing_t;
+                    continue;
+                }
+                ts.push_back(t);
+            } catch (const std::exception&) {
+                ++missing_t;
+            }
+        }
+        rep.info("checked " + std::to_string(checked) + " messages, " + std::to_string(missing_t) +
+                  " missing/non-finite 't'");
+        if (missing_t > 0) {
+            rep.fail(std::to_string(missing_t) +
+                      " message(s) missing a finite 't' field (NatNet 2.10 stream -- 't' should be "
+                      "present on every message once the version is confirmed)");
+        }
+    }
+
+    if (ts.size() < 10) {
+        rep.fail("too few timestamped messages to check monotonicity/quantization: " +
+                  std::to_string(ts.size()));
+        fs::remove(bridge_log_path, ec);
+        return rep;
+    }
+
+    // ---- Check 3: "t" strictly increasing across consecutive messages. ----
+    {
+        int violations = 0;
+        for (std::size_t i = 1; i < ts.size(); ++i) {
+            if (ts[i] <= ts[i - 1]) ++violations;
+        }
+        rep.info(std::to_string(violations) + " non-increasing 't' step(s) out of " +
+                  std::to_string(ts.size() - 1));
+        if (violations > 0) {
+            rep.fail(std::to_string(violations) +
+                      " published 't' value(s) were not strictly increasing across consecutive "
+                      "messages");
+        }
+    }
+
+    // ---- Check 4: "t" deltas quantize to whole multiples of the FAKE FRAME
+    // CLOCK's own period -- the direct proof that "t" tracks the mocap
+    // frame clock (frame_number/rate_hz) rather than this test's own
+    // receipt-time jitter (a receipt-time-derived delta would NOT cleanly
+    // land on multiples of a fixed 1/120s period). ----
+    {
+        constexpr double kQuantizationTolS = 0.0005;  // 0.5ms -- generous vs. float64 precision.
+        int violations = 0;
+        double max_deviation_s = 0.0;
+        for (std::size_t i = 1; i < ts.size(); ++i) {
+            const double delta = ts[i] - ts[i - 1];
+            const double periods = delta / kFramePeriodS;
+            const double nearest_whole = std::round(periods);
+            const double deviation_s = std::fabs(periods - nearest_whole) * kFramePeriodS;
+            max_deviation_s = std::max(max_deviation_s, deviation_s);
+            if (nearest_whole < 1.0 || deviation_s > kQuantizationTolS) {
+                ++violations;
+            }
+        }
+        rep.info("t-delta frame-period quantization: " + std::to_string(violations) +
+                  " violation(s) out of " + std::to_string(ts.size() - 1) + ", max deviation=" +
+                  std::to_string(max_deviation_s) + "s (frame period=" + std::to_string(kFramePeriodS) +
+                  "s)");
+        if (violations > 0) {
+            rep.fail(std::to_string(violations) +
+                      " 't' delta(s) did not quantize to a whole multiple of the fake frame period -- "
+                      "'t' appears to track receipt jitter rather than the mocap frame clock");
+        }
+    }
+
+    fs::remove(bridge_log_path, ec);
+    return rep;
+}
+
+// ---------------------------------------------------------------------
+// Part 7: mocap pose-jump filter (mpc::PoseFilter) integration -- see doc/
+// MOCAP_POSE_FILTER_PLAN.md. --map-config's "pose_filter" block turns the
+// filter ON (it ships disabled by default; Parts 1-6 above never set this
+// block, so they exercise the byte-for-byte unaffected default path).
+// fake_motive's synthetic track is smooth (no injected jumps -- fake_motive
+// isn't a mocap pose_filter has a CLI to modify), so this checks the
+// PASS-THROUGH-ON-CLEAN-DATA side: virtually every sample should be
+// accepted, and the filtered pose (fx/fy/fyaw, and the ZMQ payload's
+// x/y/yaw) should track the raw pose (planar_x/y/yaw) closely -- i.e. the
+// filter is close to invisible on clean data, exactly as designed. The
+// synthetic single/few-frame-spike/reinit BEHAVIOR itself is covered by
+// MPC/tests/pose_filter_tests.cpp's deterministic unit tests and
+// pose_filter_replay's real-recording validation (see the plan doc) --
+// this test's job is only to prove the BRIDGE WIRING (config parsing, the
+// additive ZMQ/CSV fields, enabled-by-config) actually works end-to-end.
+// ---------------------------------------------------------------------
+Report run_part_pose_filter_integration(const std::string& dir) {
+    Report rep;
+    namespace fs = std::filesystem;
+
+    const std::string fake_motive_exe = dir + "/fake_motive";
+    const std::string bridge_exe = dir + "/optitrack_zmq_bridge";
+
+    const fs::path csv_path = fs::temp_directory_path() / "test_optitrack_bridge_part7_log.csv";
+    const fs::path bridge_log_path =
+        fs::temp_directory_path() / "test_optitrack_bridge_part7_stdout.log";
+    const fs::path map_config_path =
+        fs::temp_directory_path() / "test_optitrack_bridge_part7_map_config.json";
+    std::error_code ec;
+    fs::remove(csv_path, ec);
+    fs::remove(bridge_log_path, ec);
+    fs::remove(map_config_path, ec);
+
+    // Synthetic test-only map-config (identity transform) with pose_filter
+    // explicitly enabled, default gate/noise parameters otherwise (mirrors
+    // MPC/config/mocap_map_config.json's real "pose_filter" block shape).
+    {
+        std::ofstream cfg(map_config_path);
+        cfg << "{\"y_up\": false, \"x0\": 0.0, \"y0\": 0.0, \"theta0\": 0.0, \"yaw_offset\": {}, "
+               "\"pose_filter\": {\"enabled\": true}}";
+    }
+
+    std::vector<std::string> fake_motive_args = {
+        "--target-ip",           "127.0.0.1",
+        "--target-port",         std::to_string(kBridgeLocalDataPort),
+        "--rate",                "120",
+        "--natnet-version",      "3.1",
+        "--body-ids",            "1,2",
+        "--body-names",          "Body1,Body2",
+        "--serve-command-port",  std::to_string(kFakeMotiveCommandPort),
+        "--served-app-name",     "TestMotivePoseFilter",
+        "--served-version",      "3.1",
+        "--duration-s",          "0",
+    };
+    ProcessGuard fake_motive_guard(spawn(fake_motive_exe, fake_motive_args), "fake_motive[part7]");
+    std::cout << "[test] Part 7: spawned fake_motive pid=" << fake_motive_guard.pid() << std::endl;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    const double kBridgeDurationS = 5.0;
+    std::vector<std::string> bridge_args = {
+        "--server-ip",        "127.0.0.1",
+        "--mode",              "unicast",
+        "--command-port",      std::to_string(kFakeMotiveCommandPort),
+        "--local-data-port",   std::to_string(kBridgeLocalDataPort),
+        "--natnet-version",    "3.1",
+        "--robots",             kRobot1 + "," + kRobot2,
+        "--rigid-body-ids",     "1,2",
+        "--map-config",         map_config_path.string(),
+        "--loc-port-start",     std::to_string(kLocPortStart),
+        "--publish-rate",       "30",
+        "--log-csv",            csv_path.string(),
+        "--duration-s",         std::to_string(kBridgeDurationS),
+    };
+    ProcessGuard bridge_guard(spawn(bridge_exe, bridge_args, bridge_log_path.string()),
+                               "optitrack_zmq_bridge[part7]");
+    std::cout << "[test] Part 7: spawned optitrack_zmq_bridge pid=" << bridge_guard.pid() << std::endl;
+
+    std::vector<RecvMsg> all_msgs;
+    try {
+        zmq::context_t ctx(1);
+        zmq::socket_t sub(ctx, zmq::socket_type::sub);
+        sub.set(zmq::sockopt::linger, 0);
+        sub.connect("tcp://127.0.0.1:" + std::to_string(kLocPortStart));
+        sub.set(zmq::sockopt::subscribe, "/" + kRobot1 + "/localization");
+        sub.set(zmq::sockopt::subscribe, "/" + kRobot2 + "/localization");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));  // slow-joiner grace.
+
+        bool exited = bridge_guard.wait_for_exit(
+            kBridgeDurationS + 4.0, 0.05, [&]() { drain_messages(sub, all_msgs); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        drain_messages(sub, all_msgs);
+
+        if (!exited) {
+            rep.fail("optitrack_zmq_bridge did not self-exit within budget");
+        } else {
+            std::cout << "[test] Part 7: optitrack_zmq_bridge exited on its own" << std::endl;
+        }
+    } catch (const std::exception& ex) {
+        rep.fail(std::string("exception while driving Part 7: ") + ex.what());
+    }
+
+    bridge_guard.terminate();
+    fake_motive_guard.terminate();
+    std::cout << "[test] Part 7: captured " << all_msgs.size() << " messages" << std::endl;
+
+    if (all_msgs.size() < 30) {
+        rep.fail("too few messages captured: " + std::to_string(all_msgs.size()));
+        fs::remove(csv_path, ec);
+        fs::remove(bridge_log_path, ec);
+        fs::remove(map_config_path, ec);
+        return rep;
+    }
+
+    // ---- Check 1: the bridge logged pose_filter enabled=yes. ----
+    {
+        std::ifstream log_f(bridge_log_path);
+        std::string log_contents((std::istreambuf_iterator<char>(log_f)),
+                                   std::istreambuf_iterator<char>());
+        const bool has_enabled_line = log_contents.find("pose_filter: enabled=yes") != std::string::npos;
+        rep.info(std::string("'pose_filter: enabled=yes' log line: ") + (has_enabled_line ? "yes" : "no"));
+        if (!has_enabled_line) {
+            rep.fail("bridge log does not show pose_filter enabled (map-config's \"pose_filter\" "
+                      "block was not picked up)");
+        }
+    }
+
+    // ---- Check 2: every ZMQ payload gains filt/rej/vx/vy/w on top of
+    // x/y/yaw (no "t" here -- natnet_version 3.1 carries no trailer
+    // timestamp in this synthetic setup, matching Parts 4/5's own
+    // assumption). ----
+    {
+        int checked = 0, malformed = 0;
+        for (const RecvMsg& m : all_msgs) {
+            ++checked;
+            try {
+                nlohmann::json j = nlohmann::json::parse(m.payload);
+                if (!j.is_object() || !j.contains("x") || !j.contains("y") || !j.contains("yaw") ||
+                    !j.contains("filt") || !j.contains("rej") || !j.contains("vx") ||
+                    !j.contains("vy") || !j.contains("w") || j.at("filt").get<int>() != 1) {
+                    ++malformed;
+                }
+            } catch (const std::exception&) {
+                ++malformed;
+            }
+        }
+        rep.info("payload filt/rej/vx/vy/w fields checked on " + std::to_string(checked) +
+                  " messages, " + std::to_string(malformed) + " malformed/missing");
+        if (malformed > 0) {
+            rep.fail(std::to_string(malformed) +
+                      " message(s) missing the additive pose_filter JSON fields (filt/rej/vx/vy/w)");
+        }
+    }
+
+    // ---- Check 3: --log-csv header ends with the 6 pose_filter columns,
+    // and on this clean synthetic track virtually every row is accepted
+    // with fx/fy/fyaw close to planar_x/y/planar_yaw. ----
+    {
+        std::ifstream csv_f(csv_path);
+        std::string header;
+        std::getline(csv_f, header);
+        const std::string expected_suffix = ",accepted,d2_pos,d2_yaw,fx,fy,fyaw";
+        const bool header_ok =
+            header.size() >= expected_suffix.size() &&
+            header.compare(header.size() - expected_suffix.size(), expected_suffix.size(),
+                            expected_suffix) == 0;
+        rep.info(std::string("CSV header ends with pose_filter columns: ") + (header_ok ? "yes" : "no") +
+                  " (header='" + header + "')");
+        if (!header_ok) {
+            rep.fail("--log-csv header does not end with ',accepted,d2_pos,d2_yaw,fx,fy,fyaw'");
+        }
+
+        int rows = 0, rejected = 0, fx_mismatch = 0;
+        std::string line;
+        while (std::getline(csv_f, line)) {
+            if (line.empty()) continue;
+            std::vector<std::string> fields;
+            std::stringstream ss(line);
+            std::string tok;
+            while (std::getline(ss, tok, ',')) fields.push_back(tok);
+            if (fields.size() != 22) continue;  // 16 base + 6 pose_filter columns.
+            ++rows;
+            try {
+                const int accepted = std::stoi(fields[16]);
+                const double planar_x = std::stod(fields[12]);
+                const double planar_y = std::stod(fields[13]);
+                const double fx = std::stod(fields[19]);
+                const double fy = std::stod(fields[20]);
+                if (accepted == 0) {
+                    ++rejected;
+                } else if (std::hypot(fx - planar_x, fy - planar_y) > 0.05) {
+                    ++fx_mismatch;
+                }
+            } catch (const std::exception&) {
+                continue;
+            }
+        }
+        rep.info("Part 7 CSV: " + std::to_string(rows) + " rows, " + std::to_string(rejected) +
+                  " rejected, " + std::to_string(fx_mismatch) +
+                  " accepted-but-filtered-pose-off-by->5cm");
+        if (rows < 30) {
+            rep.fail("Part 7 CSV has suspiciously few well-formed pose_filter rows: " +
+                      std::to_string(rows));
+        }
+        // Clean synthetic data -- the filter should be near-invisible (a
+        // small handful of rejects on a fresh multi-body track's very first
+        // few frames, before both filters have converged, is tolerated).
+        if (rejected > rows / 10) {
+            rep.fail("too many rejected rows on a clean synthetic track: " + std::to_string(rejected) +
+                      "/" + std::to_string(rows));
+        }
+        if (fx_mismatch > 0) {
+            rep.fail(std::to_string(fx_mismatch) +
+                      " accepted row(s) had a filtered pose >5cm from the raw pose on clean data");
+        }
+    }
+
+    fs::remove(csv_path, ec);
+    fs::remove(bridge_log_path, ec);
+    fs::remove(map_config_path, ec);
+    return rep;
+}
+
 int main() {
     std::string dir;
     try {
@@ -1641,7 +2090,26 @@ int main() {
         std::cout << "  " << n << "\n";
     }
 
-    const bool overall_pass = part1.pass && part2.pass && part3.pass && part4.pass && part5.pass;
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+
+    Report part6 = run_part_mocap_clock_sync(dir);
+    std::cout << "\n=== Part 6 (mocap clock sync: 't' field, monotonic, frame-clock-quantized deltas): "
+               << (part6.pass ? "PASS" : "FAIL") << " ===\n";
+    for (const std::string& n : part6.notes) {
+        std::cout << "  " << n << "\n";
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+
+    Report part7 = run_part_pose_filter_integration(dir);
+    std::cout << "\n=== Part 7 (mocap pose-jump filter bridge integration): "
+               << (part7.pass ? "PASS" : "FAIL") << " ===\n";
+    for (const std::string& n : part7.notes) {
+        std::cout << "  " << n << "\n";
+    }
+
+    const bool overall_pass = part1.pass && part2.pass && part3.pass && part4.pass && part5.pass &&
+                                part6.pass && part7.pass;
     std::cout << "\n=== test_optitrack_bridge OVERALL: " << (overall_pass ? "PASS" : "FAIL") << " ===\n";
     return overall_pass ? 0 : 1;
 }

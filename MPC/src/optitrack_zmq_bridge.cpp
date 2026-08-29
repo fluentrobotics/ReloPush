@@ -4,9 +4,16 @@
 // of the ZMQ endpoints mpc_controller already talks to (see
 // MPC/src/robot_sim.cpp's header comment): BINDS one PUB per
 // robot at --loc-port-start+i publishing "/<robot>/localization" with
-// payload {"x":...,"y":...,"yaw":...} (plain JSON, no base64, no "t" field
-// -- byte-identical to mpc::encode_localization_payload(), which this file
-// links directly from SimCore.cpp rather than re-deriving the format).
+// payload {"x":...,"y":...,"yaw":...} (plain JSON, no base64) -- byte-
+// identical to mpc::encode_localization_payload(), which this file links
+// directly from SimCore.cpp rather than re-deriving the format. Round 8
+// ADDS an optional "t" field (the mocap frame's own capture timestamp,
+// clock-synced into THIS PROCESS's steady_clock domain -- see the receive
+// loop's "mocap clock sync" state/doc comment) whenever the source NatNet
+// frame carried one (mpc::FrameOfData::has_timestamp) -- omitted entirely
+// otherwise, so an older-Motive/no-timestamp stream publishes byte-for-byte
+// what it always did. Purely ADDITIVE: existing consumers that only read
+// "x"/"y"/"yaw" (nlohmann::json ignores unknown keys) are unaffected.
 //
 // v1 scope (RECEIVE-TEST capability): parse a live NatNet stream (real
 // Motive, or the fake_motive test tool -- see src/fake_motive.cpp), print/
@@ -71,6 +78,7 @@
 #endif
 
 #include "mpc/OptiTrackCore.h"
+#include "mpc/PoseFilter.h"
 #include "mpc/SimCore.h"
 
 #include <nlohmann/json.hpp>
@@ -92,6 +100,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -122,6 +131,33 @@ class RateLimiter {
     bool fired_ = false;
     std::chrono::steady_clock::time_point last_fire_{};
 };
+
+// Additive localization payload used ONLY when pose_filter is enabled --
+// mpc::encode_localization_payload() (SimCore.cpp, also used byte-for-byte
+// by mpc_robot_sim) stays untouched so its existing {"x","y","yaw"[,"t"]}
+// output is unaffected either way; this bridge-local variant is a superset
+// (new keys are purely additive -- nlohmann::json's own consumers already
+// ignore unknown keys, verified for mpc_controller's decode in main.cpp and
+// CalibClient.cpp's decode_pose()) adding "filt":1, "rej":<cumulative
+// per-body reject count>, and the filter's own vx/vy/w velocity estimate --
+// see doc/MOCAP_POSE_FILTER_PLAN.md's "Bridge integration" section.
+std::string encode_localization_payload_filtered(double x, double y, double yaw,
+                                                    std::optional<double> t, double vx, double vy,
+                                                    double w, std::uint64_t reject_count) {
+    nlohmann::json j;
+    j["x"] = x;
+    j["y"] = y;
+    j["yaw"] = yaw;
+    if (t.has_value()) {
+        j["t"] = *t;
+    }
+    j["filt"] = 1;
+    j["rej"] = reject_count;
+    j["vx"] = vx;
+    j["vy"] = vy;
+    j["w"] = w;
+    return j.dump();
+}
 
 std::vector<std::string> split_comma(const std::string& s) {
     std::vector<std::string> out;
@@ -190,6 +226,11 @@ struct Options {
     std::string log_csv_path;
     double duration_s = 0.0;
     bool zmq_disable = false;
+    // Mocap pose-jump filter (see doc/MOCAP_POSE_FILTER_PLAN.md). Empty
+    // string means "not passed on the CLI" -- the --map-config file's own
+    // "pose_filter.enabled" (default false) governs in that case.
+    std::string pose_filter_cli;
+    bool publish_raw = false;
 };
 
 // Which of {compiled default, --mocap-config file, explicit CLI flag} an
@@ -257,6 +298,10 @@ Options parse_args(int argc, char** argv) {
             o.duration_s = std::stod(next());
         } else if (arg == "--zmq-disable") {
             o.zmq_disable = true;
+        } else if (arg == "--pose-filter") {
+            o.pose_filter_cli = next();
+        } else if (arg == "--publish-raw") {
+            o.publish_raw = true;
         } else {
             std::cerr << "[BRIDGE] Warning: unrecognized argument '" << arg << "'" << std::endl;
         }
@@ -365,6 +410,14 @@ void print_usage(const char* prog) {
            "                              works (full affine applied to position) but WARNS, since\n"
            "                              the yaw formula is then only an approximation\n"
            "Output:\n"
+           "  (no new flags) localization payloads now additionally carry an optional \"t\"\n"
+           "                              field -- the mocap frame's own capture timestamp,\n"
+           "                              clock-synced into this process's steady_clock seconds\n"
+           "                              (jitter-free vs. a consumer's own receipt time) --\n"
+           "                              whenever the source NatNet stream is major<3 (2.x) and\n"
+           "                              carries a timestamp; omitted otherwise (older Motive /\n"
+           "                              truncated frame / NatNet 3.x+), so existing consumers\n"
+           "                              that only read \"x\"/\"y\"/\"yaw\" are unaffected either way\n"
            "  --publish-rate <hz>         downsampled publish rate (default 30)\n"
            "  --print-frames              dump every frame's rigid bodies (id/x/y/z/yaw/tracking)\n"
            "                              plus 1/s receive-rate stats -- doubles as rigid-body-ID\n"
@@ -378,7 +431,22 @@ void print_usage(const char* prog) {
            "                              roll/pitch are the other two rotations -- see\n"
            "                              mpc::quat_to_roll_pitch_heading()'s doc comment for the\n"
            "                              exact sequence). The ZMQ payload itself stays planar-only\n"
-           "                              {\"x\",\"y\",\"yaw\"} regardless -- this is diagnostics only\n"
+           "                              {\"x\",\"y\",\"yaw\"} regardless -- this is diagnostics only.\n"
+           "                              When pose_filter is enabled, SIX more columns are appended\n"
+           "                              at the end: accepted,d2_pos,d2_yaw,fx,fy,fyaw (the filter's\n"
+           "                              own accept/reject decision and gate distances, and its\n"
+           "                              filtered pose -- planar_x/y/yaw above stay the RAW,\n"
+           "                              unfiltered world-frame pose either way, for comparison)\n"
+           "  --pose-filter on|off        override --map-config's \"pose_filter.enabled\" (see doc/\n"
+           "                              MOCAP_POSE_FILTER_PLAN.md) -- a per-body gated Kalman\n"
+           "                              filter that rejects single-frame mocap pose jumps before\n"
+           "                              they publish. Ships disabled by default (map-config's\n"
+           "                              pose_filter block, or this flag, must turn it on).\n"
+           "  --publish-raw               also publish the UNFILTERED pose on\n"
+           "                              /<name>/localization_raw (same PUB socket) -- lets a\n"
+           "                              consumer compare filtered vs raw live; independent of\n"
+           "                              --pose-filter (harmless -- identical to the main topic --\n"
+           "                              when the filter is off)\n"
            "  --zmq-disable               receive/print/log only, no ZMQ publish (RECEIVE-TEST)\n"
            "  --duration-s <secs>         stop after N seconds (default 0 = forever)\n"
            "  --help, -h                  print this message and exit\n";
@@ -398,6 +466,12 @@ struct MapConfig {
     // paths are selected at use.
     bool has_mocap_to_world_matrix = false;
     mpc::AffineTransform2D mocap_to_world_matrix;
+    // Mocap pose-jump filter (see doc/MOCAP_POSE_FILTER_PLAN.md) -- optional
+    // "pose_filter" block; enabled=false (mpc::PoseFilterConfig's own
+    // default) unless the block sets it, and --pose-filter on|off overrides
+    // whatever this resolves to (see main()'s handling right after
+    // load_map_config()).
+    mpc::PoseFilterConfig pose_filter;
 };
 
 MapConfig load_map_config(const std::string& path) {
@@ -425,6 +499,22 @@ MapConfig load_map_config(const std::string& path) {
             for (auto it = j.at("aliases").begin(); it != j.at("aliases").end(); ++it) {
                 cfg.aliases[it.key()] = it.value().get<std::string>();
             }
+        }
+        if (j.contains("pose_filter") && j.at("pose_filter").is_object()) {
+            const nlohmann::json& pf = j.at("pose_filter");
+            mpc::PoseFilterConfig& pfc = cfg.pose_filter;
+            if (pf.contains("enabled")) pfc.enabled = pf.at("enabled").get<bool>();
+            if (pf.contains("gate_chi2_pos")) pfc.gate_chi2_pos = pf.at("gate_chi2_pos").get<double>();
+            if (pf.contains("gate_chi2_yaw")) pfc.gate_chi2_yaw = pf.at("gate_chi2_yaw").get<double>();
+            if (pf.contains("gate_chi2_all")) pfc.gate_chi2_all = pf.at("gate_chi2_all").get<double>();
+            if (pf.contains("max_speed")) pfc.max_speed = pf.at("max_speed").get<double>();
+            if (pf.contains("max_yaw_rate")) pfc.max_yaw_rate = pf.at("max_yaw_rate").get<double>();
+            if (pf.contains("reinit_after_s")) pfc.reinit_after_s = pf.at("reinit_after_s").get<double>();
+            if (pf.contains("gap_reinit_s")) pfc.gap_reinit_s = pf.at("gap_reinit_s").get<double>();
+            if (pf.contains("r_pos")) pfc.r_pos = pf.at("r_pos").get<double>();
+            if (pf.contains("r_yaw")) pfc.r_yaw = pf.at("r_yaw").get<double>();
+            if (pf.contains("q_acc")) pfc.q_acc = pf.at("q_acc").get<double>();
+            if (pf.contains("q_yaw_acc")) pfc.q_yaw_acc = pf.at("q_yaw_acc").get<double>();
         }
         if (j.contains("mocap_to_world_matrix")) {
             // Reduce the JSON array-of-arrays to a plain nested double
@@ -763,6 +853,16 @@ int main(int argc, char** argv) {
     }
 
     MapConfig map_cfg = load_map_config(opt.map_config_path);
+    if (opt.pose_filter_cli == "on") {
+        map_cfg.pose_filter.enabled = true;
+    } else if (opt.pose_filter_cli == "off") {
+        map_cfg.pose_filter.enabled = false;
+    } else if (!opt.pose_filter_cli.empty()) {
+        std::cerr << "[BRIDGE] Warning: --pose-filter expects 'on' or 'off', got '"
+                   << opt.pose_filter_cli << "'; ignoring" << std::endl;
+    }
+    std::cout << "[BRIDGE] pose_filter: enabled=" << (map_cfg.pose_filter.enabled ? "yes" : "no")
+               << " publish_raw=" << (opt.publish_raw ? "yes" : "no") << std::endl;
 
     std::vector<std::string> robot_names;
     std::vector<RobotConfig> robots;
@@ -914,6 +1014,12 @@ int main(int argc, char** argv) {
         bool last_tracking_valid = true;
         long invalid_frame_count = 0;
         long published_count = 0;
+        // Mocap pose-jump filter: one instance per discovered body, default-
+        // constructed here with the DEFAULT (disabled) config -- overwritten
+        // with the real map_cfg.pose_filter the moment this body is first
+        // discovered (see apply_auto_discovery()'s "new body" branch right
+        // below), since a struct-default member can't see map_cfg.
+        mpc::PoseFilter pose_filter;
     };
     std::unordered_map<std::int32_t, AutoBodyState> auto_body_state;  // keyed by rigid_body_id.
     std::set<std::string> unmatched_aliases_logged;
@@ -936,6 +1042,7 @@ int main(int argc, char** argv) {
                 map_changed = true;
                 AutoBodyState st;
                 st.published_name = b.published_name;
+                st.pose_filter = mpc::PoseFilter(map_cfg.pose_filter);
                 auto_body_state[b.rigid_body_id] = st;
                 std::string reason = b.from_alias ? "alias"
                                        : b.used_empty_fallback ? "empty-name fallback"
@@ -1079,12 +1186,38 @@ int main(int argc, char** argv) {
         // doc comment for the exact roll/pitch/heading sequence definition;
         // heading == planar_yaw's pre-map-transform value, bit-for-bit).
         csv << "t_arrival,robot,raw_x,raw_y,raw_z,qx,qy,qz,qw,roll,pitch,heading,planar_x,planar_y,"
-               "planar_yaw,tracking_valid\n";
+               "planar_yaw,tracking_valid";
+        // Mocap pose-jump filter columns -- appended at the END, and only
+        // when the filter is actually enabled, so a run with pose_filter
+        // off (the shipped default) produces a byte-for-byte identical
+        // header/rows to before this feature existed (see doc/
+        // MOCAP_POSE_FILTER_PLAN.md's "Implementation status" for why: it
+        // keeps MPC/tests/test_optitrack_bridge.cpp's existing strict
+        // header-string checks passing unmodified).
+        if (map_cfg.pose_filter.enabled) {
+            csv << ",accepted,d2_pos,d2_yaw,fx,fy,fyaw";
+        }
+        csv << "\n";
     }
 
     struct RobotPoseSample {
         size_t robot_index = 0;
-        mpc::PlanarPose world;
+        mpc::PlanarPose world;  // the pose actually PUBLISHED (== raw when pose_filter is off).
+        // Round 8: this sample's frame's published "t" (mocap clock, PC
+        // steady_clock domain) -- std::nullopt if the source frame had no
+        // NatNet timestamp. Carried per-sample (mirroring `world` above)
+        // rather than read from a frame-scoped variable at publish time, so
+        // this struct stays a complete, self-contained snapshot of
+        // everything a publish needs -- see mocap_t's own doc comment above.
+        std::optional<double> t;
+        // Mocap pose-jump filter: raw (unfiltered) pose, always carried so
+        // --publish-raw can publish it regardless of pose_filter.enabled;
+        // and the filter's own velocity estimate + this body's cumulative
+        // reject count at publish time, carried into the ZMQ payload's
+        // additive "vx"/"vy"/"w"/"rej" fields when pose_filter is enabled.
+        mpc::PlanarPose raw;
+        double vx = 0.0, vy = 0.0, w = 0.0;
+        std::uint64_t reject_count = 0;
     };
     mpc::Downsampler<std::vector<RobotPoseSample>> publish_gate(opt.publish_rate_hz);
 
@@ -1095,13 +1228,33 @@ int main(int argc, char** argv) {
     struct AutoBodyPoseSample {
         std::int32_t rigid_body_id = 0;
         std::string published_name;
-        mpc::PlanarPose world;
+        mpc::PlanarPose world;  // the pose actually PUBLISHED (== raw when pose_filter is off).
+        std::optional<double> t;  // round 8 -- see RobotPoseSample::t's doc comment.
+        mpc::PlanarPose raw;      // see RobotPoseSample::raw's doc comment.
+        double vx = 0.0, vy = 0.0, w = 0.0;
+        std::uint64_t reject_count = 0;
     };
     mpc::Downsampler<std::vector<AutoBodyPoseSample>> auto_publish_gate(opt.publish_rate_hz);
 
     std::vector<bool> last_tracking_valid(robots.size(), true);
     std::vector<long> invalid_frame_count(robots.size(), 0);
     std::vector<long> published_count(robots.size(), 0);
+    // Mocap pose-jump filter: one instance per explicit-mode robot (parallel
+    // to `robots`), constructed with the resolved map_cfg.pose_filter.
+    std::vector<mpc::PoseFilter> pose_filters(robots.size(), mpc::PoseFilter(map_cfg.pose_filter));
+    // --publish-raw: SAME PUB socket as the main topic, just a second
+    // "/<name>/localization_raw" topic string -- see loc_topics_raw's
+    // construction next to loc_topics above, and auto mode's inline
+    // "<name>/localization_raw" topic build in its own publish loop below.
+    std::vector<std::string> loc_topics_raw;  // explicit mode, parallel to pub_sockets/loc_topics.
+    for (size_t i = 0; i < robots.size(); ++i) {
+        loc_topics_raw.push_back("/" + robots[i].name + "/localization_raw");
+    }
+    // Swap diagnostic (see doc/MOCAP_POSE_FILTER_PLAN.md's "What it cannot
+    // fix"): per-ordered-pair "<rejected_body>->[<would_accept_body>]"
+    // counters + a once-per-second log rate limiter per pair.
+    std::map<std::string, long> swap_counts;
+    std::map<std::string, RateLimiter> swap_log_limiters;
     // Round 4: per-robot count of frames processed while that robot's name
     // was still unresolved (mirrors VersionGate's frames_deferred
     // bookkeeping) -- only ever increments for kExplicitNames (kAuto never
@@ -1128,6 +1281,29 @@ int main(int argc, char** argv) {
     RateLimiter parse_error_warn_limiter;
     RateLimiter unknown_message_warn_limiter;
     RateLimiter name_error_warn_limiter;  // ~1/10s re-log of unresolved --rigid-body-names entries.
+
+    // Round 8: mocap clock sync -- established on the FIRST frame whose
+    // NatNet trailer carried a timestamp (mpc::FrameOfData::has_timestamp),
+    // then held fixed so every subsequent frame's "t" = frame.timestamp +
+    // clock_offset tracks the mocap frame clock's own (jitter-free) pacing
+    // rather than this process's per-frame receipt jitter. clock_offset =
+    // (this PC's absolute steady_clock seconds at establishment) -
+    // (frame.timestamp at establishment) -- NOT t_arrival (which is
+    // relative to this run's OWN t_start, meaningless to another process);
+    // steady_clock's epoch (CLOCK_MONOTONIC on Linux/macOS) is shared
+    // across every process on this machine, which is what makes "t"
+    // directly comparable to a same-machine consumer's own steady_clock
+    // reading (see encode_localization_payload()'s doc comment). Re-
+    // established (with a fresh log line) if the mocap timestamp ever jumps
+    // BACKWARDS by more than kMocapClockResyncThresholdS -- e.g. Motive's
+    // own capture clock resetting on a record start/stop -- since a fixed
+    // offset computed against the OLD mocap epoch would otherwise publish
+    // wildly wrong "t" values forever after such a reset.
+    constexpr double kMocapClockResyncThresholdS = 1.0;
+    bool have_mocap_clock_offset = false;
+    double mocap_clock_offset_s = 0.0;
+    bool have_last_mocap_timestamp = false;
+    double last_mocap_timestamp_s = 0.0;
 
     const auto t_start = std::chrono::steady_clock::now();
     auto last_ping = t_start - std::chrono::seconds(10);  // force an immediate first ping.
@@ -1210,6 +1386,36 @@ int main(int argc, char** argv) {
                             std::cout << "[BRIDGE] frame=" << frame.frame_number;
                         }
 
+                        // Round 8: (re-)establish the mocap clock-sync
+                        // offset and compute this frame's published "t" --
+                        // see the offset state's own doc comment above.
+                        // std::nullopt (omitting "t" from the published
+                        // payload entirely) whenever this frame's trailer
+                        // had no timestamp at all (older Motive / truncated
+                        // frame) -- consumers fall back to their own
+                        // receipt time exactly as before this feature.
+                        std::optional<double> mocap_t;
+                        if (frame.has_timestamp) {
+                            const bool backwards_jump =
+                                have_last_mocap_timestamp &&
+                                (frame.timestamp < last_mocap_timestamp_s - kMocapClockResyncThresholdS);
+                            if (!have_mocap_clock_offset || backwards_jump) {
+                                const double pc_steady_now_s =
+                                    std::chrono::duration<double>(now.time_since_epoch()).count();
+                                mocap_clock_offset_s = pc_steady_now_s - frame.timestamp;
+                                have_mocap_clock_offset = true;
+                                std::cout << "[BRIDGE] mocap clock sync: offset=" << mocap_clock_offset_s
+                                           << " s"
+                                           << (backwards_jump ? " (re-established: mocap timestamp jumped "
+                                                                 "backwards)"
+                                                               : "")
+                                           << std::endl;
+                            }
+                            last_mocap_timestamp_s = frame.timestamp;
+                            have_last_mocap_timestamp = true;
+                            mocap_t = frame.timestamp + mocap_clock_offset_s;
+                        }
+
                         if (operating_mode == OperatingMode::kExplicit) {
                         std::vector<RobotPoseSample> samples;
                         // Round 4: count, per robot, every frame processed
@@ -1261,6 +1467,34 @@ int main(int argc, char** argv) {
                             const mpc::EulerRollPitchHeading rph =
                                 mpc::quat_to_roll_pitch_heading(rb.qx, rb.qy, rb.qz, rb.qw, map_cfg.y_up);
 
+                            // Mocap pose-jump filter: stepped at the FULL received-frame rate
+                            // (this loop body runs once per rigid body per received NatNet frame,
+                            // well before the publish downsampler below) -- see doc/
+                            // MOCAP_POSE_FILTER_PLAN.md. `world` (raw, unfiltered) is preserved
+                            // for --log-csv's planar_x/y/yaw and --publish-raw regardless.
+                            const double filt_t = frame.has_timestamp ? frame.timestamp : t_arrival;
+                            const mpc::PoseFilterOutput pf_out =
+                                pose_filters[idx].step(filt_t, world.x, world.y, world.yaw);
+                            if (!pf_out.accepted) {
+                                // Swap diagnostic: would any OTHER robot's filter have accepted
+                                // this same rejected sample? (see doc/MOCAP_POSE_FILTER_PLAN.md's
+                                // "What it cannot fix").
+                                for (size_t j = 0; j < robots.size(); ++j) {
+                                    if (j == idx) continue;
+                                    if (pose_filters[j].would_accept(filt_t, world.x, world.y, world.yaw)) {
+                                        const std::string swap_key = robot_name + "->" + robots[j].name;
+                                        ++swap_counts[swap_key];
+                                        if (swap_log_limiters[swap_key].allow(now, 1.0)) {
+                                            std::cout << "[BRIDGE] SWAP? " << robot_name << " sample fits "
+                                                       << robots[j].name << std::endl;
+                                        }
+                                    }
+                                }
+                            }
+                            const mpc::PlanarPose published_pose =
+                                map_cfg.pose_filter.enabled ? mpc::PlanarPose{pf_out.x, pf_out.y, pf_out.yaw}
+                                                              : world;
+
                             if (rb.tracking_valid != last_tracking_valid[idx]) {
                                 std::cout << "[BRIDGE] " << robot_name << ": tracking "
                                            << (rb.tracking_valid ? "RECOVERED" : "LOST") << std::endl;
@@ -1275,7 +1509,13 @@ int main(int argc, char** argv) {
                                      << ',' << rb.z << ',' << rb.qx << ',' << rb.qy << ',' << rb.qz
                                      << ',' << rb.qw << ',' << rph.roll << ',' << rph.pitch << ','
                                      << rph.heading << ',' << world.x << ',' << world.y << ','
-                                     << world.yaw << ',' << (rb.tracking_valid ? 1 : 0) << '\n';
+                                     << world.yaw << ',' << (rb.tracking_valid ? 1 : 0);
+                                if (map_cfg.pose_filter.enabled) {
+                                    csv << ',' << (pf_out.accepted ? 1 : 0) << ',' << pf_out.d2_pos << ','
+                                         << pf_out.d2_yaw << ',' << pf_out.x << ',' << pf_out.y << ','
+                                         << pf_out.yaw;
+                                }
+                                csv << '\n';
                             }
 
                             if (opt.print_frames) {
@@ -1286,7 +1526,16 @@ int main(int argc, char** argv) {
                             }
 
                             if (rb.tracking_valid) {
-                                samples.push_back(RobotPoseSample{idx, world});
+                                RobotPoseSample sample;
+                                sample.robot_index = idx;
+                                sample.world = published_pose;
+                                sample.t = mocap_t;
+                                sample.raw = world;
+                                sample.vx = pf_out.vx;
+                                sample.vy = pf_out.vy;
+                                sample.w = pf_out.w;
+                                sample.reject_count = pose_filters[idx].rejects();
+                                samples.push_back(sample);
                             }
                         }
 
@@ -1294,8 +1543,13 @@ int main(int argc, char** argv) {
                             std::vector<RobotPoseSample> to_publish;
                             if (publish_gate.feed(t_arrival, samples, to_publish)) {
                                 for (const RobotPoseSample& s : to_publish) {
-                                    const std::string payload = mpc::encode_localization_payload(
-                                        s.world.x, s.world.y, s.world.yaw);
+                                    const std::string payload =
+                                        map_cfg.pose_filter.enabled
+                                            ? encode_localization_payload_filtered(
+                                                  s.world.x, s.world.y, s.world.yaw, s.t, s.vx, s.vy, s.w,
+                                                  s.reject_count)
+                                            : mpc::encode_localization_payload(s.world.x, s.world.y,
+                                                                                 s.world.yaw, s.t);
                                     zmq::message_t topic_msg(loc_topics[s.robot_index].begin(),
                                                                loc_topics[s.robot_index].end());
                                     zmq::message_t payload_msg(payload.begin(), payload.end());
@@ -1307,6 +1561,23 @@ int main(int argc, char** argv) {
                                         std::cerr << "[BRIDGE] Warning: zmq send error for "
                                                    << robots[s.robot_index].name << ": " << ex.what()
                                                    << std::endl;
+                                    }
+                                    if (opt.publish_raw) {
+                                        const std::string raw_payload = mpc::encode_localization_payload(
+                                            s.raw.x, s.raw.y, s.raw.yaw, s.t);
+                                        zmq::message_t raw_topic_msg(loc_topics_raw[s.robot_index].begin(),
+                                                                       loc_topics_raw[s.robot_index].end());
+                                        zmq::message_t raw_payload_msg(raw_payload.begin(), raw_payload.end());
+                                        try {
+                                            pub_sockets[s.robot_index].send(raw_topic_msg,
+                                                                              zmq::send_flags::sndmore);
+                                            pub_sockets[s.robot_index].send(raw_payload_msg,
+                                                                              zmq::send_flags::none);
+                                        } catch (const zmq::error_t& ex) {
+                                            std::cerr << "[BRIDGE] Warning: zmq send error (raw) for "
+                                                       << robots[s.robot_index].name << ": " << ex.what()
+                                                       << std::endl;
+                                        }
                                     }
                                 }
                             }
@@ -1349,6 +1620,32 @@ int main(int argc, char** argv) {
                             const mpc::EulerRollPitchHeading rph =
                                 mpc::quat_to_roll_pitch_heading(rb.qx, rb.qy, rb.qz, rb.qw, map_cfg.y_up);
 
+                            // Mocap pose-jump filter -- see the explicit-mode branch above for the
+                            // full doc comment (identical mechanism, just keyed by rigid_body_id/
+                            // AutoBodyState instead of a robot index).
+                            const double filt_t = frame.has_timestamp ? frame.timestamp : t_arrival;
+                            const mpc::PoseFilterOutput pf_out =
+                                state.pose_filter.step(filt_t, world.x, world.y, world.yaw);
+                            if (!pf_out.accepted) {
+                                for (auto& other_kv : auto_body_state) {
+                                    if (other_kv.first == rb.id) continue;
+                                    if (other_kv.second.pose_filter.would_accept(filt_t, world.x, world.y,
+                                                                                   world.yaw)) {
+                                        const std::string swap_key =
+                                            published_name + "->" + other_kv.second.published_name;
+                                        ++swap_counts[swap_key];
+                                        if (swap_log_limiters[swap_key].allow(now, 1.0)) {
+                                            std::cout << "[BRIDGE] SWAP? " << published_name
+                                                       << " sample fits " << other_kv.second.published_name
+                                                       << std::endl;
+                                        }
+                                    }
+                                }
+                            }
+                            const mpc::PlanarPose published_pose =
+                                map_cfg.pose_filter.enabled ? mpc::PlanarPose{pf_out.x, pf_out.y, pf_out.yaw}
+                                                              : world;
+
                             if (rb.tracking_valid != state.last_tracking_valid) {
                                 std::cout << "[BRIDGE] " << published_name << ": tracking "
                                            << (rb.tracking_valid ? "RECOVERED" : "LOST") << std::endl;
@@ -1363,7 +1660,13 @@ int main(int argc, char** argv) {
                                      << ',' << rb.z << ',' << rb.qx << ',' << rb.qy << ',' << rb.qz
                                      << ',' << rb.qw << ',' << rph.roll << ',' << rph.pitch << ','
                                      << rph.heading << ',' << world.x << ',' << world.y << ','
-                                     << world.yaw << ',' << (rb.tracking_valid ? 1 : 0) << '\n';
+                                     << world.yaw << ',' << (rb.tracking_valid ? 1 : 0);
+                                if (map_cfg.pose_filter.enabled) {
+                                    csv << ',' << (pf_out.accepted ? 1 : 0) << ',' << pf_out.d2_pos << ','
+                                         << pf_out.d2_yaw << ',' << pf_out.x << ',' << pf_out.y << ','
+                                         << pf_out.yaw;
+                                }
+                                csv << '\n';
                             }
 
                             if (opt.print_frames) {
@@ -1374,7 +1677,17 @@ int main(int argc, char** argv) {
                             }
 
                             if (rb.tracking_valid) {
-                                auto_samples.push_back(AutoBodyPoseSample{rb.id, published_name, world});
+                                AutoBodyPoseSample sample;
+                                sample.rigid_body_id = rb.id;
+                                sample.published_name = published_name;
+                                sample.world = published_pose;
+                                sample.t = mocap_t;
+                                sample.raw = world;
+                                sample.vx = pf_out.vx;
+                                sample.vy = pf_out.vy;
+                                sample.w = pf_out.w;
+                                sample.reject_count = state.pose_filter.rejects();
+                                auto_samples.push_back(sample);
                             }
                         }
 
@@ -1382,8 +1695,13 @@ int main(int argc, char** argv) {
                             std::vector<AutoBodyPoseSample> to_publish;
                             if (auto_publish_gate.feed(t_arrival, auto_samples, to_publish)) {
                                 for (const AutoBodyPoseSample& s : to_publish) {
-                                    const std::string payload = mpc::encode_localization_payload(
-                                        s.world.x, s.world.y, s.world.yaw);
+                                    const std::string payload =
+                                        map_cfg.pose_filter.enabled
+                                            ? encode_localization_payload_filtered(
+                                                  s.world.x, s.world.y, s.world.yaw, s.t, s.vx, s.vy, s.w,
+                                                  s.reject_count)
+                                            : mpc::encode_localization_payload(s.world.x, s.world.y,
+                                                                                 s.world.yaw, s.t);
                                     const std::string topic = "/" + s.published_name + "/localization";
                                     zmq::message_t topic_msg(topic.begin(), topic.end());
                                     zmq::message_t payload_msg(payload.begin(), payload.end());
@@ -1397,6 +1715,20 @@ int main(int argc, char** argv) {
                                     } catch (const zmq::error_t& ex) {
                                         std::cerr << "[BRIDGE] Warning: zmq send error for "
                                                    << s.published_name << ": " << ex.what() << std::endl;
+                                    }
+                                    if (opt.publish_raw) {
+                                        const std::string raw_payload = mpc::encode_localization_payload(
+                                            s.raw.x, s.raw.y, s.raw.yaw, s.t);
+                                        const std::string raw_topic = "/" + s.published_name + "/localization_raw";
+                                        zmq::message_t raw_topic_msg(raw_topic.begin(), raw_topic.end());
+                                        zmq::message_t raw_payload_msg(raw_payload.begin(), raw_payload.end());
+                                        try {
+                                            auto_pub_socket.send(raw_topic_msg, zmq::send_flags::sndmore);
+                                            auto_pub_socket.send(raw_payload_msg, zmq::send_flags::none);
+                                        } catch (const zmq::error_t& ex) {
+                                            std::cerr << "[BRIDGE] Warning: zmq send error (raw) for "
+                                                       << s.published_name << ": " << ex.what() << std::endl;
+                                        }
                                     }
                                 }
                             }
@@ -1533,6 +1865,25 @@ int main(int argc, char** argv) {
                 std::cout << " auto_discovery_bodies=" << auto_body_state.size()
                            << " frames_deferred_before_modeldef=" << auto_frames_deferred_before_modeldef;
             }
+            if (map_cfg.pose_filter.enabled) {
+                std::cout << " pose_filter=[";
+                if (operating_mode == OperatingMode::kExplicit) {
+                    for (size_t i = 0; i < robots.size(); ++i) {
+                        std::cout << (i == 0 ? "" : " ") << robots[i].name
+                                   << ":rejects=" << pose_filters[i].rejects()
+                                   << ",reinits=" << pose_filters[i].reinits();
+                    }
+                } else {
+                    bool first = true;
+                    for (const auto& kv : auto_body_state) {
+                        std::cout << (first ? "" : " ") << kv.second.published_name
+                                   << ":rejects=" << kv.second.pose_filter.rejects()
+                                   << ",reinits=" << kv.second.pose_filter.reinits();
+                        first = false;
+                    }
+                }
+                std::cout << "]";
+            }
             std::cout << std::endl;
             frames_at_last_hz_print = frames_received;
             last_hz_print = now;
@@ -1568,14 +1919,23 @@ int main(int argc, char** argv) {
                                    ? "yes"
                                    : "no");
             }
-            std::cout << std::endl;
+            std::cout << " pose_filter_rejects=" << pose_filters[i].rejects()
+                       << " pose_filter_reinits=" << pose_filters[i].reinits() << std::endl;
         }
     } else {
         std::cout << "  frames_deferred_before_modeldef=" << auto_frames_deferred_before_modeldef << "\n";
         for (const auto& kv : auto_body_state) {
             std::cout << "  " << kv.second.published_name << " (id=" << kv.first
                        << "): published=" << kv.second.published_count
-                       << " frames_tracking_lost=" << kv.second.invalid_frame_count << std::endl;
+                       << " frames_tracking_lost=" << kv.second.invalid_frame_count
+                       << " pose_filter_rejects=" << kv.second.pose_filter.rejects()
+                       << " pose_filter_reinits=" << kv.second.pose_filter.reinits() << std::endl;
+        }
+    }
+    if (!swap_counts.empty()) {
+        std::cout << "  pose_filter SWAP? counts (rejected_body->would_accept_body):\n";
+        for (const auto& kv : swap_counts) {
+            std::cout << "    " << kv.first << ": " << kv.second << std::endl;
         }
     }
 
